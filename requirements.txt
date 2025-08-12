@@ -1,0 +1,149 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Core Framework
+# Data Processing
+# Data Validation
+# Database
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+sqlalchemy[asyncio]==2.0.23
+msgpack==1.0.8
+# Development
+# Documentation
+# Financial Data APIs
+# Machine Learning
+# Monitoring
+# LLM and TradingAgents Dependencies
+langchain-anthropic==0.3.15
+langchain-openai==0.3.23
+langgraph==0.4.8
+typing-extensions==4.14.0
+
+# NLP
+# Security
+# Task Queue
+# Technical Analysis
+# Testing
+# Utilities
+aiohttp==3.9.1
+alembic==1.12.1
+alpha-vantage==2.3.1
+apache-airflow==2.7.3
+asyncpg==0.29.0
+beautifulsoup4==4.12.2
+black==23.11.0
+celery==5.3.4
+colorama==0.4.6
+confluent-kafka==2.3.0
+dask==2023.11.0
+docker==7.0.0
+elasticsearch==8.11.0
+fastapi==0.104.1
+finnhub-python==2.4.18
+flake8==6.1.0
+great-expectations==0.18.6
+httpx==0.25.2
+isort==5.12.0
+lime==0.2.0.1
+lxml==4.9.3
+mkdocs-material==9.4.14
+mkdocs==1.5.3
+mplfinance==0.12.10b0
+mypy==1.7.1
+nltk==3.8.1
+numpy==1.26.2
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+optuna==3.4.0
+pandas-ta==0.3.14b0
+pandas==2.1.3
+passlib[bcrypt]==1.7.4
+polygon-api-client==1.13.2
+pre-commit==3.5.0
+prometheus-client==0.19.0
+prophet==1.1.5
+pydantic==2.5.0
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest==7.4.3
+python-dotenv==1.0.0
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+pytz==2023.3
+redis==5.0.1
+requests==2.31.0
+schedule==1.2.0
+scikit-learn==1.3.2
+scipy==1.11.4
+shap==0.43.0
+sqlalchemy==2.0.23
+statsmodels==0.14.0
+ta-lib==0.4.28
+textblob==0.17.1
+tokenizers==0.15.0
+torch==2.1.1
+tqdm==4.66.1
+transformers==4.35.2
+uvicorn[standard]==0.24.0
+xgboost==2.0.2
+yfinance==0.2.32
+
+# Additional dependencies for enhanced features
+aiokafka==0.10.0
+cryptography==41.0.7
+faker==20.1.0
+factory-boy==3.3.0
+grafana-api==1.0.3
+pytest-mock==3.12.0
+pybreaker==1.0.2
+slowapi==0.1.9
+bandit==1.7.5
+sphinx==7.2.6
+sphinx-rtd-theme==1.3.0
+gunicorn==21.2.0
+gevent==23.9.1
+structlog==23.2.0
+sentry-sdk[fastapi]==1.39.2
+pydantic-settings==2.1.0
+PyJWT==2.8.0
+aiofiles==23.2.1
+websockets==12.0
+cachetools==5.3.2
+tenacity==8.2.3
+psutil==5.9.6
+
+# Additional requirements for complete implementation
+xbrl-parser==1.1.0
+prophet==1.1.5
+shap==0.44.0
+lime==0.2.0.1
+praw==7.7.1
+tweepy==4.14.0
+reportlab==4.0.7
+openpyxl==3.1.2
+yfinance==0.2.33
+scipy==1.11.4
+
+# Additional requirements for complete implementation
+xbrl-parser==1.1.0
+prophet==1.1.5
+shap==0.44.0
+lime==0.2.0.1
+praw==7.7.1
+tweepy==4.14.0
+reportlab==4.0.7
+openpyxl==3.1.2
+yfinance==0.2.33
+scipy==1.11.4

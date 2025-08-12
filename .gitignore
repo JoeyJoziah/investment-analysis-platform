@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data
+data/cache/
+cache/
+logs/
+*.log
+
+# Testing
+htmlcov/
+.coverage
+.pytest_cache/
+coverage/
+
+# Docker
+*.pid
+
+# Database
+*.db
+*.sqlite
+
+# Models
+models/*.bin
+models/*.pkl
+models/*.h5
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Agent repositories (treat as external dependencies)
+.claude/agents/*/
+TradingAgents/
+awesome-claude-code-agents/
+claude-code-sub-agents/
+furai-subagents/
+lst97-subagents/
+nuttall-agents/
+voltagent-subagents/
+wshobson-agents/
+backend/TradingAgents/
+backend/analytics/agents/TradingAgents/
+backend/analytics/fundamental/TradingAgents/

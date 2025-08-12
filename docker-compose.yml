@@ -1,0 +1,227 @@
+services:
+  # PostgreSQL Database with TimescaleDB
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: investment_db
+    environment:
+      POSTGRES_DB: investment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TIMESCALEDB_TELEMETRY: "off"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: 
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - work_mem=4MB
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: investment_cache
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: investment_search
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+    container_name: investment_api
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend Web
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+    container_name: investment_web
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/web:/app
+      - /app/node_modules
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+    container_name: investment_worker
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+    command: celery -A backend.tasks.celery_app worker --loglevel=info
+
+  # Celery Beat Scheduler
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+    container_name: investment_scheduler
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres
+      - redis
+    command: celery -A backend.tasks.celery_app beat --loglevel=info
+
+  # Apache Airflow
+  airflow:
+    image: apache/airflow:2.7.3-python3.11
+    container_name: investment_airflow
+    env_file:
+      - .env
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:${DB_PASSWORD}@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - AIRFLOW__CELERY__BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - AIRFLOW__CORE__FERNET_KEY=${FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - ./data_pipelines/airflow/dags:/opt/airflow/dags
+      - ./data_pipelines/airflow/logs:/opt/airflow/logs
+      - ./data_pipelines/airflow/plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: investment_prometheus
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: investment_grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: investment_nginx
+    volumes:
+      - ./infrastructure/docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/docker/nginx/conf.d:/etc/nginx/conf.d
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
