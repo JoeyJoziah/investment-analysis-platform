@@ -38,6 +38,7 @@ typing-extensions==4.14.0
 # Utilities
 aiohttp==3.9.1
 alembic==1.12.1
+backoff==2.2.1
 alpha-vantage==2.3.1
 apache-airflow==2.7.3
 asyncpg==0.29.0

@@ -51,6 +51,9 @@ class BaseAPIClient(ABC):
     async def __aenter__(self):
         """Async context manager entry"""
         self.session = aiohttp.ClientSession(timeout=self.timeout)
+        # Initialize cost monitor if not already done
+        if cost_monitor.redis is None:
+            await cost_monitor.initialize()
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):

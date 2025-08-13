@@ -15,6 +15,10 @@ import Portfolio from './pages/Portfolio';
 import MarketOverview from './pages/MarketOverview';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import Watchlist from './pages/Watchlist';
+import Alerts from './pages/Alerts';
+import Reports from './pages/Reports';
+import Help from './pages/Help';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
 import { initializeApp } from './store/slices/appSlice';
 
@@ -46,7 +50,11 @@ function AppContent() {
             <Route path="analysis/:ticker?" element={<Analysis />} />
             <Route path="portfolio" element={<Portfolio />} />
             <Route path="market" element={<MarketOverview />} />
+            <Route path="watchlist" element={<Watchlist />} />
+            <Route path="alerts" element={<Alerts />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="help" element={<Help />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         )}

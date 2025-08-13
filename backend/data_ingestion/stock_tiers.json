@@ -1,0 +1,51 @@
+{
+  "1": [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "TSLA",
+    "NVDA",
+    "JPM",
+    "V",
+    "JNJ"
+  ],
+  "2": [
+    "WMT",
+    "PG",
+    "MA",
+    "HD",
+    "DIS",
+    "BAC",
+    "NFLX",
+    "ADBE",
+    "CRM",
+    "PFE"
+  ],
+  "3": [
+    "T",
+    "VZ",
+    "INTC",
+    "CSCO",
+    "PEP",
+    "KO",
+    "MRK",
+    "ABT",
+    "TMO",
+    "ORCL"
+  ],
+  "4": [
+    "GE",
+    "F",
+    "GM",
+    "BA",
+    "CAT",
+    "MMM",
+    "IBM",
+    "GS",
+    "MS",
+    "AXP"
+  ],
+  "5": []
+}

@@ -12,18 +12,62 @@ Key requirements:
 - Fully automated daily analysis without manual intervention
 - Compliance with 2025 SEC and GDPR regulations
 
-## 🤖 AUTOMATIC AGENT USAGE PROTOCOL
+## 🤖 AUTOMATIC AGENT USAGE PROTOCOL - ENHANCED COORDINATION SYSTEM
 
-**CRITICAL REQUIREMENT**: All prompts to Claude Code MUST automatically invoke appropriate specialized agents unless the user explicitly states "no agents" or specifies a different agent. This is a mandatory requirement for all interactions with this project.
+**CRITICAL REQUIREMENT**: All prompts to Claude Code MUST automatically invoke appropriate specialized agents from our **397-agent ecosystem** organized into **12 specialized teams**. The majority of responses should be delegated to agents/teams working in parallel, with Claude Code acting as the meta-coordinator for synthesis and quality assurance.
 
-### Agent Selection Rules
+### 🎯 Agent Ecosystem Overview
 
-Claude Code will automatically analyze each user prompt and:
+**Total Agents Available: 397 specialized agents across 7 repositories**
+- **furai-subagents**: 137 technology-specific experts
+- **voltagent-subagents**: 110 enterprise development specialists  
+- **wshobson-agents**: 63 financial & business experts
+- **claude-code-sub-agents**: 38 core development agents
+- **lst97-subagents**: 37 organized business function agents
+- **nuttall-agents**: 7 specialized development agents
+- **awesome-claude-code-agents**: 5 backend & UI specialists
 
-1. **Always assess task complexity** to determine if single agent or multi-agent approach is needed
-2. **Automatically select and invoke appropriate agents** based on the task requirements
-3. **Use the agent-organizer** for complex multi-domain tasks requiring coordination
-4. **Default to specialized agents** over generic responses for all technical tasks
+### 📊 12 Specialized Agent Teams
+
+1. **Data Pipeline Team** (32 agents) - Lead: `data-engineer@lst97`
+2. **ML/AI Team** (45 agents) - Lead: `ml-engineer@wshobson`
+3. **Financial Analysis Team** (28 agents) - Lead: `quant-analyst@wshobson`
+4. **API Integration Team** (35 agents) - Lead: `api-designer@claude-code`
+5. **Backend Development Team** (48 agents) - Lead: `python-pro@wshobson`
+6. **Frontend Team** (38 agents) - Lead: `frontend-developer@lst97`
+7. **Database Team** (25 agents) - Lead: `postgres-pro@lst97`
+8. **DevOps Team** (42 agents) - Lead: `deployment-engineer@lst97`
+9. **Security Team** (30 agents) - Lead: `security-auditor@wshobson`
+10. **Performance Team** (22 agents) - Lead: `performance-optimizer@claude-code`
+11. **Testing Team** (28 agents) - Lead: `test-suite-generator@claude-code`
+12. **Documentation Team** (24 agents) - Lead: `api-documenter@lst97`
+
+### 🔄 Coordination Protocols
+
+Claude Code will automatically:
+
+1. **Analyze Task Complexity** (1-10 scale)
+   - 1-3: Single agent execution
+   - 4-6: Team execution with lead coordination
+   - 7-8: Multi-team parallel execution
+   - 9-10: Enterprise coordination with `agent-organizer@lst97`
+
+2. **Distribute Work for Parallel Execution**
+   - Identify independent components for simultaneous processing
+   - Deploy up to 5 teams in parallel (max 20 agents concurrently)
+   - Set synthesis checkpoints for quality assurance
+
+3. **Synthesize Multi-Agent Outputs**
+   - Consolidate results from parallel executions
+   - Resolve conflicts between agent recommendations
+   - Ensure coherent, unified deliverables
+   - Perform quality checks before final delivery
+
+4. **Apply Quality Gates**
+   - Automatic code review for all code changes
+   - Security validation for sensitive operations
+   - Performance impact assessment
+   - Documentation completeness checks
 
 ### Automatic Agent Invocation Categories
 
@@ -217,34 +261,81 @@ For every user prompt, Claude Code will:
 | Architectural changes | +2 |
 | User-facing changes | +1 |
 
-### 🚀 Agent Cohort Patterns
+### 🚀 Enhanced Agent Team Patterns with Parallel Execution
 
-**Common Agent Teams for This Project:**
+**Parallel Execution Guidelines:**
+- Teams can work simultaneously on independent components
+- Maximum 5 teams in parallel (20 agents total)
+- Synthesis checkpoints every 30 minutes for long tasks
+- Meta-coordinator (`agent-organizer@lst97`) for enterprise tasks
 
-1. **Data Pipeline Activation Team**
-   - Lead: `data-engineer`
-   - Support: `python-pro`, `database-schema-designer`, `deployment-engineer`
-   - Use for: Activating Airflow DAGs, ETL implementation
+**Team Execution Patterns:**
 
-2. **ML Model Development Team**
-   - Lead: `ml-engineer`
-   - Support: `quant-analyst`, `data-scientist`, `python-pro`
-   - Use for: Training models, feature engineering, backtesting
+1. **Data Pipeline Team** (32 agents)
+   - **Lead**: `data-engineer@lst97`
+   - **Core Members**: `airflow-expert@furai`, `etl-specialist@voltagent`, `streaming-expert@wshobson`
+   - **Parallel Capabilities**: Can process multiple data sources simultaneously
+   - **Use Cases**: Airflow DAGs, ETL pipelines, real-time streaming, batch processing
 
-3. **Frontend Completion Team**
-   - Lead: `frontend-developer`
-   - Support: `react-pro`, `ui-designer`, `api-designer`
-   - Use for: Implementing missing pages, UI/UX improvements
+2. **ML/AI Team** (45 agents)
+   - **Lead**: `ml-engineer@wshobson`
+   - **Core Members**: `pytorch-expert@furai`, `tensorflow-specialist@voltagent`, `scikit-learn-expert@furai`
+   - **Parallel Capabilities**: Train multiple models concurrently
+   - **Use Cases**: Model training, feature engineering, hyperparameter tuning, ensemble creation
 
-4. **Production Deployment Team**
-   - Lead: `deployment-engineer`
-   - Support: `cloud-architect`, `security-auditor`, `devops-engineer`
-   - Use for: K8s setup, CI/CD pipeline, production configuration
+3. **Financial Analysis Team** (28 agents)
+   - **Lead**: `quant-analyst@wshobson`
+   - **Core Members**: `algo-trader@voltagent`, `risk-analyst@wshobson`, `portfolio-optimizer@lst97`
+   - **Parallel Capabilities**: Analyze multiple portfolios/strategies simultaneously
+   - **Use Cases**: Trading strategies, risk metrics, portfolio optimization, backtesting
 
-5. **Performance Optimization Team**
-   - Lead: `performance-optimizer`
-   - Support: `database-optimizer`, `python-pro`, `cache-expert`
-   - Use for: System-wide performance improvements
+4. **API Integration Team** (35 agents)
+   - **Lead**: `api-designer@claude-code`
+   - **Core Members**: `fastapi-expert@furai`, `graphql-specialist@voltagent`, `webhook-expert@wshobson`
+   - **Parallel Capabilities**: Design and implement multiple endpoints concurrently
+   - **Use Cases**: REST APIs, GraphQL schemas, webhook integration, API documentation
+
+5. **Backend Development Team** (48 agents)
+   - **Lead**: `python-pro@wshobson`
+   - **Core Members**: `django-expert@furai`, `fastapi-specialist@voltagent`, `async-python-expert@lst97`
+   - **Parallel Capabilities**: Develop multiple backend components simultaneously
+   - **Use Cases**: Backend architecture, async programming, microservices, business logic
+
+### 🎯 Task Routing Decision Tree
+
+```
+User Request Analysis
+├── Complexity Assessment (1-10)
+│   ├── Simple (1-3) → Single Agent
+│   ├── Moderate (4-6) → Team Lead + 2-3 Support Agents
+│   ├── Complex (7-8) → Multiple Teams (Parallel)
+│   └── Enterprise (9-10) → Meta-Coordinator + All Teams
+│
+├── Domain Detection
+│   ├── Single Domain → Specialized Team
+│   ├── Multi-Domain → Multiple Teams (Parallel)
+│   └── Cross-Functional → Meta-Coordinator
+│
+└── Parallel Execution Planning
+    ├── Identify Independent Components
+    ├── Assign Teams to Components
+    ├── Set Synthesis Checkpoints
+    └── Deploy Parallel Execution
+```
+
+### 📈 Performance Metrics & Monitoring
+
+**Team Performance Targets:**
+- Task Completion Rate: >95%
+- Parallel Efficiency: 60% time reduction
+- Quality Score: >85/100
+- Synthesis Accuracy: >90%
+
+**Agent Utilization Metrics:**
+- Daily Activations: Track frequency
+- Success Rate: >92% target
+- Specialization Match: >95% accuracy
+- Collaboration Score: >88%
 
 ### 📊 Current Project Priority Agent Assignments
 
@@ -257,7 +348,259 @@ Based on project status (72% complete):
 4. **"Set up CI/CD"** → Production Deployment Team
 5. **"Optimize performance"** → Performance Optimization Team
 
-This ensures that every interaction leverages the full power of the 300+ specialized agents available, providing expert-level assistance for all aspects of the investment analysis platform development.
+This ensures that every interaction leverages the full power of the 397 specialized agents available across 7 repositories, providing expert-level assistance for all aspects of the investment analysis platform development.
+
+## 🎯 COMPREHENSIVE AGENT MANAGEMENT SYSTEM
+
+### Agent Inventory Overview
+
+**Total Available Agents**: 397 agents across 7 specialized repositories
+**Agent Categories**: 12 major specialization domains
+**Coordination Protocols**: 5 different team interaction patterns
+**Team Structures**: 12 specialized agent teams with defined hierarchies
+
+### 📊 Repository Breakdown
+
+| Repository | Agent Count | Primary Focus | Key Strengths |
+|------------|-------------|---------------|---------------|
+| **claude-code-sub-agents** | 38 | Core development & project management | Foundation agents for all development tasks |
+| **furai-subagents** | 137 | Technology-specific experts | Deep expertise in 130+ technologies |
+| **voltagent-subagents** | 110 | Enterprise development patterns | Professional-grade team coordination |
+| **wshobson-agents** | 63 | Financial & business focus | Perfect for investment platform |
+| **lst97-subagents** | 37 | Organized business functions | Meta-coordination capabilities |
+| **nuttall-agents** | 7 | Specialized development | Modern development practices |
+| **awesome-claude-code-agents** | 5 | Backend & UI engineering | High-quality focused agents |
+
+### 🏗️ Agent Team Structure
+
+#### 1. Data Pipeline Team
+**Mission**: Airflow DAGs, ETL processes, data ingestion, streaming systems
+- **Lead**: `data-engineer@lst97`
+- **Core**: `data-engineer@voltagent`, `data-scientist@wshobson`, `kafka-expert@furai`, `python-pro@wshobson`
+- **Support**: `database-optimizer@lst97`, `postgres-pro@lst97`, `performance-optimizer@claude-code`
+- **Protocol**: Sequential with parallel phases
+- **Use Cases**: Activate Airflow pipelines, implement ETL, optimize data ingestion
+
+#### 2. ML/AI Team  
+**Mission**: PyTorch models, scikit-learn, feature engineering, model training
+- **Lead**: `ml-engineer@wshobson`
+- **Core**: `ml-engineer@lst97`, `ai-engineer@lst97`, `pytorch-expert@furai`, `data-scientist@wshobson`
+- **Support**: `python-pro@wshobson`, `performance-engineer@lst97`, `langchain-expert@furai`
+- **Protocol**: Collaborative research and development
+- **Use Cases**: Train ML models, ensemble methods, feature engineering
+
+#### 3. Financial Analysis Team
+**Mission**: Quantitative analysis, trading strategies, risk metrics
+- **Lead**: `quant-analyst@wshobson`
+- **Core**: `quant-analyst@voltagent`, `risk-manager@wshobson`, `fintech-engineer@voltagent`
+- **Support**: `ml-engineer@wshobson`, `database-optimizer@wshobson`
+- **Protocol**: Domain expert led collaboration
+- **Use Cases**: Trading algorithms, risk metrics, portfolio optimization
+
+#### 4. API Integration Team
+**Mission**: FastAPI endpoints, REST APIs, rate limiting, external API integration
+- **Lead**: `api-designer@claude-code`
+- **Core**: `api-designer@voltagent`, `python-backend-engineer@awesome`, `fastapi-expert@furai`
+- **Support**: `api-documenter@lst97`, `performance-optimizer@claude-code`
+- **Protocol**: Design review implementation
+- **Use Cases**: Design REST APIs, integrate external APIs, implement caching
+
+#### 5. Backend Development Team
+**Mission**: FastAPI, async Python, database integration, business logic
+- **Lead**: `python-pro@wshobson`
+- **Core**: `backend-architect@lst97`, `python-backend-engineer@awesome`, `fastapi-expert@furai`
+- **Support**: `database-schema-designer@claude-code`, `security-analyzer@claude-code`
+- **Protocol**: Architecture first development
+- **Use Cases**: Business logic, database models, async processing
+
+#### 6. Frontend Team
+**Mission**: React components, UI/UX, data visualization, mobile apps
+- **Lead**: `frontend-developer@lst97`
+- **Core**: `react-pro@lst97`, `ui-engineer@awesome`, `react-expert@furai`
+- **Support**: `typescript-pro@lst97`, `mobile-developer@voltagent`
+- **Protocol**: Design system driven development
+- **Use Cases**: React components, dashboards, mobile apps
+
+#### 7. Database Team
+**Mission**: PostgreSQL, TimescaleDB, query optimization, migrations
+- **Lead**: `postgres-pro@lst97`
+- **Core**: `database-optimizer@wshobson`, `postgres-expert@furai`, `database-schema-designer@claude-code`
+- **Support**: `redis-expert@furai`, `elasticsearch-expert@furai`
+- **Protocol**: Schema first optimization driven
+- **Use Cases**: Schema design, query optimization, migrations
+
+#### 8. DevOps Team
+**Mission**: Docker, Kubernetes, CI/CD, monitoring, deployment
+- **Lead**: `deployment-engineer@lst97`
+- **Core**: `devops-engineer@voltagent`, `cloud-architect@wshobson`, `kubernetes-expert@furai`
+- **Support**: `github-actions-expert@furai`, `terraform-specialist@wshobson`
+- **Protocol**: Infrastructure as code driven
+- **Use Cases**: Container orchestration, CI/CD, monitoring
+
+#### 9. Security Team
+**Mission**: Authentication, compliance, vulnerability assessment, encryption
+- **Lead**: `security-auditor@wshobson`
+- **Core**: `security-auditor@lst97`, `penetration-tester@voltagent`, `jwt-expert@furai`
+- **Support**: `oauth-oidc-expert@furai`, `owasp-top10-expert@furai`
+- **Protocol**: Security first compliance driven
+- **Use Cases**: Security assessment, authentication, compliance
+
+#### 10. Performance Team
+**Mission**: Optimization, caching, scaling, load balancing
+- **Lead**: `performance-optimizer@claude-code`
+- **Core**: `performance-engineer@lst97`, `database-optimizer@wshobson`, `redis-expert@furai`
+- **Support**: `cloud-architect@wshobson`, `sre-engineer@voltagent`
+- **Protocol**: Benchmark driven optimization
+- **Use Cases**: Performance optimization, caching, scaling
+
+#### 11. Testing Team
+**Mission**: Unit tests, integration tests, E2E testing, quality assurance
+- **Lead**: `test-suite-generator@claude-code`
+- **Core**: `test-automator@lst97`, `qa-expert@lst97`, `jest-expert@furai`
+- **Support**: `pytest-expert@furai`, `playwright-expert@furai`
+- **Protocol**: Test driven development focused
+- **Use Cases**: Test suites, automation, quality assurance
+
+#### 12. Documentation Team
+**Mission**: Technical writing, API documentation, architecture diagrams
+- **Lead**: `api-documenter@lst97`
+- **Core**: `documentation-generator@claude-code`, `content-writer@nuttall`, `technical-writer@voltagent`
+- **Support**: `openapi-expert@furai`, `mermaid-expert@wshobson`
+- **Protocol**: Documentation as code
+- **Use Cases**: API docs, technical writing, diagrams
+
+### 🔄 Coordination Protocols
+
+#### 1. Sequential with Parallel Phases
+**Pattern**: Lead → [Phase 1: Parallel Tasks] → Synthesis → [Phase 2: Parallel Tasks] → Integration
+**Best For**: Data pipelines, complex multi-step processes
+**Example**: Data ingestion (Lead analysis → Parallel API integration + DB setup → Synthesis → Parallel testing + optimization → Final integration)
+
+#### 2. Collaborative Research and Development
+**Pattern**: Research Phase (Parallel) → Design Collaboration → Implementation (Parallel) → Validation
+**Best For**: ML model development, algorithm design
+**Example**: ML training (Parallel research on models → Collaborative feature design → Parallel implementation + testing → Model validation)
+
+#### 3. Domain Expert Led Collaboration
+**Pattern**: Expert Analysis → Specialist Consultation → Collaborative Implementation → Expert Validation
+**Best For**: Financial analysis, specialized domain work
+**Example**: Trading algorithm (Quant analysis → Risk consultation → Collaborative coding → Financial validation)
+
+#### 4. Design Review Implementation
+**Pattern**: Design → Review → [Parallel Implementation] → Integration → Testing
+**Best For**: API development, system interfaces
+**Example**: API development (Design endpoints → Security review → Parallel implementation + docs → Integration → Testing)
+
+#### 5. Architecture First Development
+**Pattern**: Architecture → Component Design → [Parallel Development] → Integration → Testing
+**Best For**: Backend systems, infrastructure
+**Example**: Backend service (System architecture → Component design → Parallel coding + DB setup → Service integration → Testing)
+
+### 📈 Agent Selection Framework
+
+#### Automatic Task Analysis
+Every user prompt triggers automatic analysis:
+
+1. **Task Complexity Assessment** (1-10 scale):
+   - Simple (1-3): Single agent
+   - Moderate (4-6): Primary + support agents  
+   - Complex (7-8): Full team coordination
+   - Enterprise (9-10): Multi-team coordination with agent-organizer
+
+2. **Domain Detection**: Automatic identification of required expertise
+3. **Team Selection**: Best-fit team(s) based on task requirements
+4. **Parallel Execution Planning**: Identify parallelizable components
+5. **Synthesis Strategy**: Plan for consolidating multi-agent outputs
+
+#### Task Routing Decision Tree
+```
+User Request → Task Analysis → Complexity Score → Domain Mapping → Team Selection → Execution Plan
+```
+
+**Examples**:
+- "Fix database performance" → Complexity: 5 → Database Team (Lead: postgres-pro@lst97)
+- "Add authentication + API security" → Complexity: 7 → Security Team + API Team (Coordinated)
+- "Complete ML model training pipeline" → Complexity: 8 → ML Team + Data Pipeline Team + Backend Team
+
+### ⚡ Parallel Execution Guidelines
+
+#### Maximum Concurrency Rules
+- **Maximum concurrent teams**: 5
+- **Maximum agents per team**: 4 in parallel
+- **Synthesis checkpoints**: After each major phase
+- **Conflict resolution**: Lead agent decision with escalation path
+
+#### Parallel Work Distribution
+1. **Independent Components**: Can be developed simultaneously
+2. **Dependent Phases**: Sequential with internal parallelization
+3. **Shared Resources**: Coordination through lead agents
+4. **Quality Gates**: Parallel reviews with synthesis
+
+### 🎛️ Meta-Coordination System
+
+#### Agent-Organizer Integration
+The `agent-organizer@lst97` serves as the meta-coordinator for:
+- **Multi-team coordination**: When tasks span 3+ teams
+- **Resource conflict resolution**: When teams compete for resources
+- **Complex synthesis**: Consolidating outputs from 5+ agents
+- **Strategic planning**: Large-scale architectural changes
+
+#### Escalation Protocols
+**Level 1**: Team Lead resolution
+**Level 2**: Domain architect (system-architect, backend-architect, etc.)
+**Level 3**: Agent-organizer coordination
+**Level 4**: Multi-agent-coordinator for enterprise-scale issues
+
+### 📊 Success Metrics & Performance Tracking
+
+#### Team Performance Metrics
+- **Task completion rate**: % of tasks completed successfully by each team
+- **Time to completion**: Average time for different task types
+- **Quality scores**: Code review scores, test coverage, security ratings
+- **Parallel efficiency**: % improvement from parallel vs sequential execution
+- **Synthesis effectiveness**: Quality of multi-agent output consolidation
+
+#### Agent Utilization Tracking
+- **Agent activation frequency**: How often each agent is invoked
+- **Success rates**: % of successful task completions per agent
+- **Collaboration effectiveness**: Quality of multi-agent teamwork
+- **Specialization accuracy**: How well agents stay within expertise areas
+
+### 🚀 Enhanced Project Priority Assignments
+
+Based on 72% project completion status, automatic team assignments:
+
+#### Immediate Priority (Auto-invoke these teams):
+1. **"Activate data pipeline"** → Data Pipeline Team + Backend Team
+2. **"Train ML models"** → ML/AI Team + Data Pipeline Team  
+3. **"Complete frontend pages"** → Frontend Team + API Integration Team
+4. **"Implement security compliance"** → Security Team + Backend Team
+5. **"Set up production deployment"** → DevOps Team + Performance Team
+6. **"Optimize system performance"** → Performance Team + Database Team
+
+#### Advanced Integration Examples
+
+**Example 1**: "Implement real-time stock price streaming with WebSocket API"
+- **Complexity**: 8 (Multi-team coordination required)
+- **Teams**: API Integration Team + Backend Team + Performance Team
+- **Coordination**: Design review implementation protocol
+- **Parallel Phases**: API design || Backend service setup || Caching strategy
+- **Lead Coordination**: `api-designer@claude-code` with `agent-organizer@lst97`
+
+**Example 2**: "Create comprehensive ML model training pipeline with automated retraining"
+- **Complexity**: 9 (Enterprise-level coordination)
+- **Teams**: ML/AI Team + Data Pipeline Team + DevOps Team + Testing Team
+- **Coordination**: Collaborative research and development + Infrastructure as code
+- **Parallel Phases**: Model research || Pipeline setup || Container orchestration || Test automation
+- **Meta-Coordination**: `agent-organizer@lst97` orchestrating team leads
+
+#### Quality Assurance Integration
+- **Automatic Code Review**: Every code change triggers `code-reviewer@claude-code` + domain expert
+- **Security Validation**: All API changes auto-include `security-auditor@wshobson`
+- **Documentation Updates**: API changes trigger `api-documenter@lst97`
+- **Performance Validation**: Database changes trigger `performance-optimizer@claude-code`
+
+This comprehensive agent management system ensures maximum efficiency through parallel execution, expert specialization, and systematic coordination across all 397 available agents.
 
 ## Technology Stack
 

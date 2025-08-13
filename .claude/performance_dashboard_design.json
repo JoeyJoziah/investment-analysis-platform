@@ -1,0 +1,403 @@
+{
+  "dashboard_config": {
+    "title": "Agent Performance & Coordination Dashboard",
+    "description": "Comprehensive monitoring system for 397 agents across 12 teams",
+    "update_frequency": "real_time",
+    "retention_period": "90_days",
+    "alert_thresholds": {
+      "task_completion_rate": 85,
+      "avg_response_time": 300,
+      "agent_utilization": 70,
+      "synthesis_quality_score": 80
+    }
+  },
+  "metrics_categories": {
+    "team_performance": {
+      "description": "Team-level performance and coordination metrics",
+      "metrics": [
+        {
+          "name": "task_completion_rate",
+          "display_name": "Task Completion Rate",
+          "type": "percentage",
+          "calculation": "completed_tasks / total_assigned_tasks * 100",
+          "target": 95,
+          "visualization": "gauge_chart"
+        },
+        {
+          "name": "average_completion_time",
+          "display_name": "Average Completion Time",
+          "type": "duration",
+          "calculation": "sum(completion_times) / count(completed_tasks)",
+          "target": 240,
+          "visualization": "trend_line"
+        },
+        {
+          "name": "parallel_efficiency",
+          "display_name": "Parallel Execution Efficiency",
+          "type": "percentage", 
+          "calculation": "sequential_time / parallel_time * 100 - 100",
+          "target": 60,
+          "visualization": "bar_chart"
+        },
+        {
+          "name": "quality_score",
+          "display_name": "Output Quality Score",
+          "type": "score_0_100",
+          "calculation": "weighted_average(code_quality, test_coverage, security_score)",
+          "target": 85,
+          "visualization": "radar_chart"
+        },
+        {
+          "name": "coordination_effectiveness",
+          "display_name": "Team Coordination Effectiveness",
+          "type": "score_0_100",
+          "calculation": "successful_handoffs / total_handoffs * 100",
+          "target": 90,
+          "visualization": "network_graph"
+        }
+      ]
+    },
+    "agent_utilization": {
+      "description": "Individual agent performance and specialization metrics",
+      "metrics": [
+        {
+          "name": "activation_frequency",
+          "display_name": "Agent Activation Frequency",
+          "type": "count_per_day",
+          "calculation": "count(agent_invocations) / days",
+          "target": 5,
+          "visualization": "heatmap"
+        },
+        {
+          "name": "success_rate",
+          "display_name": "Task Success Rate",
+          "type": "percentage",
+          "calculation": "successful_completions / total_assignments * 100",
+          "target": 92,
+          "visualization": "donut_chart"
+        },
+        {
+          "name": "specialization_accuracy",
+          "display_name": "Specialization Accuracy",
+          "type": "percentage",
+          "calculation": "tasks_within_expertise / total_tasks * 100",
+          "target": 95,
+          "visualization": "scatter_plot"
+        },
+        {
+          "name": "collaboration_score",
+          "display_name": "Collaboration Effectiveness",
+          "type": "score_0_100",
+          "calculation": "successful_collaborations / total_collaborations * 100",
+          "target": 88,
+          "visualization": "force_directed_graph"
+        },
+        {
+          "name": "learning_curve",
+          "display_name": "Performance Improvement Trend",
+          "type": "trend",
+          "calculation": "linear_regression(performance_scores_over_time)",
+          "target": "positive_slope",
+          "visualization": "trend_line"
+        }
+      ]
+    },
+    "synthesis_quality": {
+      "description": "Multi-agent output synthesis and consolidation metrics",
+      "metrics": [
+        {
+          "name": "synthesis_success_rate",
+          "display_name": "Synthesis Success Rate",
+          "type": "percentage",
+          "calculation": "successful_synthesis / total_multi_agent_tasks * 100",
+          "target": 90,
+          "visualization": "gauge_chart"
+        },
+        {
+          "name": "output_coherence",
+          "display_name": "Output Coherence Score",
+          "type": "score_0_100", 
+          "calculation": "nlp_coherence_analysis(synthesized_outputs)",
+          "target": 85,
+          "visualization": "histogram"
+        },
+        {
+          "name": "redundancy_elimination",
+          "display_name": "Redundancy Elimination Rate",
+          "type": "percentage",
+          "calculation": "eliminated_redundant_content / total_content * 100",
+          "target": 80,
+          "visualization": "bar_chart"
+        },
+        {
+          "name": "completeness_score",
+          "display_name": "Output Completeness",
+          "type": "score_0_100",
+          "calculation": "covered_requirements / total_requirements * 100",
+          "target": 95,
+          "visualization": "progress_bar"
+        }
+      ]
+    },
+    "coordination_efficiency": {
+      "description": "Multi-team coordination and workflow optimization metrics",
+      "metrics": [
+        {
+          "name": "handoff_success_rate", 
+          "display_name": "Team Handoff Success Rate",
+          "type": "percentage",
+          "calculation": "successful_handoffs / total_handoffs * 100",
+          "target": 95,
+          "visualization": "sankey_diagram"
+        },
+        {
+          "name": "escalation_rate",
+          "display_name": "Escalation Rate",
+          "type": "percentage",
+          "calculation": "escalated_tasks / total_tasks * 100",
+          "target": 10,
+          "visualization": "funnel_chart"
+        },
+        {
+          "name": "protocol_adherence",
+          "display_name": "Protocol Adherence Score",
+          "type": "score_0_100",
+          "calculation": "protocol_compliant_executions / total_executions * 100",
+          "target": 92,
+          "visualization": "radar_chart"
+        },
+        {
+          "name": "resource_utilization",
+          "display_name": "Resource Utilization Efficiency",
+          "type": "percentage", 
+          "calculation": "active_agents / available_agents * 100",
+          "target": 70,
+          "visualization": "area_chart"
+        }
+      ]
+    }
+  },
+  "dashboard_panels": {
+    "overview_panel": {
+      "title": "System Overview",
+      "layout": "2x2_grid",
+      "widgets": [
+        {
+          "type": "kpi_card",
+          "metric": "task_completion_rate",
+          "time_range": "24h"
+        },
+        {
+          "type": "kpi_card", 
+          "metric": "average_completion_time",
+          "time_range": "24h"
+        },
+        {
+          "type": "kpi_card",
+          "metric": "active_agents",
+          "time_range": "real_time"
+        },
+        {
+          "type": "kpi_card",
+          "metric": "synthesis_success_rate",
+          "time_range": "24h"
+        }
+      ]
+    },
+    "team_performance_panel": {
+      "title": "Team Performance Analysis",
+      "layout": "dynamic_grid",
+      "widgets": [
+        {
+          "type": "team_comparison_chart",
+          "metrics": ["task_completion_rate", "quality_score", "parallel_efficiency"],
+          "teams": "all_teams"
+        },
+        {
+          "type": "coordination_network", 
+          "visualization": "force_directed_graph",
+          "data_source": "team_interactions"
+        },
+        {
+          "type": "performance_heatmap",
+          "axes": ["teams", "time"],
+          "metric": "overall_performance_score"
+        }
+      ]
+    },
+    "agent_utilization_panel": {
+      "title": "Agent Utilization & Specialization",
+      "layout": "flexible",
+      "widgets": [
+        {
+          "type": "agent_activity_heatmap",
+          "axes": ["agents", "time_of_day"],
+          "metric": "activation_frequency"
+        },
+        {
+          "type": "specialization_scatter",
+          "x_axis": "tasks_assigned",
+          "y_axis": "success_rate",
+          "color_by": "repository",
+          "size_by": "expertise_level"
+        },
+        {
+          "type": "collaboration_network",
+          "visualization": "interactive_graph",
+          "nodes": "agents",
+          "edges": "collaboration_frequency"
+        }
+      ]
+    },
+    "synthesis_quality_panel": {
+      "title": "Multi-Agent Synthesis Quality",
+      "layout": "dashboard_grid",
+      "widgets": [
+        {
+          "type": "synthesis_pipeline",
+          "visualization": "flow_chart",
+          "stages": ["input_collection", "conflict_resolution", "synthesis", "validation"]
+        },
+        {
+          "type": "quality_trends",
+          "metrics": ["coherence", "completeness", "accuracy"],
+          "time_range": "30d"
+        },
+        {
+          "type": "improvement_recommendations",
+          "type": "ai_generated_insights",
+          "update_frequency": "daily"
+        }
+      ]
+    },
+    "coordination_efficiency_panel": {
+      "title": "Coordination & Protocol Effectiveness",
+      "layout": "mixed",
+      "widgets": [
+        {
+          "type": "protocol_usage_breakdown",
+          "visualization": "pie_chart",
+          "data": "coordination_protocols_used"
+        },
+        {
+          "type": "escalation_flow",
+          "visualization": "sankey_diagram", 
+          "flow": "task -> team -> escalation_level"
+        },
+        {
+          "type": "efficiency_metrics",
+          "visualization": "multi_line_chart",
+          "metrics": ["handoff_time", "resolution_time", "quality_score"]
+        }
+      ]
+    }
+  },
+  "alerting_rules": [
+    {
+      "name": "Low Team Performance",
+      "condition": "task_completion_rate < 85% for 2 hours",
+      "severity": "warning",
+      "action": "notify_team_lead"
+    },
+    {
+      "name": "High Escalation Rate", 
+      "condition": "escalation_rate > 15% for 24 hours",
+      "severity": "critical",
+      "action": "notify_agent_organizer"
+    },
+    {
+      "name": "Poor Synthesis Quality",
+      "condition": "synthesis_success_rate < 80% for 6 hours", 
+      "severity": "warning",
+      "action": "review_synthesis_protocols"
+    },
+    {
+      "name": "Agent Overutilization",
+      "condition": "agent_utilization > 90% for any single agent for 4 hours",
+      "severity": "warning", 
+      "action": "load_balance_tasks"
+    },
+    {
+      "name": "Coordination Bottleneck",
+      "condition": "handoff_success_rate < 90% for 1 hour",
+      "severity": "critical",
+      "action": "activate_meta_coordinator"
+    }
+  ],
+  "optimization_recommendations": {
+    "automatic_insights": [
+      {
+        "category": "team_optimization",
+        "description": "Identify underutilized agents and suggest task reallocation",
+        "frequency": "daily",
+        "action": "generate_reallocation_suggestions"
+      },
+      {
+        "category": "parallel_efficiency",
+        "description": "Analyze tasks for better parallelization opportunities", 
+        "frequency": "weekly",
+        "action": "suggest_parallel_improvements"
+      },
+      {
+        "category": "specialization_drift",
+        "description": "Detect agents working outside their expertise",
+        "frequency": "daily", 
+        "action": "realign_agent_assignments"
+      },
+      {
+        "category": "protocol_effectiveness",
+        "description": "Evaluate coordination protocol success rates",
+        "frequency": "weekly",
+        "action": "suggest_protocol_adjustments"
+      }
+    ]
+  },
+  "data_sources": {
+    "agent_activity_log": {
+      "description": "All agent invocations, tasks, and completions",
+      "retention": "1_year",
+      "fields": ["timestamp", "agent_id", "task_id", "action", "result", "duration"]
+    },
+    "team_coordination_log": {
+      "description": "Team interactions, handoffs, and coordination events", 
+      "retention": "6_months",
+      "fields": ["timestamp", "source_team", "target_team", "handoff_type", "success"]
+    },
+    "synthesis_quality_metrics": {
+      "description": "Quality scores for multi-agent outputs",
+      "retention": "90_days", 
+      "fields": ["task_id", "agents_involved", "coherence_score", "completeness_score", "accuracy_score"]
+    },
+    "performance_benchmarks": {
+      "description": "Historical performance baselines and targets",
+      "retention": "2_years",
+      "fields": ["metric_name", "baseline_value", "target_value", "measurement_date"]
+    }
+  },
+  "integration_endpoints": {
+    "metrics_api": "/api/v1/metrics/{metric_name}",
+    "team_performance": "/api/v1/teams/{team_id}/performance", 
+    "agent_utilization": "/api/v1/agents/{agent_id}/utilization",
+    "synthesis_quality": "/api/v1/synthesis/quality_score",
+    "real_time_status": "/api/v1/status/real_time",
+    "optimization_suggestions": "/api/v1/optimization/suggestions"
+  },
+  "visualization_library": {
+    "primary_library": "plotly_dash",
+    "fallback_library": "d3js",
+    "chart_types": [
+      "gauge_chart",
+      "trend_line", 
+      "bar_chart",
+      "radar_chart",
+      "network_graph",
+      "heatmap",
+      "donut_chart",
+      "scatter_plot",
+      "force_directed_graph",
+      "sankey_diagram",
+      "funnel_chart",
+      "area_chart"
+    ]
+  }
+}

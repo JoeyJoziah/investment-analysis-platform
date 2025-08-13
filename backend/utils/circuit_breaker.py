@@ -5,7 +5,7 @@ Prevents cascading failures in distributed systems by failing fast
 
 import asyncio
 import time
-from typing import Callable, Optional, Any, Dict, Union
+from typing import Callable, Optional, Any, Dict, Union, List
 from functools import wraps
 from enum import Enum
 from datetime import datetime, timedelta
