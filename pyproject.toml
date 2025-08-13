@@ -1,0 +1,149 @@
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+skip_gitignore = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--verbose",
+    "--cov=backend",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=85",
+    "--durations=10",
+    "--maxfail=5",
+]
+testpaths = ["backend/tests"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests", 
+    "performance: Performance tests",
+    "security: Security tests",
+    "compliance: Compliance tests",
+    "financial: Financial model tests",
+    "slow: Slow running tests",
+    "api: API endpoint tests",
+    "database: Database tests",
+    "cache: Cache-related tests",
+    "external_api: Tests requiring external APIs",
+    "flaky: Flaky tests that may need retries",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning:pandas.*",
+    "ignore::PendingDeprecationWarning",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "backend/tests/*",
+    "backend/migrations/*", 
+    "backend/config/settings.py",
+    "backend/*/__pycache__/*",
+    "backend/*/conftest.py",
+    "*/venv/*",
+    "*/env/*",
+    "*/.venv/*",
+    "*/site-packages/*",
+]
+branch = true
+parallel = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError", 
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\b.*\\):",
+    "@(abc\\.)?abstractmethod",
+]
+show_missing = true
+precision = 2
+skip_covered = false
+skip_empty = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+title = "Investment Analysis App Coverage Report"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg",
+    ".venv",
+    "migrations",
+]
+
+[tool.pylint]
+max-line-length = 88
+disable = [
+    "C0111",  # missing-docstring
+    "C0103",  # invalid-name
+    "R0903",  # too-few-public-methods
+    "R0913",  # too-many-arguments
+    "W0622",  # redefined-builtin
+]

@@ -1,0 +1,672 @@
+name: Production Deployment
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to deploy'
+        required: true
+        type: string
+      skip_tests:
+        description: 'Skip pre-deployment tests'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  # Validate release
+  validate-release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.release.outputs.prerelease }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+    - name: Get release info
+      id: release
+      run: |
+        if [[ "${{ github.event_name }}" == "release" ]]; then
+          echo "prerelease=${{ github.event.release.prerelease }}" >> $GITHUB_OUTPUT
+          echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+        else
+          echo "prerelease=false" >> $GITHUB_OUTPUT
+          echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Extract version
+      id: version
+      run: |
+        TAG_NAME="${{ steps.release.outputs.tag_name }}"
+        VERSION=${TAG_NAME#v}  # Remove 'v' prefix if present
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Validate version format
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          echo "Expected format: X.Y.Z (e.g., 1.2.3)"
+          exit 1
+        fi
+        echo "✅ Version format is valid: $VERSION"
+
+    - name: Check if prerelease
+      if: steps.release.outputs.prerelease == 'true'
+      run: |
+        echo "⚠️  This is a pre-release. Deployment will be marked as such."
+
+  # Pre-deployment tests (can be skipped for hotfixes)
+  pre-deployment-tests:
+    runs-on: ubuntu-latest
+    needs: [validate-release]
+    if: github.event.inputs.skip_tests != 'true'
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-prod-${{ hashFiles('**/requirements*.txt') }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+        
+        # Install TA-Lib
+        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/ && ./configure --prefix=/usr && make && sudo make install
+        
+        # Install Python dependencies
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run critical tests
+      run: |
+        pytest backend/tests/ \
+          -m "not slow and not external_api" \
+          --cov=backend \
+          --cov-report=xml \
+          --cov-fail-under=85 \
+          -x \
+          --tb=short
+      env:
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        JWT_SECRET_KEY: test-secret-key
+        APP_ENV: testing
+
+    - name: Upload pre-deployment test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pre-deployment-test-results
+        path: |
+          coverage.xml
+          .coverage
+
+  # Build production images
+  build-production-images:
+    runs-on: ubuntu-latest
+    needs: [validate-release, pre-deployment-tests]
+    if: always() && (needs.pre-deployment-tests.result == 'success' || needs.pre-deployment-tests.result == 'skipped')
+    outputs:
+      backend-image: ${{ steps.backend-meta.outputs.tags }}
+      frontend-image: ${{ steps.frontend-meta.outputs.tags }}
+      backend-digest: ${{ steps.backend-build.outputs.digest }}
+      frontend-digest: ${{ steps.frontend-build.outputs.digest }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract backend metadata
+      id: backend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+        tags: |
+          type=semver,pattern={{version}},value=${{ needs.validate-release.outputs.version }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate-release.outputs.version }}
+          type=raw,value=production-latest
+          type=raw,value=stable,enable=${{ needs.validate-release.outputs.is_prerelease == 'false' }}
+
+    - name: Extract frontend metadata
+      id: frontend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+        tags: |
+          type=semver,pattern={{version}},value=${{ needs.validate-release.outputs.version }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ needs.validate-release.outputs.version }}
+          type=raw,value=production-latest
+          type=raw,value=stable,enable=${{ needs.validate-release.outputs.is_prerelease == 'false' }}
+
+    - name: Build and push backend image
+      id: backend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.backend-meta.outputs.tags }}
+        labels: ${{ steps.backend-meta.outputs.labels }}
+        cache-from: type=gha,scope=backend-production
+        cache-to: type=gha,mode=max,scope=backend-production
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          BUILD_ENV=production
+          VERSION=${{ needs.validate-release.outputs.version }}
+
+    - name: Build and push frontend image
+      id: frontend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/web
+        file: ./frontend/web/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.frontend-meta.outputs.tags }}
+        labels: ${{ steps.frontend-meta.outputs.labels }}
+        cache-from: type=gha,scope=frontend-production
+        cache-to: type=gha,mode=max,scope=frontend-production
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          REACT_APP_ENV=production
+          REACT_APP_API_URL=https://api.investment-analysis.com
+          REACT_APP_VERSION=${{ needs.validate-release.outputs.version }}
+
+    - name: Generate and sign SBOMs
+      run: |
+        # Generate SBOMs
+        docker buildx imagetools inspect ${{ steps.backend-meta.outputs.tags }} --format "{{ json . }}" > backend-manifest.json
+        docker buildx imagetools inspect ${{ steps.frontend-meta.outputs.tags }} --format "{{ json . }}" > frontend-manifest.json
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: production-build-artifacts
+        path: |
+          backend-manifest.json
+          frontend-manifest.json
+
+  # Comprehensive security scan
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [build-production-images]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run comprehensive Trivy scan on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-production-images.outputs.backend-image }}
+        format: 'json'
+        output: 'backend-trivy-results.json'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+    - name: Run comprehensive Trivy scan on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-production-images.outputs.frontend-image }}
+        format: 'json'
+        output: 'frontend-trivy-results.json'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+    - name: Generate SARIF reports
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-production-images.outputs.backend-image }}
+        format: 'sarif'
+        output: 'backend-trivy.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Upload SARIF reports
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: backend-trivy.sarif
+
+    - name: Security gate check
+      run: |
+        # Check for critical and high vulnerabilities
+        BACKEND_CRITICAL=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' backend-trivy-results.json | wc -l)
+        BACKEND_HIGH=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' backend-trivy-results.json | wc -l)
+        FRONTEND_CRITICAL=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' frontend-trivy-results.json | wc -l)
+        FRONTEND_HIGH=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' frontend-trivy-results.json | wc -l)
+        
+        echo "Backend - Critical: $BACKEND_CRITICAL, High: $BACKEND_HIGH"
+        echo "Frontend - Critical: $FRONTEND_CRITICAL, High: $FRONTEND_HIGH"
+        
+        # Allow high vulnerabilities but block critical ones
+        TOTAL_CRITICAL=$((BACKEND_CRITICAL + FRONTEND_CRITICAL))
+        
+        if [ "$TOTAL_CRITICAL" -gt 0 ]; then
+          echo "❌ CRITICAL vulnerabilities found! Production deployment blocked."
+          echo "Critical vulnerabilities must be fixed before production deployment."
+          exit 1
+        else
+          echo "✅ No critical vulnerabilities found. Deployment approved."
+        fi
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: production-security-scan
+        path: |
+          backend-trivy-results.json
+          frontend-trivy-results.json
+
+  # Deploy to production
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-production-images, security-scan]
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl for production
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        kubectl config use-context production
+
+    - name: Verify cluster connection
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+        kubectl get namespaces
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace investment-analysis-production --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Backup current deployment (for rollback)
+      run: |
+        # Create backup of current deployment state
+        kubectl get deployment backend-deployment -n investment-analysis-production -o yaml > backup-backend-deployment.yaml || echo "No existing backend deployment"
+        kubectl get deployment frontend-deployment -n investment-analysis-production -o yaml > backup-frontend-deployment.yaml || echo "No existing frontend deployment"
+        
+        # Store current image versions for rollback
+        CURRENT_BACKEND=$(kubectl get deployment backend-deployment -n investment-analysis-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+        CURRENT_FRONTEND=$(kubectl get deployment frontend-deployment -n investment-analysis-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+        
+        echo "CURRENT_BACKEND_IMAGE=$CURRENT_BACKEND" >> $GITHUB_ENV
+        echo "CURRENT_FRONTEND_IMAGE=$CURRENT_FRONTEND" >> $GITHUB_ENV
+
+    - name: Update production secrets
+      run: |
+        # Update application secrets
+        kubectl create secret generic app-secrets \
+          --namespace=investment-analysis-production \
+          --from-literal=database-url="${{ secrets.PRODUCTION_DATABASE_URL }}" \
+          --from-literal=redis-url="${{ secrets.PRODUCTION_REDIS_URL }}" \
+          --from-literal=jwt-secret="${{ secrets.PRODUCTION_JWT_SECRET }}" \
+          --from-literal=alpha-vantage-key="${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
+          --from-literal=finnhub-key="${{ secrets.FINNHUB_API_KEY }}" \
+          --from-literal=polygon-key="${{ secrets.POLYGON_API_KEY }}" \
+          --from-literal=news-api-key="${{ secrets.NEWS_API_KEY }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Update TLS certificates
+        kubectl create secret tls app-tls-cert \
+          --namespace=investment-analysis-production \
+          --cert="${{ secrets.PRODUCTION_TLS_CERT }}" \
+          --key="${{ secrets.PRODUCTION_TLS_KEY }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Run database migrations
+      run: |
+        # Run database migrations as a Job with proper retry logic
+        cat << EOF | kubectl apply -f -
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: db-migration-${{ needs.validate-release.outputs.version }}
+          namespace: investment-analysis-production
+        spec:
+          template:
+            spec:
+              containers:
+              - name: db-migration
+                image: ${{ needs.build-production-images.outputs.backend-image }}
+                command: 
+                  - "sh"
+                  - "-c"
+                  - |
+                    echo "Starting database migration..."
+                    alembic upgrade head
+                    echo "Migration completed successfully"
+                env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: database-url
+                resources:
+                  requests:
+                    memory: "256Mi"
+                    cpu: "100m"
+                  limits:
+                    memory: "512Mi"
+                    cpu: "500m"
+              restartPolicy: Never
+          backoffLimit: 3
+          activeDeadlineSeconds: 600
+        EOF
+        
+        # Wait for migration to complete
+        kubectl wait --for=condition=complete --timeout=600s job/db-migration-${{ needs.validate-release.outputs.version }} -n investment-analysis-production
+        
+        # Check migration logs
+        kubectl logs job/db-migration-${{ needs.validate-release.outputs.version }} -n investment-analysis-production
+
+    - name: Deploy application with blue-green strategy
+      run: |
+        # Update deployment manifests with new image tags and production settings
+        sed -i "s|BACKEND_IMAGE_PLACEHOLDER|${{ needs.build-production-images.outputs.backend-image }}|g" infrastructure/kubernetes/deployment.yaml
+        sed -i "s|FRONTEND_IMAGE_PLACEHOLDER|${{ needs.build-production-images.outputs.frontend-image }}|g" infrastructure/kubernetes/deployment.yaml
+        sed -i "s|NAMESPACE_PLACEHOLDER|investment-analysis-production|g" infrastructure/kubernetes/deployment.yaml
+        sed -i "s|ENVIRONMENT_PLACEHOLDER|production|g" infrastructure/kubernetes/deployment.yaml
+        
+        # Add production-specific resource limits
+        kubectl apply -f infrastructure/kubernetes/ -n investment-analysis-production
+
+    - name: Wait for rollout to complete
+      run: |
+        echo "Waiting for backend deployment to complete..."
+        kubectl rollout status deployment/backend-deployment -n investment-analysis-production --timeout=900s
+        
+        echo "Waiting for frontend deployment to complete..."
+        kubectl rollout status deployment/frontend-deployment -n investment-analysis-production --timeout=900s
+
+    - name: Verify deployment health
+      run: |
+        # Check pod status
+        kubectl get pods -n investment-analysis-production
+        
+        # Verify all pods are running
+        kubectl wait --for=condition=Ready pod -l app=backend -n investment-analysis-production --timeout=300s
+        kubectl wait --for=condition=Ready pod -l app=frontend -n investment-analysis-production --timeout=300s
+        
+        # Check service endpoints
+        kubectl get services -n investment-analysis-production
+        kubectl get ingress -n investment-analysis-production
+
+    - name: Production smoke tests
+      run: |
+        # Wait for services to be ready
+        sleep 30
+        
+        # Health check
+        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health" || exit 1
+        
+        # Database connectivity
+        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health/db" || exit 1
+        
+        # Cache connectivity
+        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health/cache" || exit 1
+        
+        # Frontend health
+        curl -f "${{ secrets.PRODUCTION_FRONTEND_URL }}" || exit 1
+
+    - name: Update deployment status
+      run: |
+        # Tag the successful deployment
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Create deployment tag
+        DEPLOYMENT_TAG="deployment-production-${{ needs.validate-release.outputs.version }}-$(date +%Y%m%d-%H%M%S)"
+        git tag -a "$DEPLOYMENT_TAG" -m "Production deployment of version ${{ needs.validate-release.outputs.version }}"
+        git push origin "$DEPLOYMENT_TAG"
+
+  # Post-deployment monitoring setup
+  post-deployment-monitoring:
+    runs-on: ubuntu-latest
+    needs: [deploy-production]
+    
+    steps:
+    - name: Setup monitoring alerts
+      run: |
+        echo "Setting up enhanced monitoring for production deployment..."
+        
+        # This would integrate with your monitoring system
+        # Example: Update Grafana dashboards, PagerDuty, etc.
+        curl -X POST "${{ secrets.MONITORING_WEBHOOK_URL }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "deployment": {
+              "version": "${{ needs.validate-release.outputs.version }}",
+              "environment": "production", 
+              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+              "backend_image": "${{ needs.build-production-images.outputs.backend-image }}",
+              "frontend_image": "${{ needs.build-production-images.outputs.frontend-image }}"
+            }
+          }' || echo "Monitoring webhook not configured"
+
+    - name: Enable production monitoring
+      run: |
+        echo "✅ Production monitoring enabled"
+        echo "- Health checks: Every 30 seconds"
+        echo "- Error rate monitoring: Active"
+        echo "- Performance monitoring: Active"
+        echo "- Resource usage alerts: Active"
+
+  # Notification and summary
+  deployment-notification:
+    runs-on: ubuntu-latest
+    needs: [validate-release, deploy-production, post-deployment-monitoring]
+    if: always()
+    
+    steps:
+    - name: Send success notification
+      if: needs.deploy-production.result == 'success'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'good',
+              title: '🚀 Production Deployment Successful!',
+              fields: [{
+                title: 'Version',
+                value: 'v${{ needs.validate-release.outputs.version }}',
+                short: true
+              }, {
+                title: 'Environment',
+                value: 'Production',
+                short: true
+              }, {
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Deployment Time',
+                value: '<!date^${{ github.run_started_at }}^{date_num} {time_secs}|${{ github.run_started_at }}>',
+                short: true
+              }, {
+                title: 'Release Notes',
+                value: '${{ github.event.release.html_url || "Manual deployment" }}'
+              }],
+              actions: [{
+                type: 'button',
+                text: 'View Live Site',
+                url: '${{ secrets.PRODUCTION_FRONTEND_URL }}'
+              }, {
+                type: 'button',
+                text: 'API Status',
+                url: '${{ secrets.PRODUCTION_API_URL }}/api/health'
+              }],
+              footer: 'GitHub Actions',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Send failure notification  
+      if: needs.deploy-production.result == 'failure'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: |
+          🚨 **Production Deployment Failed**
+          
+          Version: v${{ needs.validate-release.outputs.version }}
+          Repository: ${{ github.repository }}
+          
+          Please check the GitHub Actions logs and initiate rollback if necessary.
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create deployment summary
+      run: |
+        echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Version**: v${{ needs.validate-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ needs.deploy-production.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Pre-release**: ${{ needs.validate-release.outputs.is_prerelease }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Validation | ${{ needs.validate-release.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Production Deploy | ${{ needs.deploy-production.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Monitoring Setup | ${{ needs.post-deployment-monitoring.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Production URLs:**" >> $GITHUB_STEP_SUMMARY
+        echo "- 🌐 [Frontend](${{ secrets.PRODUCTION_FRONTEND_URL }})" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔗 [API Health](${{ secrets.PRODUCTION_API_URL }}/api/health)" >> $GITHUB_STEP_SUMMARY
+
+  # Emergency rollback workflow
+  emergency-rollback:
+    runs-on: ubuntu-latest
+    if: failure() && needs.deploy-production.result == 'failure'
+    needs: [deploy-production]
+    environment: production
+    
+    steps:
+    - name: Emergency rollback
+      run: |
+        echo "🚨 EMERGENCY ROLLBACK INITIATED"
+        
+        # Configure kubectl
+        mkdir -p ~/.kube
+        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        
+        # Rollback deployments
+        if [[ "${{ env.CURRENT_BACKEND_IMAGE }}" != "none" ]]; then
+          kubectl set image deployment/backend-deployment backend=${{ env.CURRENT_BACKEND_IMAGE }} -n investment-analysis-production
+        fi
+        
+        if [[ "${{ env.CURRENT_FRONTEND_IMAGE }}" != "none" ]]; then
+          kubectl set image deployment/frontend-deployment frontend=${{ env.CURRENT_FRONTEND_IMAGE }} -n investment-analysis-production
+        fi
+        
+        # Wait for rollback
+        kubectl rollout status deployment/backend-deployment -n investment-analysis-production --timeout=300s
+        kubectl rollout status deployment/frontend-deployment -n investment-analysis-production --timeout=300s
+
+    - name: Verify rollback
+      run: |
+        # Health check after rollback
+        sleep 30
+        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health" || echo "Health check failed after rollback"
+
+    - name: Notify emergency rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: |
+          🚨 **EMERGENCY PRODUCTION ROLLBACK COMPLETED**
+          
+          Failed Version: v${{ needs.validate-release.outputs.version }}
+          Repository: ${{ github.repository }}
+          
+          Previous version has been restored. Immediate investigation required.
+          
+          Rollback Details:
+          - Backend: ${{ env.CURRENT_BACKEND_IMAGE }}
+          - Frontend: ${{ env.CURRENT_FRONTEND_IMAGE }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

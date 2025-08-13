@@ -1,0 +1,22 @@
+{
+  "finnhub": {
+    "calls_per_minute": 60,
+    "calls_per_day": 1800,
+    "retry_after": 60
+  },
+  "alpha_vantage": {
+    "calls_per_minute": 5,
+    "calls_per_day": 25,
+    "retry_after": 300
+  },
+  "polygon": {
+    "calls_per_minute": 5,
+    "calls_per_day": 150,
+    "retry_after": 60
+  },
+  "newsapi": {
+    "calls_per_minute": 30,
+    "calls_per_day": 100,
+    "retry_after": 60
+  }
+}

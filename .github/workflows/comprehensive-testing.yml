@@ -1,0 +1,676 @@
+name: Comprehensive Testing Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run comprehensive tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  POSTGRES_PASSWORD: test_password
+  REDIS_PASSWORD: test_redis_password
+
+jobs:
+  # Security and vulnerability scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security & Vulnerability Scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install security scanning tools
+        run: |
+          pip install safety bandit semgrep
+          npm install -g audit-ci
+
+      - name: Run safety check for Python dependencies
+        run: |
+          pip install -r requirements.txt
+          safety check --json --output safety-report.json || true
+
+      - name: Run bandit security analysis
+        run: |
+          bandit -r backend/ -f json -o bandit-report.json || true
+
+      - name: Run semgrep security analysis
+        run: |
+          semgrep --config=auto backend/ --json --output=semgrep-report.json || true
+
+      - name: Frontend security audit
+        run: |
+          cd frontend/web
+          npm install
+          npm audit --audit-level high || true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            safety-report.json
+            bandit-report.json
+            semgrep-report.json
+
+  # Code quality and linting
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality & Linting
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install black isort flake8 mypy pylint
+
+      - name: Format check with Black
+        run: |
+          black --check --diff backend/
+
+      - name: Import sorting check with isort
+        run: |
+          isort --check-only --diff backend/
+
+      - name: Lint with flake8
+        run: |
+          flake8 backend/ --max-line-length=88 --extend-ignore=E203,W503
+
+      - name: Type checking with mypy
+        run: |
+          mypy backend/ --ignore-missing-imports --no-strict-optional
+
+      - name: Advanced linting with pylint
+        run: |
+          pylint backend/ --disable=C0114,C0115,C0116 || true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend/web
+          npm install
+
+      - name: Lint frontend code
+        run: |
+          cd frontend/web
+          npm run lint
+
+      - name: Check frontend formatting
+        run: |
+          cd frontend/web
+          npm run format:check
+
+  # Unit tests with coverage
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: Unit Tests & Coverage
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_investment_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio pytest-mock coverage
+
+      - name: Set up test environment
+        run: |
+          cp .env.example .env.test
+          echo "DATABASE_URL=postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db" >> .env.test
+          echo "REDIS_URL=redis://localhost:6379/0" >> .env.test
+
+      - name: Run unit tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest backend/tests/test_comprehensive_units.py \
+            --cov=backend \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --cov-fail-under=85 \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            htmlcov/
+
+  # Integration tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: Integration Tests
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_investment_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio testcontainers
+
+      - name: Run integration tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest backend/tests/test_integration_comprehensive.py \
+            -v \
+            --tb=short \
+            -m "not slow"
+
+      - name: Upload integration test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-reports
+          path: |
+            pytest-report.html
+            integration-test-logs/
+
+  # Performance tests
+  performance-tests:
+    runs-on: ubuntu-latest
+    name: Performance & Load Tests
+    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[run-performance-tests]')
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_investment_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio psutil memory-profiler
+
+      - name: Run performance tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest backend/tests/test_performance_load.py \
+            -v \
+            -m "performance" \
+            --tb=short \
+            --durations=0
+
+      - name: Upload performance reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-reports
+          path: |
+            performance-metrics.json
+            memory-profiles/
+
+  # Financial model validation
+  financial-model-tests:
+    runs-on: ubuntu-latest
+    name: Financial Model Validation
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest numpy pandas scikit-learn yfinance
+
+      - name: Run financial model validation tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest backend/tests/test_financial_model_validation.py \
+            -v \
+            --tb=short
+
+      - name: Upload model validation reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: financial-model-reports
+          path: |
+            model-validation-results.json
+            backtesting-reports/
+
+  # Security and compliance tests
+  security-compliance-tests:
+    runs-on: ubuntu-latest
+    name: Security & Compliance Tests
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_investment_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio cryptography pyjwt
+
+      - name: Run security and compliance tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pytest backend/tests/test_security_compliance.py \
+            -v \
+            --tb=short
+
+      - name: Upload security test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-test-reports
+          path: |
+            security-test-results.json
+            compliance-audit-logs/
+
+  # Frontend tests
+  frontend-tests:
+    runs-on: ubuntu-latest
+    name: Frontend Tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          cd frontend/web
+          npm install
+
+      - name: Run frontend unit tests
+        run: |
+          cd frontend/web
+          npm test -- --coverage --watchAll=false
+
+      - name: Run frontend E2E tests
+        run: |
+          cd frontend/web
+          npm run test:e2e
+
+      - name: Upload frontend test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: frontend-test-reports
+          path: |
+            frontend/web/coverage/
+            frontend/web/cypress/screenshots/
+            frontend/web/cypress/videos/
+
+  # Docker build and test
+  docker-build:
+    runs-on: ubuntu-latest
+    name: Docker Build & Test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image
+        run: |
+          docker build -f Dockerfile.backend -t investment-app-backend:test .
+
+      - name: Build frontend Docker image
+        run: |
+          docker build -f Dockerfile.frontend -t investment-app-frontend:test .
+
+      - name: Test Docker containers
+        run: |
+          # Start services
+          docker-compose -f docker-compose.test.yml up -d
+
+          # Wait for services to be ready
+          sleep 30
+
+          # Run health checks
+          docker-compose -f docker-compose.test.yml exec -T backend python -c "
+          import requests
+          response = requests.get('http://localhost:8000/api/health')
+          assert response.status_code == 200
+          print('Backend health check passed')
+          "
+
+          # Stop services
+          docker-compose -f docker-compose.test.yml down
+
+      - name: Run security scan on Docker images
+        run: |
+          # Install trivy
+          sudo apt-get update
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+          # Scan images
+          trivy image --exit-code 0 --format json -o backend-security-scan.json investment-app-backend:test
+          trivy image --exit-code 0 --format json -o frontend-security-scan.json investment-app-frontend:test
+
+      - name: Upload Docker security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-security-reports
+          path: |
+            backend-security-scan.json
+            frontend-security-scan.json
+
+  # End-to-end testing
+  e2e-tests:
+    runs-on: ubuntu-latest
+    name: End-to-End Tests
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start full application stack
+        run: |
+          docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d
+          
+          # Wait for all services to be ready
+          sleep 60
+
+      - name: Set up Node.js for E2E tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install E2E test dependencies
+        run: |
+          npm install -g cypress @cypress/browserstack-plugin
+
+      - name: Run E2E tests
+        run: |
+          cd frontend/web
+          npm run cypress:run
+
+      - name: Stop application stack
+        if: always()
+        run: |
+          docker-compose -f docker-compose.yml -f docker-compose.test.yml down
+
+      - name: Upload E2E test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-test-reports
+          path: |
+            frontend/web/cypress/screenshots/
+            frontend/web/cypress/videos/
+            frontend/web/cypress/reports/
+
+  # Generate comprehensive test report
+  test-report:
+    runs-on: ubuntu-latest
+    name: Generate Test Report
+    needs: [security-scan, code-quality, unit-tests, integration-tests, financial-model-tests, security-compliance-tests, frontend-tests]
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Set up Python for report generation
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Generate comprehensive test report
+        run: |
+          python scripts/generate_test_report.py \
+            --security-reports security-reports/ \
+            --coverage-reports coverage-reports/ \
+            --integration-reports integration-test-reports/ \
+            --performance-reports performance-reports/ \
+            --frontend-reports frontend-test-reports/ \
+            --output comprehensive-test-report.html
+
+      - name: Upload comprehensive test report
+        uses: actions/upload-artifact@v3
+        with:
+          name: comprehensive-test-report
+          path: |
+            comprehensive-test-report.html
+            test-summary.json
+
+      - name: Comment PR with test results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read test summary
+            const testSummary = JSON.parse(fs.readFileSync('test-summary.json', 'utf8'));
+            
+            const comment = `
+            ## 📊 Comprehensive Test Results
+            
+            | Test Suite | Status | Details |
+            |------------|--------|---------|
+            | Unit Tests | ${testSummary.unit_tests.status} | Coverage: ${testSummary.unit_tests.coverage}% |
+            | Integration Tests | ${testSummary.integration_tests.status} | ${testSummary.integration_tests.tests_run} tests |
+            | Security Tests | ${testSummary.security_tests.status} | ${testSummary.security_tests.vulnerabilities_found} vulnerabilities |
+            | Performance Tests | ${testSummary.performance_tests.status} | Avg response: ${testSummary.performance_tests.avg_response_time}ms |
+            | Frontend Tests | ${testSummary.frontend_tests.status} | ${testSummary.frontend_tests.tests_passed}/${testSummary.frontend_tests.total_tests} passed |
+            
+            **Overall Status:** ${testSummary.overall_status}
+            
+            📁 [View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Deploy to staging (on main branch)
+  deploy-staging:
+    runs-on: ubuntu-latest
+    name: Deploy to Staging
+    needs: [unit-tests, integration-tests, security-compliance-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: staging
+      url: https://staging.investment-app.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging environment
+        run: |
+          echo "Deploying to staging..."
+          # Actual deployment commands would go here
+
+      - name: Run staging smoke tests
+        run: |
+          echo "Running staging smoke tests..."
+          # Smoke test commands would go here
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Staging deployment successful"
+
+  # Performance monitoring
+  performance-monitoring:
+    runs-on: ubuntu-latest
+    name: Performance Monitoring
+    needs: [deploy-staging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Run performance benchmarks
+        run: |
+          echo "Running performance benchmarks against staging..."
+          # Performance monitoring commands would go here
+
+      - name: Update performance baselines
+        run: |
+          echo "Updating performance baselines..."
+          # Update performance baseline metrics

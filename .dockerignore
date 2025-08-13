@@ -1,0 +1,103 @@
+# Docker ignore file for production builds
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+test/
+*_test.py
+*_test.go
+*.test
+
+# Build artifacts
+build/
+dist/
+*.egg
+wheels/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Development files
+*.sqlite
+*.db
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# Data files (should be mounted as volumes)
+data/
+backups/
+ml_models/*.pkl
+ml_models/*.h5
+ml_models/*.pt
+
+# Monitoring
+monitoring/
+grafana/
+prometheus/
+
+# Scripts (only needed for deployment)
+scripts/
+deploy.sh
+start-docker.sh
+*.sh

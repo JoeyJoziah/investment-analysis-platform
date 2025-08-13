@@ -1,0 +1,140 @@
+# GitLeaks Configuration for Investment Analysis App
+
+title = "Investment Analysis App Secret Detection"
+
+# Custom rules for financial data APIs and services
+[[rules]]
+id = "alpha-vantage-api-key"
+description = "Alpha Vantage API Key"
+regex = '''(?i)(alpha[_-]?vantage[_-]?api[_-]?key|av[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([A-Z0-9]{16,32})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "finnhub-api-key"
+description = "Finnhub API Key"
+regex = '''(?i)(finnhub[_-]?api[_-]?key|fh[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([a-z0-9]{20,40})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "polygon-api-key"
+description = "Polygon.io API Key"
+regex = '''(?i)(polygon[_-]?api[_-]?key|poly[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([A-Za-z0-9_]{32,64})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "news-api-key"
+description = "NewsAPI Key"
+regex = '''(?i)(news[_-]?api[_-]?key|newsapi[_-]?key)['"\s]*[:=]\s*['"]?([a-f0-9]{32})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "database-url-password"
+description = "Database URL with Password"
+regex = '''postgresql://[^:]*:([^@\s]+)@[^/\s]*/[^\s]*'''
+secretGroup = 1
+
+[[rules]]
+id = "redis-url-password"  
+description = "Redis URL with Password"
+regex = '''redis://[^:]*:([^@\s]+)@[^/\s]*'''
+secretGroup = 1
+
+[[rules]]
+id = "jwt-secret-key"
+description = "JWT Secret Key"
+regex = '''(?i)(jwt[_-]?secret[_-]?key|jwt[_-]?key)['"\s]*[:=]\s*['"]?([A-Za-z0-9+/=]{32,})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "aws-access-key-id"
+description = "AWS Access Key ID"
+regex = '''(?i)(aws[_-]?access[_-]?key[_-]?id|access[_-]?key[_-]?id)['"\s]*[:=]\s*['"]?(AKIA[0-9A-Z]{16})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "aws-secret-access-key"
+description = "AWS Secret Access Key"
+regex = '''(?i)(aws[_-]?secret[_-]?access[_-]?key|secret[_-]?access[_-]?key)['"\s]*[:=]\s*['"]?([A-Za-z0-9+/]{40})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token"
+regex = '''(?i)(github[_-]?token|gh[_-]?token)['"\s]*[:=]\s*['"]?(ghp_[A-Za-z0-9_]{36}|gho_[A-Za-z0-9_]{36}|ghu_[A-Za-z0-9_]{36}|ghs_[A-Za-z0-9_]{36}|ghr_[A-Za-z0-9_]{36})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "slack-webhook"
+description = "Slack Webhook URL"
+regex = '''https://hooks\.slack\.com/services/[A-Z0-9]{9}/[A-Z0-9]{9}/[A-Za-z0-9]{24}'''
+
+[[rules]]
+id = "docker-config-auth"
+description = "Docker Config Auth"
+regex = '''(?i)"auth"\s*:\s*"([A-Za-z0-9+/=]{20,})"'''
+secretGroup = 1
+
+[[rules]]
+id = "kubernetes-bearer-token"
+description = "Kubernetes Bearer Token"
+regex = '''(?i)(bearer[_-]?token|authorization[_-]?bearer)['"\s]*[:=]\s*['"]?([A-Za-z0-9\-._~+/]+=*)['"]?'''
+secretGroup = 2
+
+# File path allowlists (files to ignore)
+[allowlist]
+description = "Allowlisted files"
+files = [
+    '''(.*?)(jpg|gif|doc|pdf|bin|svg|socket)$''',
+    '''^\.env\.example$''',
+    '''^\.env\.template$''',
+    '''.*test.*\.py$''',
+    '''.*_test\.py$''',
+    '''.*\.md$''',
+    '''package-lock\.json$''',
+    '''yarn\.lock$''',
+]
+
+paths = [
+    '''node_modules/''',
+    '''\.git/''',
+    '''htmlcov/''',
+    '''coverage/''',
+    '''venv/''',
+    '''\.venv/''',
+    '''__pycache__/''',
+    '''\.pytest_cache/''',
+    '''logs/''',
+    '''data/cache/''',
+]
+
+# Regex patterns to allowlist (reduce false positives)
+regexes = [
+    '''example\.com''',
+    '''localhost''',
+    '''127\.0\.0\.1''',
+    '''0\.0\.0\.0''',
+    '''test[_-]?password''',
+    '''dummy[_-]?key''',
+    '''placeholder''',
+    '''template''',
+    '''sample[_-]?token''',
+    '''YOUR[_-]?API[_-]?KEY''',
+    '''<API_KEY>''',
+    '''\$\{[A-Z_]+\}''',  # Environment variable placeholders
+]
+
+# Commits to allowlist (if needed)
+commits = [
+    # "commitsha",
+]
+
+# Stop words that indicate false positives
+stopwords = [
+    '''password''',
+    '''bearer''',
+    '''token''',
+    '''api''',
+    '''key''',
+    '''secret''',
+    '''auth''',
+]

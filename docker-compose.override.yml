@@ -1,0 +1,73 @@
+services:
+  # Limit heavy services
+  elasticsearch:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+
+  postgres:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - WORKERS=2
+
+  airflow:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - AIRFLOW__CORE__PARALLELISM=8
+      - AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG=4
+
+  prometheus:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  grafana:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+
+  celery_worker:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - CELERY_WORKER_CONCURRENCY=2
+
+  celery_beat:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M

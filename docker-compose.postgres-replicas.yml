@@ -1,0 +1,197 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Primary (Master)
+  postgres-primary:
+    image: timescale/timescaledb:latest-pg15
+    container_name: postgres-primary
+    environment:
+      - POSTGRES_DB=investment_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_REPLICATION_MODE=master
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${REPLICATION_PASSWORD:-repl123}
+      - POSTGRES_MAX_CONNECTIONS=200
+      - POSTGRES_SHARED_BUFFERS=256MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
+      - POSTGRES_MAINTENANCE_WORK_MEM=128MB
+      - POSTGRES_CHECKPOINT_COMPLETION_TARGET=0.9
+      - POSTGRES_WAL_BUFFERS=16MB
+      - POSTGRES_DEFAULT_STATISTICS_TARGET=100
+      - POSTGRES_RANDOM_PAGE_COST=1.1
+      - POSTGRES_EFFECTIVE_IO_CONCURRENCY=200
+      - POSTGRES_WORK_MEM=4MB
+      - POSTGRES_MIN_WAL_SIZE=1GB
+      - POSTGRES_MAX_WAL_SIZE=4GB
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./config/postgresql-primary.conf:/etc/postgresql/postgresql.conf
+      - ./scripts/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c wal_level=replica
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c hot_standby=on
+      -c archive_mode=on
+      -c archive_command='test ! -f /archive/%f && cp %p /archive/%f'
+    networks:
+      - postgres-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Read Replica 1
+  postgres-replica1:
+    image: timescale/timescaledb:latest-pg15
+    container_name: postgres-replica1
+    environment:
+      - POSTGRES_DB=investment_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_MASTER_HOST=postgres-primary
+      - POSTGRES_MASTER_PORT=5432
+      - POSTGRES_REPLICATION_MODE=slave
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${REPLICATION_PASSWORD:-repl123}
+      - POSTGRES_MAX_CONNECTIONS=200
+      - POSTGRES_SHARED_BUFFERS=256MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-replica1-data:/var/lib/postgresql/data
+      - ./config/postgresql-replica.conf:/etc/postgresql/postgresql.conf
+      - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hot_standby=on
+      -c max_standby_streaming_delay=30s
+      -c wal_receiver_status_interval=10s
+      -c hot_standby_feedback=on
+    networks:
+      - postgres-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Read Replica 2
+  postgres-replica2:
+    image: timescale/timescaledb:latest-pg15
+    container_name: postgres-replica2
+    environment:
+      - POSTGRES_DB=investment_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_MASTER_HOST=postgres-primary
+      - POSTGRES_MASTER_PORT=5432
+      - POSTGRES_REPLICATION_MODE=slave
+      - POSTGRES_REPLICATION_USER=replicator
+      - POSTGRES_REPLICATION_PASSWORD=${REPLICATION_PASSWORD:-repl123}
+      - POSTGRES_MAX_CONNECTIONS=200
+      - POSTGRES_SHARED_BUFFERS=256MB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=1GB
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-replica2-data:/var/lib/postgresql/data
+      - ./config/postgresql-replica.conf:/etc/postgresql/postgresql.conf
+      - ./scripts/init-replica.sh:/docker-entrypoint-initdb.d/init-replica.sh
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hot_standby=on
+      -c max_standby_streaming_delay=30s
+      -c wal_receiver_status_interval=10s
+      -c hot_standby_feedback=on
+    networks:
+      - postgres-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgPool-II for Load Balancing
+  pgpool:
+    image: pgpool/pgpool:latest
+    container_name: pgpool
+    environment:
+      - PGPOOL_BACKENDS=postgres-primary:5432,postgres-replica1:5432,postgres-replica2:5432
+      - PGPOOL_BACKEND_WEIGHT0=0  # Primary - write only
+      - PGPOOL_BACKEND_WEIGHT1=1  # Replica 1 - read weight
+      - PGPOOL_BACKEND_WEIGHT2=1  # Replica 2 - read weight
+      - PGPOOL_BACKEND_FLAG0=ALWAYS_PRIMARY
+      - PGPOOL_BACKEND_FLAG1=DISALLOW_TO_FAILOVER
+      - PGPOOL_BACKEND_FLAG2=DISALLOW_TO_FAILOVER
+      - PGPOOL_POSTGRES_USERNAME=postgres
+      - PGPOOL_POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - PGPOOL_SR_CHECK_USER=postgres
+      - PGPOOL_SR_CHECK_PASSWORD=${DB_PASSWORD:-postgres}
+      - PGPOOL_ENABLE_LOAD_BALANCING=on
+      - PGPOOL_MAX_POOL=25
+      - PGPOOL_NUM_INIT_CHILDREN=32
+      - PGPOOL_POSTGRES_CUSTOM_CONF=/config/pgpool.conf
+    ports:
+      - "5430:5432"  # PgPool port for application connections
+      - "9898:9898"  # PCP port for management
+    volumes:
+      - ./config/pgpool.conf:/config/pgpool.conf
+      - pgpool-data:/var/lib/pgpool
+    depends_on:
+      - postgres-primary
+      - postgres-replica1
+      - postgres-replica2
+    networks:
+      - postgres-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgAdmin for monitoring
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@example.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./config/servers.json:/pgadmin4/servers.json
+    networks:
+      - postgres-network
+    depends_on:
+      - postgres-primary
+      - postgres-replica1
+      - postgres-replica2
+
+networks:
+  postgres-network:
+    driver: bridge
+
+volumes:
+  postgres-primary-data:
+  postgres-replica1-data:
+  postgres-replica2-data:
+  pgpool-data:
+  pgadmin-data:

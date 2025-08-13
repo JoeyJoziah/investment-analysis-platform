@@ -1,0 +1,431 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Backend Code Quality
+  backend-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-quality-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort flake8 mypy pylint bandit safety
+
+    - name: Check code formatting with Black
+      run: black --check --diff backend/
+
+    - name: Check import sorting with isort
+      run: isort --check-only --diff backend/
+
+    - name: Lint with flake8
+      run: flake8 backend/ --statistics --tee --output-file=flake8-report.txt
+
+    - name: Type checking with mypy
+      run: mypy backend/ --install-types --non-interactive || true
+
+    - name: Lint with pylint
+      run: |
+        pip install -r requirements.txt  # Install project deps for pylint
+        pylint backend/ --exit-zero --output-format=text --reports=yes > pylint-report.txt
+
+    - name: Security analysis with bandit
+      run: bandit -r backend/ -f json -o bandit-report.json || true
+
+    - name: Check for known security vulnerabilities
+      run: safety check --json --output safety-report.json || true
+
+    - name: Upload quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: backend-quality-reports
+        path: |
+          flake8-report.txt
+          pylint-report.txt
+          bandit-report.json
+          safety-report.json
+
+  # Backend Testing and Quality Checks
+  backend-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev libxml2-dev libxslt1-dev libffi-dev
+
+    - name: Install TA-Lib
+      run: |
+        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/
+        ./configure --prefix=/usr
+        make
+        sudo make install
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-xvfb  # For headless testing if needed
+
+    - name: Set up test environment
+      run: |
+        cp .env.example .env || echo "No .env.example found"
+        echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/test_db" >> .env
+        echo "REDIS_URL=redis://localhost:6379/0" >> .env
+        echo "JWT_SECRET_KEY=test-secret-key" >> .env
+        echo "APP_ENV=testing" >> .env
+
+    - name: Initialize test database
+      run: |
+        # Wait for PostgreSQL to be ready
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        
+        # Run database migrations
+        alembic upgrade head || echo "No migrations to run"
+
+    - name: Run backend tests with coverage
+      run: |
+        pytest backend/tests/ \
+          --cov=backend \
+          --cov-report=xml:coverage.xml \
+          --cov-report=html:htmlcov \
+          --cov-report=term-missing \
+          --cov-fail-under=85 \
+          --junitxml=test-results.xml \
+          -v
+      env:
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        JWT_SECRET_KEY: test-secret-key
+        APP_ENV: testing
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      if: matrix.python-version == '3.11'  # Only upload once
+      with:
+        file: ./coverage.xml
+        flags: backend
+        name: backend-coverage
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Store test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: backend-test-results-${{ matrix.python-version }}
+        path: |
+          test-results.xml
+          coverage.xml
+          htmlcov/
+
+  # Frontend Testing
+  frontend-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: Install dependencies
+      working-directory: frontend/web
+      run: npm ci
+
+    - name: Run frontend tests
+      working-directory: frontend/web
+      run: |
+        npm test -- --coverage --ci --watchAll=false --testResultsProcessor=jest-junit
+      env:
+        CI: true
+        JEST_JUNIT_OUTPUT_DIR: ./test-results
+        JEST_JUNIT_OUTPUT_NAME: results.xml
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: frontend-test-results
+        path: |
+          frontend/web/coverage/
+          frontend/web/test-results/
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./frontend/web/coverage/lcov.info
+        flags: frontend
+        name: frontend-coverage
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Frontend Code Quality
+  frontend-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: Install dependencies
+      working-directory: frontend/web
+      run: npm ci
+
+    - name: Run ESLint
+      working-directory: frontend/web
+      run: |
+        npm run lint -- --format=json --output-file=eslint-report.json || true
+
+    - name: Check formatting with Prettier
+      working-directory: frontend/web
+      run: |
+        npx prettier --check src/**/*.{js,jsx,ts,tsx,css,scss} || true
+
+    - name: Upload quality reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: frontend-quality-reports
+        path: frontend/web/eslint-report.json
+
+  # Docker Build Test
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: Build backend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        push: false
+        tags: test-backend:latest
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+    - name: Build frontend Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/web
+        file: ./frontend/web/Dockerfile
+        push: false
+        tags: test-frontend:latest
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+    - name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # Integration Tests
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Create test environment file
+      run: |
+        cat << EOF > .env
+        DATABASE_URL=postgresql://postgres:testpass@postgres:5432/investment_db
+        REDIS_URL=redis://redis:6379/0
+        JWT_SECRET_KEY=test-secret-key-for-integration
+        APP_ENV=testing
+        DEBUG=True
+        TEST_DB_PASSWORD=testpass
+        TEST_JWT_SECRET_KEY=test-secret-key-for-integration
+        ALPHA_VANTAGE_API_KEY=demo
+        FINNHUB_API_KEY=demo
+        POLYGON_API_KEY=demo
+        NEWS_API_KEY=demo
+        EOF
+
+    - name: Run integration tests
+      run: |
+        docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from backend
+        docker-compose -f docker-compose.test.yml down -v
+
+    - name: Collect integration test results
+      if: always()
+      run: |
+        mkdir -p integration-results
+        docker-compose -f docker-compose.test.yml logs backend > integration-results/backend-logs.txt 2>&1 || true
+
+    - name: Upload integration test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: integration-results/
+
+  # Notification on failure
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
+    if: failure()
+    
+    steps:
+    - name: Notify on Slack
+      uses: 8398a7/action-slack@v3
+      if: env.SLACK_WEBHOOK_URL != ''
+      with:
+        status: failure
+        text: 'CI Pipeline failed for ${{ github.repository }} on branch ${{ github.ref_name }}'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Send email notification
+      if: env.EMAIL_ENABLED == 'true'
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "CI Pipeline Failed: ${{ github.repository }}"
+        body: |
+          The CI pipeline failed for repository ${{ github.repository }}.
+          
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          
+          Please check the GitHub Actions for more details.
+        to: ${{ secrets.NOTIFICATION_EMAIL }}
+        from: ${{ secrets.SMTP_USERNAME }}
+      env:
+        EMAIL_ENABLED: ${{ secrets.EMAIL_ENABLED }}
+
+  # Summary
+  ci-summary:
+    runs-on: ubuntu-latest
+    needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
+    if: always()
+    
+    steps:
+    - name: CI Summary
+      run: |
+        echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|"," >> $GITHUB_STEP_SUMMARY
+        echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Backend Quality | ${{ needs.backend-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend Tests | ${{ needs.frontend-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend Quality | ${{ needs.frontend-quality.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration Tests | ${{ needs.integration-test.result }} |" >> $GITHUB_STEP_SUMMARY

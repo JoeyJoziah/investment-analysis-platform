@@ -1,0 +1,63 @@
+server:
+  log_level: info
+  http_listen_port: 12345
+
+metrics:
+  global:
+    scrape_interval: 15s
+    external_labels:
+      environment: development
+      app: investment-analysis
+  configs:
+    - name: default
+      remote_write:
+        - url: https://prometheus-prod-13-prod-us-east-0.grafana.net/api/prom/push
+          basic_auth:
+            username: "YOUR_METRICS_USER_ID"  # Get from Grafana Cloud
+            password: "${GRAFANA_API_KEY}"
+      
+      scrape_configs:
+        # Scrape your application metrics
+        - job_name: 'investment-app'
+          static_configs:
+            - targets: ['host.docker.internal:8000']
+              labels:
+                app: 'investment-analysis'
+                
+        # Scrape PostgreSQL metrics (if using postgres_exporter)
+        - job_name: 'postgres'
+          static_configs:
+            - targets: ['postgres:9187']
+              
+        # Scrape Redis metrics (if using redis_exporter)
+        - job_name: 'redis'
+          static_configs:
+            - targets: ['redis:9121']
+
+logs:
+  configs:
+    - name: default
+      positions:
+        filename: /tmp/positions.yaml
+      clients:
+        - url: https://logs-prod-012.grafana.net/loki/api/v1/push
+          basic_auth:
+            username: "YOUR_LOGS_USER_ID"  # Get from Grafana Cloud
+            password: "${GRAFANA_API_KEY}"
+      scrape_configs:
+        - job_name: investment-app-logs
+          static_configs:
+            - targets:
+                - localhost
+              labels:
+                job: investment-app-logs
+                __path__: /var/log/investment-app/*.log
+
+traces:
+  configs:
+    - name: default
+      remote_write:
+        - endpoint: tempo-us-east-0.grafana.net:443
+          basic_auth:
+            username: "YOUR_TRACES_USER_ID"  # Get from Grafana Cloud
+            password: "${GRAFANA_API_KEY}"

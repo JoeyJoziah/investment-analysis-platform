@@ -1,0 +1,538 @@
+name: Staging Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy to environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - qa
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+concurrency:
+  group: staging-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Build and push Docker images
+  build-images:
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.backend-meta.outputs.tags }}
+      frontend-image: ${{ steps.frontend-meta.outputs.tags }}
+      backend-digest: ${{ steps.backend-build.outputs.digest }}
+      frontend-digest: ${{ steps.frontend-build.outputs.digest }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract backend metadata
+      id: backend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix=staging-
+          type=raw,value=staging-latest,enable={{is_default_branch}}
+
+    - name: Extract frontend metadata
+      id: frontend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+        tags: |
+          type=ref,event=branch
+          type=sha,prefix=staging-
+          type=raw,value=staging-latest,enable={{is_default_branch}}
+
+    - name: Build and push backend image
+      id: backend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.backend-meta.outputs.tags }}
+        labels: ${{ steps.backend-meta.outputs.labels }}
+        cache-from: type=gha,scope=backend-staging
+        cache-to: type=gha,mode=max,scope=backend-staging
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          BUILD_ENV=staging
+
+    - name: Build and push frontend image
+      id: frontend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/web
+        file: ./frontend/web/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.frontend-meta.outputs.tags }}
+        labels: ${{ steps.frontend-meta.outputs.labels }}
+        cache-from: type=gha,scope=frontend-staging
+        cache-to: type=gha,mode=max,scope=frontend-staging
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          REACT_APP_ENV=staging
+          REACT_APP_API_URL=https://api-staging.investment-analysis.com
+
+    - name: Generate SBOM for backend
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.backend-meta.outputs.tags }}
+        output-file: backend-sbom.spdx.json
+        format: spdx-json
+
+    - name: Generate SBOM for frontend  
+      uses: anchore/sbom-action@v0
+      with:
+        image: ${{ steps.frontend-meta.outputs.tags }}
+        output-file: frontend-sbom.spdx.json
+        format: spdx-json
+
+    - name: Upload SBOMs
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-reports
+        path: |
+          backend-sbom.spdx.json
+          frontend-sbom.spdx.json
+
+  # Security scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [build-images]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-images.outputs.backend-image }}
+        format: 'sarif'
+        output: 'backend-trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-images.outputs.frontend-image }}
+        format: 'sarif' 
+        output: 'frontend-trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: |
+          backend-trivy-results.sarif
+          frontend-trivy-results.sarif
+
+    - name: Check for critical vulnerabilities
+      run: |
+        # Check if there are any CRITICAL vulnerabilities
+        CRITICAL_BACKEND=$(jq '[.runs[].results[] | select(.level == "error")] | length' backend-trivy-results.sarif)
+        CRITICAL_FRONTEND=$(jq '[.runs[].results[] | select(.level == "error")] | length' frontend-trivy-results.sarif)
+        
+        echo "Backend critical vulnerabilities: $CRITICAL_BACKEND"
+        echo "Frontend critical vulnerabilities: $CRITICAL_FRONTEND"
+        
+        if [ "$CRITICAL_BACKEND" -gt 0 ] || [ "$CRITICAL_FRONTEND" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found! Deployment blocked."
+          exit 1
+        else
+          echo "✅ No critical vulnerabilities found."
+        fi
+
+  # Deploy to staging environment
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [build-images, security-scan]
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl for staging
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+        kubectl config use-context staging
+
+    - name: Verify cluster connection
+      run: |
+        kubectl cluster-info
+        kubectl get nodes
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace investment-analysis-staging --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Update Kubernetes secrets
+      run: |
+        # Create or update application secrets
+        kubectl create secret generic app-secrets \
+          --namespace=investment-analysis-staging \
+          --from-literal=database-url="${{ secrets.STAGING_DATABASE_URL }}" \
+          --from-literal=redis-url="${{ secrets.STAGING_REDIS_URL }}" \
+          --from-literal=jwt-secret="${{ secrets.STAGING_JWT_SECRET }}" \
+          --from-literal=alpha-vantage-key="${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
+          --from-literal=finnhub-key="${{ secrets.FINNHUB_API_KEY }}" \
+          --from-literal=polygon-key="${{ secrets.POLYGON_API_KEY }}" \
+          --from-literal=news-api-key="${{ secrets.NEWS_API_KEY }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy database migrations
+      run: |
+        # Run database migrations as a Job
+        cat << EOF | kubectl apply -f -
+        apiVersion: batch/v1
+        kind: Job
+        metadata:
+          name: db-migration-${{ github.sha }}
+          namespace: investment-analysis-staging
+        spec:
+          template:
+            spec:
+              containers:
+              - name: db-migration
+                image: ${{ needs.build-images.outputs.backend-image }}
+                command: ["alembic", "upgrade", "head"]
+                env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: app-secrets
+                      key: database-url
+              restartPolicy: Never
+          backoffLimit: 3
+        EOF
+        
+        # Wait for migration to complete
+        kubectl wait --for=condition=complete --timeout=300s job/db-migration-${{ github.sha }} -n investment-analysis-staging
+
+    - name: Deploy application
+      run: |
+        # Update deployment with new image tags
+        sed -i "s|BACKEND_IMAGE_PLACEHOLDER|${{ needs.build-images.outputs.backend-image }}|g" infrastructure/kubernetes/deployment.yaml
+        sed -i "s|FRONTEND_IMAGE_PLACEHOLDER|${{ needs.build-images.outputs.frontend-image }}|g" infrastructure/kubernetes/deployment.yaml
+        sed -i "s|NAMESPACE_PLACEHOLDER|investment-analysis-staging|g" infrastructure/kubernetes/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f infrastructure/kubernetes/ -n investment-analysis-staging
+
+    - name: Wait for rollout to complete
+      run: |
+        kubectl rollout status deployment/backend-deployment -n investment-analysis-staging --timeout=600s
+        kubectl rollout status deployment/frontend-deployment -n investment-analysis-staging --timeout=600s
+
+    - name: Verify deployment
+      run: |
+        # Check pod status
+        kubectl get pods -n investment-analysis-staging
+        
+        # Check service endpoints
+        kubectl get services -n investment-analysis-staging
+
+  # Run smoke tests
+  smoke-tests:
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install test dependencies
+      run: |
+        pip install requests pytest pytest-html pytest-json-report
+
+    - name: Wait for services to be ready
+      run: |
+        echo "Waiting for staging services to be ready..."
+        sleep 60
+
+    - name: Run health checks
+      run: |
+        # Basic health check
+        curl -f "${{ secrets.STAGING_API_URL }}/api/health" || exit 1
+        
+        # Database health check
+        curl -f "${{ secrets.STAGING_API_URL }}/api/health/db" || exit 1
+        
+        # Redis health check  
+        curl -f "${{ secrets.STAGING_API_URL }}/api/health/cache" || exit 1
+
+    - name: Run API smoke tests
+      run: |
+        # Run basic API tests
+        pytest backend/tests/smoke/ -v \
+          --html=smoke-test-report.html \
+          --json-report --json-report-file=smoke-test-report.json \
+          --tb=short
+      env:
+        API_BASE_URL: ${{ secrets.STAGING_API_URL }}
+        TEST_USER_EMAIL: ${{ secrets.STAGING_TEST_USER_EMAIL }}
+        TEST_USER_PASSWORD: ${{ secrets.STAGING_TEST_USER_PASSWORD }}
+
+    - name: Run frontend smoke tests
+      run: |
+        # Simple frontend health check
+        curl -f "${{ secrets.STAGING_FRONTEND_URL }}" || exit 1
+        
+        # Check if main bundles are loading
+        curl -f "${{ secrets.STAGING_FRONTEND_URL }}/static/js/main.*js" || echo "Warning: Main JS bundle check failed"
+
+    - name: Upload smoke test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: smoke-test-results
+        path: |
+          smoke-test-report.html
+          smoke-test-report.json
+
+  # Performance testing
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: [smoke-tests]
+    if: github.event_name == 'push'  # Only run on push, not manual dispatch
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5  
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Locust
+      run: pip install locust
+
+    - name: Run load tests
+      run: |
+        locust -f backend/tests/performance/staging_load_test.py \
+          --host=${{ secrets.STAGING_API_URL }} \
+          --users=10 \
+          --spawn-rate=2 \
+          --run-time=5m \
+          --html=performance-report.html \
+          --csv=performance \
+          --headless
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          performance-report.html
+          performance_stats.csv
+          performance_failures.csv
+
+  # Generate test coverage report
+  coverage-report:
+    runs-on: ubuntu-latest
+    needs: [smoke-tests]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download test artifacts from CI
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "*test-results*"
+        merge-multiple: true
+
+    - name: Generate consolidated coverage report
+      run: |
+        # Combine coverage reports if available
+        mkdir -p coverage-combined
+        
+        echo "## Staging Deployment Coverage Report" > coverage-combined/README.md
+        echo "" >> coverage-combined/README.md
+        echo "- **Backend Coverage**: Available in backend test artifacts" >> coverage-combined/README.md
+        echo "- **Frontend Coverage**: Available in frontend test artifacts" >> coverage-combined/README.md
+        echo "- **Smoke Tests**: Passed basic API and frontend checks" >> coverage-combined/README.md
+
+    - name: Upload consolidated coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: staging-coverage-report
+        path: coverage-combined/
+
+  # Notification and summary
+  deployment-summary:
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, smoke-tests, performance-test, coverage-report]
+    if: always()
+    
+    steps:
+    - name: Send Slack notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ needs.deploy-staging.result }}' === 'success' ? 'good' : 'danger',
+              title: 'Staging Deployment Summary',
+              fields: [{
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Branch',
+                value: '${{ github.ref_name }}',
+                short: true
+              }, {
+                title: 'Commit',
+                value: '${{ github.sha }}',
+                short: true
+              }, {
+                title: 'Environment',
+                value: 'Staging',
+                short: true
+              }, {
+                title: 'Deployment',
+                value: '${{ needs.deploy-staging.result }}',
+                short: true
+              }, {
+                title: 'Smoke Tests',
+                value: '${{ needs.smoke-tests.result }}',
+                short: true
+              }, {
+                title: 'Performance Tests',
+                value: '${{ needs.performance-test.result }}',
+                short: true
+              }],
+              footer: 'GitHub Actions',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create deployment summary
+      run: |
+        echo "## 🚀 Staging Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Build Images | ${{ needs.build-images.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Deployment | ${{ needs.deploy-staging.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY  
+        echo "| Performance Tests | ${{ needs.performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Staging URL**: ${{ secrets.STAGING_FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
+        echo "**API URL**: ${{ secrets.STAGING_API_URL }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `🚀 **Staging Deployment Complete**
+            
+            ✅ **Deployment Status**: ${{ needs.deploy-staging.result }}
+            ✅ **Smoke Tests**: ${{ needs.smoke-tests.result }}  
+            ✅ **Performance Tests**: ${{ needs.performance-test.result }}
+            
+            **Preview URLs:**
+            - Frontend: ${{ secrets.STAGING_FRONTEND_URL }}
+            - API: ${{ secrets.STAGING_API_URL }}
+            
+            📊 Check the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for detailed results.`
+          })
+
+  # Rollback capability
+  rollback:
+    runs-on: ubuntu-latest
+    if: failure() && needs.deploy-staging.result == 'failure'
+    needs: [deploy-staging]
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+    - name: Rollback to previous version
+      run: |
+        echo "🔄 Rolling back deployment..."
+        kubectl rollout undo deployment/backend-deployment -n investment-analysis-staging
+        kubectl rollout undo deployment/frontend-deployment -n investment-analysis-staging
+        
+        # Wait for rollback to complete
+        kubectl rollout status deployment/backend-deployment -n investment-analysis-staging --timeout=300s
+        kubectl rollout status deployment/frontend-deployment -n investment-analysis-staging --timeout=300s
+
+    - name: Notify rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: |
+          🔄 **Staging Deployment Rolled Back**
+          
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          
+          The deployment failed and has been automatically rolled back to the previous version.
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

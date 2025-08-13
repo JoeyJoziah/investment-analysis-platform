@@ -1,0 +1,199 @@
+version: 2
+
+updates:
+  # Python dependencies (backend)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "dev-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(backend)"
+      prefix-development: "deps-dev(backend)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "backend"
+      - "python"
+    ignore:
+      # Ignore patch updates for stable packages
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-patch"]
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+        dependency-name: "security-*"
+
+  # Node.js dependencies (frontend)
+  - package-ecosystem: "npm"
+    directory: "/frontend/web"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "frontend-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(frontend)"
+      prefix-development: "deps-dev(frontend)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "javascript"
+    ignore:
+      # Ignore patch updates for React ecosystem
+      - dependency-name: "react"
+        update-types: ["version-update:semver-patch"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-patch"]
+      # Ignore specific packages with known compatibility issues
+      - dependency-name: "@types/react"
+        versions: ["18.3.0"]
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+        dependency-name: "security-*"
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "devops-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(docker)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "infrastructure"
+    
+  # Frontend Docker
+  - package-ecosystem: "docker"
+    directory: "/frontend/web"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "devops-team"
+      - "frontend-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(docker-frontend)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "frontend"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "devops-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"
+
+  # Terraform (if using for infrastructure)
+  - package-ecosystem: "terraform"
+    directory: "/infrastructure/terraform"
+    schedule:
+      interval: "weekly"  
+      day: "friday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "devops-team"
+    assignees:
+      - "tech-lead"
+    commit-message:
+      prefix: "deps(terraform)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "terraform"
+      - "infrastructure"
+
+# Security updates (separate from regular updates)
+  # Python security updates
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "security-team"
+      - "dev-team"
+    assignees:
+      - "security-lead"
+    commit-message:
+      prefix: "security(backend)"
+    labels:
+      - "security"
+      - "dependencies"
+      - "backend"
+      - "high-priority"
+    allow:
+      - dependency-type: "all"
+    ignore: []  # Don't ignore any security updates
+
+  # Node.js security updates  
+  - package-ecosystem: "npm"
+    directory: "/frontend/web"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "security-team"
+      - "frontend-team"
+    assignees:
+      - "security-lead"
+    commit-message:
+      prefix: "security(frontend)"
+    labels:
+      - "security"
+      - "dependencies"
+      - "frontend"
+      - "high-priority"
+    allow:
+      - dependency-type: "all"
+    ignore: []  # Don't ignore any security updates

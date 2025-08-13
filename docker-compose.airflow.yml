@@ -1,0 +1,455 @@
+version: '3.8'
+
+# Apache Airflow infrastructure for investment analysis application
+# Designed to handle 6000+ stock analysis with proper resource limits and API rate limiting
+
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.7.3-python3.11
+  env_file:
+    - .env
+    - .env.airflow
+  environment: &airflow-common-env
+    # Core Airflow Configuration
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow_user}:${AIRFLOW_DB_PASSWORD:-secure_airflow_db_password_456}@postgres:5432/${AIRFLOW_DB_NAME:-airflow_db}
+    AIRFLOW__CELERY__RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/${AIRFLOW_REDIS_DB:-2}
+    AIRFLOW__CELERY__BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/${AIRFLOW_REDIS_DB:-2}
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-DpuJvXHWimMqS03BWRG9-wBlcmg6q7xsMINwyaYeUWo=}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__STORE_SERIALIZED_DAGS: 'true'
+    AIRFLOW__CORE__STORE_DAG_CODE: 'true'
+    
+    # API Configuration
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    AIRFLOW__API__ENABLE_EXPERIMENTAL_API: 'false'
+    
+    # Security Configuration
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'false'
+    AIRFLOW__WEBSERVER__RBAC: 'true'
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-4b2c6743542bdb84e0be01d9a9b582ed6ec71b53123bad70eb0f6ce508c14cf8}
+    AIRFLOW__WEBSERVER__AUTHENTICATE: 'true'
+    AIRFLOW__WEBSERVER__AUTH_BACKEND: 'airflow.contrib.auth.backends.password_auth'
+    
+    # Email Configuration
+    AIRFLOW__EMAIL__EMAIL_BACKEND: airflow.utils.email.send_email_smtp
+    AIRFLOW__SMTP__SMTP_HOST: smtp.gmail.com
+    AIRFLOW__SMTP__SMTP_PORT: 587
+    AIRFLOW__SMTP__SMTP_STARTTLS: 'true'
+    AIRFLOW__SMTP__SMTP_SSL: 'false'
+    AIRFLOW__SMTP__SMTP_USER: ${SMTP_USER:-}
+    AIRFLOW__SMTP__SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    AIRFLOW__SMTP__SMTP_MAIL_FROM: ${SMTP_FROM:-noreply@investment-app.com}
+    
+    # Logging Configuration
+    AIRFLOW__LOGGING__LOGGING_LEVEL: INFO
+    AIRFLOW__LOGGING__FAB_LOGGING_LEVEL: WARN
+    AIRFLOW__LOGGING__COLORED_CONSOLE_LOG: 'false'
+    AIRFLOW__LOGGING__REMOTE_LOGGING: 'false'
+    
+    # Task Configuration
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: 1
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 16
+    AIRFLOW__CORE__PARALLELISM: 32
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: 4
+    AIRFLOW__CORE__DAG_CONCURRENCY: 16
+    
+    # Scheduler Configuration
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 300
+    AIRFLOW__SCHEDULER__CATCHUP_BY_DEFAULT: 'false'
+    AIRFLOW__SCHEDULER__MAX_TIS_PER_QUERY: 512
+    AIRFLOW__SCHEDULER__PROCESSOR_POLL_INTERVAL: 1
+    
+    # Pool Configuration
+    AIRFLOW__CORE__DEFAULT_POOL_TASK_SLOT_COUNT: 128
+    
+    # Custom environment variables for investment app
+    DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+    REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    ELASTICSEARCH_URL: http://elasticsearch:9200
+    
+    # API Keys
+    ALPHA_VANTAGE_API_KEY: ${ALPHA_VANTAGE_API_KEY}
+    FINNHUB_API_KEY: ${FINNHUB_API_KEY}
+    POLYGON_API_KEY: ${POLYGON_API_KEY}
+    NEWS_API_KEY: ${NEWS_API_KEY}
+    
+    # Cost Monitoring
+    MONTHLY_BUDGET_LIMIT: ${MONTHLY_BUDGET_LIMIT}
+    DAILY_API_LIMIT_FINNHUB: ${DAILY_API_LIMIT_FINNHUB}
+    DAILY_API_LIMIT_ALPHA_VANTAGE: ${DAILY_API_LIMIT_ALPHA_VANTAGE}
+    DAILY_API_LIMIT_POLYGON: ${DAILY_API_LIMIT_POLYGON}
+    
+  volumes:
+    - ${AIRFLOW_PROJ_DIR:-.}/data_pipelines/airflow/dags:/opt/airflow/dags
+    - ${AIRFLOW_PROJ_DIR:-.}/data_pipelines/airflow/logs:/opt/airflow/logs
+    - ${AIRFLOW_PROJ_DIR:-.}/data_pipelines/airflow/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/data_pipelines/airflow/config:/opt/airflow/config
+    - ${AIRFLOW_PROJ_DIR:-.}/backend:/opt/airflow/backend
+    - ${AIRFLOW_PROJ_DIR:-.}/models:/opt/airflow/models
+    - /var/run/docker.sock:/var/run/docker.sock
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    - postgres
+    - redis
+
+services:
+  # PostgreSQL service (shared with main application)
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: investment_db_airflow
+    environment:
+      POSTGRES_DB: investment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TIMESCALEDB_TELEMETRY: "off"
+      # Create additional Airflow database
+      POSTGRES_MULTIPLE_DATABASES: ${AIRFLOW_DB_NAME:-airflow_db}:${AIRFLOW_DB_USER:-airflow_user}:${AIRFLOW_DB_PASSWORD:-secure_airflow_db_password_456}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/init_airflow_db.sql:/docker-entrypoint-initdb.d/02-airflow.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: 
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - max_connections=400
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - checkpoint_completion_target=0.9
+    restart: always
+    networks:
+      - airflow
+
+  # Redis service (shared with main application)
+  redis:
+    image: redis:7-alpine
+    container_name: investment_redis_airflow
+    command: redis-server --appendonly yes --maxmemory 1024mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "auth", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    networks:
+      - airflow
+
+  # Airflow Webserver
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - airflow
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8974/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - airflow
+
+  # Airflow Worker 1 (API-intensive tasks)
+  airflow-worker-api:
+    <<: *airflow-common
+    container_name: airflow_worker_api
+    command: celery worker -q api_calls -c 2 --loglevel=INFO
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CELERY__WORKER_CONCURRENCY: 2
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app airflow.executors.celery_executor.app inspect ping -d 'celery@$${HOSTNAME}'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - airflow
+
+  # Airflow Worker 2 (Compute-intensive tasks)
+  airflow-worker-compute:
+    <<: *airflow-common
+    container_name: airflow_worker_compute
+    command: celery worker -q compute_intensive -c 4 --loglevel=INFO
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CELERY__WORKER_CONCURRENCY: 4
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app airflow.executors.celery_executor.app inspect ping -d 'celery@$${HOSTNAME}'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 3G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - airflow
+
+  # Airflow Worker 3 (Default queue)
+  airflow-worker-default:
+    <<: *airflow-common
+    container_name: airflow_worker_default
+    command: celery worker -q default -c 3 --loglevel=INFO
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CELERY__WORKER_CONCURRENCY: 3
+    healthcheck:
+      test: ["CMD-SHELL", "celery --app airflow.executors.celery_executor.app inspect ping -d 'celery@$${HOSTNAME}'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - airflow
+
+  # Celery Flower (Monitoring)
+  airflow-flower:
+    <<: *airflow-common
+    container_name: airflow_flower
+    command: celery flower
+    ports:
+      - "5555:5555"
+    environment:
+      <<: *airflow-common-env
+      AIRFLOW__CELERY__FLOWER_HOST: 0.0.0.0
+      AIRFLOW__CELERY__FLOWER_PORT: 5555
+      AIRFLOW__CELERY__FLOWER_BASIC_AUTH: admin:${FLOWER_PASSWORD:-secure_flower_password_123}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    networks:
+      - airflow
+
+  # Airflow Triggerer (for deferrable operators)
+  airflow-triggerer:
+    <<: *airflow-common
+    container_name: airflow_triggerer
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", "airflow jobs check --job-type TriggererJob --hostname \"$${HOSTNAME}\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    networks:
+      - airflow
+
+  # Airflow Database Initialization
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        function ver() {
+          printf "%04d%04d%04d%04d" $${1//./ }
+        }
+        airflow_version=$$(AIRFLOW__LOGGING__LOGGING_LEVEL=INFO && gosu airflow airflow version)
+        airflow_version_comparable=$$(ver $${airflow_version})
+        min_airflow_version=2.2.0
+        min_airflow_version_comparable=$$(ver $${min_airflow_version})
+        if (( airflow_version_comparable < min_airflow_version_comparable )); then
+          echo
+          echo -e "\033[1;31mERROR!!!: Too old Airflow version $${airflow_version}!\e[0m"
+          echo "The minimum Airflow version supported: $${min_airflow_version}. Only use this or higher!"
+          echo
+          exit 1
+        fi
+        if [[ -z "$${AIRFLOW_UID}" ]]; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: AIRFLOW_UID not set!\e[0m"
+          echo "If you are on Linux, you SHOULD follow the instructions below to set"
+          echo "AIRFLOW_UID environment variable, otherwise files will be owned by root."
+          echo "For other operating systems you can get rid of the warning with manually created .env file:"
+          echo "    See: https://airflow.apache.org/docs/apache-airflow/stable/start/docker.html#setting-the-right-airflow-user"
+          echo
+        fi
+        one_meg=1048576
+        mem_available=$$(($$(getconf _PHYS_PAGES) * $$(getconf PAGE_SIZE) / one_meg))
+        cpus_available=$$(grep -cE 'cpu[0-9]+' /proc/stat)
+        disk_available=$$(df / | tail -1 | awk '{print $$4}')
+        warning_resources="false"
+        if (( mem_available < 4000 )) ; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough memory available for Docker.\e[0m"
+          echo "At least 4GB of memory required. You have $$(numfmt --to iec $$((mem_available * one_meg)))"
+          echo
+          warning_resources="true"
+        fi
+        if (( cpus_available < 2 )); then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough CPUS available for Docker.\e[0m"
+          echo "At least 2 CPUs recommended. You have $${cpus_available}"
+          echo
+          warning_resources="true"
+        fi
+        if (( disk_available < one_meg * 10 )); then
+          echo
+          echo -e "\033[1;33mWARNING!!!: Not enough Disk space available for Docker.\e[0m"
+          echo "At least 10 GBs recommended. You have $$(numfmt --to iec $$((disk_available * 1024 )))"
+          echo
+          warning_resources="true"
+        fi
+        if [[ $${warning_resources} == "true" ]]; then
+          echo
+          echo -e "\033[1;33mWARNING!!!: You have not enough resources to run Airflow (see above)!\e[0m"
+          echo "Please follow the instructions to increase amount of resources available:"
+          echo "   https://airflow.apache.org/docs/apache-airflow/stable/start/docker.html#before-you-begin"
+          echo
+        fi
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R "$${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        exec /entrypoint airflow version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-secure_admin_password_789}
+      _PIP_ADDITIONAL_REQUIREMENTS: ''
+    user: "0:0"
+    volumes:
+      - ${AIRFLOW_PROJ_DIR:-.}:/sources
+    networks:
+      - airflow
+
+  # StatsD Exporter for Prometheus
+  statsd-exporter:
+    image: prom/statsd-exporter:latest
+    container_name: airflow_statsd_exporter
+    command:
+      - '--statsd.mapping-config=/etc/statsd_mapping.yml'
+      - '--statsd.listen-udp=:9125'
+      - '--web.listen-address=:9102'
+    ports:
+      - "9102:9102"
+      - "9125:9125/udp"
+    volumes:
+      - ./data_pipelines/airflow/config/statsd_mapping.yml:/etc/statsd_mapping.yml
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    networks:
+      - airflow
+
+networks:
+  airflow:
+    driver: bridge
+    name: airflow_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

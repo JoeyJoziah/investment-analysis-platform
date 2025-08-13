@@ -11,6 +11,10 @@ import logging
 from datetime import datetime
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,

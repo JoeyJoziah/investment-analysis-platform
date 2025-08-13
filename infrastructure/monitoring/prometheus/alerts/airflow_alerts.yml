@@ -1,0 +1,272 @@
+groups:
+  - name: airflow.alerts
+    interval: 30s
+    rules:
+      # Critical Alerts
+      - alert: AirflowSchedulerDown
+        expr: up{job="airflow-scheduler-health"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: airflow
+          component: scheduler
+        annotations:
+          summary: "Airflow scheduler is down"
+          description: "Airflow scheduler has been down for more than 2 minutes"
+          runbook_url: "https://docs.company.com/runbooks/airflow-scheduler-down"
+
+      - alert: AirflowWebserverDown
+        expr: up{job="airflow-webserver"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: airflow
+          component: webserver
+        annotations:
+          summary: "Airflow webserver is down"
+          description: "Airflow webserver has been down for more than 2 minutes"
+          runbook_url: "https://docs.company.com/runbooks/airflow-webserver-down"
+
+      - alert: AirflowNoTasksRunning
+        expr: airflow_scheduler_tasks_running == 0
+        for: 10m
+        labels:
+          severity: critical
+          service: airflow
+          component: scheduler
+        annotations:
+          summary: "No Airflow tasks are running"
+          description: "No tasks have been running for more than 10 minutes, this could indicate scheduler issues"
+          runbook_url: "https://docs.company.com/runbooks/airflow-no-tasks"
+
+      - alert: AirflowDailyMarketAnalysisFailure
+        expr: increase(airflow_task_instance_finished_failed_total{dag_id="daily_market_analysis"}[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: airflow
+          component: dag
+          dag_id: daily_market_analysis
+        annotations:
+          summary: "Daily market analysis DAG has failed"
+          description: "The daily market analysis DAG has failed in the last hour"
+          runbook_url: "https://docs.company.com/runbooks/daily-market-analysis-failure"
+
+      # Warning Alerts
+      - alert: AirflowHighTaskFailureRate
+        expr: (rate(airflow_task_instance_finished_failed_total[5m]) / rate(airflow_task_instance_finished_success_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: airflow
+          component: tasks
+        annotations:
+          summary: "High task failure rate in Airflow"
+          description: "Task failure rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+          runbook_url: "https://docs.company.com/runbooks/airflow-high-failure-rate"
+
+      - alert: AirflowTasksStuck
+        expr: airflow_scheduler_tasks_queued > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: airflow
+          component: scheduler
+        annotations:
+          summary: "Too many queued tasks in Airflow"
+          description: "{{ $value }} tasks have been queued for more than 10 minutes"
+          runbook_url: "https://docs.company.com/runbooks/airflow-tasks-stuck"
+
+      - alert: AirflowDagProcessingDelay
+        expr: airflow_dag_processing_last_run_seconds_ago > 600
+        for: 5m
+        labels:
+          severity: warning
+          service: airflow
+          component: scheduler
+        annotations:
+          summary: "Airflow DAG processing delay"
+          description: "DAG {{ $labels.dag_file }} was last processed {{ $value }} seconds ago"
+          runbook_url: "https://docs.company.com/runbooks/airflow-dag-processing-delay"
+
+      - alert: AirflowWorkerDown
+        expr: up{job="airflow-flower"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: airflow
+          component: worker
+        annotations:
+          summary: "Airflow Celery worker monitoring is down"
+          description: "Flower monitoring for Celery workers is not responding"
+          runbook_url: "https://docs.company.com/runbooks/airflow-worker-monitoring-down"
+
+      # Investment Analysis Specific Alerts
+      - alert: InvestmentAPICallsExceeded
+        expr: sum(rate(airflow_investment_api_calls_total[1h])) by (provider) > on(provider) (
+          (provider="alpha_vantage" and 25) or
+          (provider="finnhub" and 1800) or
+          (provider="polygon" and 150)
+        )
+        for: 0m
+        labels:
+          severity: critical
+          service: airflow
+          component: investment-analysis
+          cost_impact: high
+        annotations:
+          summary: "API call limit exceeded for {{ $labels.provider }}"
+          description: "{{ $labels.provider }} API calls have exceeded the daily limit in the last hour"
+          runbook_url: "https://docs.company.com/runbooks/api-limit-exceeded"
+
+      - alert: InvestmentMonthlyCostExceeded
+        expr: sum(airflow_investment_api_cost_dollars) > 45
+        for: 0m
+        labels:
+          severity: critical
+          service: airflow
+          component: investment-analysis
+          cost_impact: high
+        annotations:
+          summary: "Monthly API cost approaching limit"
+          description: "Monthly API cost is ${{ $value }}, approaching the $50 limit"
+          runbook_url: "https://docs.company.com/runbooks/cost-limit-exceeded"
+
+      - alert: InvestmentDataQualityDegraded
+        expr: airflow_investment_data_quality_score < 0.8
+        for: 15m
+        labels:
+          severity: warning
+          service: airflow
+          component: investment-analysis
+          data_quality: degraded
+        annotations:
+          summary: "Data quality degraded for {{ $labels.data_source }}"
+          description: "Data quality score for {{ $labels.data_source }} is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.company.com/runbooks/data-quality-degraded"
+
+      - alert: InvestmentStockProcessingLag
+        expr: increase(airflow_investment_stocks_processed_total[1h]) < 5000
+        for: 0m
+        labels:
+          severity: warning
+          service: airflow
+          component: investment-analysis
+          performance: degraded
+        annotations:
+          summary: "Stock processing rate is below expected"
+          description: "Only {{ $value }} stocks processed in the last hour, expected >5000"
+          runbook_url: "https://docs.company.com/runbooks/stock-processing-lag"
+
+      # Pool Utilization Alerts
+      - alert: AirflowPoolExhausted
+        expr: airflow_pool_open_slots == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: airflow
+          component: pools
+        annotations:
+          summary: "Airflow pool {{ $labels.pool }} is exhausted"
+          description: "Pool {{ $labels.pool }} has no available slots for 15 minutes"
+          runbook_url: "https://docs.company.com/runbooks/airflow-pool-exhausted"
+
+      - alert: AirflowAPIPoolHighUtilization
+        expr: (airflow_pool_running_slots{pool="api_calls"} / (airflow_pool_running_slots{pool="api_calls"} + airflow_pool_open_slots{pool="api_calls"})) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: airflow
+          component: pools
+          pool: api_calls
+        annotations:
+          summary: "API calls pool utilization is high"
+          description: "API calls pool utilization is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.company.com/runbooks/api-pool-high-utilization"
+
+      # Performance Alerts
+      - alert: AirflowDAGDurationHigh
+        expr: rate(airflow_dag_duration_seconds_sum[5m]) / rate(airflow_dag_duration_seconds_count[5m]) > 3600
+        for: 5m
+        labels:
+          severity: warning
+          service: airflow
+          component: performance
+        annotations:
+          summary: "DAG {{ $labels.dag_id }} execution time is high"
+          description: "DAG {{ $labels.dag_id }} average execution time is {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.company.com/runbooks/dag-duration-high"
+
+      - alert: AirflowTaskDurationHigh
+        expr: rate(airflow_task_duration_seconds_sum[5m]) / rate(airflow_task_duration_seconds_count[5m]) > 1800
+        for: 5m
+        labels:
+          severity: warning
+          service: airflow
+          component: performance
+        annotations:
+          summary: "Task {{ $labels.task_id }} in DAG {{ $labels.dag_id }} is running slow"
+          description: "Task {{ $labels.task_id }} average execution time is {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.company.com/runbooks/task-duration-high"
+
+      # Info Alerts (for tracking)
+      - alert: AirflowDailyMarketAnalysisCompleted
+        expr: increase(airflow_task_instance_finished_success_total{dag_id="daily_market_analysis",task_id="generate_recommendations"}[30m]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: airflow
+          component: dag
+          dag_id: daily_market_analysis
+        annotations:
+          summary: "Daily market analysis completed successfully"
+          description: "Daily market analysis DAG completed successfully"
+          runbook_url: "https://docs.company.com/runbooks/daily-analysis-success"
+
+      - alert: AirflowStockTierProcessingCompleted
+        expr: increase(airflow_investment_stocks_processed_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: info
+          service: airflow
+          component: investment-analysis
+        annotations:
+          summary: "Stock tier processing completed"
+          description: "{{ $value }} stocks processed for tier {{ $labels.tier }} in the last hour"
+          runbook_url: "https://docs.company.com/runbooks/tier-processing-complete"
+
+  - name: airflow.cost.alerts
+    interval: 60s
+    rules:
+      # Cost monitoring alerts
+      - alert: InvestmentAPIBudgetWarning
+        expr: sum(airflow_investment_api_cost_dollars) > 35
+        for: 0m
+        labels:
+          severity: warning
+          service: airflow
+          component: cost-monitoring
+          budget: warning
+        annotations:
+          summary: "API budget warning threshold reached"
+          description: "Monthly API cost is ${{ $value }}, exceeding 70% of $50 budget"
+          runbook_url: "https://docs.company.com/runbooks/budget-warning"
+
+      - alert: InvestmentDailyAPILimitApproaching
+        expr: |
+          (
+            sum(rate(airflow_investment_api_calls_total{provider="alpha_vantage"}[1h])) * 24 > 20
+          ) or (
+            sum(rate(airflow_investment_api_calls_total{provider="finnhub"}[1h])) * 24 > 1440
+          ) or (
+            sum(rate(airflow_investment_api_calls_total{provider="polygon"}[1h])) * 24 > 120
+          )
+        for: 0m
+        labels:
+          severity: warning
+          service: airflow
+          component: api-rate-limiting
+        annotations:
+          summary: "Daily API limit approaching for {{ $labels.provider }}"
+          description: "Current rate suggests daily limit will be exceeded for {{ $labels.provider }}"
+          runbook_url: "https://docs.company.com/runbooks/daily-limit-approaching"

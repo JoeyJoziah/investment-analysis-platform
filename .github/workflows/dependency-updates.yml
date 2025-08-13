@@ -1,0 +1,535 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 10 AM UTC (after Dependabot)
+    - cron: '0 10 * * MON'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of dependency update'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - python
+        - javascript
+        - security-only
+      force_update:
+        description: 'Force update even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+concurrency:
+  group: dependency-updates
+  cancel-in-progress: false
+
+jobs:
+  # Check for security vulnerabilities
+  security-check:
+    runs-on: ubuntu-latest
+    outputs:
+      has_vulnerabilities: ${{ steps.check.outputs.has_vulnerabilities }}
+      python_vulns: ${{ steps.check.outputs.python_vulns }}
+      js_vulns: ${{ steps.check.outputs.js_vulns }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Check Python vulnerabilities
+      id: python-check
+      run: |
+        pip install safety pip-audit
+        
+        # Check with Safety
+        SAFETY_COUNT=$(safety check --json 2>/dev/null | jq length || echo "0")
+        
+        # Check with pip-audit
+        AUDIT_COUNT=$(pip-audit --format=json --desc 2>/dev/null | jq '.vulnerabilities | length' || echo "0")
+        
+        echo "safety_count=$SAFETY_COUNT" >> $GITHUB_OUTPUT
+        echo "audit_count=$AUDIT_COUNT" >> $GITHUB_OUTPUT
+        
+        TOTAL_PYTHON=$((SAFETY_COUNT + AUDIT_COUNT))
+        echo "total_python=$TOTAL_PYTHON" >> $GITHUB_OUTPUT
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: Check JavaScript vulnerabilities
+      id: js-check
+      working-directory: frontend/web
+      run: |
+        npm ci
+        
+        # Run npm audit and count high/critical vulnerabilities
+        AUDIT_RESULT=$(npm audit --audit-level=high --json 2>/dev/null || echo '{"vulnerabilities":{}}')
+        JS_VULNS=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' || echo "0")
+        
+        echo "js_count=$JS_VULNS" >> $GITHUB_OUTPUT
+
+    - name: Summarize vulnerability check
+      id: check
+      run: |
+        PYTHON_VULNS="${{ steps.python-check.outputs.total_python }}"
+        JS_VULNS="${{ steps.js-check.outputs.js_count }}"
+        
+        echo "python_vulns=$PYTHON_VULNS" >> $GITHUB_OUTPUT
+        echo "js_vulns=$JS_VULNS" >> $GITHUB_OUTPUT
+        
+        if [ "$PYTHON_VULNS" -gt 0 ] || [ "$JS_VULNS" -gt 0 ]; then
+          echo "has_vulnerabilities=true" >> $GITHUB_OUTPUT
+          echo "⚠️ Found vulnerabilities: Python=$PYTHON_VULNS, JavaScript=$JS_VULNS"
+        else
+          echo "has_vulnerabilities=false" >> $GITHUB_OUTPUT
+          echo "✅ No vulnerabilities found"
+        fi
+
+  # Update Python dependencies
+  update-python-deps:
+    runs-on: ubuntu-latest
+    needs: [security-check]
+    if: github.event.inputs.update_type == 'python' || github.event.inputs.update_type == 'all' || github.event.inputs.update_type == ''
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache current dependencies
+      run: |
+        cp requirements.txt requirements-backup.txt
+        pip freeze > current-deps.txt
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+        
+        # Install TA-Lib
+        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+        tar -xzf ta-lib-0.4.0-src.tar.gz
+        cd ta-lib/ && ./configure --prefix=/usr && make && sudo make install
+
+    - name: Update Python dependencies
+      run: |
+        pip install --upgrade pip pip-tools
+        
+        # Update requirements
+        if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+          # Only update packages with known vulnerabilities
+          pip install safety
+          safety check --json > safety-report.json || true
+          
+          # Extract vulnerable package names (simplified)
+          VULNERABLE_PACKAGES=$(jq -r '.[] | .package_name' safety-report.json 2>/dev/null | sort -u || echo "")
+          
+          if [ -n "$VULNERABLE_PACKAGES" ]; then
+            echo "Updating vulnerable packages: $VULNERABLE_PACKAGES"
+            pip install --upgrade $VULNERABLE_PACKAGES
+          else
+            echo "No vulnerable packages to update"
+          fi
+        else
+          # Update all dependencies
+          pip-compile requirements.in --upgrade --verbose || pip install --upgrade -r requirements.txt
+        fi
+        
+        pip freeze > updated-deps.txt
+
+    - name: Run tests with updated dependencies
+      id: test-updated
+      continue-on-error: true
+      run: |
+        # Install updated dependencies
+        pip install -r requirements.txt
+        
+        # Run critical tests
+        pytest backend/tests/ \
+          -m "not slow and not external_api" \
+          --tb=short \
+          -x \
+          --maxfail=5
+      env:
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        JWT_SECRET_KEY: test-secret-key
+        APP_ENV: testing
+
+    - name: Rollback on test failure
+      if: steps.test-updated.outcome == 'failure' && github.event.inputs.force_update != 'true'
+      run: |
+        echo "❌ Tests failed with updated dependencies. Rolling back..."
+        cp requirements-backup.txt requirements.txt
+        pip install -r requirements.txt
+        exit 1
+
+    - name: Generate update summary
+      run: |
+        echo "# Python Dependency Update Summary" > python-update-summary.md
+        echo "" >> python-update-summary.md
+        echo "**Update Type**: ${{ github.event.inputs.update_type || 'all' }}" >> python-update-summary.md
+        echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> python-update-summary.md
+        echo "" >> python-update-summary.md
+        
+        echo "## Changed Dependencies" >> python-update-summary.md
+        echo "" >> python-update-summary.md
+        
+        # Compare before and after
+        if [ -f current-deps.txt ] && [ -f updated-deps.txt ]; then
+          diff current-deps.txt updated-deps.txt > deps-diff.txt || true
+          
+          if [ -s deps-diff.txt ]; then
+            echo "\`\`\`diff" >> python-update-summary.md
+            cat deps-diff.txt >> python-update-summary.md
+            echo "\`\`\`" >> python-update-summary.md
+          else
+            echo "*No dependency changes*" >> python-update-summary.md
+          fi
+        fi
+
+    - name: Upload Python update results
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-dependency-updates
+        path: |
+          python-update-summary.md
+          requirements-backup.txt
+          current-deps.txt
+          updated-deps.txt
+          deps-diff.txt
+
+  # Update JavaScript dependencies
+  update-js-deps:
+    runs-on: ubuntu-latest
+    needs: [security-check]
+    if: github.event.inputs.update_type == 'javascript' || github.event.inputs.update_type == 'all' || github.event.inputs.update_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: Backup current dependencies
+      working-directory: frontend/web
+      run: |
+        cp package.json package-backup.json
+        cp package-lock.json package-lock-backup.json
+
+    - name: Update JavaScript dependencies
+      working-directory: frontend/web
+      run: |
+        if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+          # Only update packages with vulnerabilities
+          npm audit fix --audit-level=high
+        else
+          # Update all dependencies
+          npm update
+          
+          # Check for major version updates
+          npx npm-check-updates --upgrade --target minor
+        fi
+
+    - name: Install updated dependencies
+      working-directory: frontend/web
+      run: npm ci
+
+    - name: Run tests with updated dependencies
+      id: test-js-updated
+      continue-on-error: true
+      working-directory: frontend/web
+      run: |
+        # Run tests
+        npm test -- --coverage --watchAll=false --testTimeout=30000
+        
+        # Build to ensure no build errors
+        npm run build
+
+    - name: Rollback on test failure
+      if: steps.test-js-updated.outcome == 'failure' && github.event.inputs.force_update != 'true'
+      working-directory: frontend/web
+      run: |
+        echo "❌ Tests failed with updated dependencies. Rolling back..."
+        cp package-backup.json package.json
+        cp package-lock-backup.json package-lock.json
+        npm ci
+        exit 1
+
+    - name: Generate JS update summary
+      working-directory: frontend/web
+      run: |
+        echo "# JavaScript Dependency Update Summary" > js-update-summary.md
+        echo "" >> js-update-summary.md
+        echo "**Update Type**: ${{ github.event.inputs.update_type || 'all' }}" >> js-update-summary.md
+        echo "**Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> js-update-summary.md
+        echo "" >> js-update-summary.md
+        
+        echo "## Package.json Changes" >> js-update-summary.md
+        echo "" >> js-update-summary.md
+        
+        # Compare package.json files
+        if [ -f package-backup.json ]; then
+          diff package-backup.json package.json > package-diff.txt || true
+          
+          if [ -s package-diff.txt ]; then
+            echo "\`\`\`diff" >> js-update-summary.md
+            cat package-diff.txt >> js-update-summary.md
+            echo "\`\`\`" >> js-update-summary.md
+          else
+            echo "*No package.json changes*" >> js-update-summary.md
+          fi
+        fi
+        
+        # Security audit summary
+        echo "" >> js-update-summary.md
+        echo "## Security Audit" >> js-update-summary.md
+        echo "" >> js-update-summary.md
+        npm audit --audit-level=moderate >> js-update-summary.md || echo "No vulnerabilities found" >> js-update-summary.md
+
+    - name: Upload JS update results
+      uses: actions/upload-artifact@v4
+      with:
+        name: javascript-dependency-updates
+        path: |
+          frontend/web/js-update-summary.md
+          frontend/web/package-backup.json
+          frontend/web/package-lock-backup.json
+          frontend/web/package-diff.txt
+
+  # Create pull request with updates
+  create-update-pr:
+    runs-on: ubuntu-latest
+    needs: [security-check, update-python-deps, update-js-deps]
+    if: always() && (needs.update-python-deps.result == 'success' || needs.update-js-deps.result == 'success')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download update artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "*dependency-updates*"
+        merge-multiple: true
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "dependabot[bot]"
+        git config --global user.email "dependabot[bot]@users.noreply.github.com"
+
+    - name: Create update branch
+      run: |
+        BRANCH_NAME="deps/automated-updates-$(date +%Y%m%d-%H%M%S)"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        git checkout -b "$BRANCH_NAME"
+
+    - name: Commit dependency updates
+      run: |
+        # Add all changes
+        git add .
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No dependency changes to commit"
+          exit 0
+        fi
+        
+        # Commit changes
+        COMMIT_MSG="deps: automated dependency updates $(date +%Y-%m-%d)"
+        
+        if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+          COMMIT_MSG="security: automated security dependency updates $(date +%Y-%m-%d)"
+        fi
+        
+        git commit -m "$COMMIT_MSG"
+
+    - name: Push update branch
+      run: |
+        git push origin "$BRANCH_NAME"
+
+    - name: Create Pull Request
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          let body = `# Automated Dependency Updates\n\n`;
+          body += `**Update Type**: ${context.payload.inputs?.update_type || 'all'}\n`;
+          body += `**Generated**: ${new Date().toISOString()}\n\n`;
+          
+          if (${needs.security-check.outputs.has_vulnerabilities}) {
+            body += `## ⚠️ Security Vulnerabilities Found\n\n`;
+            body += `- Python vulnerabilities: ${needs.security-check.outputs.python_vulns}\n`;
+            body += `- JavaScript vulnerabilities: ${needs.security-check.outputs.js_vulns}\n\n`;
+          }
+          
+          // Add Python update summary if exists
+          try {
+            const pythonSummary = fs.readFileSync('python-update-summary.md', 'utf8');
+            body += pythonSummary + '\n\n';
+          } catch (e) {
+            // File doesn't exist, skip
+          }
+          
+          // Add JavaScript update summary if exists
+          try {
+            const jsSummary = fs.readFileSync('js-update-summary.md', 'utf8');
+            body += jsSummary + '\n\n';
+          } catch (e) {
+            // File doesn't exist, skip
+          }
+          
+          body += `## Testing\n\n`;
+          body += `- ✅ Backend tests: ${needs['update-python-deps'].result}\n`;
+          body += `- ✅ Frontend tests: ${needs['update-js-deps'].result}\n\n`;
+          
+          body += `## Review Checklist\n\n`;
+          body += `- [ ] Review dependency changes\n`;
+          body += `- [ ] Check for breaking changes\n`;
+          body += `- [ ] Verify security vulnerabilities are addressed\n`;
+          body += `- [ ] Test deployment in staging\n\n`;
+          
+          body += `*This PR was automatically created by the dependency update workflow.*`;
+          
+          const { data: pullRequest } = await github.rest.pulls.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `deps: automated dependency updates ${new Date().toISOString().split('T')[0]}`,
+            head: process.env.BRANCH_NAME,
+            base: 'main',
+            body: body,
+            draft: false
+          });
+          
+          // Add labels
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pullRequest.number,
+            labels: ['dependencies', 'automated', 'maintenance']
+          });
+          
+          if (${needs.security-check.outputs.has_vulnerabilities}) {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pullRequest.number,
+              labels: ['security', 'high-priority']
+            });
+          }
+
+  # Notification
+  update-notification:
+    runs-on: ubuntu-latest
+    needs: [security-check, update-python-deps, update-js-deps, create-update-pr]
+    if: always()
+    
+    steps:
+    - name: Send update notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ needs.create-update-pr.result }}' === 'success' ? 'good' : 'warning',
+              title: '📦 Dependency Updates Complete',
+              fields: [{
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Update Type',
+                value: '${{ github.event.inputs.update_type || "all" }}',
+                short: true
+              }, {
+                title: 'Vulnerabilities Found',
+                value: '${{ needs.security-check.outputs.has_vulnerabilities }}',
+                short: true
+              }, {
+                title: 'Python Updates',
+                value: '${{ needs.update-python-deps.result }}',
+                short: true
+              }, {
+                title: 'JavaScript Updates',
+                value: '${{ needs.update-js-deps.result }}',
+                short: true
+              }, {
+                title: 'PR Created',
+                value: '${{ needs.create-update-pr.result }}',
+                short: true
+              }],
+              footer: 'Dependency Update Workflow',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create update summary
+      run: |
+        echo "## 📦 Dependency Update Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status | Vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|------------------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Check | ${{ needs.security-check.result }} | ${{ needs.security-check.outputs.has_vulnerabilities }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Python Dependencies | ${{ needs.update-python-deps.result }} | ${{ needs.security-check.outputs.python_vulns }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| JavaScript Dependencies | ${{ needs.update-js-deps.result }} | ${{ needs.security-check.outputs.js_vulns }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Pull Request | ${{ needs.create-update-pr.result }} | - |" >> $GITHUB_STEP_SUMMARY

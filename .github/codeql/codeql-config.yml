@@ -1,0 +1,72 @@
+# CodeQL Configuration for Investment Analysis App
+
+name: "CodeQL Config"
+
+# Language-specific configurations
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+# Paths to exclude from analysis
+paths-ignore:
+  - 'node_modules/**'
+  - 'frontend/web/build/**'
+  - 'frontend/web/coverage/**'
+  - 'htmlcov/**'
+  - 'venv/**'
+  - '.venv/**'
+  - 'migrations/**'
+  - '**/__pycache__/**'
+  - '**/*.pyc'
+  - 'docs/**'
+  - 'scripts/temp/**'
+  - 'logs/**'
+  - 'data/cache/**'
+
+# Paths to include (if needed to override excludes)
+paths:
+  - 'backend/**'
+  - 'frontend/web/src/**'
+  - 'data_pipelines/**'
+  - 'infrastructure/**'
+
+# Disable specific queries that may be noisy
+disable-default-queries: false
+
+# Custom query suites for financial applications
+packs:
+  - codeql/python-queries:AlertSuppression.ql
+  - codeql/javascript-queries:AlertSuppression.ql
+
+# Query filters for investment analysis specific code
+query-filters:
+  - exclude:
+      id: py/unused-import
+    # Allow unused imports in __init__.py files
+      files:
+        - "**/__init__.py"
+  
+  - exclude:
+      id: js/unused-property
+    # Allow unused properties in React prop types
+      files:
+        - "**/propTypes.js"
+
+# Additional configuration for Python
+python:
+  # Include additional Python standard library modules
+  # that might be used in financial calculations
+  setup-python-dependencies: |
+    pip install numpy pandas scipy scikit-learn
+    pip install yfinance alpha_vantage finnhub-python
+    
+# Additional configuration for JavaScript/TypeScript  
+javascript:
+  # Include financial calculation libraries
+  setup:
+    - npm install --save-dev @types/d3 @types/chart.js
+
+# Threat models to include
+threat-models:
+  - remote
+  - local

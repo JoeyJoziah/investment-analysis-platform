@@ -1,0 +1,465 @@
+name: Cleanup
+
+on:
+  schedule:
+    # Run cleanup every Sunday at 2 AM UTC
+    - cron: '0 2 * * SUN'
+  workflow_dispatch:
+    inputs:
+      cleanup_type:
+        description: 'Type of cleanup to perform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - artifacts
+        - packages
+        - cache
+        - logs
+      dry_run:
+        description: 'Perform dry run (show what would be deleted)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  RETENTION_DAYS_ARTIFACTS: 30
+  RETENTION_DAYS_PACKAGES: 90
+  RETENTION_DAYS_LOGS: 14
+
+concurrency:
+  group: cleanup
+  cancel-in-progress: false
+
+jobs:
+  # Cleanup old workflow artifacts
+  cleanup-artifacts:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'artifacts' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == ''
+    
+    steps:
+    - name: Cleanup old artifacts
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const retentionDays = ${{ env.RETENTION_DAYS_ARTIFACTS }};
+          const dryRun = ${{ github.event.inputs.dry_run || true }};
+          
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Looking for artifacts older than ${cutoffDate.toISOString()}`);
+          
+          let page = 1;
+          let deletedCount = 0;
+          let totalSize = 0;
+          
+          while (true) {
+            const response = await github.rest.actions.listArtifactsForRepo({
+              owner,
+              repo,
+              per_page: 100,
+              page
+            });
+            
+            if (response.data.artifacts.length === 0) {
+              break;
+            }
+            
+            for (const artifact of response.data.artifacts) {
+              const createdAt = new Date(artifact.created_at);
+              
+              if (createdAt < cutoffDate) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} artifact: ${artifact.name} (${artifact.size_in_bytes} bytes, created: ${artifact.created_at})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.actions.deleteArtifact({
+                      owner,
+                      repo,
+                      artifact_id: artifact.id
+                    });
+                  } catch (error) {
+                    console.error(`Failed to delete artifact ${artifact.name}: ${error.message}`);
+                    continue;
+                  }
+                }
+                
+                deletedCount++;
+                totalSize += artifact.size_in_bytes;
+              }
+            }
+            
+            page++;
+          }
+          
+          const sizeMB = (totalSize / 1024 / 1024).toFixed(2);
+          console.log(`${dryRun ? '[DRY RUN] Would clean up' : 'Cleaned up'} ${deletedCount} artifacts (${sizeMB} MB total)`);
+          
+          // Update step summary
+          const summary = `## Artifacts Cleanup\n\n` +
+                         `- **Retention Period**: ${retentionDays} days\n` +
+                         `- **Dry Run**: ${dryRun}\n` +
+                         `- **Artifacts ${dryRun ? 'to delete' : 'deleted'}**: ${deletedCount}\n` +
+                         `- **Space ${dryRun ? 'to reclaim' : 'reclaimed'}**: ${sizeMB} MB`;
+          
+          await core.summary.addRaw(summary).write();
+
+  # Cleanup old container packages
+  cleanup-packages:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'packages' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == ''
+    
+    steps:
+    - name: Cleanup old container images
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const owner = context.repo.owner;
+          const packageType = 'container';
+          const retentionDays = ${{ env.RETENTION_DAYS_PACKAGES }};
+          const dryRun = ${{ github.event.inputs.dry_run || true }};
+          
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Looking for container packages older than ${cutoffDate.toISOString()}`);
+          
+          try {
+            // Get organization packages (if repo is in an org)
+            const { data: packages } = await github.rest.packages.listPackagesForOrganization({
+              org: owner,
+              package_type: packageType
+            }).catch(() => {
+              // If not an organization, try user packages
+              return github.rest.packages.listPackagesForUser({
+                username: owner,
+                package_type: packageType
+              });
+            });
+            
+            let deletedCount = 0;
+            
+            for (const pkg of packages) {
+              // Skip if not related to this repository
+              if (!pkg.repository || pkg.repository.name !== context.repo.repo) {
+                continue;
+              }
+              
+              console.log(`Checking package: ${pkg.name}`);
+              
+              // Get package versions
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg({
+                org: owner,
+                package_type: packageType,
+                package_name: pkg.name
+              }).catch(() => {
+                return github.rest.packages.getAllPackageVersionsForPackageOwnedByUser({
+                  username: owner,
+                  package_type: packageType,
+                  package_name: pkg.name
+                });
+              });
+              
+              // Sort versions by creation date (newest first)
+              const sortedVersions = versions.sort((a, b) => 
+                new Date(b.created_at) - new Date(a.created_at)
+              );
+              
+              // Keep the 5 most recent versions, delete older ones
+              const versionsToDelete = sortedVersions.slice(5).filter(version => {
+                const createdAt = new Date(version.created_at);
+                return createdAt < cutoffDate;
+              });
+              
+              for (const version of versionsToDelete) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} ${pkg.name}:${version.name} (created: ${version.created_at})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.packages.deletePackageVersionForOrg({
+                      org: owner,
+                      package_type: packageType,
+                      package_name: pkg.name,
+                      package_version_id: version.id
+                    }).catch(() => {
+                      return github.rest.packages.deletePackageVersionForUser({
+                        username: owner,
+                        package_type: packageType,
+                        package_name: pkg.name,
+                        package_version_id: version.id
+                      });
+                    });
+                  } catch (error) {
+                    console.error(`Failed to delete ${pkg.name}:${version.name}: ${error.message}`);
+                    continue;
+                  }
+                }
+                
+                deletedCount++;
+              }
+            }
+            
+            console.log(`${dryRun ? '[DRY RUN] Would clean up' : 'Cleaned up'} ${deletedCount} package versions`);
+            
+            // Update step summary
+            const summary = `## Packages Cleanup\n\n` +
+                           `- **Retention Period**: ${retentionDays} days\n` +
+                           `- **Dry Run**: ${dryRun}\n` +
+                           `- **Package versions ${dryRun ? 'to delete' : 'deleted'}**: ${deletedCount}\n` +
+                           `- **Policy**: Keep 5 most recent versions per package`;
+            
+            await core.summary.addRaw(summary).write();
+            
+          } catch (error) {
+            console.log(`Package cleanup failed: ${error.message}`);
+            console.log('This might be expected if packages are not stored in GitHub Container Registry');
+          }
+
+  # Cleanup GitHub Actions cache
+  cleanup-cache:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'cache' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == ''
+    
+    steps:
+    - name: Cleanup old cache entries
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const owner = context.repo.owner;
+          const repo = context.repo.repo;
+          const retentionDays = 7; // GitHub Actions cache retention
+          const dryRun = ${{ github.event.inputs.dry_run || true }};
+          
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+          
+          console.log(`Looking for cache entries older than ${cutoffDate.toISOString()}`);
+          
+          try {
+            const { data: caches } = await github.rest.actions.getActionsCacheList({
+              owner,
+              repo,
+              per_page: 100
+            });
+            
+            let deletedCount = 0;
+            let totalSize = 0;
+            
+            for (const cache of caches.actions_caches) {
+              const createdAt = new Date(cache.created_at);
+              
+              if (createdAt < cutoffDate) {
+                console.log(`${dryRun ? '[DRY RUN] Would delete' : 'Deleting'} cache: ${cache.key} (${cache.size_in_bytes} bytes, created: ${cache.created_at})`);
+                
+                if (!dryRun) {
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner,
+                      repo,
+                      cache_id: cache.id
+                    });
+                  } catch (error) {
+                    console.error(`Failed to delete cache ${cache.key}: ${error.message}`);
+                    continue;
+                  }
+                }
+                
+                deletedCount++;
+                totalSize += cache.size_in_bytes;
+              }
+            }
+            
+            const sizeMB = (totalSize / 1024 / 1024).toFixed(2);
+            console.log(`${dryRun ? '[DRY RUN] Would clean up' : 'Cleaned up'} ${deletedCount} cache entries (${sizeMB} MB total)`);
+            
+            // Update step summary
+            const summary = `## Cache Cleanup\n\n` +
+                           `- **Retention Period**: ${retentionDays} days\n` +
+                           `- **Dry Run**: ${dryRun}\n` +
+                           `- **Cache entries ${dryRun ? 'to delete' : 'deleted'}**: ${deletedCount}\n` +
+                           `- **Space ${dryRun ? 'to reclaim' : 'reclaimed'}**: ${sizeMB} MB`;
+            
+            await core.summary.addRaw(summary).write();
+            
+          } catch (error) {
+            console.error(`Cache cleanup failed: ${error.message}`);
+          }
+
+  # Cleanup application-specific data
+  cleanup-application-data:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.cleanup_type == 'logs' || github.event.inputs.cleanup_type == 'all' || github.event.inputs.cleanup_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Cleanup old application logs and data
+      run: |
+        DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+        RETENTION_DAYS="${{ env.RETENTION_DAYS_LOGS }}"
+        
+        echo "Starting application data cleanup (dry run: $DRY_RUN)"
+        
+        # Find old log files
+        if [ -d "logs" ]; then
+          OLD_LOGS=$(find logs -type f -name "*.log" -mtime +$RETENTION_DAYS 2>/dev/null || echo "")
+          
+          if [ -n "$OLD_LOGS" ]; then
+            echo "Found old log files:"
+            echo "$OLD_LOGS"
+            
+            if [ "$DRY_RUN" = "false" ]; then
+              echo "Deleting old log files..."
+              echo "$OLD_LOGS" | xargs rm -f
+            else
+              echo "[DRY RUN] Would delete the above log files"
+            fi
+          else
+            echo "No old log files found"
+          fi
+        fi
+        
+        # Find old cache files
+        if [ -d "data/cache" ]; then
+          OLD_CACHE=$(find data/cache -type f -mtime +$RETENTION_DAYS 2>/dev/null || echo "")
+          
+          if [ -n "$OLD_CACHE" ]; then
+            echo "Found old cache files:"
+            echo "$OLD_CACHE"
+            
+            if [ "$DRY_RUN" = "false" ]; then
+              echo "Deleting old cache files..."
+              echo "$OLD_CACHE" | xargs rm -f
+            else
+              echo "[DRY RUN] Would delete the above cache files"
+            fi
+          else
+            echo "No old cache files found"
+          fi
+        fi
+        
+        # Find old temporary files
+        TEMP_PATTERNS=(
+          "*.tmp"
+          "*.temp"
+          "*.bak"
+          "*.old"
+          ".coverage.*"
+          "coverage-*.xml"
+        )
+        
+        for pattern in "${TEMP_PATTERNS[@]}"; do
+          OLD_TEMP=$(find . -maxdepth 3 -name "$pattern" -type f -mtime +$RETENTION_DAYS 2>/dev/null || echo "")
+          
+          if [ -n "$OLD_TEMP" ]; then
+            echo "Found old temporary files matching $pattern:"
+            echo "$OLD_TEMP"
+            
+            if [ "$DRY_RUN" = "false" ]; then
+              echo "Deleting old temporary files..."
+              echo "$OLD_TEMP" | xargs rm -f
+            else
+              echo "[DRY RUN] Would delete the above temporary files"
+            fi
+          fi
+        done
+
+    - name: Generate cleanup summary
+      run: |
+        cat << 'EOF' > cleanup-summary.md
+        # Application Data Cleanup Summary
+        
+        **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        **Retention Period**: ${{ env.RETENTION_DAYS_LOGS }} days
+        **Dry Run**: ${{ github.event.inputs.dry_run || 'true' }}
+        
+        ## Cleaned Up
+        - Old log files (*.log)
+        - Cache files in data/cache/
+        - Temporary files (*.tmp, *.temp, *.bak, *.old)
+        - Coverage reports older than retention period
+        
+        ## Notes
+        - Application logs are automatically rotated
+        - Cache files are safe to delete (will be regenerated)
+        - Temporary files are created during testing and analysis
+        
+        EOF
+
+    - name: Upload cleanup summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: cleanup-summary
+        path: cleanup-summary.md
+
+  # Send cleanup notification
+  cleanup-notification:
+    runs-on: ubuntu-latest
+    needs: [cleanup-artifacts, cleanup-packages, cleanup-cache, cleanup-application-data]
+    if: always()
+    
+    steps:
+    - name: Send cleanup notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'good',
+              title: '🧹 Scheduled Cleanup Complete',
+              fields: [{
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Cleanup Type',
+                value: '${{ github.event.inputs.cleanup_type || "all" }}',
+                short: true
+              }, {
+                title: 'Dry Run',
+                value: '${{ github.event.inputs.dry_run || "true" }}',
+                short: true
+              }, {
+                title: 'Artifacts',
+                value: '${{ needs.cleanup-artifacts.result }}',
+                short: true
+              }, {
+                title: 'Packages',
+                value: '${{ needs.cleanup-packages.result }}',
+                short: true
+              }, {
+                title: 'Cache',
+                value: '${{ needs.cleanup-cache.result }}',
+                short: true
+              }],
+              footer: 'GitHub Actions Cleanup',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create cleanup summary
+      run: |
+        echo "## 🧹 Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Cleanup Type**: ${{ github.event.inputs.cleanup_type || 'all' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Dry Run**: ${{ github.event.inputs.dry_run || 'true' }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Artifacts | ${{ needs.cleanup-artifacts.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Packages | ${{ needs.cleanup-packages.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Cache | ${{ needs.cleanup-cache.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Application Data | ${{ needs.cleanup-application-data.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Next Scheduled Run**: Every Sunday at 2 AM UTC" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,213 @@
+version: '3.8'
+
+services:
+  # Single PostgreSQL instance with optimized settings for budget constraints
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: investment_db
+    environment:
+      POSTGRES_DB: investment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TIMESCALEDB_TELEMETRY: "off"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: 
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - max_connections=50  # Reduced from 200
+      - -c
+      - shared_buffers=128MB  # Reduced from 256MB
+      - -c
+      - effective_cache_size=512MB  # Reduced from 1GB
+      - -c
+      - maintenance_work_mem=64MB  # Reduced from 128MB
+      - -c
+      - work_mem=2MB  # Reduced from 4MB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - wal_buffers=8MB  # Reduced from 16MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=100
+      - -c
+      - min_wal_size=512MB  # Reduced from 1GB
+      - -c
+      - max_wal_size=1GB  # Reduced from 4GB
+      - -c
+      - max_worker_processes=2  # Limit background workers
+      - -c
+      - max_parallel_workers=2  # Limit parallel queries
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Redis with memory constraints
+  redis:
+    image: redis:7-alpine
+    container_name: investment_cache
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+  # Elasticsearch with minimal heap
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: investment_search
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"  # Reduced from 512m
+      - indices.memory.index_buffer_size=10%  # Reduce index buffer
+      - indices.queries.cache.size=5%  # Reduce query cache
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 384M
+          cpus: '0.25'
+
+  # Backend with reduced resources
+  backend:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+    container_name: investment_api
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      # Optimized connection pool settings
+      - DB_POOL_SIZE=10  # Reduced from 50
+      - DB_MAX_OVERFLOW=5  # Reduced from 25
+      - DB_POOL_RECYCLE=3600
+      - DB_POOL_PRE_PING=true
+      - REDIS_MAX_CONNECTIONS=20  # Reduced from 50
+    volumes:
+      - ./backend:/app
+      - ./models:/app/models
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --workers 2 --limit-concurrency 100
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # Nginx reverse proxy (replaces Istio)
+  nginx:
+    image: nginx:alpine
+    container_name: investment_proxy
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+
+  # Single Celery worker with combined beat
+  celery:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+    container_name: investment_worker
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - DB_POOL_SIZE=5  # Minimal for worker
+      - DB_MAX_OVERFLOW=2
+    command: celery -A backend.tasks.celery_app worker --beat --loglevel=info --concurrency=2
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1450  # Optimize for cloud environments

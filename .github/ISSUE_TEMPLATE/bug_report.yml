@@ -1,0 +1,172 @@
+name: Bug Report
+description: File a bug report to help us improve
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-flight checklist
+      description: By submitting this issue, you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md)
+      options:
+        - label: I have searched for [existing issues](https://github.com/investment-analysis/app/issues) that already report this problem, without success.
+          required: true
+        - label: I have tried reproducing this issue with the latest version.
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - Backend API
+        - Frontend Web App
+        - Mobile App
+        - Data Pipeline
+        - ML/Analytics
+        - Database
+        - Infrastructure
+        - Documentation
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Which environment are you experiencing this bug in?
+      options:
+        - Development (local)
+        - Staging
+        - Production
+        - CI/CD Pipeline
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: A clear and concise description of what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem.
+      placeholder: Drag and drop images here, or click to browse.
+
+  - type: textarea
+    id: environment-details
+    attributes:
+      label: Environment details
+      description: |
+        Please provide details about your environment:
+      value: |
+        - OS: [e.g. Ubuntu 20.04, macOS 12.0, Windows 11]
+        - Browser: [e.g. Chrome 95, Firefox 94, Safari 15]
+        - Python version: [e.g. 3.11.0]
+        - Node.js version: [e.g. 18.12.0]
+        - Docker version: [e.g. 20.10.21]
+        - App version/commit: [e.g. v1.2.3 or commit sha]
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error logs
+      description: |
+        Please include relevant error logs, stack traces, or console output.
+        **Important**: Remove any sensitive information like API keys, passwords, or personal data.
+      render: shell
+      placeholder: |
+        Paste error logs here...
+
+  - type: textarea
+    id: network-info
+    attributes:
+      label: Network/API Information
+      description: |
+        For API-related issues, please provide:
+      placeholder: |
+        - API endpoint: [e.g. /api/stocks/AAPL]
+        - HTTP method: [e.g. GET, POST]
+        - Request headers: [if relevant]
+        - Response status: [e.g. 500, 404]
+        - Response body: [if relevant, sanitized]
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Low - Minor issue, workaround available
+        - Medium - Affects functionality, but app is usable
+        - High - Major functionality broken
+        - Critical - App unusable, data loss, security issue
+      default: 1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security
+      description: Security-related questions
+      options:
+        - label: This bug involves a potential security vulnerability
+        - label: This bug involves financial data exposure
+        - label: This bug involves user authentication issues
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: |
+        Add any other context about the problem here.
+        - Related issues or PRs
+        - Financial calculations involved
+        - Data sources affected
+        - Performance impact

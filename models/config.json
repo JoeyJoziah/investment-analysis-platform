@@ -1,0 +1,9 @@
+{
+  "models": [
+    "price_predictor",
+    "sentiment_analyzer",
+    "pattern_detector"
+  ],
+  "status": "initialized",
+  "version": "1.0.0"
+}

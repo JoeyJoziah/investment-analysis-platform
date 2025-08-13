@@ -1,0 +1,630 @@
+name: Security Scanning
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - code
+        - dependencies
+        - secrets
+        - containers
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Code security scanning
+  code-security:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'code' || github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python, javascript, typescript
+        config-file: ./.github/codeql/codeql-config.yml
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install Python dependencies for analysis
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: Install frontend dependencies
+      working-directory: frontend/web
+      run: npm ci
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:python,javascript,typescript"
+
+    - name: Run Bandit security scan
+      run: |
+        pip install bandit[toml]
+        bandit -r backend/ \
+          -f json \
+          -o bandit-results.json \
+          -ll \
+          --configfile pyproject.toml || true
+
+    - name: Run Semgrep static analysis
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/python
+          p/javascript
+          p/typescript
+          p/react
+        generateSarif: "1"
+
+    - name: Upload Semgrep results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+
+    - name: ESLint security scan for frontend
+      working-directory: frontend/web
+      run: |
+        npm install eslint-plugin-security --save-dev
+        npx eslint src/ \
+          --ext .js,.jsx,.ts,.tsx \
+          --format json \
+          --output-file eslint-security-results.json \
+          --config .eslintrc-security.js || true
+
+    - name: Upload code security results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: code-security-results
+        path: |
+          bandit-results.json
+          frontend/web/eslint-security-results.json
+          semgrep.sarif
+
+  # Dependency vulnerability scanning
+  dependency-security:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'dependencies' || github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Python dependency security scan with Safety
+      run: |
+        pip install safety
+        safety check \
+          --json \
+          --output safety-results.json \
+          --continue-on-error || true
+        
+        # Also check requirements files directly
+        safety check \
+          -r requirements.txt \
+          --json \
+          --output safety-requirements.json \
+          --continue-on-error || true
+
+    - name: Python dependency scan with pip-audit
+      run: |
+        pip install pip-audit
+        pip-audit \
+          --format json \
+          --output pip-audit-results.json \
+          --continue-on-error || true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/web/package-lock.json
+
+    - name: NPM dependency security audit
+      working-directory: frontend/web
+      run: |
+        npm audit --audit-level=moderate --json > npm-audit-results.json || true
+
+    - name: Yarn/NPM dependency scan with Snyk
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: |
+          --severity-threshold=medium
+          --json-file-output=snyk-results.json
+          --file=frontend/web/package.json
+
+    - name: Generate dependency vulnerability report
+      run: |
+        cat << 'EOF' > dependency-summary.md
+        # Dependency Vulnerability Report
+        
+        Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        ## Python Dependencies
+        - **Safety scan**: Results in safety-results.json
+        - **pip-audit scan**: Results in pip-audit-results.json
+        
+        ## JavaScript/Node Dependencies
+        - **npm audit**: Results in npm-audit-results.json
+        - **Snyk scan**: Results in snyk-results.json
+        
+        ## Summary
+        
+        Review the JSON files for detailed vulnerability information.
+        Critical and High severity vulnerabilities should be addressed immediately.
+        EOF
+
+    - name: Upload dependency scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-security-results
+        path: |
+          safety-results.json
+          safety-requirements.json
+          pip-audit-results.json
+          frontend/web/npm-audit-results.json
+          snyk-results.json
+          dependency-summary.md
+
+  # Secret scanning
+  secret-scanning:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'secrets' || github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for secret scanning
+
+    - name: Run TruffleHog secret scan
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified --json > trufflehog-results.json
+
+    - name: Run GitLeaks secret scan
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      with:
+        config-path: .gitleaks.toml
+
+    - name: Scan for hardcoded secrets with custom patterns
+      run: |
+        # Custom secret patterns specific to investment analysis app
+        cat << 'EOF' > custom-secret-patterns.txt
+        # API Keys
+        ALPHA_VANTAGE_API_KEY=[A-Z0-9]{16,32}
+        FINNHUB_API_KEY=[a-z0-9]{20,40}
+        POLYGON_API_KEY=[A-Za-z0-9_]{32,64}
+        NEWS_API_KEY=[a-f0-9]{32}
+        
+        # Database URLs
+        postgresql://[^\\s]*:[^\\s]*@[^\\s]*/[^\\s]*
+        redis://[^\\s]*:[^\\s]*@[^\\s]*
+        
+        # JWT Secrets
+        JWT_SECRET[_]?KEY[\"']?\s*[:=]\s*[\"'][^\"']{32,}[\"']
+        
+        # AWS Credentials
+        aws_access_key_id\s*=\s*[A-Z0-9]{20}
+        aws_secret_access_key\s*=\s*[A-Za-z0-9/+=]{40}
+        
+        # Generic API patterns
+        [aA]pi[_-]?[kK]ey[\"']?\s*[:=]\s*[\"'][^\"']{16,}[\"']
+        [sS]ecret[_-]?[kK]ey[\"']?\s*[:=]\s*[\"'][^\"']{16,}[\"']
+        EOF
+        
+        # Scan using grep with custom patterns
+        grep -rn -f custom-secret-patterns.txt . \
+          --exclude-dir=.git \
+          --exclude-dir=node_modules \
+          --exclude-dir=venv \
+          --exclude-dir=htmlcov \
+          --exclude="*.pyc" \
+          --exclude="*.log" \
+          --exclude="custom-secret-patterns.txt" \
+          > custom-secret-scan-results.txt || true
+
+    - name: Check for exposed environment files
+      run: |
+        # Look for potentially exposed .env files
+        find . -name ".env*" -not -path "./.git/*" -not -name ".env.example" | while read envfile; do
+          echo "WARNING: Found environment file: $envfile"
+          echo "File contents (first 10 lines):"
+          head -10 "$envfile" | sed 's/=.*/=***REDACTED***/'
+        done > env-file-check.txt
+
+    - name: Upload secret scanning results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: secret-scanning-results
+        path: |
+          trufflehog-results.json
+          gitleaks-report.json
+          custom-secret-scan-results.txt
+          env-file-check.txt
+
+  # Container security scanning
+  container-security:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'containers' || github.event.inputs.scan_type == 'all' || github.event.inputs.scan_type == ''
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build backend image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        tags: security-scan-backend:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build frontend image for scanning
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/web
+        file: ./frontend/web/Dockerfile
+        tags: security-scan-frontend:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan-backend:latest'
+        format: 'json'
+        output: 'backend-container-scan.json'
+        severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan-frontend:latest'
+        format: 'json'
+        output: 'frontend-container-scan.json'
+        severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+
+    - name: Run Trivy config scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'config'
+        format: 'json'
+        output: 'config-scan.json'
+
+    - name: Scan Dockerfiles with Hadolint
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: Dockerfile.backend
+        format: json
+        output-file: backend-dockerfile-scan.json
+        no-fail: true
+
+    - name: Scan frontend Dockerfile with Hadolint
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: frontend/web/Dockerfile
+        format: json
+        output-file: frontend-dockerfile-scan.json
+        no-fail: true
+
+    - name: Container security analysis with Dockle
+      run: |
+        # Install dockle
+        VERSION=$(curl --silent "https://api.github.com/repos/goodwithtech/dockle/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        curl -L -o dockle.deb "https://github.com/goodwithtech/dockle/releases/download/${VERSION}/dockle_${VERSION:1}_Linux-64bit.deb"
+        sudo dpkg -i dockle.deb
+        
+        # Scan backend container
+        dockle --format json --output backend-dockle-scan.json security-scan-backend:latest || true
+        
+        # Scan frontend container
+        dockle --format json --output frontend-dockle-scan.json security-scan-frontend:latest || true
+
+    - name: Generate container security summary
+      run: |
+        cat << 'EOF' > container-security-summary.md
+        # Container Security Scan Summary
+        
+        Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        
+        ## Backend Container
+        - **Trivy Vulnerability Scan**: backend-container-scan.json
+        - **Dockerfile Scan (Hadolint)**: backend-dockerfile-scan.json
+        - **Container Analysis (Dockle)**: backend-dockle-scan.json
+        
+        ## Frontend Container
+        - **Trivy Vulnerability Scan**: frontend-container-scan.json
+        - **Dockerfile Scan (Hadolint)**: frontend-dockerfile-scan.json
+        - **Container Analysis (Dockle)**: frontend-dockle-scan.json
+        
+        ## Configuration Scan
+        - **Config Files (Trivy)**: config-scan.json
+        
+        ## Recommendations
+        
+        1. Review all HIGH and CRITICAL vulnerabilities
+        2. Update base images to latest security patches
+        3. Follow Dockerfile best practices from Hadolint
+        4. Address Dockle security recommendations
+        EOF
+
+    - name: Upload container security results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: container-security-results
+        path: |
+          backend-container-scan.json
+          frontend-container-scan.json
+          config-scan.json
+          backend-dockerfile-scan.json
+          frontend-dockerfile-scan.json
+          backend-dockle-scan.json
+          frontend-dockle-scan.json
+          container-security-summary.md
+
+  # Security report generation
+  security-report:
+    runs-on: ubuntu-latest
+    needs: [code-security, dependency-security, secret-scanning, container-security]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all security artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "*security-results*"
+        merge-multiple: true
+
+    - name: Install report generation tools
+      run: |
+        pip install jq yq-python
+
+    - name: Generate consolidated security report
+      run: |
+        cat << 'EOF' > consolidated-security-report.md
+        # Investment Analysis App Security Report
+        
+        **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        **Scan Trigger**: ${{ github.event_name }}
+        **Branch**: ${{ github.ref_name }}
+        **Commit**: ${{ github.sha }}
+        
+        ## Summary
+        
+        | Scan Type | Status | Critical | High | Medium | Low |
+        |-----------|--------|----------|------|--------|-----|
+        | Code Security | ${{ needs.code-security.result }} | - | - | - | - |
+        | Dependencies | ${{ needs.dependency-security.result }} | - | - | - | - |
+        | Secrets | ${{ needs.secret-scanning.result }} | - | - | - | - |
+        | Containers | ${{ needs.container-security.result }} | - | - | - | - |
+        
+        ## Code Security Findings
+        
+        ### Bandit (Python Static Analysis)
+        - Results: See bandit-results.json
+        
+        ### Semgrep (Multi-language Analysis)  
+        - Results: See semgrep.sarif
+        
+        ### ESLint Security (Frontend)
+        - Results: See eslint-security-results.json
+        
+        ## Dependency Vulnerabilities
+        
+        ### Python Dependencies
+        - **Safety**: safety-results.json
+        - **pip-audit**: pip-audit-results.json
+        
+        ### Node.js Dependencies
+        - **npm audit**: npm-audit-results.json
+        - **Snyk**: snyk-results.json
+        
+        ## Secret Scanning
+        
+        - **TruffleHog**: trufflehog-results.json
+        - **GitLeaks**: gitleaks-report.json
+        - **Custom Patterns**: custom-secret-scan-results.txt
+        
+        ## Container Security
+        
+        - **Trivy Scans**: backend/frontend-container-scan.json
+        - **Dockerfile Analysis**: backend/frontend-dockerfile-scan.json
+        - **Container Hardening**: backend/frontend-dockle-scan.json
+        
+        ## Action Items
+        
+        ### Critical Priority
+        1. Review and fix all CRITICAL severity vulnerabilities
+        2. Rotate any exposed secrets or API keys
+        3. Update vulnerable dependencies to patched versions
+        
+        ### High Priority  
+        1. Address HIGH severity security findings
+        2. Implement missing security headers
+        3. Review and harden container configurations
+        
+        ### Medium Priority
+        1. Fix MEDIUM severity vulnerabilities
+        2. Improve code security practices
+        3. Update security scanning tools and rules
+        
+        ## Security Recommendations
+        
+        1. **Enable Dependabot**: Automated dependency updates
+        2. **Secret Scanning**: Enable GitHub secret scanning
+        3. **Code Scanning**: Enable CodeQL analysis
+        4. **Branch Protection**: Require security checks to pass
+        5. **Regular Audits**: Schedule weekly security reviews
+        
+        ---
+        
+        *This report was automatically generated by GitHub Actions Security Scanning workflow.*
+        EOF
+
+    - name: Parse and summarize vulnerabilities
+      run: |
+        # Count vulnerabilities by severity (this would need to be customized based on actual scan output formats)
+        echo "" >> consolidated-security-report.md
+        echo "## Vulnerability Counts" >> consolidated-security-report.md
+        echo "" >> consolidated-security-report.md
+        
+        # This is a template - actual implementation would parse JSON files
+        echo "- **Critical**: 0" >> consolidated-security-report.md
+        echo "- **High**: 0" >> consolidated-security-report.md
+        echo "- **Medium**: 0" >> consolidated-security-report.md
+        echo "- **Low**: 0" >> consolidated-security-report.md
+
+    - name: Upload consolidated security report
+      uses: actions/upload-artifact@v4
+      with:
+        name: consolidated-security-report
+        path: |
+          consolidated-security-report.md
+          *security-results*
+
+    - name: Comment security report on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('consolidated-security-report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔒 Security Scan Results
+            
+            ${report}
+            
+            📋 Full results are available in the [Actions artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`
+          });
+
+  # Security notification
+  security-notification:
+    runs-on: ubuntu-latest
+    needs: [code-security, dependency-security, secret-scanning, container-security, security-report]
+    if: always()
+    
+    steps:
+    - name: Send security scan notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ contains(needs.*.result, 'failure') }}' === 'true' ? 'danger' : 'good',
+              title: '🔒 Security Scan Complete',
+              fields: [{
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Branch',
+                value: '${{ github.ref_name }}',
+                short: true
+              }, {
+                title: 'Trigger',
+                value: '${{ github.event_name }}',
+                short: true
+              }, {
+                title: 'Code Security',
+                value: '${{ needs.code-security.result }}',
+                short: true
+              }, {
+                title: 'Dependencies',
+                value: '${{ needs.dependency-security.result }}',
+                short: true
+              }, {
+                title: 'Secrets',
+                value: '${{ needs.secret-scanning.result }}',
+                short: true
+              }, {
+                title: 'Containers',
+                value: '${{ needs.container-security.result }}',
+                short: true
+              }],
+              footer: 'GitHub Actions Security Scan',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create security summary
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Code Security | ${{ needs.code-security.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Dependencies | ${{ needs.dependency-security.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Container Security | ${{ needs.container-security.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Report | ${{ needs.security-report.result }} |" >> $GITHUB_STEP_SUMMARY

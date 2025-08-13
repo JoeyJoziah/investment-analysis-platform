@@ -20,8 +20,15 @@ yarn-error.log*
 
 # Environment
 .env
+.env.*
+!.env.example
+!.env.*.example
+!.env.*.template
 .env.local
 .env.*.local
+.env.secure
+.env.production
+.env_backup_DONOTUSE/
 
 # IDE
 .vscode/

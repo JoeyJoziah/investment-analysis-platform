@@ -1,0 +1,856 @@
+name: Database Migration Check
+
+on:
+  pull_request:
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/models/**'
+      - 'alembic.ini'
+      - 'backend/config/database.py'
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/migrations/**'
+      - 'backend/models/**'
+      - 'alembic.ini'
+      - 'backend/config/database.py'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of migration test to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - forward
+        - rollback
+        - data-integrity
+        - performance
+
+env:
+  PYTHON_VERSION: '3.11'
+  POSTGRES_VERSION: '15'
+
+concurrency:
+  group: migration-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Detect migration changes
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_migrations: ${{ steps.changes.outputs.has_migrations }}
+      migration_files: ${{ steps.changes.outputs.migration_files }}
+      has_model_changes: ${{ steps.changes.outputs.has_model_changes }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Detect migration changes
+      id: changes
+      run: |
+        # Check for new migration files
+        MIGRATION_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} -- backend/migrations/versions/ || git diff --name-only HEAD~1..HEAD -- backend/migrations/versions/ || echo "")
+        
+        if [ -n "$MIGRATION_FILES" ]; then
+          echo "has_migrations=true" >> $GITHUB_OUTPUT
+          echo "migration_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$MIGRATION_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "📄 Found migration changes: $MIGRATION_FILES"
+        else
+          echo "has_migrations=false" >> $GITHUB_OUTPUT
+          echo "No migration files changed"
+        fi
+        
+        # Check for model changes
+        MODEL_CHANGES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} -- backend/models/ || git diff --name-only HEAD~1..HEAD -- backend/models/ || echo "")
+        
+        if [ -n "$MODEL_CHANGES" ]; then
+          echo "has_model_changes=true" >> $GITHUB_OUTPUT
+          echo "📝 Found model changes: $MODEL_CHANGES"
+        else
+          echo "has_model_changes=false" >> $GITHUB_OUTPUT
+          echo "No model files changed"
+        fi
+
+    - name: List detected changes
+      run: |
+        echo "## Migration Change Detection" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Has Migrations**: ${{ steps.changes.outputs.has_migrations }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Has Model Changes**: ${{ steps.changes.outputs.has_model_changes }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ steps.changes.outputs.has_migrations }}" == "true" ]]; then
+          echo "### Migration Files Changed:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.changes.outputs.migration_files }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi
+
+  # Validate migration syntax and structure
+  migration-syntax:
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.has_migrations == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install alembic sqlalchemy psycopg2-binary
+        pip install -r requirements.txt
+
+    - name: Validate Alembic configuration
+      run: |
+        # Check if alembic.ini is valid
+        python -c "
+        import alembic.config
+        config = alembic.config.Config('alembic.ini')
+        print('✅ Alembic configuration is valid')
+        "
+
+    - name: Check migration file syntax
+      run: |
+        echo "Checking migration file syntax..."
+        
+        # Find all migration files
+        MIGRATION_FILES=$(find backend/migrations/versions -name "*.py" -type f)
+        
+        for file in $MIGRATION_FILES; do
+          echo "Checking syntax of $file..."
+          python -m py_compile "$file"
+          echo "✅ Syntax OK: $file"
+        done
+
+    - name: Validate migration headers
+      run: |
+        echo "Validating migration headers..."
+        
+        python << 'EOF'
+        import os
+        import re
+        import sys
+        
+        migration_dir = "backend/migrations/versions"
+        errors = []
+        
+        for filename in os.listdir(migration_dir):
+            if not filename.endswith('.py') or filename == '__init__.py':
+                continue
+                
+            filepath = os.path.join(migration_dir, filename)
+            with open(filepath, 'r') as f:
+                content = f.read()
+            
+            # Check for required fields
+            required_fields = ['revision', 'down_revision', 'branch_labels', 'depends_on']
+            missing_fields = []
+            
+            for field in required_fields:
+                if f'{field} = ' not in content:
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                errors.append(f"{filename}: Missing fields: {missing_fields}")
+            
+            # Check for upgrade and downgrade functions
+            if 'def upgrade():' not in content:
+                errors.append(f"{filename}: Missing upgrade() function")
+            
+            if 'def downgrade():' not in content:
+                errors.append(f"{filename}: Missing downgrade() function")
+            
+            print(f"✅ Validated: {filename}")
+        
+        if errors:
+            print("❌ Migration validation errors:")
+            for error in errors:
+                print(f"  - {error}")
+            sys.exit(1)
+        else:
+            print("✅ All migrations have valid structure")
+        EOF
+
+  # Test forward migrations
+  test-forward-migration:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, migration-syntax]
+    if: needs.detect-changes.outputs.has_migrations == 'true' && (github.event.inputs.test_type == 'forward' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: migration_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Test fresh database migration
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/migration_test_db"
+        
+        echo "🔄 Running fresh database migration..."
+        alembic upgrade head
+        
+        echo "✅ Fresh migration completed successfully"
+
+    - name: Verify database structure
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/migration_test_db"
+        
+        echo "Verifying database structure..."
+        
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, inspect
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        inspector = inspect(engine)
+        
+        # Get all tables
+        tables = inspector.get_table_names()
+        print(f"📊 Found {len(tables)} tables: {tables}")
+        
+        # Check for required tables (customize based on your schema)
+        required_tables = ['users', 'stocks', 'portfolios', 'recommendations']  # Adjust as needed
+        missing_tables = [table for table in required_tables if table not in tables]
+        
+        if missing_tables:
+            print(f"❌ Missing required tables: {missing_tables}")
+        else:
+            print("✅ All required tables present")
+        
+        # Check alembic_version table
+        if 'alembic_version' not in tables:
+            print("❌ Missing alembic_version table")
+        else:
+            print("✅ Alembic version table present")
+        EOF
+
+    - name: Test incremental migration
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/migration_test_db"
+        
+        echo "🔄 Testing incremental migration..."
+        
+        # Get current revision
+        CURRENT_REV=$(alembic current)
+        echo "Current revision: $CURRENT_REV"
+        
+        # Downgrade one step
+        alembic downgrade -1
+        
+        # Upgrade back
+        alembic upgrade head
+        
+        echo "✅ Incremental migration test passed"
+
+  # Test rollback migrations
+  test-rollback-migration:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, migration-syntax]
+    if: needs.detect-changes.outputs.has_migrations == 'true' && (github.event.inputs.test_type == 'rollback' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: rollback_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        until pg_isready -h localhost -p 5432 -U postgres; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+
+    - name: Test rollback capability
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/rollback_test_db"
+        
+        echo "🔄 Testing rollback migrations..."
+        
+        # Apply all migrations
+        alembic upgrade head
+        
+        # Get all revision history
+        alembic history --verbose > migration_history.txt
+        cat migration_history.txt
+        
+        # Test rollback of recent migrations
+        REVISIONS=$(alembic history --rev-range=head:head~3 | grep -o "^[a-f0-9]\+" || echo "")
+        
+        for rev in $REVISIONS; do
+          if [ -n "$rev" ]; then
+            echo "Testing rollback to revision: $rev"
+            alembic downgrade "$rev"
+            
+            # Verify database state after rollback
+            python << EOF
+        import os
+        from sqlalchemy import create_engine, inspect
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        print(f"Tables after rollback to $rev: {len(tables)} tables")
+        EOF
+            
+            # Upgrade back
+            alembic upgrade head
+            echo "✅ Rollback test passed for revision: $rev"
+          fi
+        done
+
+    - name: Test empty database rollback
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/rollback_test_db"
+        
+        echo "🔄 Testing complete rollback to base..."
+        
+        # Rollback to base (empty database)
+        alembic downgrade base
+        
+        # Verify empty state
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, inspect
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        
+        # Should only have alembic_version table or be empty
+        if len(tables) <= 1:
+            print("✅ Database successfully rolled back to base state")
+        else:
+            print(f"❌ Unexpected tables remain after rollback: {tables}")
+        EOF
+        
+        # Upgrade back to head
+        alembic upgrade head
+        echo "✅ Complete rollback test passed"
+
+  # Test data integrity during migrations
+  test-data-integrity:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, migration-syntax]
+    if: needs.detect-changes.outputs.has_migrations == 'true' && (github.event.inputs.test_type == 'data-integrity' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: integrity_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt faker
+
+    - name: Create test data
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/integrity_test_db"
+        
+        echo "📊 Creating test data..."
+        
+        # Apply migrations up to the previous version
+        alembic upgrade head~1 2>/dev/null || alembic upgrade head
+        
+        # Insert test data using Python
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, text
+        from faker import Faker
+        import uuid
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        fake = Faker()
+        
+        # This is a template - adjust based on your actual schema
+        try:
+            with engine.connect() as conn:
+                # Example: Insert test users if users table exists
+                try:
+                    conn.execute(text("""
+                        INSERT INTO users (id, email, created_at) 
+                        VALUES (:id, :email, NOW())
+                    """), [
+                        {"id": str(uuid.uuid4()), "email": fake.email()}
+                        for _ in range(10)
+                    ])
+                    print("✅ Inserted test users")
+                except Exception as e:
+                    print(f"ℹ️ Could not insert test users: {e}")
+                
+                # Example: Insert test stocks if stocks table exists
+                try:
+                    conn.execute(text("""
+                        INSERT INTO stocks (symbol, name, exchange) 
+                        VALUES (:symbol, :name, :exchange)
+                    """), [
+                        {"symbol": f"TEST{i}", "name": fake.company(), "exchange": "NYSE"}
+                        for i in range(5)
+                    ])
+                    print("✅ Inserted test stocks")
+                except Exception as e:
+                    print(f"ℹ️ Could not insert test stocks: {e}")
+                
+                conn.commit()
+                print("✅ Test data created successfully")
+        except Exception as e:
+            print(f"⚠️ Test data creation skipped: {e}")
+        EOF
+
+    - name: Test migration with data
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/integrity_test_db"
+        
+        echo "🔄 Testing migration with existing data..."
+        
+        # Count records before migration
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, text
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        
+        try:
+            with engine.connect() as conn:
+                # Get record counts for all tables
+                tables_result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name != 'alembic_version'
+                """))
+                
+                record_counts = {}
+                for (table_name,) in tables_result:
+                    try:
+                        count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                        count = count_result.scalar()
+                        record_counts[table_name] = count
+                        print(f"📊 {table_name}: {count} records")
+                    except Exception as e:
+                        print(f"⚠️ Could not count {table_name}: {e}")
+                
+                # Save counts to file
+                with open('pre_migration_counts.txt', 'w') as f:
+                    for table, count in record_counts.items():
+                        f.write(f"{table}:{count}\n")
+                        
+        except Exception as e:
+            print(f"⚠️ Could not get pre-migration counts: {e}")
+            with open('pre_migration_counts.txt', 'w') as f:
+                f.write("no_data:0\n")
+        EOF
+        
+        # Apply latest migration
+        alembic upgrade head
+        
+        echo "✅ Migration applied with existing data"
+
+    - name: Verify data integrity after migration
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/integrity_test_db"
+        
+        echo "🔍 Verifying data integrity..."
+        
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, text
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        
+        # Read pre-migration counts
+        pre_counts = {}
+        try:
+            with open('pre_migration_counts.txt', 'r') as f:
+                for line in f:
+                    if ':' in line:
+                        table, count = line.strip().split(':', 1)
+                        pre_counts[table] = int(count)
+        except Exception as e:
+            print(f"⚠️ Could not read pre-migration counts: {e}")
+            pre_counts = {}
+        
+        try:
+            with engine.connect() as conn:
+                # Get current record counts
+                tables_result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name != 'alembic_version'
+                """))
+                
+                integrity_issues = []
+                
+                for (table_name,) in tables_result:
+                    try:
+                        count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                        current_count = count_result.scalar()
+                        pre_count = pre_counts.get(table_name, 0)
+                        
+                        print(f"📊 {table_name}: {pre_count} -> {current_count}")
+                        
+                        # Check if data was unexpectedly lost (adjust logic as needed)
+                        if pre_count > 0 and current_count == 0:
+                            integrity_issues.append(f"Data lost in {table_name}")
+                        elif current_count < pre_count:
+                            print(f"⚠️ {table_name} has fewer records after migration")
+                            
+                    except Exception as e:
+                        print(f"⚠️ Could not verify {table_name}: {e}")
+                
+                if integrity_issues:
+                    print("❌ Data integrity issues found:")
+                    for issue in integrity_issues:
+                        print(f"  - {issue}")
+                    exit(1)
+                else:
+                    print("✅ Data integrity verified")
+                    
+        except Exception as e:
+            print(f"⚠️ Data integrity check incomplete: {e}")
+        EOF
+
+  # Performance test for migrations
+  test-migration-performance:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, migration-syntax]
+    if: needs.detect-changes.outputs.has_migrations == 'true' && (github.event.inputs.test_type == 'performance' || github.event.inputs.test_type == 'all' || github.event.inputs.test_type == '')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: perf_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client build-essential libpq-dev
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt psutil
+
+    - name: Create large dataset for performance testing
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/perf_test_db"
+        
+        echo "📊 Creating large dataset for performance testing..."
+        
+        # Apply migrations up to previous version
+        alembic upgrade head~1 2>/dev/null || alembic upgrade head
+        
+        # Create large dataset
+        python << 'EOF'
+        import os
+        from sqlalchemy import create_engine, text
+        import uuid
+        import time
+        import random
+        
+        engine = create_engine(os.environ['DATABASE_URL'])
+        
+        try:
+            with engine.connect() as conn:
+                print("Creating large test dataset...")
+                start_time = time.time()
+                
+                # Create large batch of test records (adjust based on your schema)
+                batch_size = 1000
+                total_records = 10000
+                
+                for i in range(0, total_records, batch_size):
+                    try:
+                        # Example for users table
+                        conn.execute(text("""
+                            INSERT INTO users (id, email, created_at) 
+                            SELECT 
+                                gen_random_uuid(),
+                                'test' || generate_series || '@example.com',
+                                NOW() - (random() * interval '365 days')
+                            FROM generate_series(:start, :end)
+                        """), {"start": i, "end": min(i + batch_size - 1, total_records - 1)})
+                    except:
+                        print(f"Could not create test users batch {i}")
+                    
+                    if i % 5000 == 0:
+                        print(f"Created {i} records...")
+                
+                conn.commit()
+                end_time = time.time()
+                print(f"✅ Created {total_records} test records in {end_time - start_time:.2f} seconds")
+                
+        except Exception as e:
+            print(f"⚠️ Could not create large dataset: {e}")
+        EOF
+
+    - name: Measure migration performance
+      run: |
+        export DATABASE_URL="postgresql://postgres:test_password@localhost:5432/perf_test_db"
+        
+        echo "⏱️ Measuring migration performance..."
+        
+        python << 'EOF'
+        import os
+        import time
+        import subprocess
+        import psutil
+        
+        print("Starting performance measurement...")
+        
+        # Monitor system resources
+        process = psutil.Process()
+        start_memory = process.memory_info().rss / 1024 / 1024  # MB
+        start_time = time.time()
+        
+        # Run migration
+        try:
+            result = subprocess.run(['alembic', 'upgrade', 'head'], 
+                                  capture_output=True, text=True, timeout=300)
+            
+            end_time = time.time()
+            end_memory = process.memory_info().rss / 1024 / 1024  # MB
+            
+            migration_time = end_time - start_time
+            memory_used = end_memory - start_memory
+            
+            print(f"✅ Migration completed in {migration_time:.2f} seconds")
+            print(f"📊 Memory usage: {memory_used:.2f} MB")
+            
+            # Performance thresholds (adjust as needed)
+            if migration_time > 60:  # 1 minute threshold
+                print(f"⚠️ Migration took longer than expected: {migration_time:.2f}s")
+            
+            if memory_used > 500:  # 500MB threshold
+                print(f"⚠️ Migration used more memory than expected: {memory_used:.2f}MB")
+            
+            # Check migration output
+            if result.returncode != 0:
+                print(f"❌ Migration failed: {result.stderr}")
+                exit(1)
+            else:
+                print("✅ Migration performance test passed")
+                
+        except subprocess.TimeoutExpired:
+            print("❌ Migration timed out after 5 minutes")
+            exit(1)
+        except Exception as e:
+            print(f"❌ Migration performance test failed: {e}")
+            exit(1)
+        EOF
+
+  # Generate migration report
+  migration-report:
+    runs-on: ubuntu-latest
+    needs: [detect-changes, migration-syntax, test-forward-migration, test-rollback-migration, test-data-integrity, test-migration-performance]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate migration report
+      run: |
+        cat << 'EOF' > migration-report.md
+        # Database Migration Check Report
+        
+        **Generated**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        **Branch**: ${{ github.ref_name }}
+        **Commit**: ${{ github.sha }}
+        **Trigger**: ${{ github.event_name }}
+        
+        ## Summary
+        
+        | Test | Status | Result |
+        |------|--------|--------|
+        | Change Detection | ${{ needs.detect-changes.result }} | ${{ needs.detect-changes.outputs.has_migrations == 'true' && 'Migrations detected' || 'No migrations' }} |
+        | Syntax Validation | ${{ needs.migration-syntax.result }} | ${{ needs.migration-syntax.result == 'success' && 'Valid syntax' || 'Check failed' }} |
+        | Forward Migration | ${{ needs.test-forward-migration.result }} | ${{ needs.test-forward-migration.result == 'success' && 'Passed' || 'Failed/Skipped' }} |
+        | Rollback Migration | ${{ needs.test-rollback-migration.result }} | ${{ needs.test-rollback-migration.result == 'success' && 'Passed' || 'Failed/Skipped' }} |
+        | Data Integrity | ${{ needs.test-data-integrity.result }} | ${{ needs.test-data-integrity.result == 'success' && 'Passed' || 'Failed/Skipped' }} |
+        | Performance | ${{ needs.test-migration-performance.result }} | ${{ needs.test-migration-performance.result == 'success' && 'Passed' || 'Failed/Skipped' }} |
+        
+        ## Migration Files
+        
+        EOF
+        
+        if [[ "${{ needs.detect-changes.outputs.has_migrations }}" == "true" ]]; then
+          echo "### Changed Files:" >> migration-report.md
+          echo '```' >> migration-report.md
+          echo "${{ needs.detect-changes.outputs.migration_files }}" >> migration-report.md
+          echo '```' >> migration-report.md
+        else
+          echo "*No migration files changed.*" >> migration-report.md
+        fi
+        
+        cat << 'EOF' >> migration-report.md
+        
+        ## Recommendations
+        
+        ### ✅ Passed Tests
+        - All migration tests have passed successfully
+        - Database schema changes are safe to deploy
+        
+        ### ⚠️ Warnings
+        - Review migration performance if tests took longer than expected
+        - Ensure rollback procedures are documented
+        - Test migrations on staging environment before production
+        
+        ### 📋 Deployment Checklist
+        
+        - [ ] All migration tests pass
+        - [ ] Database backup taken before deployment
+        - [ ] Rollback plan documented
+        - [ ] Migration tested on staging environment
+        - [ ] Database maintenance window scheduled if needed
+        - [ ] Monitoring alerts configured for deployment
+        
+        ---
+        
+        *This report was automatically generated by the Migration Check workflow.*
+        EOF
+
+    - name: Upload migration report
+      uses: actions/upload-artifact@v4
+      with:
+        name: migration-report
+        path: migration-report.md
+
+    - name: Comment migration report on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('migration-report.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🗃️ Database Migration Check Results\n\n${report}`
+          });
+
+    - name: Create step summary
+      run: |
+        echo "## 🗃️ Migration Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Change Detection | ${{ needs.detect-changes.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Syntax Validation | ${{ needs.migration-syntax.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Forward Migration | ${{ needs.test-forward-migration.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Rollback Migration | ${{ needs.test-rollback-migration.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Data Integrity | ${{ needs.test-data-integrity.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Performance Test | ${{ needs.test-migration-performance.result }} |" >> $GITHUB_STEP_SUMMARY

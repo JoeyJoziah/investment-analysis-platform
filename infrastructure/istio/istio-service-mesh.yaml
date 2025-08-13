@@ -1,0 +1,432 @@
+# Istio Service Mesh Configuration for Investment Analysis App
+# Provides traffic management, security, and observability
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: investment-app
+  labels:
+    istio-injection: enabled  # Enable automatic sidecar injection
+
+---
+# Virtual Service for API Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: investment-api-vs
+  namespace: investment-app
+spec:
+  hosts:
+  - investment-api.example.com
+  gateways:
+  - investment-api-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api/v3
+    route:
+    - destination:
+        host: backend-service
+        port:
+          number: 8000
+      weight: 100
+  - match:
+    - uri:
+        prefix: /api/v2
+    route:
+    - destination:
+        host: backend-service-v2
+        port:
+          number: 8000
+      weight: 100
+  - match:
+    - uri:
+        prefix: /api/v1
+    route:
+    - destination:
+        host: backend-service-v1
+        port:
+          number: 8000
+      weight: 100
+    fault:
+      abort:
+        httpStatus: 410
+        percentage:
+          value: 100  # v1 is sunset
+
+---
+# Gateway Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: investment-api-gateway
+  namespace: investment-app
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - investment-api.example.com
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: investment-api-cert
+    hosts:
+    - investment-api.example.com
+
+---
+# Destination Rules for Load Balancing
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: backend-service-dr
+  namespace: investment-app
+spec:
+  host: backend-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+  - name: v3
+    labels:
+      version: v3
+    trafficPolicy:
+      connectionPool:
+        tcp:
+          maxConnections: 200
+  - name: v2
+    labels:
+      version: v2
+  - name: v1
+    labels:
+      version: v1
+
+---
+# Service Entry for External APIs
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: finnhub-api
+  namespace: investment-app
+spec:
+  hosts:
+  - finnhub.io
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: alphavantage-api
+  namespace: investment-app
+spec:
+  hosts:
+  - www.alphavantage.co
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: polygon-api
+  namespace: investment-app
+spec:
+  hosts:
+  - api.polygon.io
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+# Rate Limiting with Envoy
+apiVersion: networking.istio.io/v1beta1
+kind: EnvoyFilter
+metadata:
+  name: rate-limit-filter
+  namespace: investment-app
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: http_local_rate_limiter
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: local_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: local_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+
+---
+# Circuit Breaker Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: external-apis-circuit-breaker
+  namespace: investment-app
+spec:
+  host: "*.io"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 10
+      http:
+        http1MaxPendingRequests: 10
+        http2MaxRequests: 20
+        maxRequestsPerConnection: 1
+    outlierDetection:
+      consecutiveErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 100
+      minHealthPercent: 0
+
+---
+# Retry Policy
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: external-api-retry
+  namespace: investment-app
+spec:
+  hosts:
+  - finnhub.io
+  - www.alphavantage.co
+  - api.polygon.io
+  http:
+  - timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+
+---
+# Authorization Policy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: backend-authz
+  namespace: investment-app
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/investment-app/sa/frontend"]
+    to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/api/*"]
+  - from:
+    - source:
+        principals: ["cluster.local/ns/investment-app/sa/admin"]
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/api/admin/*"]
+
+---
+# PeerAuthentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: investment-app
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# Telemetry Configuration
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: investment-app-metrics
+  namespace: investment-app
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+    dimensions:
+      request_protocol: request.protocol | "unknown"
+      response_code: response.code | 200
+      source_workload: source.workload.name | "unknown"
+      destination_service: destination.service.name | "unknown"
+  - providers:
+    - name: prometheus
+    dimensions:
+      api_version: request.headers["x-api-version"] | "unknown"
+      user_id: request.headers["x-user-id"] | "anonymous"
+
+---
+# Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-mesh-metrics
+  namespace: investment-app
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# Distributed Tracing with Jaeger
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-custom-bootstrap-config
+  namespace: investment-app
+data:
+  custom_bootstrap.yaml: |
+    tracing:
+      zipkin:
+        address: jaeger-collector.istio-system:9411
+    stats_config:
+      stats_matches:
+      - name: "api_version"
+        actions:
+        - name: "api_version"
+          action:
+            name: "envoy.actions.headervalue"
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.header_to_metadata.v3.Config
+              request_rules:
+              - header: "x-api-version"
+                on_header_present:
+                  key: "api_version"
+
+---
+# Traffic Mirroring for Testing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: backend-mirroring
+  namespace: investment-app
+spec:
+  hosts:
+  - backend-service
+  http:
+  - match:
+    - headers:
+        x-test-traffic:
+          exact: "true"
+    mirror:
+      host: backend-service-canary
+      port:
+        number: 8000
+    mirrorPercentage:
+      value: 100.0
+    route:
+    - destination:
+        host: backend-service
+        port:
+          number: 8000
+
+---
+# Canary Deployment Configuration
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: backend-canary
+  namespace: investment-app
+spec:
+  hosts:
+  - backend-service
+  http:
+  - match:
+    - headers:
+        x-canary:
+          exact: "true"
+    route:
+    - destination:
+        host: backend-service
+        subset: canary
+      weight: 100
+  - route:
+    - destination:
+        host: backend-service
+        subset: stable
+      weight: 95
+    - destination:
+        host: backend-service
+        subset: canary
+      weight: 5  # 5% canary traffic
+
+---
+# Request Authentication with JWT
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: investment-app
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  jwtRules:
+  - issuer: "https://auth.investment-app.com"
+    jwksUri: "https://auth.investment-app.com/.well-known/jwks.json"
+    audiences:
+    - "investment-api"
+    forwardOriginalToken: true

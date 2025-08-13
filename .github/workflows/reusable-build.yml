@@ -1,0 +1,187 @@
+name: Reusable Build Workflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Target environment (development, staging, production)'
+        required: true
+        type: string
+      push-images:
+        description: 'Whether to push built images'
+        required: false
+        type: boolean
+        default: false
+      platforms:
+        description: 'Target platforms for multi-arch builds'
+        required: false
+        type: string
+        default: 'linux/amd64'
+      cache-scope:
+        description: 'Cache scope for build layers'
+        required: false
+        type: string
+        default: 'default'
+    secrets:
+      registry-username:
+        description: 'Container registry username'
+        required: false
+      registry-password:
+        description: 'Container registry password'
+        required: false
+    outputs:
+      backend-image:
+        description: 'Backend container image reference'
+        value: ${{ jobs.build.outputs.backend-image }}
+      frontend-image:
+        description: 'Frontend container image reference'
+        value: ${{ jobs.build.outputs.frontend-image }}
+      backend-digest:
+        description: 'Backend image digest'
+        value: ${{ jobs.build.outputs.backend-digest }}
+      frontend-digest:
+        description: 'Frontend image digest'
+        value: ${{ jobs.build.outputs.frontend-digest }}
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image: ${{ steps.backend-meta.outputs.tags }}
+      frontend-image: ${{ steps.frontend-meta.outputs.tags }}
+      backend-digest: ${{ steps.backend-build.outputs.digest }}
+      frontend-digest: ${{ steps.frontend-build.outputs.digest }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      if: inputs.push-images
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.registry-username || github.actor }}
+        password: ${{ secrets.registry-password || secrets.GITHUB_TOKEN }}
+
+    - name: Extract backend metadata
+      id: backend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
+        tags: |
+          type=ref,event=branch,suffix=-${{ inputs.environment }}
+          type=ref,event=pr,suffix=-${{ inputs.environment }}
+          type=sha,prefix=${{ inputs.environment }}-
+          type=raw,value=${{ inputs.environment }}-latest,enable={{is_default_branch}}
+
+    - name: Extract frontend metadata
+      id: frontend-meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+        tags: |
+          type=ref,event=branch,suffix=-${{ inputs.environment }}
+          type=ref,event=pr,suffix=-${{ inputs.environment }}
+          type=sha,prefix=${{ inputs.environment }}-
+          type=raw,value=${{ inputs.environment }}-latest,enable={{is_default_branch}}
+
+    - name: Determine build arguments
+      id: build-args
+      run: |
+        case "${{ inputs.environment }}" in
+          "development")
+            echo "BUILD_ENV=development" >> $GITHUB_OUTPUT
+            echo "API_URL=http://localhost:8000" >> $GITHUB_OUTPUT
+            echo "DEBUG=true" >> $GITHUB_OUTPUT
+            ;;
+          "staging")
+            echo "BUILD_ENV=staging" >> $GITHUB_OUTPUT
+            echo "API_URL=https://api-staging.investment-analysis.com" >> $GITHUB_OUTPUT
+            echo "DEBUG=false" >> $GITHUB_OUTPUT
+            ;;
+          "production")
+            echo "BUILD_ENV=production" >> $GITHUB_OUTPUT
+            echo "API_URL=https://api.investment-analysis.com" >> $GITHUB_OUTPUT
+            echo "DEBUG=false" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "BUILD_ENV=development" >> $GITHUB_OUTPUT
+            echo "API_URL=http://localhost:8000" >> $GITHUB_OUTPUT
+            echo "DEBUG=true" >> $GITHUB_OUTPUT
+            ;;
+        esac
+
+    - name: Build and push backend image
+      id: backend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.backend
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push-images }}
+        tags: ${{ steps.backend-meta.outputs.tags }}
+        labels: ${{ steps.backend-meta.outputs.labels }}
+        cache-from: type=gha,scope=backend-${{ inputs.cache-scope }}
+        cache-to: type=gha,mode=max,scope=backend-${{ inputs.cache-scope }}
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          BUILD_ENV=${{ steps.build-args.outputs.BUILD_ENV }}
+          DEBUG=${{ steps.build-args.outputs.DEBUG }}
+
+    - name: Build and push frontend image
+      id: frontend-build
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend/web
+        file: ./frontend/web/Dockerfile
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push-images }}
+        tags: ${{ steps.frontend-meta.outputs.tags }}
+        labels: ${{ steps.frontend-meta.outputs.labels }}
+        cache-from: type=gha,scope=frontend-${{ inputs.cache-scope }}
+        cache-to: type=gha,mode=max,scope=frontend-${{ inputs.cache-scope }}
+        build-args: |
+          BUILDKIT_INLINE_CACHE=1
+          REACT_APP_ENV=${{ steps.build-args.outputs.BUILD_ENV }}
+          REACT_APP_API_URL=${{ steps.build-args.outputs.API_URL }}
+
+    - name: Generate build summary
+      run: |
+        echo "## Container Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Platforms**: ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Push Images**: ${{ inputs.push-images }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Built Images" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Backend**:" >> $GITHUB_STEP_SUMMARY
+        echo "- Tags: ${{ steps.backend-meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Digest: ${{ steps.backend-build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Frontend**:" >> $GITHUB_STEP_SUMMARY
+        echo "- Tags: ${{ steps.frontend-meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY  
+        echo "- Digest: ${{ steps.frontend-build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Generate SBOM
+      if: inputs.environment == 'production'
+      run: |
+        # Generate Software Bill of Materials for production builds
+        docker buildx imagetools inspect ${{ steps.backend-meta.outputs.tags }} --format "{{ json . }}" > backend-manifest.json
+        docker buildx imagetools inspect ${{ steps.frontend-meta.outputs.tags }} --format "{{ json . }}" > frontend-manifest.json
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ inputs.environment }}
+        path: |
+          backend-manifest.json
+          frontend-manifest.json
