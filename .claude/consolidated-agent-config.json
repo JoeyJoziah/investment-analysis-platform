@@ -1,0 +1,208 @@
+{
+  "project": "Investment Analysis Platform",
+  "description": "Optimized agent configuration for financial analysis, ML/AI, and data pipeline operations",
+  
+  "primary_agents": {
+    "financial_core": {
+      "trading_framework": {
+        "source": "TradingAgents",
+        "agents": [
+          "fundamental_analyst",
+          "sentiment_analyst", 
+          "news_analyst",
+          "technical_analyst",
+          "bull_researcher",
+          "bear_researcher",
+          "portfolio_manager"
+        ],
+        "purpose": "Core financial analysis and trading logic with agent debates"
+      },
+      "quant_analyst": {
+        "source": "wshobson-agents/quant-analyst.md",
+        "purpose": "Financial modeling, backtesting, R-multiple analysis",
+        "model": "claude-3-opus"
+      },
+      "risk_manager": {
+        "source": "wshobson-agents/risk-manager.md",
+        "purpose": "Portfolio risk assessment, position sizing, expectancy calculation",
+        "model": "claude-3-sonnet"
+      },
+      "fintech_engineer": {
+        "source": "voltagent-subagents/fintech-engineer.md",
+        "purpose": "SEC/GDPR compliance, regulatory requirements, payment processing"
+      }
+    },
+    
+    "data_ml_pipeline": {
+      "data_science_architect": {
+        "source": ".claude/agents/data-science-architect.md",
+        "purpose": "ETL pipeline design, data organization, statistical analysis"
+      },
+      "ml_engineer": {
+        "source": "wshobson-agents/ml-engineer.md",
+        "purpose": "Model deployment, feature engineering, PyTorch/scikit-learn optimization",
+        "model": "claude-3-opus"
+      },
+      "data_engineer": {
+        "source": "wshobson-agents/data-engineer.md",
+        "purpose": "Apache Airflow DAGs, Kafka streams, data processing pipelines",
+        "model": "claude-3-sonnet"
+      },
+      "database_optimizer": {
+        "source": "wshobson-agents/database-optimizer.md",
+        "purpose": "PostgreSQL/TimescaleDB optimization, query performance, indexing"
+      }
+    },
+    
+    "infrastructure_performance": {
+      "cloud_architect": {
+        "source": "wshobson-agents/cloud-architect.md",
+        "purpose": "AWS cost optimization under $50/month, auto-scaling, spot instances",
+        "model": "claude-3-sonnet"
+      },
+      "performance_engineer": {
+        "source": "wshobson-agents/performance-engineer.md",
+        "purpose": "Application optimization, Redis caching strategies, resource management"
+      },
+      "security_auditor": {
+        "source": "wshobson-agents/security-auditor.md",
+        "purpose": "SEC/GDPR compliance verification, vulnerability assessment, OAuth2 implementation",
+        "model": "claude-3-opus"
+      }
+    },
+    
+    "development_support": {
+      "backend_architect": {
+        "source": "wshobson-agents/backend-architect.md",
+        "purpose": "FastAPI design, microservices architecture, API patterns",
+        "model": "claude-3-sonnet"
+      },
+      "python_pro": {
+        "source": "wshobson-agents/python-pro.md",
+        "purpose": "Python development, FastAPI implementation, pandas/numpy optimization"
+      },
+      "react_pro": {
+        "source": "awesome-claude-code-agents/ui-engineer.md",
+        "purpose": "React dashboard, Material-UI components, Plotly visualizations"
+      },
+      "code_reviewer": {
+        "source": ".claude/agents/code-review-expert.md",
+        "purpose": "Code quality, security review, production reliability"
+      },
+      "godmode_refactorer": {
+        "source": ".claude/agents/godmode-refactorer.md",
+        "purpose": "Comprehensive refactoring across all technologies when needed"
+      }
+    },
+    
+    "operational_support": {
+      "devops_troubleshooter": {
+        "source": "wshobson-agents/devops-troubleshooter.md",
+        "purpose": "Production monitoring, Prometheus/Grafana, Docker troubleshooting"
+      },
+      "api_documenter": {
+        "source": "wshobson-agents/api-documenter.md",
+        "purpose": "Investment API documentation, endpoint specifications"
+      },
+      "test_automator": {
+        "source": "wshobson-agents/test-automator.md",
+        "purpose": "pytest implementation, integration testing, financial model validation"
+      }
+    },
+    
+    "orchestration": {
+      "agent_organizer": {
+        "source": "lst97-subagents/agent-organizer.md",
+        "purpose": "Multi-agent workflow coordination, complex task delegation"
+      },
+      "project_orchestrator": {
+        "source": "claude-code-sub-agents/project-orchestrator.md",
+        "purpose": "High-level project coordination and planning"
+      }
+    }
+  },
+  
+  "agent_triggers": {
+    "keywords": {
+      "financial": ["quant_analyst", "risk_manager", "trading_framework"],
+      "trading": ["trading_framework", "quant_analyst"],
+      "stock": ["trading_framework", "quant_analyst", "data_science_architect"],
+      "portfolio": ["risk_manager", "portfolio_manager", "quant_analyst"],
+      "compliance": ["fintech_engineer", "security_auditor"],
+      "sec": ["fintech_engineer", "security_auditor"],
+      "gdpr": ["fintech_engineer", "security_auditor"],
+      "python": ["python_pro", "backend_architect"],
+      "fastapi": ["python_pro", "backend_architect", "api_documenter"],
+      "react": ["react_pro"],
+      "dashboard": ["react_pro", "data_science_architect"],
+      "ml": ["ml_engineer", "data_science_architect"],
+      "model": ["ml_engineer", "quant_analyst"],
+      "pytorch": ["ml_engineer"],
+      "airflow": ["data_engineer"],
+      "kafka": ["data_engineer"],
+      "postgresql": ["database_optimizer"],
+      "timescale": ["database_optimizer"],
+      "redis": ["performance_engineer"],
+      "docker": ["devops_troubleshooter"],
+      "aws": ["cloud_architect"],
+      "cost": ["cloud_architect", "performance_engineer"],
+      "optimize": ["performance_engineer", "database_optimizer", "cloud_architect"],
+      "test": ["test_automator"],
+      "refactor": ["godmode_refactorer", "code_reviewer"],
+      "api": ["backend_architect", "api_documenter"],
+      "security": ["security_auditor", "fintech_engineer"]
+    },
+    
+    "complex_tasks": {
+      "full_stack_feature": ["agent_organizer", "backend_architect", "react_pro", "database_optimizer"],
+      "financial_analysis": ["trading_framework", "quant_analyst", "ml_engineer"],
+      "data_pipeline": ["data_engineer", "data_science_architect", "database_optimizer"],
+      "production_deployment": ["cloud_architect", "devops_troubleshooter", "security_auditor"],
+      "cost_optimization": ["cloud_architect", "performance_engineer", "database_optimizer"],
+      "regulatory_compliance": ["fintech_engineer", "security_auditor", "api_documenter"]
+    }
+  },
+  
+  "execution_rules": {
+    "default_orchestrator": "agent_organizer",
+    "financial_tasks_priority": "trading_framework",
+    "always_include_for_production": ["security_auditor", "code_reviewer"],
+    "cost_limit_enforcement": "cloud_architect",
+    "max_concurrent_agents": 5,
+    "agent_timeout_seconds": 300
+  },
+  
+  "available_commands": {
+    "analyze_codebase": {
+      "source": ".claude/commands/analyze_codebase.md",
+      "purpose": "Comprehensive project analysis and readiness assessment",
+      "output_dir": ".context/"
+    },
+    "ui_design": {
+      "source": ".claude/commands/ui_design.md",
+      "commands": ["interpret_ui", "analyze_ui", "compare_designs", "generate_ui_components"],
+      "purpose": "UI/UX design and component generation"
+    }
+  },
+  
+  "optimization_notes": {
+    "eliminated_duplicates": [
+      "Multiple code reviewers consolidated to one",
+      "Multiple Python specialists consolidated to python_pro",
+      "Multiple database experts consolidated to database_optimizer",
+      "Multiple security auditors consolidated to security_auditor",
+      "Multiple frontend developers consolidated to react_pro"
+    ],
+    "unique_capabilities_preserved": [
+      "TradingAgents framework - only financial trading multi-agent system",
+      "godmode_refactorer - comprehensive refactoring capability",
+      "fintech_engineer - regulatory compliance expertise",
+      "agent_organizer - advanced multi-agent orchestration"
+    ],
+    "cost_optimization_focus": [
+      "cloud_architect for AWS under $50/month",
+      "performance_engineer for resource optimization",
+      "database_optimizer for query efficiency"
+    ]
+  }
+}

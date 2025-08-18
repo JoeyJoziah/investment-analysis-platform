@@ -1,0 +1,107 @@
+# Development Docker Compose Configuration
+# Investment Analysis Platform - Simplified Development Stack
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  # Override backend for development
+  backend:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      target: development
+    volumes:
+      - ./backend:/app/backend  # Hot reload
+      - ./models:/app/models
+      - ./scripts:/app/scripts
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"  # Expose for development
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Override frontend for development
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+      target: development
+    volumes:
+      - ./frontend/web/src:/app/src
+      - ./frontend/web/public:/app/public
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"  # React dev server
+    command: npm start
+
+  # Override database for development
+  postgres:
+    ports:
+      - "5432:5432"  # Expose for local tools
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init_database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  # Override Redis for development
+  redis:
+    ports:
+      - "6379:6379"  # Expose for local tools
+    command: redis-server --appendonly yes --loglevel debug --requirepass ${REDIS_PASSWORD:-dev_password}
+
+  # Override Elasticsearch for development
+  elasticsearch:
+    ports:
+      - "9200:9200"  # Expose for local tools
+    environment:
+      - xpack.security.enabled=false  # Disable security for dev
+
+  # Development-specific services
+  flower:
+    image: mher/flower:latest
+    container_name: investment_flower
+    environment:
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-dev_password}@redis:6379/0
+      - FLOWER_PORT=5555
+    ports:
+      - "5555:5555"  # Celery monitoring
+    depends_on:
+      - redis
+      - celery_worker
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: investment_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: investment_redis_ui
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:${REDIS_PASSWORD:-dev_password}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+
+volumes:
+  postgres_dev_data:
+  pgadmin_data:

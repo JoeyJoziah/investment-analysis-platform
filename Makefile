@@ -1,46 +1,77 @@
-# Makefile for Investment Analysis Platform
+# Investment Platform - Simplified Makefile
+# Essential commands for development and deployment
 
-.PHONY: help build up down test clean debug
+.PHONY: help build up down test clean logs init
 
 help:
-	@echo "Available commands:"
-	@echo "  make build    - Build all Docker images"
-	@echo "  make up       - Start all services"
+	@echo "Investment Platform - Available Commands"
+	@echo "======================================="
+	@echo "  make setup    - Initial project setup"
+	@echo "  make build    - Build Docker images"
+	@echo "  make up       - Start development environment"
 	@echo "  make down     - Stop all services"
-	@echo "  make test     - Run all tests"
+	@echo "  make test     - Run tests"
 	@echo "  make clean    - Clean up containers and volumes"
-	@echo "  make debug    - Run debug validation"
+	@echo "  make logs     - View logs"
+	@echo "  make shell    - Open backend shell"
+
+setup:
+	@./setup.sh
 
 build:
-	docker-compose build
+	@echo "Building Docker images..."
+	@docker-compose build
 
 up:
-	docker-compose up -d
-	@echo "Waiting for services to start..."
-	@sleep 10
-	@echo "Services started! Access at:"
-	@echo "  Frontend: http://localhost:3000"
-	@echo "  API Docs: http://localhost:8000/docs"
+	@./start.sh dev
 
 down:
-	docker-compose down
+	@./stop.sh
 
 test:
-	docker-compose run --rm backend pytest
+	@./start.sh test
 
 clean:
-	docker-compose down -v
-	rm -rf logs/* data/cache/*
-
-debug:
-	python debug_validate.py
-
-init-db:
-	docker-compose exec postgres psql -U postgres -f /scripts/init_db.sql
+	@./stop.sh --clean
 
 logs:
-	docker-compose logs -f
+	@./logs.sh
 
-install-deps:
-	pip install -r requirements.txt
-	cd frontend/web && npm install
+shell:
+	@docker-compose exec backend bash
+
+# Python specific commands
+format:
+	@echo "Formatting Python code..."
+	@black backend/ --line-length 88
+	@isort backend/ --profile black
+
+lint:
+	@echo "Linting Python code..."
+	@flake8 backend/ --max-line-length 88
+	@mypy backend/ --python-version 3.11
+
+# Frontend specific commands
+frontend-dev:
+	@cd frontend/web && npm start
+
+frontend-build:
+	@cd frontend/web && npm run build
+
+frontend-test:
+	@cd frontend/web && npm test
+
+# Database commands
+db-migrate:
+	@docker-compose exec backend alembic upgrade head
+
+db-rollback:
+	@docker-compose exec backend alembic downgrade -1
+
+db-shell:
+	@docker-compose exec postgres psql -U postgres -d investment_db
+
+# Monitoring commands
+monitor:
+	@echo "Opening monitoring dashboard..."
+	@open http://localhost:3001 || xdg-open http://localhost:3001

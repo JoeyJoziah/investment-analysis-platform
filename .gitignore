@@ -1,87 +1,149 @@
-# Python
+# Investment Analysis Platform - Git Ignore File
+
+# ============================================================================
+# ENVIRONMENT & SECRETS
+# ============================================================================
+.env
+.env.local
+.env.production
+.env.test
+*.pem
+*.key
+*.crt
+secrets/
+ssl/
+
+# ============================================================================
+# PYTHON
+# ============================================================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-venv/
-ENV/
-env/
-*.egg-info/
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
 *.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
 
-# Node
+# ============================================================================
+# NODE.JS / FRONTEND
+# ============================================================================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.npm
+.eslintcache
 
-# Environment
-.env
-.env.*
-!.env.example
-!.env.*.example
-!.env.*.template
-.env.local
-.env.*.local
-.env.secure
-.env.production
-.env_backup_DONOTUSE/
+# ============================================================================
+# DOCKER & CONTAINERS
+# ============================================================================
+.dockerignore
+*.log
 
-# IDE
+# ============================================================================
+# DATABASES
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+backups/
+dumps/
+
+# ============================================================================
+# LOGS & TEMPORARY FILES
+# ============================================================================
+logs/
+*.log
+temp/
+tmp/
+.tmp/
+.temp/
+nul
+
+# ============================================================================
+# DATA & MODELS
+# ============================================================================
+data/cache/
+data/temp/
+*.pkl
+*.pickle
+*.joblib
+*.model
+*.h5
+*.pt
+*.pth
+loading_checkpoint.pkl
+loading_progress.json
+
+# ============================================================================
+# ML & JUPYTER
+# ============================================================================
+.ipynb_checkpoints
+*.ipynb
+
+# ============================================================================
+# IDE & EDITORS
+# ============================================================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
+Thumbs.db
 
-# Data
-data/cache/
-cache/
-logs/
-*.log
-
-# Testing
-htmlcov/
-.coverage
+# ============================================================================
+# TESTING
+# ============================================================================
 .pytest_cache/
+test-results.xml
 coverage/
+.coverage
+htmlcov/
 
-# Docker
-*.pid
+# ============================================================================
+# MONITORING & OBSERVABILITY
+# ============================================================================
+prometheus_data/
+grafana_data/
 
-# Database
-*.db
-*.sqlite
+# ============================================================================
+# ARCHIVE & DEPRECATED
+# ============================================================================
+archive/
+deprecated/
+old/
+backup/
 
-# Models
-models/*.bin
-models/*.pkl
-models/*.h5
-
-# Secrets
-secrets/
-*.key
-*.pem
-*.crt
-
-# Temporary
-tmp/
-temp/
-*.tmp
-
-# Agent repositories (treat as external dependencies)
-.claude/agents/*/
-TradingAgents/
-awesome-claude-code-agents/
-claude-code-sub-agents/
-furai-subagents/
-lst97-subagents/
-nuttall-agents/
-voltagent-subagents/
-wshobson-agents/
-backend/TradingAgents/
-backend/analytics/agents/TradingAgents/
-backend/analytics/fundamental/TradingAgents/
+# ============================================================================
+# LOCAL DEVELOPMENT
+# ============================================================================
+.local/
+.cache/
+.config/
+venv/
+env/
+.env/

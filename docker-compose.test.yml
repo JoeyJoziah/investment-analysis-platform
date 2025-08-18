@@ -1,56 +1,72 @@
+# Test Docker Compose Configuration
+# Investment Analysis Platform - Testing Stack
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up --abort-on-container-exit
+
+version: '3.8'
+
 services:
-  # PostgreSQL Database
+  # Test database with minimal resources
   postgres:
-    image: postgres:15-alpine
-    container_name: investment_db_test
     environment:
-      POSTGRES_DB: investment_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD}
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      POSTGRES_DB: test_investment_db
+      POSTGRES_PASSWORD: test_password
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    command: 
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=128MB
 
-  # Redis Cache
+  # Test Redis with minimal config
   redis:
-    image: redis:7-alpine
-    container_name: investment_cache_test
-    command: redis-server --appendonly yes
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    command: redis-server --requirepass test_password --maxmemory 256mb
 
-  # Backend API
+  # Backend for testing
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.minimal
-    container_name: investment_api_test
+      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      target: test
     environment:
-      - DATABASE_URL=postgresql://postgres:${TEST_DB_PASSWORD}@postgres:5432/investment_db
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET_KEY=${TEST_JWT_SECRET_KEY}
-      - APP_ENV=development
-      - DEBUG=True
-      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-demo}
-      - FINNHUB_API_KEY=${FINNHUB_API_KEY:-demo}
-      - POLYGON_API_KEY=${POLYGON_API_KEY:-demo}
-      - NEWS_API_KEY=${NEWS_API_KEY:-demo}
+      - DATABASE_URL=postgresql://postgres:test_password@postgres:5432/test_investment_db
+      - REDIS_URL=redis://:test_password@redis:6379/0
+      - TESTING=true
+      - DEBUG=false
+      - LOG_LEVEL=WARNING
     volumes:
       - ./backend:/app/backend
-    ports:
-      - "8000:8000"
+      - ./tests:/app/tests
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+      - postgres
+      - redis
+    command: >
+      sh -c "
+        # Wait for services
+        while ! nc -z postgres 5432; do sleep 1; done;
+        while ! nc -z redis 6379; do sleep 1; done;
+        # Run migrations
+        alembic upgrade head;
+        # Run tests
+        pytest tests/ -v --cov=backend --cov-report=html --cov-report=term-missing --junit-xml=test-results.xml
+      "
+
+  # Frontend testing
+  frontend_test:
+    build:
+      context: ./frontend/web
+      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+      target: test
+    volumes:
+      - ./frontend/web/src:/app/src
+      - ./frontend/web/public:/app/public
+    environment:
+      - NODE_ENV=test
+      - CI=true
+    command: npm test -- --coverage --watchAll=false
+
+volumes:
+  postgres_test_data:

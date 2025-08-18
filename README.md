@@ -1,231 +1,221 @@
-# 🚀 World-Leading Investment Analysis & Recommendation Platform
+# 📈 Investment Analysis Platform
 
-## ⚠️ CRITICAL: CREDENTIAL PRESERVATION WARNING
+A comprehensive, AI-powered investment analysis and recommendation platform designed to analyze 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
 
-**NEVER DELETE OR MODIFY THE FOLLOWING CREDENTIALS IN THE .env FILE:**
-- `ALPHA_VANTAGE_API_KEY=4265EWGEBCXVE3RP`
-- `FINNHUB_API_KEY=d295ehpr01qhoena0ffgd295ehpr01qhoena0fg0`
-- `POLYGON_API_KEY=lwi0HlBLeyuDwSAIX6H5gpM4jM4xqLgk`
-- `NEWS_API_KEY=c2173d404c67434cbd4ed9f94a71ed67`
-- All SECRET_KEY, JWT_SECRET_KEY, and database passwords
+## 🚀 Quick Start
 
-**These are production API keys and credentials that must be preserved. Any automated tools or scripts should NEVER remove or modify these values.**
+```bash
+# 1. Initial setup (run once)
+./setup.sh
 
----
+# 2. Start development environment
+./start.sh dev
 
-An advanced, AI-powered investment analysis platform that provides institutional-grade stock analysis and recommendations for all 6,000+ publicly traded stocks on NYSE, NASDAQ, and AMEX exchanges. Built with cutting-edge technology while maintaining operational costs under $50/month.
+# 3. Access the application
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:8000/docs
+```
 
-## 🌟 Key Features
+## 📋 Features
 
-### Comprehensive Analysis
-- **Technical Analysis**: 200+ indicators, pattern recognition, market structure analysis
-- **Fundamental Analysis**: DCF valuation, peer comparison, quality scoring, financial health assessment
-- **Sentiment Analysis**: FinBERT-powered news and social media analysis
-- **ML Predictions**: Ensemble of LSTM, Transformer, XGBoost, and Prophet models
-- **Alternative Data**: Satellite imagery, weather patterns, web traffic analysis
-
-### World-Class Capabilities
-- ✅ Analyzes all 6,000+ US stocks daily
-- ✅ Multi-model ensemble with 65%+ directional accuracy
-- ✅ Real-time monitoring and alerts
-- ✅ Explainable AI with SHAP/LIME
-- ✅ Portfolio optimization with risk management
-- ✅ Automated daily recommendations
-- ✅ Cost tracking to stay under $50/month
+- **Real-time Stock Analysis**: Technical, fundamental, and sentiment analysis
+- **AI-Powered Recommendations**: ML models including LSTM, XGBoost, and Prophet
+- **Portfolio Management**: Track and optimize investment portfolios
+- **Cost Optimized**: Designed to run under $50/month using free API tiers
+- **Fully Automated**: Daily analysis without manual intervention
+- **Compliance Ready**: GDPR and SEC compliant architecture
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Frontend (React + Material-UI)                │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────┐
-│                      API Layer (FastAPI)                         │
-├─────────────────────────────────────────────────────────────────┤
-│  Technical  │ Fundamental │ Sentiment │    ML     │   Risk      │
-│  Analysis   │  Analysis   │ Analysis  │ Ensemble  │ Management  │
-└─────────────────────────────────────────────────────────────────┘
-                                    │
-┌─────────────────────────────────────────────────────────────────┐
-│   PostgreSQL  │     Redis     │  Elasticsearch │   Airflow      │
-└─────────────────────────────────────────────────────────────────┘
+├── backend/           # FastAPI backend with ML models
+├── frontend/          # React web application
+├── data_pipelines/    # Apache Airflow DAGs
+├── infrastructure/    # Docker and Kubernetes configs
+├── scripts/          # Utility scripts
+├── models/           # Trained ML models
+└── tests/            # Test suites
 ```
 
-## 🚀 Quick Start
+## 🛠️ Technology Stack
 
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
-- Node.js 18+
-- Free API keys from: Alpha Vantage, Finnhub, Polygon.io, NewsAPI
+- **Backend**: FastAPI, Python 3.11
+- **Frontend**: React, TypeScript, Material-UI
+- **Database**: PostgreSQL, TimescaleDB
+- **Cache**: Redis
+- **ML/AI**: PyTorch, scikit-learn, Prophet
+- **Orchestration**: Apache Airflow
+- **Container**: Docker, Kubernetes
 
-### Installation
+## 📝 Available Commands
 
-1. **Clone the repository**
+### Using Make
 ```bash
-git clone https://github.com/yourusername/investment-analysis-app.git
-cd investment-analysis-app
+make help          # Show all available commands
+make setup         # Initial project setup
+make up            # Start development environment
+make down          # Stop all services
+make test          # Run tests
+make logs          # View logs
+make clean         # Clean up everything
 ```
 
-2. **Set up environment variables**
+### Using Scripts
 ```bash
-cp .env.example .env
-# Edit .env with your API keys
+./setup.sh         # Initial setup with secure passwords
+./start.sh dev     # Start development environment
+./start.sh prod    # Start production environment
+./start.sh test    # Run tests
+./stop.sh          # Stop all services
+./stop.sh --clean  # Stop and clean volumes
+./logs.sh          # View all logs
+./logs.sh backend  # View specific service logs
 ```
 
-3. **Start with Docker Compose**
-```bash
-docker-compose up -d
-```
-
-4. **Initialize the database**
-```bash
-docker-compose exec backend python -m backend.utils.db_init
-```
-
-5. **Access the application**
-- Frontend: http://localhost:3000
-- API Docs: http://localhost:8000/api/docs
-- Grafana: http://localhost:3001
-- Airflow: http://localhost:8080
-
-## 📊 Data Sources (Free Tier)
-
-| Provider | Data Type | Free Limit | Usage |
-|----------|-----------|------------|--------|
-| Alpha Vantage | Prices, Fundamentals | 25/day | Daily updates |
-| Finnhub | Real-time, News | 60/min | Primary source |
-| Polygon.io | Historical, Options | 5/min | Backup source |
-| SEC EDGAR | Filings, Financials | Unlimited | Fundamentals |
-| NewsAPI | News | 100/day | Sentiment |
-| Yahoo Finance | Prices | Unofficial | Fallback |
-
-## 🤖 ML Models
-
-### Ensemble Architecture
-- **LSTM**: Time series prediction with attention mechanism
-- **Transformer**: Multi-horizon forecasting
-- **XGBoost**: Feature-based prediction
-- **LightGBM**: Fast gradient boosting
-- **Prophet**: Seasonality and trend decomposition
-- **Random Forest**: Robust baseline
-
-### Performance Metrics
-- Directional Accuracy: 65%+
-- Sharpe Ratio: >2.0
-- Risk-Adjusted Returns: Top quartile
-
-## 💰 Cost Optimization
-
-The platform is designed to operate under $50/month:
-
-- **API Management**: Smart caching and batching
-- **Compute**: CPU-optimized models, spot instances
-- **Storage**: PostgreSQL with compression
-- **Monitoring**: Built-in cost tracking and alerts
-
-## 🛠️ Development
+## 🔧 Development
 
 ### Backend Development
 ```bash
-cd backend
+# Install dependencies
 pip install -r requirements.txt
+
+# Run development server
 uvicorn backend.api.main:app --reload
+
+# Run tests
+pytest backend/tests/
+
+# Format code
+black backend/ --line-length 88
+isort backend/ --profile black
 ```
 
 ### Frontend Development
 ```bash
-cd frontend/web
-npm install
+# Install dependencies
+cd frontend/web && npm install
+
+# Start development server
 npm start
-```
 
-### Running Tests
-```bash
-# Backend tests
-pytest backend/tests/
-
-# Frontend tests
+# Run tests
 npm test
+
+# Build for production
+npm run build
 ```
 
-## 📈 API Endpoints
+## 🗄️ Database
 
-### Core Endpoints
-- `GET /api/recommendations` - Daily stock recommendations
-- `GET /api/analysis/{ticker}` - Comprehensive stock analysis
-- `GET /api/portfolio` - Portfolio management
-- `GET /api/market/overview` - Market overview
-- `WS /api/ws/live` - Real-time updates
+### Migrations
+```bash
+# Run migrations
+make db-migrate
 
-### Analysis Endpoints
-- `POST /api/analysis/technical` - Technical analysis
-- `POST /api/analysis/fundamental` - Fundamental analysis
-- `POST /api/analysis/sentiment` - Sentiment analysis
-- `POST /api/predictions/{ticker}` - ML predictions
+# Rollback migration
+make db-rollback
 
-## 🔒 Security
+# Access database
+make db-shell
+```
 
-- OAuth2 authentication with JWT tokens
-- End-to-end encryption for sensitive data
-- GDPR compliant data handling
-- Regular security audits
-- API rate limiting and DDoS protection
+## 📊 API Endpoints
 
-## 📊 Monitoring
+- `GET /api/health` - Health check
+- `GET /api/stocks/{ticker}` - Stock data and analysis
+- `GET /api/recommendations` - AI recommendations
+- `POST /api/portfolio` - Portfolio management
+- `GET /api/analysis/{ticker}` - Detailed analysis
+- `WS /ws` - WebSocket for real-time updates
 
-### Prometheus Metrics
-- API response times
-- Model prediction accuracy
-- Cost tracking
-- System health
+## 🔐 Environment Variables
 
-### Grafana Dashboards
-- Real-time performance monitoring
-- Cost tracking dashboard
-- Model performance metrics
-- API usage analytics
+Copy `.env.template` to `.env` and update with your API keys:
+
+```bash
+# Required API Keys (free tiers available)
+ALPHA_VANTAGE_API_KEY=your_key
+FINNHUB_API_KEY=your_key
+POLYGON_API_KEY=your_key
+NEWS_API_KEY=your_key
+
+# Generated automatically by setup.sh
+DB_PASSWORD=auto_generated
+REDIS_PASSWORD=auto_generated
+SECRET_KEY=auto_generated
+JWT_SECRET_KEY=auto_generated
+```
+
+## 📈 Cost Optimization
+
+The platform is designed to operate under $50/month by:
+- Using free API tiers effectively
+- Intelligent caching strategies
+- Batch processing during off-peak hours
+- Auto-scaling down during idle periods
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+pytest --cov=backend --cov-report=html
+
+# View coverage report
+open htmlcov/index.html
+```
 
 ## 🚀 Deployment
 
-### Kubernetes Deployment
+### Production Deployment
 ```bash
-kubectl apply -f infrastructure/kubernetes/
+# Start production environment
+./start.sh prod
+
+# Monitor services
+docker-compose logs -f
+
+# Access monitoring
+http://localhost:3001  # Grafana dashboard
 ```
 
-### Production Checklist
-- [ ] Set strong passwords and API keys
-- [ ] Configure SSL certificates
-- [ ] Set up backup strategies
-- [ ] Configure monitoring alerts
-- [ ] Enable auto-scaling
-- [ ] Set up CI/CD pipeline
+### Kubernetes Deployment
+```bash
+# Apply configurations
+kubectl apply -f infrastructure/kubernetes/
+
+# Check status
+kubectl get pods -n investment-platform
+```
+
+## 📚 Documentation
+
+- [API Documentation](http://localhost:8000/docs) - Interactive API docs
+- [Architecture Guide](docs/architecture/README.md) - System architecture
+- [Development Guide](docs/guides/development.md) - Development practices
+- [Deployment Guide](docs/deployment/README.md) - Deployment instructions
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Run tests
+5. Submit a pull request
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-- FinBERT team for the financial sentiment model
-- TA-Lib for technical analysis functions
-- All the open-source projects that made this possible
-
-## 📞 Support
-
-- Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/yourusername/investment-analysis-app/issues)
-- Email: support@investment-analysis.com
+- Alpha Vantage for market data
+- Finnhub for real-time quotes
+- Polygon.io for historical data
+- NewsAPI for sentiment analysis
 
 ---
 
-Built with ❤️ for democratizing institutional-grade investment analysis
+**Built with ❤️ for automated investment analysis**

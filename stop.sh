@@ -1,37 +1,28 @@
 #!/bin/bash
-# Investment Analysis Platform - Stop Script
+# Unified Stop Script for Investment Platform
 
-echo "======================================"
-echo "Stopping Investment Analysis Platform"
-echo "======================================"
+echo "🛑 Stopping Investment Platform"
+echo "=============================="
 
-# Colors
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-# Stop all services
-echo -e "${YELLOW}Stopping all services...${NC}"
+# Stop all docker-compose services
 docker-compose down
 
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}All services stopped successfully!${NC}"
-else
-    echo -e "${RED}Error stopping services.${NC}"
-    exit 1
+# Option to clean volumes
+if [ "$1" == "--clean" ]; then
+    echo "🧹 Cleaning up volumes and data..."
+    docker-compose down -v
+    docker system prune -f
+    echo "✅ Cleanup complete"
 fi
 
-# Ask if user wants to remove volumes
-echo -e "\n${YELLOW}Do you want to remove data volumes? (y/n)${NC}"
-echo "Warning: This will delete all data including the database!"
-read -r response
+echo "✅ Platform stopped"
 
-if [[ "$response" =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}Removing volumes...${NC}"
-    docker-compose down -v
-    rm -f .initialized
-    echo -e "${GREEN}Volumes removed.${NC}"
-else
-    echo -e "${GREEN}Volumes preserved.${NC}"
+# Show status
+echo ""
+echo "Container status:"
+docker ps --filter "label=com.docker.compose.project=investment-platform" --format "table {{.Names}}\t{{.Status}}"
+
+if [ "$1" != "--clean" ]; then
+    echo ""
+    echo "To completely clean up (including volumes), run: ./stop.sh --clean"
 fi

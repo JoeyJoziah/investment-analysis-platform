@@ -1,0 +1,118 @@
+groups:
+  - name: info_alerts
+    interval: 5m
+    rules:
+      # Informational Metrics
+      - alert: DailyAnalysisComplete
+        expr: increase(analysis_completed_total{status="success"}[1d]) > 1000
+        for: 1m
+        labels:
+          severity: info
+          team: data
+        annotations:
+          summary: "Daily analysis milestone reached"
+          description: "Successfully analyzed {{ $value }} stocks today"
+
+      - alert: NewRecommendationsGenerated
+        expr: increase(recommendations_generated_total[1h]) > 10
+        for: 1m
+        labels:
+          severity: info
+          team: ml
+        annotations:
+          summary: "New recommendations generated"
+          description: "{{ $value }} new {{ $labels.action }} recommendations with {{ $labels.confidence_level }} confidence"
+
+      - alert: CacheWarmingComplete
+        expr: increase(cache_hits_total{operation="warming"}[1h]) > 100
+        for: 1m
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "Cache warming completed"
+          description: "Warmed {{ $value }} cache entries in the last hour"
+
+      # Data Pipeline Info
+      - alert: PipelineStageComplete
+        expr: pipeline_data_quality_score > 90
+        for: 1m
+        labels:
+          severity: info
+          team: data
+        annotations:
+          summary: "Pipeline stage {{ $labels.pipeline_stage }} complete"
+          description: "Data quality score: {{ $value }} from {{ $labels.data_source }}"
+
+      - alert: DataIngestionComplete
+        expr: increase(stocks_analyzed_total[1h]) > 100
+        for: 1m
+        labels:
+          severity: info
+          team: data
+        annotations:
+          summary: "Data ingestion batch complete"
+          description: "Ingested data for {{ $value }} stocks from {{ $labels.exchange }}"
+
+      # Model Performance Info
+      - alert: ModelRetrained
+        expr: increase(ml_model_load_time_seconds_count[1d]) > 0
+        for: 1m
+        labels:
+          severity: info
+          team: ml
+        annotations:
+          summary: "ML model {{ $labels.model }} retrained"
+          description: "Model loading took {{ $value }}s"
+
+      - alert: PredictionAccuracyImproved
+        expr: ml_prediction_accuracy - ml_prediction_accuracy offset 1h > 0.05
+        for: 1m
+        labels:
+          severity: info
+          team: ml
+        annotations:
+          summary: "Prediction accuracy improved"
+          description: "{{ $labels.model }} accuracy improved by {{ $value }}"
+
+      # System Optimization Info
+      - alert: AutoScalingTriggered
+        expr: rate(api_requests_total[5m]) > 100
+        for: 1m
+        labels:
+          severity: info
+          team: platform
+        annotations:
+          summary: "Auto-scaling triggered"
+          description: "Request rate is {{ $value }}/s, scaling up"
+
+      - alert: CostOptimizationActive
+        expr: cost_budget_usage_percent < 50
+        for: 1h
+        labels:
+          severity: info
+          team: finance
+        annotations:
+          summary: "Cost optimization working well"
+          description: "Only {{ $value }}% of budget used"
+
+      # Compliance and Audit Info
+      - alert: AuditLogRotation
+        expr: increase(audit_logs_created_total[24h]) > 10000
+        for: 1m
+        labels:
+          severity: info
+          team: compliance
+        annotations:
+          summary: "Audit log rotation triggered"
+          description: "{{ $value }} audit logs created in last 24 hours"
+
+      - alert: GDPRRequestProcessed
+        expr: increase(gdpr_requests_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: info
+          team: compliance
+        annotations:
+          summary: "GDPR request processed"
+          description: "Processed {{ $value }} {{ $labels.request_type }} requests"

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-08-12T13:14:28.390336",
+  "pid": 16556,
+  "status": {
+    "loading_progress": {
+      "total_stocks": 10,
+      "completed": 0,
+      "failed": 1,
+      "skipped": 9,
+      "in_progress": 0,
+      "total_records": 2257
+    },
+    "database_stats": {
+      "total_price_records": 24834,
+      "stocks_with_data": 99,
+      "invalid_prices": 0,
+      "recent_records": 480
+    },
+    "api_usage": {
+      "daily_calls": 0,
+      "budget_used_pct": 0,
+      "budget_status": "unknown"
+    }
+  },
+  "uptime_seconds": 3.380596876144409
+}
