@@ -18,11 +18,18 @@ load_dotenv()
 
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
-    auth, health, websocket, admin  # , agents - temporarily disabled
+    auth, health, admin, cache_management
+    # websocket,  # Temporarily disabled due to missing dependencies
+    # agents,  # Temporarily disabled due to missing dependencies
 )
 from backend.utils.database import init_db, close_db
 from backend.config.database import initialize_database, cleanup_database
 from backend.utils.cache import init_cache
+from backend.utils.comprehensive_cache import get_cache_manager
+from backend.utils.intelligent_cache_policies import start_intelligent_caching
+from backend.utils.cache_monitoring import initialize_cache_monitoring
+from backend.utils.database_query_cache import setup_cache_invalidation_triggers
+from backend.utils.api_cache_decorators import CacheControlMiddleware
 from backend.utils.monitoring import PrometheusMiddleware, export_metrics
 from backend.config.settings import settings
 
@@ -52,7 +59,28 @@ async def lifespan(app: FastAPI):
     
     # Initialize cache
     await init_cache()
-    logger.info("Cache initialized")
+    logger.info("Basic cache initialized")
+    
+    # Initialize comprehensive caching system
+    try:
+        cache_manager = await get_cache_manager()
+        logger.info("Comprehensive cache manager initialized")
+        
+        # Start intelligent caching services
+        await start_intelligent_caching()
+        logger.info("Intelligent caching services started")
+        
+        # Initialize cache monitoring
+        await initialize_cache_monitoring()
+        logger.info("Cache monitoring initialized")
+        
+        # Setup database cache invalidation
+        await setup_cache_invalidation_triggers()
+        logger.info("Cache invalidation triggers setup")
+        
+    except Exception as e:
+        logger.warning(f"Failed to initialize advanced caching features: {e}")
+        logger.info("Continuing with basic caching only")
     
     # Start background tasks
     from backend.tasks.scheduler import start_scheduler
@@ -98,12 +126,19 @@ app = FastAPI(
     redoc_url="/api/redoc" if settings.DEBUG else None
 )
 
-# Add CORS middleware with secure configuration
-from backend.utils.cors import setup_cors
-setup_cors(app)
+# Add comprehensive security middleware stack - temporarily disabled due to missing dependencies
+# from backend.security.security_config import add_comprehensive_security_middleware
+# add_comprehensive_security_middleware(app)
 
 # Add Prometheus monitoring
 app.add_middleware(PrometheusMiddleware)
+
+# Add comprehensive cache control middleware
+app.add_middleware(
+    CacheControlMiddleware,
+    default_cache_control="public, max-age=300",
+    cache_excluded_paths=["/api/auth/", "/api/admin/", "/api/ws/", "/api/metrics"]
+)
 
 # Include routers
 app.include_router(health.router, prefix="/api/health", tags=["health"])
@@ -112,9 +147,10 @@ app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
 app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
-app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])
+# app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])  # Temporarily disabled
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-# app.include_router(agents.router, prefix="/api/agents", tags=["agents"]) # Temporarily disabled
+# app.include_router(agents.router, prefix="/api/agents", tags=["agents"])  # Temporarily disabled
+app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
 
 
 @app.exception_handler(HTTPException)

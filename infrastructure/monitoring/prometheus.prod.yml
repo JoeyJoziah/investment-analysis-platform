@@ -1,0 +1,228 @@
+# Production Prometheus Configuration
+# Optimized for cost-efficient monitoring (<$50/month budget)
+# Focused on essential metrics with optimized retention
+
+global:
+  scrape_interval: 30s      # Reduced frequency for cost optimization
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+  external_labels:
+    monitor: 'investment-platform'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Rule files for alerts
+rule_files:
+  - "alerts/*.yml"
+
+# Scrape configurations - Optimized for cost efficiency
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+
+  # Investment Platform Backend
+  - job_name: 'investment-backend'
+    static_configs:
+      - targets: ['backend:8000']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    honor_labels: false
+    params:
+      format: ['prometheus']
+
+  # Investment Platform Frontend (Nginx)
+  - job_name: 'investment-frontend'
+    static_configs:
+      - targets: ['nginx:9113']  # nginx-prometheus-exporter
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL Database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'investment-db'
+
+  # Redis Cache
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'investment-cache'
+
+  # System Metrics (Node Exporter)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Container Metrics (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+
+  # Celery Workers
+  - job_name: 'celery-worker'
+    static_configs:
+      - targets: ['celery-worker:8000']
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+
+  # Custom Application Metrics
+  - job_name: 'investment-metrics'
+    static_configs:
+      - targets: ['backend:8000']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: '/api/metrics'
+    honor_labels: true
+    params:
+      module: ['investment_platform']
+
+  # Health Check Monitoring
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://backend:8000/api/health
+        - http://frontend:80/health
+        - http://grafana:3000/api/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+# Storage configuration - Optimized for cost
+storage:
+  tsdb:
+    # Retention settings for cost optimization
+    retention.time: 7d              # Keep 7 days of data
+    retention.size: 1GB             # Limit storage size
+    
+    # Compression and performance
+    min-block-duration: 2h
+    max-block-duration: 25h
+    wal-compression: true
+    
+    # Reduce resource usage
+    no-lockfile: false
+    allow-overlapping-blocks: false
+
+# Remote write configuration (optional - for external storage)
+# Uncomment if using external time series database for long-term storage
+# remote_write:
+#   - url: "https://your-external-tsdb.com/write"
+#     write_relabel_configs:
+#       - source_labels: [__name__]
+#         regex: '(up|investment_.*|http_.*|postgres_.*|redis_.*)'
+#         action: keep
+#     queue_config:
+#       capacity: 500
+#       max_samples_per_send: 100
+#       batch_send_deadline: 5s
+#       max_retries: 3
+#       min_backoff: 30ms
+#       max_backoff: 100ms
+
+# Cost optimization relabeling - Keep only essential metrics
+metric_relabel_configs:
+  # Drop high cardinality metrics to save storage
+  - source_labels: [__name__]
+    regex: 'go_memstats_.*_bytes_total'
+    action: drop
+  
+  - source_labels: [__name__]
+    regex: 'prometheus_tsdb_symbol_table_size_bytes'
+    action: drop
+  
+  - source_labels: [__name__]
+    regex: 'prometheus_tsdb_head_series'
+    action: drop
+  
+  # Keep only important HTTP metrics
+  - source_labels: [__name__]
+    regex: 'http_request_duration_seconds_(bucket|sum|count)'
+    action: keep
+  
+  # Keep essential database metrics
+  - source_labels: [__name__]
+    regex: 'postgres_(connections|query_duration|cache_hit_ratio)'
+    action: keep
+  
+  # Keep Redis essentials
+  - source_labels: [__name__]
+    regex: 'redis_(connected_clients|memory_used|keyspace_hits_total)'
+    action: keep
+
+# Recording rules for cost optimization
+recording_rules:
+  - name: investment_platform_rules
+    interval: 30s
+    rules:
+      # API request rate (5-minute average)
+      - record: investment:api_request_rate5m
+        expr: rate(http_requests_total{job="investment-backend"}[5m])
+      
+      # Database query rate
+      - record: investment:db_query_rate5m
+        expr: rate(postgres_queries_total[5m])
+      
+      # Cache hit ratio
+      - record: investment:cache_hit_ratio5m
+        expr: |
+          (
+            rate(redis_keyspace_hits_total[5m]) /
+            (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))
+          ) * 100
+      
+      # System resource utilization
+      - record: investment:cpu_usage
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+      
+      - record: investment:memory_usage_percent
+        expr: |
+          (
+            (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 
+            node_memory_MemTotal_bytes
+          ) * 100
+      
+      # Application-specific metrics
+      - record: investment:active_connections
+        expr: sum(postgres_connections{state="active"})
+      
+      - record: investment:api_errors_rate5m
+        expr: |
+          rate(http_requests_total{job="investment-backend", status=~"5.."}[5m]) /
+          rate(http_requests_total{job="investment-backend"}[5m]) * 100

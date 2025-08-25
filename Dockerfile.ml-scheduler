@@ -1,0 +1,32 @@
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    cron \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt pyproject.toml ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt schedule
+
+# Copy application code
+COPY backend/ ./backend/
+COPY scripts/ ./scripts/
+COPY .env* ./
+
+# Create necessary directories
+RUN mkdir -p backend/ml_models backend/ml_logs backend/ml_registry data/training
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV ML_MODELS_PATH=/app/backend/ml_models
+ENV ML_LOGS_PATH=/app/backend/ml_logs
+
+# Run the ML scheduler
+CMD ["python3", "scripts/ml_scheduler.py", "--daemon"]

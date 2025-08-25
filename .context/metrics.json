@@ -1,0 +1,231 @@
+{
+  "context_metrics": {
+    "version": "1.0.0",
+    "created": "2025-08-19T00:00:00Z",
+    "last_updated": "2025-08-19T00:00:00Z",
+    "reporting_period": "24h"
+  },
+  "performance_metrics": {
+    "retrieval_performance": {
+      "avg_retrieval_time_ms": 0,
+      "p50_retrieval_time_ms": 0,
+      "p95_retrieval_time_ms": 0,
+      "p99_retrieval_time_ms": 0,
+      "target_retrieval_time_ms": 100,
+      "total_retrievals": 0,
+      "failed_retrievals": 0
+    },
+    "cache_performance": {
+      "l1_cache_hit_rate": 0.0,
+      "l2_cache_hit_rate": 0.0,
+      "l3_cache_hit_rate": 0.0,
+      "overall_cache_hit_rate": 0.0,
+      "target_cache_hit_rate": 0.8,
+      "cache_misses_total": 0,
+      "cache_evictions_total": 0
+    },
+    "sync_performance": {
+      "sync_operations_total": 0,
+      "sync_duration_avg_ms": 0,
+      "sync_conflicts_total": 0,
+      "sync_failures_total": 0,
+      "last_successful_sync": null,
+      "sync_frequency_actual": "0/hour",
+      "sync_frequency_target": "4/hour"
+    },
+    "storage_metrics": {
+      "total_contexts": 1,
+      "context_size_bytes": 0,
+      "compressed_size_bytes": 0,
+      "compression_ratio": 0.0,
+      "storage_utilization": "0%",
+      "index_size_bytes": 0
+    }
+  },
+  "availability_metrics": {
+    "uptime_percentage": 100.0,
+    "availability_target": 99.9,
+    "downtime_minutes_24h": 0,
+    "mean_time_to_recovery_minutes": 0,
+    "service_interruptions": 0,
+    "planned_maintenance_windows": 0
+  },
+  "consistency_metrics": {
+    "consistency_score": 100.0,
+    "consistency_target": 100.0,
+    "data_integrity_checks_passed": 0,
+    "data_integrity_checks_failed": 0,
+    "schema_validation_errors": 0,
+    "checksum_mismatches": 0
+  },
+  "agent_interaction_metrics": {
+    "total_agent_requests": 0,
+    "requests_by_agent": {
+      "agent_organizer": 0,
+      "multi_agent_coordinator": 0,
+      "workflow_orchestrator": 0,
+      "task_distributor": 0,
+      "performance_monitor": 0,
+      "error_coordinator": 0,
+      "knowledge_synthesizer": 0
+    },
+    "avg_response_time_by_agent": {
+      "agent_organizer": 0,
+      "multi_agent_coordinator": 0,
+      "workflow_orchestrator": 0,
+      "task_distributor": 0,
+      "performance_monitor": 0,
+      "error_coordinator": 0,
+      "knowledge_synthesizer": 0
+    },
+    "failed_requests_by_agent": {
+      "agent_organizer": 0,
+      "multi_agent_coordinator": 0,
+      "workflow_orchestrator": 0,
+      "task_distributor": 0,
+      "performance_monitor": 0,
+      "error_coordinator": 0,
+      "knowledge_synthesizer": 0
+    }
+  },
+  "context_usage_patterns": {
+    "most_requested_contexts": [],
+    "context_access_frequency": {},
+    "context_update_frequency": {},
+    "peak_usage_hours": [],
+    "context_size_distribution": {
+      "small_contexts_lt_1kb": 0,
+      "medium_contexts_1kb_10kb": 0,
+      "large_contexts_gt_10kb": 0
+    }
+  },
+  "error_metrics": {
+    "total_errors": 0,
+    "error_rate_percentage": 0.0,
+    "errors_by_type": {
+      "retrieval_errors": 0,
+      "sync_errors": 0,
+      "validation_errors": 0,
+      "storage_errors": 0,
+      "network_errors": 0,
+      "timeout_errors": 0
+    },
+    "errors_by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "mean_time_to_resolution_minutes": 0,
+    "unresolved_errors": 0
+  },
+  "resource_utilization": {
+    "memory_usage": {
+      "current_mb": 0,
+      "peak_mb": 0,
+      "average_mb": 0,
+      "limit_mb": 512,
+      "utilization_percentage": 0.0
+    },
+    "cpu_usage": {
+      "current_percentage": 0.0,
+      "peak_percentage": 0.0,
+      "average_percentage": 0.0,
+      "limit_percentage": 50.0
+    },
+    "disk_usage": {
+      "current_mb": 0,
+      "peak_mb": 0,
+      "growth_rate_mb_per_day": 0,
+      "cleanup_operations": 0
+    },
+    "network_usage": {
+      "bytes_in": 0,
+      "bytes_out": 0,
+      "requests_per_second": 0.0,
+      "bandwidth_utilization": "0%"
+    }
+  },
+  "cost_metrics": {
+    "estimated_monthly_cost": 0.0,
+    "cost_breakdown": {
+      "compute": 0.0,
+      "storage": 0.0,
+      "network": 0.0,
+      "apis": 0.0
+    },
+    "cost_per_operation": 0.0,
+    "cost_optimization_savings": 0.0,
+    "budget_utilization": "0%",
+    "target_monthly_cost": 5.0
+  },
+  "sla_metrics": {
+    "retrieval_time_sla": {
+      "target": "< 100ms",
+      "current": "N/A",
+      "compliance_percentage": 100.0
+    },
+    "availability_sla": {
+      "target": "> 99.9%",
+      "current": 100.0,
+      "compliance_percentage": 100.0
+    },
+    "cache_hit_rate_sla": {
+      "target": "> 80%",
+      "current": "N/A",
+      "compliance_percentage": 100.0
+    },
+    "consistency_sla": {
+      "target": "100%",
+      "current": 100.0,
+      "compliance_percentage": 100.0
+    }
+  },
+  "trending_data": {
+    "retrieval_time_trend": "stable",
+    "cache_hit_rate_trend": "stable",
+    "error_rate_trend": "stable",
+    "usage_trend": "stable",
+    "cost_trend": "stable"
+  },
+  "alerts_and_thresholds": {
+    "active_alerts": [],
+    "threshold_breaches_24h": 0,
+    "threshold_configurations": {
+      "retrieval_time_warning": 150,
+      "retrieval_time_critical": 200,
+      "cache_hit_rate_warning": 70,
+      "cache_hit_rate_critical": 60,
+      "error_rate_warning": 5.0,
+      "error_rate_critical": 10.0,
+      "memory_usage_warning": 80,
+      "memory_usage_critical": 90
+    }
+  },
+  "operational_metrics": {
+    "context_versions_created": 1,
+    "context_migrations_completed": 0,
+    "backup_operations_completed": 0,
+    "recovery_operations": 0,
+    "maintenance_operations": 0,
+    "security_scans_passed": 0,
+    "compliance_audits_passed": 0
+  },
+  "benchmarks": {
+    "initial_benchmark": {
+      "timestamp": "2025-08-19T00:00:00Z",
+      "contexts_managed": 1,
+      "avg_retrieval_time_ms": 0,
+      "cache_hit_rate": 0,
+      "availability": 100.0,
+      "consistency_score": 100.0
+    },
+    "performance_targets": {
+      "retrieval_time_target": 100,
+      "cache_hit_rate_target": 0.8,
+      "availability_target": 99.9,
+      "consistency_target": 100.0,
+      "cost_target": 5.0
+    }
+  }
+}

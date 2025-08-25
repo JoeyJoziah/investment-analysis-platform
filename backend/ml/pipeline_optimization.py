@@ -27,7 +27,7 @@ import torch
 import joblib
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import redis
-from kubernetes import client, config as k8s_config
+# from kubernetes import client, config as k8s_config
 import docker
 
 logger = logging.getLogger(__name__)

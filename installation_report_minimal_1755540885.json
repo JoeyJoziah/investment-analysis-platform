@@ -1,0 +1,39 @@
+{
+  "installation_id": "minimal_1755540885",
+  "environment": "minimal",
+  "start_time": "2025-08-18T14:14:45.518621",
+  "end_time": "2025-08-18T14:17:11.368417",
+  "duration_seconds": 145.849796,
+  "system_info": {
+    "platform": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python_version": "3.12.3",
+    "architecture": "x86_64",
+    "processor": "x86_64"
+  },
+  "phases": [
+    {
+      "timestamp": "2025-08-18T14:14:45.742555",
+      "phase": "system_dependencies",
+      "message": "Installing system dependencies...",
+      "success": true,
+      "environment": "minimal"
+    },
+    {
+      "timestamp": "2025-08-18T14:17:11.325732",
+      "phase": "system_dependencies",
+      "message": "System dependencies installation failed",
+      "success": false,
+      "environment": "minimal"
+    }
+  ],
+  "configuration": {
+    "verbose": true,
+    "dry_run": false,
+    "force": false,
+    "max_workers": 4,
+    "timeout": 300,
+    "no_binary": false,
+    "verify_hashes": false
+  },
+  "success": false
+}

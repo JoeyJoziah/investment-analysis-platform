@@ -174,6 +174,45 @@ async def get_current_user(
     return user
 
 
+async def get_current_user_from_token(
+    token: str,
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get current user from token string (for WebSocket connections)
+    Similar to get_current_user but takes token as direct parameter
+    """
+    try:
+        token_data = decode_access_token(token)
+        
+        user = db.query(User).filter(User.username == token_data.username).first()
+        
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Inactive user"
+            )
+        
+        return user
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error authenticating user from token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:

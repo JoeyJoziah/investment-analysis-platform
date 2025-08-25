@@ -1,0 +1,440 @@
+{
+  "context_manager": {
+    "version": "1.0.0",
+    "created": "2025-08-19T00:00:00Z",
+    "last_updated": "2025-08-19T00:00:00Z",
+    "project_root": "/mnt/wsl/docker-desktop-bind-mounts/Ubuntu-24.04/7b51113a393465a37d4f1fda36b4d190088ac69ea8d5cf2f90400b3c14148ad3",
+    "sync_status": "initialized",
+    "retrieval_performance": {
+      "avg_retrieval_time_ms": 0,
+      "cache_hit_rate": 0,
+      "total_contexts": 0,
+      "consistency_score": 100
+    }
+  },
+  "project_metadata": {
+    "name": "Investment Analysis Platform",
+    "type": "AI-Powered Financial Analysis Application",
+    "description": "Comprehensive investment analysis and recommendation platform analyzing 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges",
+    "target_cost": "$50/month",
+    "architecture": "microservices",
+    "deployment": "docker-compose",
+    "tech_stack": {
+      "backend": "FastAPI",
+      "frontend": "React.js",
+      "database": "PostgreSQL + TimescaleDB",
+      "cache": "Redis",
+      "search": "Elasticsearch",
+      "ml_framework": "PyTorch, scikit-learn, Prophet",
+      "orchestration": "Apache Airflow",
+      "monitoring": "Prometheus + Grafana"
+    }
+  },
+  "directory_structure": {
+    "backend/": {
+      "purpose": "FastAPI backend with ML/AI capabilities",
+      "key_components": {
+        "api/": "FastAPI routers and main application",
+        "ml/": "Machine learning models and algorithms",
+        "utils/": "Utility functions and helpers",
+        "config/": "Configuration and settings",
+        "tasks/": "Celery tasks and background jobs",
+        "migrations/": "Database migration scripts",
+        "tests/": "Test suites (unit, integration, performance)"
+      },
+      "critical_files": [
+        "backend/api/main.py",
+        "backend/config/settings.py",
+        "backend/utils/comprehensive_cache.py",
+        "backend/tasks/data_pipeline.py"
+      ]
+    },
+    "frontend/": {
+      "purpose": "React web application with Material-UI",
+      "key_components": {
+        "web/src/": "React application source code",
+        "web/public/": "Static assets",
+        "web/build/": "Production build output"
+      }
+    },
+    "data_pipelines/": {
+      "purpose": "Apache Airflow DAGs for data processing",
+      "key_components": {
+        "airflow/dags/": "Airflow DAG definitions",
+        "airflow/logs/": "Airflow execution logs",
+        "airflow/plugins/": "Custom Airflow plugins"
+      }
+    },
+    "infrastructure/": {
+      "purpose": "Docker configurations and deployment",
+      "key_components": {
+        "docker/": "Dockerfile configurations",
+        "monitoring/": "Prometheus and Grafana configurations",
+        "kubernetes/": "Kubernetes deployment manifests"
+      }
+    },
+    "scripts/": {
+      "purpose": "Utility scripts for setup and maintenance",
+      "key_files": [
+        "scripts/verify_database.py",
+        "scripts/data/mock_data_generator.py"
+      ]
+    },
+    "config/": {
+      "purpose": "Configuration files",
+      "key_files": [
+        "config/database.yml",
+        "config/cache.yml"
+      ]
+    },
+    "models/": {
+      "purpose": "Trained ML models storage",
+      "subdirectories": ["trained/"]
+    },
+    "logs/": {
+      "purpose": "Application logs",
+      "retention": "30 days"
+    },
+    "requirements/": {
+      "purpose": "Python dependency specifications",
+      "key_files": [
+        "requirements/base.txt",
+        "requirements/dev.txt",
+        "requirements/prod.txt"
+      ]
+    }
+  },
+  "api_endpoints": {
+    "health": {
+      "path": "/api/health",
+      "methods": ["GET"],
+      "purpose": "Health check and system status"
+    },
+    "stocks": {
+      "path": "/api/stocks",
+      "methods": ["GET", "POST"],
+      "purpose": "Stock data and real-time quotes"
+    },
+    "analysis": {
+      "path": "/api/analysis",
+      "methods": ["GET"],
+      "purpose": "Comprehensive stock analysis (technical, fundamental, sentiment)"
+    },
+    "recommendations": {
+      "path": "/api/recommendations",
+      "methods": ["GET"],
+      "purpose": "AI-powered investment recommendations"
+    },
+    "portfolio": {
+      "path": "/api/portfolio",
+      "methods": ["GET", "POST", "PUT", "DELETE"],
+      "purpose": "Portfolio management and tracking"
+    },
+    "auth": {
+      "path": "/api/auth",
+      "methods": ["POST"],
+      "purpose": "Authentication and authorization"
+    },
+    "websocket": {
+      "path": "/api/ws",
+      "protocol": "WebSocket",
+      "purpose": "Real-time updates and notifications"
+    },
+    "cache": {
+      "path": "/api/cache",
+      "methods": ["GET", "POST", "DELETE"],
+      "purpose": "Cache management and monitoring"
+    },
+    "agents": {
+      "path": "/api/agents",
+      "methods": ["GET", "POST"],
+      "purpose": "AI agent coordination and management"
+    },
+    "admin": {
+      "path": "/api/admin",
+      "methods": ["GET", "POST", "PUT", "DELETE"],
+      "purpose": "Administrative functions"
+    }
+  },
+  "database_schema": {
+    "primary_database": "PostgreSQL + TimescaleDB",
+    "key_tables": {
+      "stocks": "Stock information and metadata",
+      "prices": "Historical price data (time-series)",
+      "analysis": "Analysis results cache",
+      "recommendations": "AI recommendations",
+      "portfolios": "User portfolios",
+      "users": "User accounts and authentication",
+      "cache_storage": "Multi-layer cache data"
+    },
+    "time_series_tables": [
+      "prices",
+      "technical_indicators",
+      "market_sentiment"
+    ]
+  },
+  "caching_architecture": {
+    "levels": 3,
+    "l1_cache": {
+      "type": "in-memory",
+      "ttl": "300 seconds",
+      "max_size": 1000,
+      "purpose": "Fastest access for frequently used data"
+    },
+    "l2_cache": {
+      "type": "Redis",
+      "ttl": "3600 seconds",
+      "purpose": "Medium-term storage with persistence"
+    },
+    "l3_cache": {
+      "type": "Database",
+      "ttl": "86400 seconds",
+      "purpose": "Long-term storage and backup"
+    },
+    "features": [
+      "compression_threshold",
+      "cache_warming",
+      "invalidation_cascading",
+      "intelligent_policies"
+    ]
+  },
+  "external_apis": {
+    "alpha_vantage": {
+      "purpose": "Stock data and indicators",
+      "rate_limit": "25 calls/day",
+      "cost": "free tier"
+    },
+    "finnhub": {
+      "purpose": "Real-time quotes",
+      "rate_limit": "60 calls/minute",
+      "cost": "free tier"
+    },
+    "polygon": {
+      "purpose": "Historical data",
+      "rate_limit": "5 calls/minute",
+      "cost": "free tier"
+    },
+    "news_api": {
+      "purpose": "News sentiment analysis",
+      "rate_limit": "1000 calls/day",
+      "cost": "free tier"
+    }
+  },
+  "ml_models": {
+    "lstm": {
+      "purpose": "Time series price prediction",
+      "framework": "PyTorch",
+      "input_features": ["price", "volume", "technical_indicators"]
+    },
+    "xgboost": {
+      "purpose": "Feature-based classification",
+      "framework": "XGBoost",
+      "input_features": ["fundamental_ratios", "technical_indicators"]
+    },
+    "prophet": {
+      "purpose": "Trend analysis and forecasting",
+      "framework": "Prophet",
+      "input_features": ["time_series_data"]
+    },
+    "finbert": {
+      "purpose": "Financial sentiment analysis",
+      "framework": "Hugging Face Transformers",
+      "input_features": ["news_text", "financial_reports"]
+    }
+  },
+  "deployment_configurations": {
+    "development": {
+      "compose_file": "docker-compose.dev.yml",
+      "services": ["postgres", "redis", "backend", "frontend", "pgadmin", "redis-commander"],
+      "features": ["hot_reload", "debug_tools", "detailed_logging"]
+    },
+    "production": {
+      "compose_file": "docker-compose.prod.yml", 
+      "services": ["postgres", "redis", "elasticsearch", "backend", "frontend", "nginx", "prometheus", "grafana"],
+      "features": ["ssl_termination", "load_balancing", "monitoring", "backup_services"]
+    },
+    "testing": {
+      "compose_file": "docker-compose.test.yml",
+      "services": ["postgres", "redis", "backend-test"],
+      "features": ["test_database", "coverage_reporting", "automated_testing"]
+    }
+  },
+  "monitoring_and_observability": {
+    "metrics": {
+      "prometheus": "Metrics collection and alerting",
+      "grafana": "Visualization and dashboards"
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "structured logging with timestamps",
+      "retention": "30 days"
+    },
+    "health_checks": {
+      "database": "PostgreSQL connectivity",
+      "cache": "Redis connectivity",
+      "external_apis": "API endpoint availability"
+    }
+  },
+  "security_features": {
+    "authentication": {
+      "method": "JWT tokens",
+      "secret_rotation": "automatic",
+      "session_timeout": "24 hours"
+    },
+    "api_security": {
+      "rate_limiting": "per user/IP",
+      "cors_enabled": "true",
+      "ssl_required": "production only"
+    },
+    "data_protection": {
+      "encryption_at_rest": "database level",
+      "encryption_in_transit": "TLS/SSL",
+      "compliance": ["GDPR", "SEC"]
+    }
+  },
+  "cost_optimization": {
+    "target_budget": "$50/month",
+    "strategies": [
+      "free_api_tiers",
+      "intelligent_caching",
+      "batch_processing",
+      "off_peak_scheduling",
+      "auto_scaling_down"
+    ],
+    "api_usage_limits": {
+      "alpha_vantage": "25 calls/day",
+      "finnhub": "60 calls/minute",
+      "polygon": "5 calls/minute",
+      "news_api": "1000 calls/day"
+    }
+  },
+  "key_scripts": {
+    "setup.sh": {
+      "purpose": "Initial project setup with secure password generation",
+      "features": ["environment_validation", "dependency_installation", "database_initialization"]
+    },
+    "start.sh": {
+      "purpose": "Start application in different environments",
+      "parameters": ["dev", "prod", "test"]
+    },
+    "stop.sh": {
+      "purpose": "Stop all services with optional cleanup"
+    },
+    "logs.sh": {
+      "purpose": "View application logs by service"
+    }
+  },
+  "configuration_files": {
+    ".env": {
+      "purpose": "Environment variables and secrets",
+      "template": ".env.template"
+    },
+    "pyproject.toml": {
+      "purpose": "Python project configuration (black, isort, pytest, coverage)"
+    },
+    "requirements.txt": {
+      "purpose": "Python dependencies with version pinning"
+    },
+    "docker-compose.yml": {
+      "purpose": "Base Docker Compose configuration"
+    },
+    "package.json": {
+      "purpose": "Frontend dependencies and build scripts"
+    }
+  },
+  "testing_strategy": {
+    "coverage_target": "85%",
+    "test_categories": [
+      "unit", "integration", "performance", "security", "compliance", "financial", "api", "database", "cache", "external_api"
+    ],
+    "test_markers": {
+      "slow": "Long-running tests",
+      "flaky": "Tests that may need retries",
+      "external_api": "Tests requiring external API access"
+    }
+  },
+  "context_synchronization": {
+    "sync_frequency": "on_demand",
+    "last_sync": "2025-08-19T00:00:00Z",
+    "sync_triggers": [
+      "file_changes",
+      "git_commits",
+      "deployment_events",
+      "agent_requests"
+    ],
+    "consistency_checks": [
+      "file_integrity",
+      "dependency_versions",
+      "configuration_validity",
+      "database_schema"
+    ]
+  },
+  "agent_integration_points": {
+    "agent_organizer": {
+      "access_patterns": ["project_structure", "directory_mappings", "component_relationships"],
+      "update_triggers": ["structural_changes", "new_components"]
+    },
+    "multi_agent_coordinator": {
+      "access_patterns": ["system_state", "service_health", "resource_usage"],
+      "update_triggers": ["state_changes", "health_status_updates"]
+    },
+    "workflow_orchestrator": {
+      "access_patterns": ["process_definitions", "dependency_chains", "execution_history"],
+      "update_triggers": ["workflow_updates", "execution_events"]
+    },
+    "task_distributor": {
+      "access_patterns": ["workload_data", "performance_metrics", "capacity_info"],
+      "update_triggers": ["load_changes", "performance_updates"]
+    },
+    "performance_monitor": {
+      "access_patterns": ["metrics_storage", "performance_history", "alerting_rules"],
+      "update_triggers": ["metric_updates", "threshold_breaches"]
+    },
+    "error_coordinator": {
+      "access_patterns": ["error_context", "failure_patterns", "recovery_procedures"],
+      "update_triggers": ["error_events", "recovery_actions"]
+    },
+    "knowledge_synthesizer": {
+      "access_patterns": ["knowledge_graphs", "insights_data", "analysis_results"],
+      "update_triggers": ["knowledge_updates", "synthesis_requests"]
+    }
+  },
+  "performance_benchmarks": {
+    "api_response_time": {
+      "target": "< 200ms",
+      "current": "TBD"
+    },
+    "database_query_time": {
+      "target": "< 100ms",
+      "current": "TBD"
+    },
+    "cache_hit_rate": {
+      "target": "> 80%",
+      "current": "0%"
+    },
+    "memory_usage": {
+      "target": "< 2GB",
+      "current": "TBD"
+    }
+  },
+  "data_lifecycle": {
+    "retention_policies": {
+      "logs": "30 days",
+      "cache_l1": "5 minutes",
+      "cache_l2": "1 hour", 
+      "cache_l3": "24 hours",
+      "price_data": "5 years",
+      "analysis_results": "1 year"
+    },
+    "archival_strategy": {
+      "trigger": "age_based",
+      "compression": "gzip",
+      "storage": "cold_storage"
+    },
+    "backup_procedures": {
+      "frequency": "daily",
+      "retention": "30 days",
+      "validation": "automated"
+    }
+  }
+}

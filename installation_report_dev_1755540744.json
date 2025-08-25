@@ -1,0 +1,46 @@
+{
+  "installation_id": "dev_1755540744",
+  "environment": "dev",
+  "start_time": "2025-08-18T14:12:24.016074",
+  "end_time": "2025-08-18T14:12:55.195389",
+  "duration_seconds": 31.179315,
+  "system_info": {
+    "platform": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python_version": "3.12.3",
+    "architecture": "x86_64",
+    "processor": "x86_64"
+  },
+  "phases": [
+    {
+      "timestamp": "2025-08-18T14:12:24.280012",
+      "phase": "system_dependencies",
+      "message": "Installing system dependencies...",
+      "success": true,
+      "environment": "dev"
+    },
+    {
+      "timestamp": "2025-08-18T14:12:54.410569",
+      "phase": "system_dependencies",
+      "message": "System dependencies installed",
+      "success": true,
+      "environment": "dev"
+    },
+    {
+      "timestamp": "2025-08-18T14:12:54.483603",
+      "phase": "python_dependencies",
+      "message": "Installing Python dependencies...",
+      "success": true,
+      "environment": "dev"
+    }
+  ],
+  "configuration": {
+    "verbose": false,
+    "dry_run": true,
+    "force": false,
+    "max_workers": 4,
+    "timeout": 300,
+    "no_binary": false,
+    "verify_hashes": false
+  },
+  "success": true
+}

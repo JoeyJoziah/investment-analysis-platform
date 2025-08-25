@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Container,
   Grid,
@@ -27,6 +27,9 @@ import {
   TextField,
   MenuItem,
   Alert,
+  Skeleton,
+  Fade,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,8 +44,12 @@ import {
   Assessment,
   Download,
   Refresh,
+  Warning,
+  CheckCircle,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
+import { usePortfolioRealTimeData } from '../hooks/useRealTimeData';
+import { useErrorHandler } from '../hooks/useErrorHandler';
 import {
   fetchPortfolio,
   fetchTransactions,
@@ -82,13 +89,20 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const Portfolio: React.FC = () => {
+  const theme = useTheme();
   const dispatch = useAppDispatch();
   const { positions, transactions, metrics, isLoading, error } = useAppSelector(
     (state) => state.portfolio
   );
+  
+  // Initialize real-time data and error handling
+  const { isConnected } = usePortfolioRealTimeData();
+  const { handleAsyncError } = useErrorHandler({ context: 'Portfolio' });
+  
   const [tabValue, setTabValue] = useState(0);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [transactionForm, setTransactionForm] = useState({
     ticker: '',
     type: 'BUY' as 'BUY' | 'SELL',
@@ -97,21 +111,53 @@ const Portfolio: React.FC = () => {
     notes: '',
   });
 
-  useEffect(() => {
-    dispatch(fetchPortfolio());
-    dispatch(fetchTransactions());
-  }, [dispatch]);
-
-  const handleRefresh = () => {
-    dispatch(fetchPortfolio());
-    dispatch(fetchTransactions());
-    dispatch(
-      addNotification({
-        type: 'info',
-        message: 'Portfolio data refreshed',
-      })
+  // Memoized calculations for performance
+  const portfolioStats = useMemo(() => {
+    if (!positions.length) return { totalValue: 0, totalGain: 0, bestPerformer: null, worstPerformer: null };
+    
+    const totalValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
+    const totalGain = positions.reduce((sum, p) => sum + p.totalGain, 0);
+    const bestPerformer = positions.reduce((best, current) => 
+      !best || current.totalGainPercent > best.totalGainPercent ? current : best
     );
-  };
+    const worstPerformer = positions.reduce((worst, current) => 
+      !worst || current.totalGainPercent < worst.totalGainPercent ? current : worst
+    );
+
+    return { totalValue, totalGain, bestPerformer, worstPerformer };
+  }, [positions]);
+
+  useEffect(() => {
+    const loadPortfolioData = async () => {
+      await handleAsyncError(async () => {
+        await Promise.all([
+          dispatch(fetchPortfolio()).unwrap(),
+          dispatch(fetchTransactions()).unwrap()
+        ]);
+      }, 'Failed to load portfolio data');
+    };
+    
+    loadPortfolioData();
+  }, [dispatch, handleAsyncError]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await handleAsyncError(async () => {
+        await Promise.all([
+          dispatch(fetchPortfolio()).unwrap(),
+          dispatch(fetchTransactions()).unwrap()
+        ]);
+      }, 'Failed to refresh portfolio');
+      
+      dispatch(addNotification({
+        type: 'success',
+        message: 'Portfolio data refreshed',
+      }));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [dispatch, handleAsyncError]);
 
   const handleAddTransaction = async () => {
     try {

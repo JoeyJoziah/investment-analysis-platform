@@ -1,0 +1,8 @@
+{
+  "timestamp": "2025-08-19T14:31:01.097961",
+  "model_type": "LinearRegression",
+  "model_path": "backend/ml_models/sample_model.pkl",
+  "features": 5,
+  "samples": 100,
+  "score": 0.10415115269114439
+}

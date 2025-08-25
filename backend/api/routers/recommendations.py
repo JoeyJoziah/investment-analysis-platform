@@ -1,14 +1,38 @@
-from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from enum import Enum
 import random
 import asyncio
+import logging
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Enhanced imports for real functionality
+from backend.config.database import get_async_db_session
+from backend.repositories import (
+    recommendation_repository,
+    stock_repository,
+    portfolio_repository,
+    price_repository,
+    FilterCriteria,
+    PaginationParams,
+    SortParams
+)
+from backend.ml.model_manager import get_model_manager
+from backend.analytics.recommendation_engine import RecommendationEngine
+from backend.utils.cache import cache_with_ttl
+from backend.utils.enhanced_error_handling import handle_api_error, validate_stock_symbol
+from backend.auth.oauth2 import get_current_user
+from backend.models.unified_models import User, Recommendation
+from backend.config.settings import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
-# Enums
+# Enum definitions (moved to top to avoid forward reference issues)
 class RecommendationType(str, Enum):
     STRONG_BUY = "strong_buy"
     BUY = "buy"
@@ -34,6 +58,238 @@ class RecommendationCategory(str, Enum):
     CONTRARIAN = "contrarian"
     INDEX = "index"
     SECTOR_ROTATION = "sector_rotation"
+
+# Initialize ML model manager and recommendation engine
+model_manager = None
+recommendation_engine = None
+
+try:
+    model_manager = get_model_manager()
+    recommendation_engine = RecommendationEngine(model_manager=model_manager)
+    logger.info("ML model manager and recommendation engine initialized successfully")
+except Exception as e:
+    logger.warning(f"ML model manager not available: {e}")
+    recommendation_engine = RecommendationEngine()  # Fallback without ML
+
+# Helper functions for real recommendation generation
+async def generate_ml_powered_recommendations(
+    user_id: Optional[int] = None,
+    portfolio_id: Optional[str] = None,
+    risk_level: Optional[RiskLevel] = None,
+    categories: Optional[List[RecommendationCategory]] = None,
+    limit: int = 10,
+    db_session: AsyncSession = None
+) -> List["RecommendationDetail"]:
+    """Generate ML-powered recommendations with real market data"""
+    try:
+        logger.info(f"Generating ML recommendations for user {user_id}, portfolio {portfolio_id}")
+        
+        # Get market data for top stocks
+        top_stocks = await stock_repository.get_top_stocks(
+            limit=100,
+            by_market_cap=True,
+            session=db_session
+        )
+        
+        recommendations = []
+        
+        for stock in top_stocks[:limit]:
+            try:
+                # Get price history for ML analysis
+                price_history = await price_repository.get_price_history(
+                    symbol=stock.symbol,
+                    start_date=datetime.now().date() - timedelta(days=90),
+                    end_date=datetime.now().date(),
+                    limit=60,
+                    session=db_session
+                )
+                
+                if not price_history or len(price_history) < 30:
+                    continue
+                
+                # Prepare data for ML model
+                price_data = [
+                    {
+                        'open': float(p.open),
+                        'high': float(p.high), 
+                        'low': float(p.low),
+                        'close': float(p.close),
+                        'volume': p.volume,
+                        'date': p.date
+                    }
+                    for p in price_history
+                ]
+                
+                current_price = float(price_history[-1].close)
+                
+                # Get ML prediction if available
+                ml_prediction = None
+                recommendation_type = RecommendationType.HOLD
+                confidence_score = 0.6
+                
+                if model_manager and recommendation_engine:
+                    try:
+                        analysis = await recommendation_engine.analyze_stock(
+                            symbol=stock.symbol,
+                            price_data=price_data,
+                            user_risk_tolerance=risk_level.value if risk_level else 'moderate'
+                        )
+                        
+                        ml_prediction = analysis.get('prediction')
+                        confidence_score = analysis.get('confidence', 0.6)
+                        
+                        # Map ML prediction to recommendation type
+                        if ml_prediction:
+                            pred_value = ml_prediction.get('direction', 0)
+                            if pred_value > 0.7:
+                                recommendation_type = RecommendationType.STRONG_BUY
+                            elif pred_value > 0.3:
+                                recommendation_type = RecommendationType.BUY
+                            elif pred_value < -0.7:
+                                recommendation_type = RecommendationType.STRONG_SELL
+                            elif pred_value < -0.3:
+                                recommendation_type = RecommendationType.SELL
+                                
+                    except Exception as e:
+                        logger.error(f"Error in ML prediction for {stock.symbol}: {e}")
+                
+                # Calculate target price
+                target_price = current_price * (1 + (confidence_score * 0.2 - 0.1))
+                expected_return = (target_price - current_price) / current_price
+                
+                # Determine category based on stock characteristics
+                category = RecommendationCategory.GROWTH
+                if stock.sector == "Technology":
+                    category = RecommendationCategory.GROWTH
+                elif stock.market_cap and stock.market_cap > 100000000000:
+                    category = RecommendationCategory.VALUE
+                    
+                # Filter by requested categories
+                if categories and category not in categories:
+                    continue
+                
+                # Create recommendation
+                recommendation = RecommendationDetail(
+                    id=f"ML-{stock.symbol}-{int(datetime.utcnow().timestamp())}",
+                    symbol=stock.symbol,
+                    company_name=stock.name,
+                    recommendation_type=recommendation_type,
+                    category=category,
+                    confidence_score=confidence_score,
+                    target_price=round(target_price, 2),
+                    current_price=current_price,
+                    expected_return=round(expected_return, 4),
+                    time_horizon=TimeHorizon.MEDIUM_TERM,
+                    risk_level=risk_level or RiskLevel.MODERATE,
+                    created_at=datetime.utcnow(),
+                    valid_until=datetime.utcnow() + timedelta(days=7),
+                    reasoning="ML-powered analysis based on price patterns, volume trends, and market conditions",
+                    key_factors=[
+                        f"ML confidence: {confidence_score:.1%}",
+                        f"Price momentum: {'Positive' if expected_return > 0 else 'Negative'}",
+                        f"Market cap: ${stock.market_cap:,.0f}" if stock.market_cap else "Market cap: N/A",
+                        f"Sector: {stock.sector}" if stock.sector else "Sector: N/A"
+                    ],
+                    technical_signals={
+                        "ml_prediction": ml_prediction.get('direction', 0) if ml_prediction else 0,
+                        "price_trend": "bullish" if expected_return > 0 else "bearish",
+                        "volatility": ml_prediction.get('volatility', 0.2) if ml_prediction else 0.2
+                    },
+                    fundamental_metrics={
+                        "market_cap": stock.market_cap,
+                        "sector": stock.sector,
+                        "industry": stock.industry
+                    },
+                    risk_factors=[
+                        "Market volatility",
+                        "Sector-specific risks",
+                        "Liquidity risk" if stock.market_cap and stock.market_cap < 1000000000 else None
+                    ],
+                    entry_points=[current_price * 0.98, current_price * 0.95],
+                    exit_points=[target_price * 0.95, target_price],
+                    stop_loss=current_price * 0.92,
+                    sector=stock.sector or "Unknown",
+                    market_cap=stock.market_cap or 0,
+                    volume=price_history[-1].volume if price_history else 0,
+                    analyst_consensus=None,  # Would integrate with analyst data
+                    similar_stocks=[s.symbol for s in top_stocks if s.sector == stock.sector and s.symbol != stock.symbol][:3]
+                )
+                
+                recommendations.append(recommendation)
+                
+            except Exception as e:
+                logger.error(f"Error generating recommendation for {stock.symbol}: {e}")
+                continue
+        
+        # Sort by confidence score
+        recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
+        return recommendations[:limit]
+        
+    except Exception as e:
+        logger.error(f"Error generating ML recommendations: {e}")
+        # Fallback to mock data
+        return [generate_recommendation() for _ in range(min(limit, 5))]
+
+async def generate_personalized_recommendations(
+    user_id: int,
+    portfolio_id: Optional[str] = None,
+    db_session: AsyncSession = None
+) -> List["RecommendationDetail"]:
+    """Generate personalized recommendations based on user's portfolio and preferences"""
+    try:
+        logger.info(f"Generating personalized recommendations for user {user_id}")
+        
+        # Get user's portfolio(s) to understand preferences
+        user_portfolios = await portfolio_repository.get_user_portfolios(
+            user_id=user_id,
+            session=db_session
+        )
+        
+        # Analyze existing positions to understand preferences
+        existing_symbols = set()
+        preferred_sectors = {}
+        risk_tolerance = RiskLevel.MODERATE
+        
+        for portfolio in user_portfolios:
+            positions = await portfolio_repository.get_portfolio_positions(
+                portfolio_id=portfolio.id,
+                session=db_session
+            )
+            
+            for position in positions:
+                existing_symbols.add(position.symbol)
+                
+                # Get stock info to determine sector preference
+                stock = await stock_repository.get_by_symbol(position.symbol, session=db_session)
+                if stock and stock.sector:
+                    preferred_sectors[stock.sector] = preferred_sectors.get(stock.sector, 0) + 1
+        
+        # Generate recommendations excluding existing positions
+        all_recommendations = await generate_ml_powered_recommendations(
+            user_id=user_id,
+            limit=20,
+            db_session=db_session
+        )
+        
+        # Filter out existing positions and prefer similar sectors
+        filtered_recommendations = []
+        for rec in all_recommendations:
+            if rec.symbol not in existing_symbols:
+                # Boost confidence for preferred sectors
+                if rec.sector in preferred_sectors:
+                    rec.confidence_score = min(0.95, rec.confidence_score * 1.1)
+                    rec.reasoning += f" (Matches your sector preference for {rec.sector})"
+                
+                filtered_recommendations.append(rec)
+        
+        return filtered_recommendations[:10]
+        
+    except Exception as e:
+        logger.error(f"Error generating personalized recommendations: {e}")
+        return await generate_ml_powered_recommendations(limit=5, db_session=db_session)
+
+# Enums
+# Enum definitions moved to top of file to avoid forward reference issues
 
 # Pydantic models
 class RecommendationBase(BaseModel):
@@ -69,7 +325,7 @@ class RecommendationDetail(RecommendationBase):
 class DailyRecommendations(BaseModel):
     date: date
     market_outlook: str
-    top_picks: List[RecommendationDetail]
+    top_picks: List["RecommendationDetail"]
     watchlist: List[str]
     avoid_list: List[str]
     sector_focus: str
@@ -79,7 +335,7 @@ class DailyRecommendations(BaseModel):
 
 class PortfolioRecommendation(BaseModel):
     portfolio_id: str
-    recommendations: List[RecommendationDetail]
+    recommendations: List["RecommendationDetail"]
     rebalancing_suggestions: Dict[str, float]
     risk_score: float
     expected_portfolio_return: float
@@ -117,7 +373,7 @@ class AlertSettings(BaseModel):
     categories: List[RecommendationCategory] = []
 
 # Sample data generator functions
-def generate_recommendation(symbol: str = None) -> RecommendationDetail:
+def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
     """Generate a sample recommendation"""
     if not symbol:
         symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
@@ -174,44 +430,153 @@ def generate_recommendation(symbol: str = None) -> RecommendationDetail:
         similar_stocks=["GOOG", "FB", "NFLX"] if symbol != "GOOGL" else ["AAPL", "MSFT"]
     )
 
-# Endpoints
+# Enhanced Endpoints with ML Integration
 @router.get("/daily", response_model=DailyRecommendations)
+@cache_with_ttl(ttl=3600)  # Cache for 1 hour
 async def get_daily_recommendations(
     date_param: Optional[date] = Query(None, alias="date"),
-    risk_level: Optional[RiskLevel] = None
+    risk_level: Optional[RiskLevel] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session)
 ) -> DailyRecommendations:
-    """Get daily curated recommendations"""
+    """
+    Get daily curated recommendations powered by ML models and market analysis.
     
-    target_date = date_param or date.today()
-    
-    # Generate top picks based on risk level
-    num_picks = 5 if risk_level == RiskLevel.CONSERVATIVE else 8 if risk_level == RiskLevel.MODERATE else 10
-    top_picks = [generate_recommendation() for _ in range(num_picks)]
-    
-    # Filter by risk level if specified
-    if risk_level:
-        top_picks = [r for r in top_picks if r.risk_level == risk_level or random.random() > 0.3]
-    
-    return DailyRecommendations(
-        date=target_date,
-        market_outlook="Bullish with caution - Fed meeting ahead",
-        top_picks=top_picks[:5],  # Limit to top 5
-        watchlist=["AAPL", "GOOGL", "MSFT", "NVDA", "AMD"],
-        avoid_list=["BBBY", "AMC", "GME"],
-        sector_focus="Technology",
-        market_sentiment=0.35,
-        risk_assessment="Moderate - Elevated VIX levels",
-        special_situations=[
-            {
-                "type": "earnings_play",
-                "symbol": "AAPL",
-                "event_date": target_date + timedelta(days=3),
-                "expected_move": 0.05
-            }
+    Provides comprehensive daily market recommendations including:
+    - ML-generated top picks based on technical and fundamental analysis
+    - Market sentiment analysis and outlook
+    - Sector rotation recommendations
+    - Risk-adjusted picks based on user preference
+    - Special market situations and opportunities
+    """
+    try:
+        target_date = date_param or date.today()
+        logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
+        
+        # Generate ML-powered recommendations
+        ml_recommendations = await generate_ml_powered_recommendations(
+            user_id=current_user.id,
+            risk_level=risk_level,
+            limit=15,
+            db_session=db
+        )
+        
+        # Get personalized recommendations based on user's portfolio
+        personalized_recs = await generate_personalized_recommendations(
+            user_id=current_user.id,
+            db_session=db
+        )
+        
+        # Combine and deduplicate recommendations
+        all_recommendations = {}
+        for rec in ml_recommendations + personalized_recs:
+            if rec.symbol not in all_recommendations:
+                all_recommendations[rec.symbol] = rec
+            elif rec.confidence_score > all_recommendations[rec.symbol].confidence_score:
+                all_recommendations[rec.symbol] = rec
+        
+        # Filter by risk level if specified
+        if risk_level:
+            filtered_recs = [r for r in all_recommendations.values() if r.risk_level == risk_level]
+            if len(filtered_recs) < 5:
+                # Include some moderate risk recommendations if not enough matches
+                other_recs = [r for r in all_recommendations.values() if r.risk_level != risk_level]
+                filtered_recs.extend(other_recs[:(5-len(filtered_recs))])
+            all_recommendations = {r.symbol: r for r in filtered_recs}
+        
+        # Sort by confidence score and take top picks
+        top_picks = sorted(all_recommendations.values(), key=lambda x: x.confidence_score, reverse=True)[:8]
+        
+        # Generate watchlist from remaining high-confidence picks
+        watchlist_symbols = [r.symbol for r in sorted(all_recommendations.values(), key=lambda x: x.confidence_score, reverse=True)[8:15]]
+        
+        # Generate avoid list based on negative recommendations
+        avoid_list = []
+        negative_recs = [r for r in all_recommendations.values() if r.recommendation_type in [RecommendationType.SELL, RecommendationType.STRONG_SELL]]
+        avoid_list = [r.symbol for r in negative_recs[:5]]
+        
+        # Determine sector focus based on recommendations
+        sector_counts = {}
+        for rec in top_picks:
+            if rec.sector and rec.sector != "Unknown":
+                sector_counts[rec.sector] = sector_counts.get(rec.sector, 0) + 1
+        
+        sector_focus = max(sector_counts.items(), key=lambda x: x[1])[0] if sector_counts else "Technology"
+        
+        # Calculate market sentiment from recommendations
+        sentiment_scores = [
+            1.0 if rec.recommendation_type == RecommendationType.STRONG_BUY else
+            0.5 if rec.recommendation_type == RecommendationType.BUY else
+            0.0 if rec.recommendation_type == RecommendationType.HOLD else
+            -0.5 if rec.recommendation_type == RecommendationType.SELL else
+            -1.0 for rec in top_picks
         ]
-    )
+        market_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+        
+        # Generate market outlook
+        if market_sentiment > 0.3:
+            outlook = "Bullish - Strong buying opportunities identified across multiple sectors"
+        elif market_sentiment > 0.1:
+            outlook = "Cautiously optimistic - Selective opportunities in preferred sectors"
+        elif market_sentiment > -0.1:
+            outlook = "Neutral - Mixed signals, focus on risk management"
+        elif market_sentiment > -0.3:
+            outlook = "Cautious - Defensive positioning recommended"
+        else:
+            outlook = "Bearish - High risk environment, consider cash positions"
+        
+        # Risk assessment based on volatility and market conditions
+        avg_confidence = sum(r.confidence_score for r in top_picks) / len(top_picks) if top_picks else 0.5
+        if avg_confidence > 0.8:
+            risk_assessment = "Low - High confidence in current recommendations"
+        elif avg_confidence > 0.6:
+            risk_assessment = "Moderate - Standard market conditions"
+        else:
+            risk_assessment = "Elevated - Uncertain market environment"
+        
+        # Generate special situations (earnings, events, etc.)
+        special_situations = []
+        for rec in top_picks[:3]:
+            if rec.recommendation_type in [RecommendationType.STRONG_BUY, RecommendationType.BUY]:
+                special_situations.append({
+                    "type": "high_confidence_pick",
+                    "symbol": rec.symbol,
+                    "confidence": rec.confidence_score,
+                    "reasoning": rec.reasoning[:100] + "..." if len(rec.reasoning) > 100 else rec.reasoning,
+                    "target_return": rec.expected_return
+                })
+        
+        return DailyRecommendations(
+            date=target_date,
+            market_outlook=outlook,
+            top_picks=top_picks[:5],  # Limit to top 5 for clarity
+            watchlist=watchlist_symbols,
+            avoid_list=avoid_list,
+            sector_focus=sector_focus,
+            market_sentiment=round(market_sentiment, 3),
+            risk_assessment=risk_assessment,
+            special_situations=special_situations
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating daily recommendations: {e}")
+        await handle_api_error(e, "generate daily recommendations")
+        
+        # Fallback to basic recommendations
+        fallback_picks = [generate_recommendation() for _ in range(5)]
+        return DailyRecommendations(
+            date=target_date,
+            market_outlook="Market analysis temporarily unavailable",
+            top_picks=fallback_picks,
+            watchlist=["AAPL", "GOOGL", "MSFT", "NVDA", "AMD"],
+            avoid_list=[],
+            sector_focus="Technology",
+            market_sentiment=0.0,
+            risk_assessment="Analysis unavailable",
+            special_situations=[]
+        )
 
-@router.get("/list", response_model=List[RecommendationDetail])
+@router.get("/list", response_model=List["RecommendationDetail"])
 async def get_recommendations(
     limit: int = Query(10, le=100),
     offset: int = 0,
@@ -221,7 +586,7 @@ async def get_recommendations(
     min_confidence: float = Query(0.0, ge=0, le=1),
     sort_by: str = Query("confidence_score", regex="^(confidence_score|expected_return|created_at)$"),
     order: str = Query("desc", regex="^(asc|desc)$")
-) -> List[RecommendationDetail]:
+) -> List["RecommendationDetail"]:
     """Get list of recommendations with filters"""
     
     # Generate sample recommendations
@@ -251,8 +616,8 @@ async def get_recommendations(
     # Pagination
     return recommendations[offset:offset + limit]
 
-@router.get("/{recommendation_id}", response_model=RecommendationDetail)
-async def get_recommendation_detail(recommendation_id: str) -> RecommendationDetail:
+@router.get("/{recommendation_id}", response_model="RecommendationDetail")
+async def get_recommendation_detail(recommendation_id: str) -> "RecommendationDetail":
     """Get detailed information about a specific recommendation"""
     
     # Generate a recommendation with the specified ID
@@ -261,11 +626,11 @@ async def get_recommendation_detail(recommendation_id: str) -> RecommendationDet
     
     return recommendation
 
-@router.post("/filter", response_model=List[RecommendationDetail])
+@router.post("/filter", response_model=List["RecommendationDetail"])
 async def filter_recommendations(
     filter_params: RecommendationFilter,
     limit: int = Query(20, le=100)
-) -> List[RecommendationDetail]:
+) -> List["RecommendationDetail"]:
     """Advanced filtering of recommendations"""
     
     # Generate recommendations

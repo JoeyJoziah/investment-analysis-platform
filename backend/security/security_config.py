@@ -1,9 +1,14 @@
-"""Security configuration and hardening"""
+"""
+Enhanced Security Configuration and Hardening System
+Provides comprehensive security configurations for different environments
+"""
 
 import os
 import secrets
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from enum import Enum
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +18,19 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from backend.config.settings import settings
+from .security_headers import SecurityHeadersMiddleware, get_security_config as get_headers_config
+from .input_validation import ValidationMiddleware
+from .advanced_rate_limiter import RateLimitingMiddleware, get_default_rate_limiting_rules
+from .injection_prevention import InjectionPreventionMiddleware
+from .audit_logging import AuditMiddleware, get_audit_logger
+
+
+class Environment(str, Enum):
+    """Application environments"""
+    DEVELOPMENT = "development"
+    TESTING = "testing" 
+    STAGING = "staging"
+    PRODUCTION = "production"
 
 
 class SecurityConfig:
@@ -124,79 +142,154 @@ class SecurityConfig:
     ]
 
 
-def add_security_middleware(app: FastAPI) -> None:
-    """Add security middleware to FastAPI app"""
+def add_comprehensive_security_middleware(app: FastAPI) -> None:
+    """Add comprehensive security middleware stack to FastAPI app"""
     
-    # Add security headers middleware
-    @app.middleware("http")
-    async def add_security_headers(request: Request, call_next):
-        response = await call_next(request)
-        
-        # Add security headers
-        for header, value in SecurityConfig.SECURITY_HEADERS.items():
-            response.headers[header] = value
-            
-        # Add custom headers
-        response.headers["X-API-Version"] = "1.0"
-        response.headers["X-RateLimit-Policy"] = SecurityConfig.DEFAULT_RATE_LIMIT
-        
-        return response
+    environment = Environment(settings.ENVIRONMENT.lower())
     
-    # HTTPS redirect (production only)
-    if SecurityConfig.FORCE_HTTPS and settings.ENVIRONMENT == "production":
+    # 1. Audit logging middleware (first to capture everything)
+    app.add_middleware(AuditMiddleware)
+    
+    # 2. Security headers middleware
+    headers_config = get_headers_config()
+    app.add_middleware(SecurityHeadersMiddleware, config=headers_config)
+    
+    # 3. Rate limiting and DDoS protection
+    rate_limit_rules = get_default_rate_limiting_rules()
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    app.add_middleware(RateLimitingMiddleware, rules=rate_limit_rules, redis_url=redis_url)
+    
+    # 4. Input validation and sanitization
+    app.add_middleware(ValidationMiddleware)
+    
+    # 5. Injection prevention (SQL, XSS, etc.)
+    app.add_middleware(InjectionPreventionMiddleware, 
+                      enable_sql_protection=True, 
+                      enable_xss_protection=True,
+                      enable_csrf_protection=True,
+                      strict_mode=(environment == Environment.PRODUCTION))
+    
+    # 6. HTTPS redirect (production only)
+    if SecurityConfig.FORCE_HTTPS and environment == Environment.PRODUCTION:
         app.add_middleware(HTTPSRedirectMiddleware)
     
-    # Trusted hosts
+    # 7. Trusted hosts
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=SecurityConfig.TRUSTED_HOSTS
     )
     
-    # GZIP compression
+    # 8. GZIP compression
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     
-    # CORS
+    # 9. CORS with environment-specific settings
+    cors_origins = SecurityConfig.ALLOWED_ORIGINS
+    if environment == Environment.DEVELOPMENT:
+        cors_origins = cors_origins + [
+            "http://localhost:3001",
+            "http://127.0.0.1:3001"
+        ]
+    elif environment == Environment.PRODUCTION:
+        # Use only secure origins in production
+        cors_origins = [origin for origin in cors_origins if origin.startswith("https://")]
+    
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=SecurityConfig.ALLOWED_ORIGINS,
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=SecurityConfig.ALLOWED_METHODS,
         allow_headers=SecurityConfig.ALLOWED_HEADERS,
-        expose_headers=["X-RateLimit-Remaining", "X-RateLimit-Reset"]
+        expose_headers=["X-RateLimit-Remaining", "X-RateLimit-Reset", "X-Request-ID"]
     )
     
-    # Session middleware
+    # 10. Session middleware
     app.add_middleware(
         SessionMiddleware,
         secret_key=SecurityConfig.SESSION_SECRET_KEY,
         max_age=SecurityConfig.SESSION_MAX_AGE,
-        same_site="strict",
-        https_only=SecurityConfig.FORCE_HTTPS
+        same_site="strict" if environment == Environment.PRODUCTION else "lax",
+        https_only=SecurityConfig.FORCE_HTTPS and environment == Environment.PRODUCTION
     )
     
-    # IP filtering middleware
+    # 11. Enhanced IP filtering middleware
     @app.middleware("http")
-    async def ip_filter_middleware(request: Request, call_next):
-        client_ip = request.client.host if request.client else "unknown"
+    async def enhanced_ip_filter_middleware(request: Request, call_next):
+        client_ip = _get_real_client_ip(request)
         
         # Check blocked IPs
         if client_ip in SecurityConfig.BLOCKED_IPS:
+            audit_logger = get_audit_logger()
+            await audit_logger.log_security_violation(
+                "blocked_ip_access", client_ip, request.headers.get("User-Agent", ""), 
+                {"blocked_ip": client_ip, "endpoint": str(request.url)}
+            )
+            
             from fastapi import HTTPException, status
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="IP address blocked"
+                detail="Access denied",
+                headers={"X-Error-Code": "BLOCKED_IP"}
             )
         
         # Check allowed IPs (if configured)
         if (SecurityConfig.ALLOWED_IPS is not None and 
             client_ip not in SecurityConfig.ALLOWED_IPS):
+            audit_logger = get_audit_logger()
+            await audit_logger.log_security_violation(
+                "unauthorized_ip_access", client_ip, request.headers.get("User-Agent", ""),
+                {"unauthorized_ip": client_ip, "endpoint": str(request.url)}
+            )
+            
             from fastapi import HTTPException, status
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="IP address not allowed"
+                detail="Access denied", 
+                headers={"X-Error-Code": "UNAUTHORIZED_IP"}
             )
         
-        return await call_next(request)
+        # Add security headers to request context
+        request.state.client_ip = client_ip
+        request.state.request_id = secrets.token_hex(8)
+        
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        
+        return response
+
+
+def add_security_middleware(app: FastAPI) -> None:
+    """Legacy function - use add_comprehensive_security_middleware instead"""
+    add_comprehensive_security_middleware(app)
+
+
+def _get_real_client_ip(request: Request) -> str:
+    """Get real client IP considering proxy headers"""
+    # Check common proxy headers in order of preference
+    headers_to_check = [
+        "CF-Connecting-IP",      # Cloudflare
+        "X-Real-IP",            # Nginx
+        "X-Forwarded-For",      # Standard proxy header
+        "X-Client-IP",          # Alternative
+        "X-Cluster-Client-IP",  # Cluster environments
+    ]
+    
+    for header in headers_to_check:
+        ip = request.headers.get(header)
+        if ip:
+            # X-Forwarded-For can contain multiple IPs
+            if "," in ip:
+                ip = ip.split(",")[0].strip()
+            
+            # Basic IP validation
+            try:
+                import ipaddress
+                ipaddress.ip_address(ip)
+                return ip
+            except ValueError:
+                continue
+    
+    # Fall back to direct connection IP
+    return request.client.host if request.client else "unknown"
 
 
 class PasswordValidator:

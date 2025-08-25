@@ -29,6 +29,10 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 
 ```
 ├── backend/           # FastAPI backend with ML models
+│   ├── ml/           # ML pipeline and models
+│   │   ├── pipeline/ # ML orchestration and training
+│   │   └── models/   # Model implementations
+│   └── api/          # REST API endpoints
 ├── frontend/          # React web application
 ├── data_pipelines/    # Apache Airflow DAGs
 ├── infrastructure/    # Docker and Kubernetes configs
@@ -121,12 +125,20 @@ make db-shell
 
 ## 📊 API Endpoints
 
+### Main API (Port 8000)
 - `GET /api/health` - Health check
 - `GET /api/stocks/{ticker}` - Stock data and analysis
 - `GET /api/recommendations` - AI recommendations
 - `POST /api/portfolio` - Portfolio management
 - `GET /api/analysis/{ticker}` - Detailed analysis
 - `WS /ws` - WebSocket for real-time updates
+
+### ML API (Port 8001)
+- `GET /health` - ML service health check
+- `GET /models` - List available ML models
+- `POST /predict` - Make predictions
+- `POST /predict/stock_price` - Stock-specific predictions
+- `POST /retrain` - Trigger model retraining
 
 ## 🔐 Environment Variables
 
@@ -154,6 +166,37 @@ The platform is designed to operate under $50/month by:
 - Batch processing during off-peak hours
 - Auto-scaling down during idle periods
 
+## 🤖 Machine Learning Pipeline
+
+The platform includes a comprehensive ML pipeline for automated stock analysis and prediction.
+
+### Quick ML Setup
+```bash
+# Start ML services
+docker-compose up -d ml-api
+
+# Train your first model
+python3 backend/ml/simple_training_pipeline.py --train
+
+# Make a prediction
+curl -X POST http://localhost:8001/predict \
+  -H "Content-Type: application/json" \
+  -d '{"features": [1.2, 0.8, 150.5], "model_name": "sample_model"}'
+```
+
+### ML Features
+- **Multi-Model Support**: LSTM, XGBoost, Prophet models
+- **Automated Training**: Daily retraining with performance monitoring
+- **Real-time Inference**: <100ms prediction latency
+- **Model Versioning**: Automatic model versioning and rollback
+- **Performance Monitoring**: Drift detection and alerting
+
+### ML Documentation
+- [🚀 ML Quick Start Guide](ML_QUICKSTART.md) - Get started in 5 minutes
+- [📖 ML Pipeline Documentation](ML_PIPELINE_DOCUMENTATION.md) - Complete technical reference
+- [🔧 ML API Reference](ML_API_REFERENCE.md) - API endpoints and examples
+- [⚙️ ML Operations Guide](ML_OPERATIONS_GUIDE.md) - Production operations
+
 ## 🧪 Testing
 
 ```bash
@@ -162,6 +205,9 @@ make test
 
 # Run with coverage
 pytest --cov=backend --cov-report=html
+
+# Test ML pipeline
+pytest backend/tests/test_ml_pipeline.py
 
 # View coverage report
 open htmlcov/index.html
@@ -192,10 +238,21 @@ kubectl get pods -n investment-platform
 
 ## 📚 Documentation
 
+### API Documentation
 - [API Documentation](http://localhost:8000/docs) - Interactive API docs
+- [ML API Documentation](http://localhost:8001/docs) - ML API interactive docs
+
+### ML Pipeline Documentation
+- [🚀 ML Quick Start Guide](ML_QUICKSTART.md) - Get started in 5 minutes
+- [📖 ML Pipeline Documentation](ML_PIPELINE_DOCUMENTATION.md) - Complete technical reference
+- [🔧 ML API Reference](ML_API_REFERENCE.md) - API endpoints and examples
+- [⚙️ ML Operations Guide](ML_OPERATIONS_GUIDE.md) - Production operations
+
+### System Documentation
 - [Architecture Guide](docs/architecture/README.md) - System architecture
 - [Development Guide](docs/guides/development.md) - Development practices
 - [Deployment Guide](docs/deployment/README.md) - Deployment instructions
+- [CLAUDE.md](CLAUDE.md) - Project development guidelines
 
 ## 🤝 Contributing
 

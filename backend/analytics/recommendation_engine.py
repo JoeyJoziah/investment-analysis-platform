@@ -17,9 +17,9 @@ from backend.analytics.technical_analysis import TechnicalAnalysisEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.models.ml_models import ModelManager, PredictionResult
-from backend.data_ingestion.market_scanner import MarketScanner
-from backend.utils.risk_manager import RiskManager
-from backend.utils.portfolio_optimizer import PortfolioOptimizer
+# from backend.data_ingestion.market_scanner import MarketScanner
+# from backend.utils.risk_manager import RiskManager
+# from backend.utils.portfolio_optimizer import PortfolioOptimizer
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +123,9 @@ class RecommendationEngine:
         self.fundamental_engine = FundamentalAnalysisEngine()
         self.sentiment_engine = SentimentAnalysisEngine()
         self.model_manager = ModelManager()
-        self.market_scanner = MarketScanner()
-        self.risk_manager = RiskManager()
-        self.portfolio_optimizer = PortfolioOptimizer()
+        # self.market_scanner = MarketScanner()  # Disabled - missing module
+        # self.risk_manager = RiskManager()  # Disabled - missing module
+        # self.portfolio_optimizer = PortfolioOptimizer()  # Disabled - missing module
         
         # Recommendation thresholds
         self.thresholds = {

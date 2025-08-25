@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import structlog
-from pythonjsonlogger import jsonlogger
+# from pythonjsonlogger import jsonlogger  # TODO: Install python-json-logger
 
 # Context variable for correlation ID
 correlation_id_var: ContextVar[Optional[str]] = ContextVar('correlation_id', default=None)
@@ -157,9 +157,9 @@ def configure_structured_logging(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
     else:
-        formatter = jsonlogger.JsonFormatter(
-            fmt='%(timestamp)s %(level)s %(name)s %(message)s',
-            rename_fields={'levelname': 'level', 'name': 'logger'}
+        # Use standard formatter until python-json-logger is installed
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
@@ -167,9 +167,9 @@ def configure_structured_logging(
     # File handler if specified
     if log_file:
         file_handler = logging.FileHandler(log_file)
-        file_formatter = jsonlogger.JsonFormatter(
-            fmt='%(timestamp)s %(level)s %(name)s %(message)s',
-            rename_fields={'levelname': 'level', 'name': 'logger'}
+        # Use standard formatter until python-json-logger is installed
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)

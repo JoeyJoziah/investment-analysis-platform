@@ -1,0 +1,24 @@
+# Investment Analysis Platform - Data Pipeline Dependencies
+# Orchestration, streaming, and data processing components
+# Requires system dependencies: librdkafka-dev, build-essential
+
+-r base.txt
+-r database.txt
+
+# ============================================================================
+# DATA PIPELINE & ORCHESTRATION
+# ============================================================================
+# Apache Airflow (heavy package with many dependencies)
+apache-airflow==2.9.3
+
+# ============================================================================
+# STREAMING & MESSAGING
+# ============================================================================
+# Kafka clients (require librdkafka system dependency)
+confluent-kafka==2.5.0
+aiokafka==0.11.0
+
+# ============================================================================
+# TASK SCHEDULING
+# ============================================================================
+schedule==1.2.2

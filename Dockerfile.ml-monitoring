@@ -1,0 +1,38 @@
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt pyproject.toml ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt requests
+
+# Copy application code
+COPY backend/ ./backend/
+COPY scripts/ ./scripts/
+COPY .env* ./
+
+# Create necessary directories
+RUN mkdir -p backend/ml_logs backend/ml_models
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV ML_LOGS_PATH=/app/backend/ml_logs
+ENV ML_MODELS_PATH=/app/backend/ml_models
+
+# Expose port
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=60s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:8002/health || exit 1
+
+# Run the ML monitoring server
+CMD ["python3", "backend/ml/ml_monitoring_server.py"]

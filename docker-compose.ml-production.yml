@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  ml-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml-api
+    container_name: ml-api-production
+    ports:
+      - "8001:8001"
+    environment:
+      - ML_MODELS_PATH=/app/backend/ml_models
+      - ML_LOGS_PATH=/app/backend/ml_logs
+      - ML_REGISTRY_PATH=/app/backend/ml_registry
+      - PYTHONPATH=/app
+      - TZ=UTC
+    volumes:
+      - ./backend/ml_models:/app/backend/ml_models:ro
+      - ./backend/ml_logs:/app/backend/ml_logs
+      - ./backend/ml_registry:/app/backend/ml_registry
+    networks:
+      - ml-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  ml-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml-scheduler
+    container_name: ml-scheduler-production
+    environment:
+      - ML_MODELS_PATH=/app/backend/ml_models
+      - ML_LOGS_PATH=/app/backend/ml_logs
+      - ENABLE_DAILY_TRAINING=true
+      - ML_DAILY_TRAINING_TIME=02:00
+      - ENABLE_HOURLY_MONITORING=true
+      - PYTHONPATH=/app
+      - TZ=UTC
+    volumes:
+      - ./backend/ml_models:/app/backend/ml_models
+      - ./backend/ml_logs:/app/backend/ml_logs
+      - ./data:/app/data
+    networks:
+      - ml-network
+    restart: unless-stopped
+    depends_on:
+      - ml-api
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+
+  ml-monitoring:
+    build:
+      context: .
+      dockerfile: Dockerfile.ml-monitoring
+    container_name: ml-monitoring-production
+    ports:
+      - "8002:8002"
+    environment:
+      - ML_API_URL=http://ml-api:8001
+      - ML_LOGS_PATH=/app/backend/ml_logs
+      - PYTHONPATH=/app
+    volumes:
+      - ./backend/ml_logs:/app/backend/ml_logs:ro
+      - ./backend/ml_models:/app/backend/ml_models:ro
+    networks:
+      - ml-network
+    restart: unless-stopped
+    depends_on:
+      - ml-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
+networks:
+  ml-network:
+    driver: bridge
+
+volumes:
+  ml-models-data:
+  ml-logs-data:
+  ml-registry-data:

@@ -1,0 +1,62 @@
+# Ripgrep configuration for Investment Analysis Platform
+# Based on Claude Code performance optimizations
+
+# Exclude patterns
+--glob=!*.pyc
+--glob=!*/__pycache__/*
+--glob=!*/node_modules/*
+--glob=!*/.git/*
+--glob=!*/venv/*
+--glob=!*/.venv/*
+--glob=!*/dist/*
+--glob=!*/build/*
+--glob=!*.min.js
+--glob=!*.min.css
+--glob=!*/coverage/*
+--glob=!*/.pytest_cache/*
+--glob=!*/.mypy_cache/*
+--glob=!*/htmlcov/*
+--glob=!*/.tox/*
+--glob=!*.egg-info/*
+--glob=!*/.eggs/*
+--glob=!*/postgres-data/*
+--glob=!*/redis-data/*
+--glob=!*/logs/*
+--glob=!*.log
+--glob=!*.sqlite
+--glob=!*.db
+--glob=!*.lock
+--glob=!package-lock.json
+--glob=!yarn.lock
+--glob=!poetry.lock
+--glob=!Pipfile.lock
+
+# Include specific file types for code search
+--type-add=py:*.{py,pyi,pyx}
+--type-add=js:*.{js,jsx,mjs,ts,tsx}
+--type-add=web:*.{html,css,scss,sass,less}
+--type-add=config:*.{json,yaml,yml,toml,ini,cfg,conf}
+--type-add=docker:Dockerfile*,docker-compose*.yml
+--type-add=docs:*.{md,rst,txt}
+--type-add=sql:*.{sql,psql}
+
+# Performance settings
+--max-columns=200
+--max-columns-preview
+--smart-case
+--threads=4
+--max-filesize=5M
+
+# Output formatting
+--colors=line:fg:yellow
+--colors=line:style:bold
+--colors=path:fg:green
+--colors=path:style:bold
+--colors=match:fg:red
+--colors=match:style:bold
+
+# Search behavior
+--follow
+--hidden
+--no-ignore-vcs
+--sort=path

@@ -1,0 +1,114 @@
+# Multi-stage production-optimized Dockerfile for React frontend
+# Optimized for minimal size, security, and CDN-ready static assets
+
+# Build stage - Node.js for building React app
+FROM node:18-alpine as builder
+
+# Set build-time environment variables
+ENV NODE_ENV=production \
+    NPM_CONFIG_CACHE=/tmp/.npm \
+    GENERATE_SOURCEMAP=false \
+    INLINE_RUNTIME_CHUNK=false
+
+# Install build dependencies
+RUN apk add --no-cache \
+    git \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files (leverage Docker cache)
+COPY package*.json ./
+
+# Install dependencies with production optimization
+RUN npm ci --only=production --ignore-scripts && \
+    npm cache clean --force
+
+# Copy source code
+COPY public/ ./public/
+COPY src/ ./src/
+COPY tsconfig.json vite.config.ts index.html ./
+
+# Build arguments for environment configuration
+ARG REACT_APP_API_URL
+ARG REACT_APP_WS_URL
+ARG REACT_APP_VERSION
+ARG REACT_APP_ENVIRONMENT
+
+# Set build environment variables
+ENV REACT_APP_API_URL=${REACT_APP_API_URL} \
+    REACT_APP_WS_URL=${REACT_APP_WS_URL} \
+    REACT_APP_VERSION=${REACT_APP_VERSION} \
+    REACT_APP_ENVIRONMENT=${REACT_APP_ENVIRONMENT}
+
+# Build the application with optimizations
+RUN npm run build && \
+    # Optimize built files
+    find dist -name "*.js" -type f -exec gzip -9 -c {} \; > {}.gz && \
+    find dist -name "*.css" -type f -exec gzip -9 -c {} \; > {}.gz && \
+    find dist -name "*.html" -type f -exec gzip -9 -c {} \; > {}.gz
+
+# Production stage - Nginx for serving static files
+FROM nginx:alpine as runtime
+
+# Install security and optimization packages
+RUN apk add --no-cache \
+    curl \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S appuser && \
+    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G appuser -g appuser appuser
+
+# Copy built application from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy optimized Nginx configuration
+COPY infrastructure/docker/frontend/nginx.optimized.conf /etc/nginx/nginx.conf
+COPY infrastructure/docker/frontend/security-headers.conf /etc/nginx/conf.d/security-headers.conf
+
+# Create startup script for security and optimization
+RUN echo '#!/bin/sh\n\
+set -e\n\
+\n\
+# Update permissions\n\
+chown -R appuser:appuser /usr/share/nginx/html /var/cache/nginx /var/log/nginx\n\
+\n\
+# Graceful shutdown handler\n\
+shutdown_handler() {\n\
+    echo "Shutting down nginx gracefully..."\n\
+    nginx -s quit\n\
+    wait\n\
+    echo "Shutdown complete"\n\
+    exit 0\n\
+}\n\
+\n\
+# Set trap for graceful shutdown\n\
+trap shutdown_handler SIGTERM SIGINT\n\
+\n\
+# Start nginx\n\
+nginx -g "daemon off;" &\n\
+wait\n\
+' > /start.sh && \
+    chmod +x /start.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
+
+# Create health endpoint
+RUN echo '<!DOCTYPE html><html><head><title>Health Check</title></head><body><h1>OK</h1></body></html>' > /usr/share/nginx/html/health
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 80
+
+# Use startup script
+CMD ["/start.sh"]

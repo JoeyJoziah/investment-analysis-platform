@@ -1,0 +1,725 @@
+name: Performance Monitoring & Testing
+
+on:
+  schedule:
+    # Run performance tests twice daily: 8 AM and 8 PM UTC
+    - cron: '0 8,20 * * *'
+  workflow_dispatch:
+    inputs:
+      test_environment:
+        description: 'Environment to test'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      test_duration:
+        description: 'Test duration in minutes'
+        required: true
+        default: '5'
+        type: choice
+        options:
+        - '2'
+        - '5'
+        - '10'
+        - '15'
+      test_intensity:
+        description: 'Test intensity'
+        required: true
+        default: 'light'
+        type: choice
+        options:
+        - light
+        - moderate
+        - heavy
+
+env:
+  PYTHON_VERSION: '3.12'
+  # Cost optimization - use smaller runners when possible
+  SMALL_RUNNER: ubuntu-latest
+
+concurrency:
+  group: performance-monitoring-${{ github.event.inputs.test_environment || 'staging' }}
+  cancel-in-progress: true  # Cancel previous performance tests
+
+jobs:
+  # API Performance Testing
+  api-performance-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # Cost optimization with timeout
+    outputs:
+      avg_response_time: ${{ steps.performance-results.outputs.avg_response_time }}
+      error_rate: ${{ steps.performance-results.outputs.error_rate }}
+      throughput: ${{ steps.performance-results.outputs.throughput }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-perf-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-perf-
+          ${{ runner.os }}-pip-
+
+    - name: Install performance testing tools
+      run: |
+        pip install --upgrade pip
+        pip install locust requests aiohttp pandas matplotlib seaborn
+
+    - name: Set test parameters
+      id: test-params
+      run: |
+        # Set environment-specific URLs and parameters
+        if [ "${{ github.event.inputs.test_environment || 'staging' }}" = "production" ]; then
+          echo "base_url=${{ secrets.PRODUCTION_API_URL }}" >> $GITHUB_OUTPUT
+          echo "concurrent_users=5" >> $GITHUB_OUTPUT
+          echo "spawn_rate=1" >> $GITHUB_OUTPUT
+        else
+          echo "base_url=${{ secrets.STAGING_API_URL }}" >> $GITHUB_OUTPUT
+          echo "concurrent_users=10" >> $GITHUB_OUTPUT
+          echo "spawn_rate=2" >> $GITHUB_OUTPUT
+        fi
+        
+        # Set intensity-based parameters
+        case "${{ github.event.inputs.test_intensity || 'light' }}" in
+          "heavy")
+            echo "users_multiplier=3" >> $GITHUB_OUTPUT
+            ;;
+          "moderate")
+            echo "users_multiplier=2" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "users_multiplier=1" >> $GITHUB_OUTPUT
+            ;;
+        esac
+
+    - name: Create Locust test file
+      run: |
+        cat << 'EOF' > locustfile.py
+        import random
+        import time
+        from locust import HttpUser, task, between
+        
+        class InvestmentAPIUser(HttpUser):
+            wait_time = between(1, 3)
+            
+            def on_start(self):
+                """Called when a user starts"""
+                pass
+                
+            @task(3)
+            def get_health(self):
+                """Health check endpoint - most frequent"""
+                self.client.get("/api/health", name="health_check")
+                
+            @task(2)
+            def get_recommendations(self):
+                """Get stock recommendations"""
+                self.client.get("/api/recommendations", name="recommendations")
+                
+            @task(1)
+            def get_stock_analysis(self):
+                """Get analysis for a random stock"""
+                symbols = ["AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"]
+                symbol = random.choice(symbols)
+                self.client.get(f"/api/analysis/{symbol}", name="stock_analysis")
+                
+            @task(1)
+            def get_portfolio(self):
+                """Get portfolio data"""
+                self.client.get("/api/portfolio", name="portfolio")
+        EOF
+
+    - name: Run performance tests
+      run: |
+        # Calculate users and duration
+        BASE_USERS=${{ steps.test-params.outputs.concurrent_users }}
+        MULTIPLIER=${{ steps.test-params.outputs.users_multiplier }}
+        USERS=$((BASE_USERS * MULTIPLIER))
+        SPAWN_RATE=${{ steps.test-params.outputs.spawn_rate }}
+        DURATION="${{ github.event.inputs.test_duration || '5' }}m"
+        BASE_URL="${{ steps.test-params.outputs.base_url }}"
+        
+        echo "Running performance test with:"
+        echo "  Base URL: $BASE_URL"
+        echo "  Users: $USERS"
+        echo "  Spawn Rate: $SPAWN_RATE"
+        echo "  Duration: $DURATION"
+        
+        # Run Locust performance test
+        locust -f locustfile.py \
+          --host="$BASE_URL" \
+          --users="$USERS" \
+          --spawn-rate="$SPAWN_RATE" \
+          --run-time="$DURATION" \
+          --html=performance-report.html \
+          --csv=performance-results \
+          --headless \
+          || echo "Performance test completed with warnings"
+
+    - name: Process performance results
+      id: performance-results
+      run: |
+        python << 'EOF'
+        import pandas as pd
+        import json
+        import sys
+        import os
+        
+        try:
+            # Read Locust results
+            stats_file = "performance-results_stats.csv"
+            if os.path.exists(stats_file):
+                df = pd.read_csv(stats_file)
+                
+                # Calculate key metrics
+                total_requests = df['Request Count'].sum()
+                failed_requests = df['Failure Count'].sum()
+                avg_response_time = df['Average Response Time'].mean()
+                error_rate = (failed_requests / total_requests * 100) if total_requests > 0 else 0
+                
+                # Calculate throughput (requests per second)
+                # Locust provides this in the stats, but we'll calculate from totals
+                test_duration_minutes = ${{ github.event.inputs.test_duration || '5' }}
+                throughput = total_requests / (test_duration_minutes * 60)
+                
+                # Output results
+                print(f"avg_response_time={avg_response_time:.2f}")
+                print(f"error_rate={error_rate:.2f}")
+                print(f"throughput={throughput:.2f}")
+                
+                # Create performance summary
+                summary = {
+                    "timestamp": pd.Timestamp.now().isoformat(),
+                    "environment": "${{ github.event.inputs.test_environment || 'staging' }}",
+                    "total_requests": int(total_requests),
+                    "failed_requests": int(failed_requests),
+                    "avg_response_time_ms": round(avg_response_time, 2),
+                    "error_rate_percent": round(error_rate, 2),
+                    "throughput_rps": round(throughput, 2),
+                    "test_duration_minutes": int(test_duration_minutes)
+                }
+                
+                with open("performance-summary.json", "w") as f:
+                    json.dump(summary, f, indent=2)
+                
+                print(f"Performance test completed successfully")
+                print(f"Total requests: {total_requests}")
+                print(f"Average response time: {avg_response_time:.2f}ms")
+                print(f"Error rate: {error_rate:.2f}%")
+                print(f"Throughput: {throughput:.2f} RPS")
+                
+            else:
+                print("No performance results file found")
+                print("avg_response_time=0")
+                print("error_rate=100")
+                print("throughput=0")
+                
+        except Exception as e:
+            print(f"Error processing results: {e}")
+            print("avg_response_time=0")
+            print("error_rate=100")
+            print("throughput=0")
+            sys.exit(1)
+        EOF
+
+    - name: Generate performance charts
+      run: |
+        python << 'EOF'
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        import seaborn as sns
+        import os
+        
+        plt.style.use('seaborn-v0_8')
+        
+        try:
+            # Read performance data
+            if os.path.exists("performance-results_stats.csv"):
+                df = pd.read_csv("performance-results_stats.csv")
+                
+                # Create figure with subplots
+                fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+                fig.suptitle('Performance Test Results', fontsize=16, fontweight='bold')
+                
+                # Response time chart
+                ax1.bar(range(len(df)), df['Average Response Time'])
+                ax1.set_title('Average Response Time by Endpoint')
+                ax1.set_ylabel('Response Time (ms)')
+                ax1.set_xticks(range(len(df)))
+                ax1.set_xticklabels(df['Name'], rotation=45, ha='right')
+                
+                # Request count chart
+                ax2.bar(range(len(df)), df['Request Count'])
+                ax2.set_title('Request Count by Endpoint')
+                ax2.set_ylabel('Request Count')
+                ax2.set_xticks(range(len(df)))
+                ax2.set_xticklabels(df['Name'], rotation=45, ha='right')
+                
+                # Error rate chart
+                error_rates = (df['Failure Count'] / df['Request Count'] * 100).fillna(0)
+                ax3.bar(range(len(df)), error_rates)
+                ax3.set_title('Error Rate by Endpoint')
+                ax3.set_ylabel('Error Rate (%)')
+                ax3.set_xticks(range(len(df)))
+                ax3.set_xticklabels(df['Name'], rotation=45, ha='right')
+                
+                # Percentile response times
+                percentiles = ['50%', '66%', '75%', '80%', '90%', '95%', '98%', '99%']
+                if all(col in df.columns for col in percentiles):
+                    avg_percentiles = df[percentiles].mean()
+                    ax4.plot(percentiles, avg_percentiles, marker='o')
+                    ax4.set_title('Response Time Percentiles')
+                    ax4.set_ylabel('Response Time (ms)')
+                    ax4.set_xlabel('Percentile')
+                    ax4.tick_params(axis='x', rotation=45)
+                else:
+                    ax4.text(0.5, 0.5, 'Percentile data not available', 
+                            ha='center', va='center', transform=ax4.transAxes)
+                    ax4.set_title('Response Time Percentiles')
+                
+                plt.tight_layout()
+                plt.savefig('performance-charts.png', dpi=300, bbox_inches='tight')
+                print("Performance charts generated successfully")
+                
+        except Exception as e:
+            print(f"Error generating charts: {e}")
+            # Create empty chart
+            fig, ax = plt.subplots(1, 1, figsize=(8, 6))
+            ax.text(0.5, 0.5, f'Error generating charts: {str(e)}', 
+                   ha='center', va='center', transform=ax.transAxes)
+            plt.savefig('performance-charts.png', dpi=300, bbox_inches='tight')
+        EOF
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-test-results
+        path: |
+          performance-report.html
+          performance-results_*.csv
+          performance-summary.json
+          performance-charts.png
+
+  # Database Performance Testing
+  database-performance-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event.inputs.test_environment != 'production'  # Only run on staging
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: perf_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install asyncpg pandas numpy psutil
+
+    - name: Run database performance tests
+      run: |
+        python << 'EOF'
+        import asyncio
+        import asyncpg
+        import time
+        import pandas as pd
+        import numpy as np
+        
+        async def test_database_performance():
+            # Connect to database
+            conn = await asyncpg.connect(
+                "postgresql://postgres:testpass@localhost:5432/perf_test_db"
+            )
+            
+            results = []
+            
+            try:
+                # Create test table
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS perf_test (
+                        id SERIAL PRIMARY KEY,
+                        symbol VARCHAR(10),
+                        price DECIMAL(10,2),
+                        volume INTEGER,
+                        timestamp TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                
+                # Test 1: Insert Performance
+                print("Testing INSERT performance...")
+                start_time = time.time()
+                
+                # Insert test data
+                test_data = [
+                    (f'STOCK{i}', np.random.uniform(50, 500), np.random.randint(1000, 100000))
+                    for i in range(1000)
+                ]
+                
+                await conn.executemany(
+                    "INSERT INTO perf_test (symbol, price, volume) VALUES ($1, $2, $3)",
+                    test_data
+                )
+                
+                insert_time = time.time() - start_time
+                results.append({
+                    'test': 'INSERT_1000_RECORDS',
+                    'duration_seconds': insert_time,
+                    'operations_per_second': 1000 / insert_time
+                })
+                
+                # Test 2: SELECT Performance
+                print("Testing SELECT performance...")
+                start_time = time.time()
+                
+                rows = await conn.fetch("SELECT * FROM perf_test WHERE price > 100")
+                
+                select_time = time.time() - start_time
+                results.append({
+                    'test': 'SELECT_WITH_CONDITION',
+                    'duration_seconds': select_time,
+                    'records_returned': len(rows),
+                    'operations_per_second': len(rows) / select_time if select_time > 0 else 0
+                })
+                
+                # Test 3: Aggregate Performance
+                print("Testing AGGREGATE performance...")
+                start_time = time.time()
+                
+                result = await conn.fetchrow("""
+                    SELECT 
+                        COUNT(*) as total_records,
+                        AVG(price) as avg_price,
+                        MAX(volume) as max_volume,
+                        MIN(volume) as min_volume
+                    FROM perf_test
+                """)
+                
+                aggregate_time = time.time() - start_time
+                results.append({
+                    'test': 'AGGREGATE_FUNCTIONS',
+                    'duration_seconds': aggregate_time,
+                    'records_processed': result['total_records'],
+                    'operations_per_second': result['total_records'] / aggregate_time if aggregate_time > 0 else 0
+                })
+                
+                # Test 4: Index Performance
+                print("Testing INDEX creation and query performance...")
+                start_time = time.time()
+                
+                await conn.execute("CREATE INDEX IF NOT EXISTS idx_symbol ON perf_test(symbol)")
+                await conn.execute("CREATE INDEX IF NOT EXISTS idx_price ON perf_test(price)")
+                
+                index_time = time.time() - start_time
+                results.append({
+                    'test': 'INDEX_CREATION',
+                    'duration_seconds': index_time,
+                    'operations_per_second': 2 / index_time if index_time > 0 else 0
+                })
+                
+                # Test indexed query
+                start_time = time.time()
+                rows = await conn.fetch("SELECT * FROM perf_test WHERE symbol LIKE 'STOCK1%' ORDER BY price")
+                indexed_query_time = time.time() - start_time
+                
+                results.append({
+                    'test': 'INDEXED_QUERY',
+                    'duration_seconds': indexed_query_time,
+                    'records_returned': len(rows),
+                    'operations_per_second': len(rows) / indexed_query_time if indexed_query_time > 0 else 0
+                })
+                
+                # Save results
+                df = pd.DataFrame(results)
+                df.to_csv('database-performance-results.csv', index=False)
+                
+                print("Database performance test results:")
+                print(df.to_string(index=False))
+                
+                # Cleanup
+                await conn.execute("DROP TABLE perf_test")
+                
+            finally:
+                await conn.close()
+        
+        asyncio.run(test_database_performance())
+        EOF
+
+    - name: Upload database performance results
+      uses: actions/upload-artifact@v4
+      with:
+        name: database-performance-results
+        path: database-performance-results.csv
+
+  # Memory and Resource Usage Testing
+  resource-monitoring:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install monitoring tools
+      run: |
+        pip install --upgrade pip
+        pip install psutil pandas matplotlib
+
+    - name: Monitor system resources during load
+      run: |
+        python << 'EOF'
+        import psutil
+        import pandas as pd
+        import time
+        import matplotlib.pyplot as plt
+        from datetime import datetime
+        
+        # Monitor system resources
+        monitoring_duration = 60  # seconds
+        interval = 2  # seconds
+        
+        metrics = []
+        start_time = time.time()
+        
+        print(f"Monitoring system resources for {monitoring_duration} seconds...")
+        
+        while time.time() - start_time < monitoring_duration:
+            timestamp = datetime.now()
+            cpu_percent = psutil.cpu_percent(interval=1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            metrics.append({
+                'timestamp': timestamp,
+                'cpu_percent': cpu_percent,
+                'memory_percent': memory.percent,
+                'memory_used_gb': memory.used / (1024**3),
+                'memory_available_gb': memory.available / (1024**3),
+                'disk_percent': disk.percent,
+                'disk_used_gb': disk.used / (1024**3),
+                'disk_free_gb': disk.free / (1024**3)
+            })
+            
+            if len(metrics) % 10 == 0:
+                print(f"  CPU: {cpu_percent}%, Memory: {memory.percent}%, Disk: {disk.percent}%")
+        
+        # Create DataFrame and save results
+        df = pd.DataFrame(metrics)
+        df.to_csv('resource-monitoring-results.csv', index=False)
+        
+        # Generate resource usage charts
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
+        fig.suptitle('System Resource Monitoring', fontsize=16, fontweight='bold')
+        
+        # CPU usage
+        ax1.plot(df.index, df['cpu_percent'])
+        ax1.set_title('CPU Usage Over Time')
+        ax1.set_ylabel('CPU %')
+        ax1.set_xlabel('Time (intervals)')
+        
+        # Memory usage
+        ax2.plot(df.index, df['memory_percent'])
+        ax2.set_title('Memory Usage Over Time')
+        ax2.set_ylabel('Memory %')
+        ax2.set_xlabel('Time (intervals)')
+        
+        # Memory absolute
+        ax3.plot(df.index, df['memory_used_gb'], label='Used')
+        ax3.plot(df.index, df['memory_available_gb'], label='Available')
+        ax3.set_title('Memory Usage (Absolute)')
+        ax3.set_ylabel('Memory (GB)')
+        ax3.set_xlabel('Time (intervals)')
+        ax3.legend()
+        
+        # Disk usage
+        ax4.plot(df.index, df['disk_percent'])
+        ax4.set_title('Disk Usage Over Time')
+        ax4.set_ylabel('Disk %')
+        ax4.set_xlabel('Time (intervals)')
+        
+        plt.tight_layout()
+        plt.savefig('resource-monitoring-charts.png', dpi=300, bbox_inches='tight')
+        
+        # Summary statistics
+        print("\nResource Usage Summary:")
+        print(f"Average CPU: {df['cpu_percent'].mean():.1f}%")
+        print(f"Max CPU: {df['cpu_percent'].max():.1f}%")
+        print(f"Average Memory: {df['memory_percent'].mean():.1f}%")
+        print(f"Max Memory: {df['memory_percent'].max():.1f}%")
+        EOF
+
+    - name: Upload resource monitoring results
+      uses: actions/upload-artifact@v4
+      with:
+        name: resource-monitoring-results
+        path: |
+          resource-monitoring-results.csv
+          resource-monitoring-charts.png
+
+  # Consolidate and report results
+  generate-performance-report:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 10
+    needs: [api-performance-test, database-performance-test, resource-monitoring]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all performance results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: "*performance*"
+        merge-multiple: true
+
+    - name: Generate consolidated performance report
+      run: |
+        echo "# Performance Monitoring Report" > performance-report.md
+        echo "" >> performance-report.md
+        echo "**Date**: $(date -u +%Y-%m-%d %H:%M:%S) UTC" >> performance-report.md
+        echo "**Environment**: ${{ github.event.inputs.test_environment || 'staging' }}" >> performance-report.md
+        echo "**Test Duration**: ${{ github.event.inputs.test_duration || '5' }} minutes" >> performance-report.md
+        echo "**Test Intensity**: ${{ github.event.inputs.test_intensity || 'light' }}" >> performance-report.md
+        echo "" >> performance-report.md
+        
+        echo "## API Performance Results" >> performance-report.md
+        echo "" >> performance-report.md
+        echo "| Metric | Value |" >> performance-report.md
+        echo "|--------|-------|" >> performance-report.md
+        echo "| Average Response Time | ${{ needs.api-performance-test.outputs.avg_response_time }}ms |" >> performance-report.md
+        echo "| Error Rate | ${{ needs.api-performance-test.outputs.error_rate }}% |" >> performance-report.md
+        echo "| Throughput | ${{ needs.api-performance-test.outputs.throughput }} RPS |" >> performance-report.md
+        echo "" >> performance-report.md
+        
+        echo "## Job Status Summary" >> performance-report.md
+        echo "" >> performance-report.md
+        echo "| Component | Status |" >> performance-report.md
+        echo "|-----------|--------|" >> performance-report.md
+        echo "| API Performance | ${{ needs.api-performance-test.result }} |" >> performance-report.md
+        echo "| Database Performance | ${{ needs.database-performance-test.result }} |" >> performance-report.md
+        echo "| Resource Monitoring | ${{ needs.resource-monitoring.result }} |" >> performance-report.md
+        echo "" >> performance-report.md
+        
+        echo "## Performance Thresholds" >> performance-report.md
+        echo "" >> performance-report.md
+        echo "- **Response Time**: Target < 500ms (Current: ${{ needs.api-performance-test.outputs.avg_response_time }}ms)" >> performance-report.md
+        echo "- **Error Rate**: Target < 1% (Current: ${{ needs.api-performance-test.outputs.error_rate }}%)" >> performance-report.md
+        echo "- **Throughput**: Target > 10 RPS (Current: ${{ needs.api-performance-test.outputs.throughput }} RPS)" >> performance-report.md
+
+    - name: Check performance thresholds
+      id: threshold-check
+      run: |
+        # Check if performance metrics exceed thresholds
+        RESPONSE_TIME=${{ needs.api-performance-test.outputs.avg_response_time }}
+        ERROR_RATE=${{ needs.api-performance-test.outputs.error_rate }}
+        THROUGHPUT=${{ needs.api-performance-test.outputs.throughput }}
+        
+        ALERT_NEEDED=false
+        
+        # Response time threshold: 500ms
+        if (( $(echo "$RESPONSE_TIME > 500" | bc -l) )); then
+          echo "⚠️ Response time threshold exceeded: ${RESPONSE_TIME}ms > 500ms"
+          ALERT_NEEDED=true
+        fi
+        
+        # Error rate threshold: 1%
+        if (( $(echo "$ERROR_RATE > 1" | bc -l) )); then
+          echo "⚠️ Error rate threshold exceeded: ${ERROR_RATE}% > 1%"
+          ALERT_NEEDED=true
+        fi
+        
+        # Throughput threshold: 10 RPS
+        if (( $(echo "$THROUGHPUT < 10" | bc -l) )); then
+          echo "⚠️ Throughput below threshold: ${THROUGHPUT} RPS < 10 RPS"
+          ALERT_NEEDED=true
+        fi
+        
+        echo "alert_needed=$ALERT_NEEDED" >> $GITHUB_OUTPUT
+
+    - name: Send performance alert
+      if: steps.threshold-check.outputs.alert_needed == 'true'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: warning
+        text: |
+          ⚠️ **Performance Thresholds Exceeded**
+          
+          Environment: ${{ github.event.inputs.test_environment || 'staging' }}
+          Repository: ${{ github.repository }}
+          
+          Metrics:
+          - Response Time: ${{ needs.api-performance-test.outputs.avg_response_time }}ms (Target: < 500ms)
+          - Error Rate: ${{ needs.api-performance-test.outputs.error_rate }}% (Target: < 1%)
+          - Throughput: ${{ needs.api-performance-test.outputs.throughput }} RPS (Target: > 10 RPS)
+          
+          Please investigate performance issues.
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Upload consolidated performance report
+      uses: actions/upload-artifact@v4
+      with:
+        name: consolidated-performance-report
+        path: performance-report.md
+
+    - name: Create summary
+      run: |
+        echo "## 📊 Performance Monitoring Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment**: ${{ github.event.inputs.test_environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Date**: $(date -u +%Y-%m-%d %H:%M:%S) UTC" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Key Metrics" >> $GITHUB_STEP_SUMMARY
+        echo "- **Response Time**: ${{ needs.api-performance-test.outputs.avg_response_time }}ms" >> $GITHUB_STEP_SUMMARY
+        echo "- **Error Rate**: ${{ needs.api-performance-test.outputs.error_rate }}%" >> $GITHUB_STEP_SUMMARY
+        echo "- **Throughput**: ${{ needs.api-performance-test.outputs.throughput }} RPS" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| API Performance | ${{ needs.api-performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Database Performance | ${{ needs.database-performance-test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Resource Monitoring | ${{ needs.resource-monitoring.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ steps.threshold-check.outputs.alert_needed }}" = "true" ]; then
+          echo "⚠️ **Performance thresholds exceeded - investigation needed**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **All performance metrics within acceptable thresholds**" >> $GITHUB_STEP_SUMMARY
+        fi

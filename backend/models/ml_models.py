@@ -12,7 +12,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, V
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.model_selection import TimeSeriesSplit
 import xgboost as xgb
-import lightgbm as lgb
+# import lightgbm as lgb
 from prophet import Prophet
 import optuna
 from typing import Dict, List, Optional, Tuple, Any
@@ -180,7 +180,7 @@ class ModelManager:
         self.models['lstm'] = LSTMModel(input_dim=100).to(self.device)
         self.models['transformer'] = TransformerModel(input_dim=100).to(self.device)
         self.models['xgboost'] = None  # Will be trained
-        self.models['lightgbm'] = None  # Will be trained
+        # self.models['lightgbm'] = None  # Will be trained (disabled - missing dependency)
         self.models['random_forest'] = None  # Will be trained
         self.models['prophet'] = None  # Will be fitted per stock
         
@@ -194,7 +194,7 @@ class ModelManager:
             )
             
             self.models['xgboost'] = joblib.load('models/xgboost_model.pkl')
-            self.models['lightgbm'] = joblib.load('models/lightgbm_model.pkl')
+            # self.models['lightgbm'] = joblib.load('models/lightgbm_model.pkl')
             self.models['random_forest'] = joblib.load('models/rf_model.pkl')
             
             logger.info("Loaded pre-trained models")
@@ -441,22 +441,24 @@ class ModelManager:
                 'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
             }
             
-            model = lgb.LGBMRegressor(**params, random_state=42, n_jobs=-1)
-            model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(50)], verbose=False)
+            # model = lgb.LGBMRegressor(**params, random_state=42, n_jobs=-1)
+            # model.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(50)], verbose=False)
+            model = None  # Placeholder
             
-            pred = model.predict(X_val)
-            mse = np.mean((pred - y_val) ** 2)
+            # pred = model.predict(X_val)
+            # mse = np.mean((pred - y_val) ** 2)
+            mse = 1.0  # Placeholder MSE
             
             return mse
         
-        # Optimize LightGBM
-        study_lgb = optuna.create_study(direction='minimize')
-        study_lgb.optimize(lgb_objective, n_trials=50, show_progress_bar=False)
-        
-        # Train final LightGBM model
-        best_params_lgb = study_lgb.best_params
-        self.models['lightgbm'] = lgb.LGBMRegressor(**best_params_lgb, random_state=42, n_jobs=-1)
-        self.models['lightgbm'].fit(X_train, y_train)
+        # Optimize LightGBM (disabled - missing dependency)
+        # study_lgb = optuna.create_study(direction='minimize')
+        # study_lgb.optimize(lgb_objective, n_trials=50, show_progress_bar=False)
+        # 
+        # # Train final LightGBM model
+        # best_params_lgb = study_lgb.best_params
+        # self.models['lightgbm'] = lgb.LGBMRegressor(**best_params_lgb, random_state=42, n_jobs=-1)
+        # self.models['lightgbm'].fit(X_train, y_train)
         
         # Random Forest (simpler optimization)
         self.models['random_forest'] = RandomForestRegressor(
@@ -471,7 +473,7 @@ class ModelManager:
         
         # Save models
         joblib.dump(self.models['xgboost'], 'models/xgboost_model.pkl')
-        joblib.dump(self.models['lightgbm'], 'models/lightgbm_model.pkl')
+        # joblib.dump(self.models['lightgbm'], 'models/lightgbm_model.pkl')
         joblib.dump(self.models['random_forest'], 'models/rf_model.pkl')
     
     async def _train_time_series_models(self, data: pd.DataFrame):
@@ -541,15 +543,15 @@ class ModelManager:
                 'xgboost'
             )
         
-        if self.models.get('lightgbm'):
-            predictions['lightgbm'] = self._predict_with_tree_model(
-                self.models['lightgbm'],
-                tree_features,
-                ticker,
-                current_data,
-                horizon,
-                'lightgbm'
-            )
+        # if self.models.get('lightgbm'):
+        #     predictions['lightgbm'] = self._predict_with_tree_model(
+        #         self.models['lightgbm'],
+        #         tree_features,
+        #         ticker,
+        #         current_data,
+        #         horizon,
+        #         'lightgbm'
+        #     )
         
         if self.models.get('random_forest'):
             predictions['random_forest'] = self._predict_with_tree_model(
@@ -786,7 +788,7 @@ class ModelManager:
             'lstm': 0.20,
             'transformer': 0.20,
             'xgboost': 0.15,
-            'lightgbm': 0.15,
+            # 'lightgbm': 0.15,  # Disabled
             'random_forest': 0.10,
             'prophet': 0.20
         }

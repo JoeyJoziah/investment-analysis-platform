@@ -1,0 +1,39 @@
+{
+  "installation_id": "prod_1755540922",
+  "environment": "prod",
+  "start_time": "2025-08-18T14:15:22.230232",
+  "end_time": "2025-08-18T14:15:23.986751",
+  "duration_seconds": 1.756519,
+  "system_info": {
+    "platform": "Windows-11-10.0.26100-SP0",
+    "python_version": "3.13.5",
+    "architecture": "AMD64",
+    "processor": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel"
+  },
+  "phases": [
+    {
+      "timestamp": "2025-08-18T14:15:23.718947",
+      "phase": "system_dependencies",
+      "message": "Installing system dependencies...",
+      "success": true,
+      "environment": "prod"
+    },
+    {
+      "timestamp": "2025-08-18T14:15:23.947350",
+      "phase": "system_dependencies",
+      "message": "System dependencies installation failed",
+      "success": false,
+      "environment": "prod"
+    }
+  ],
+  "configuration": {
+    "verbose": true,
+    "dry_run": false,
+    "force": false,
+    "max_workers": 4,
+    "timeout": 300,
+    "no_binary": false,
+    "verify_hashes": false
+  },
+  "success": false
+}

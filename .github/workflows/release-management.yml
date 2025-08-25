@@ -1,0 +1,600 @@
+name: Release Management & Versioning
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+        - prerelease
+      pre_release:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Dry run (no actual release)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # Cost optimization
+  SMALL_RUNNER: ubuntu-latest
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Generate release version and validate
+  prepare-release:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for changelog generation
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install version management tools
+      run: |
+        pip install --upgrade pip
+        pip install semantic-version gitpython
+
+    - name: Determine version
+      id: version
+      run: |
+        python << 'EOF'
+        import git
+        import semantic_version
+        import re
+        import os
+        
+        def get_latest_version_tag():
+            """Get the latest version tag from git"""
+            try:
+                repo = git.Repo('.')
+                tags = [tag for tag in repo.tags if re.match(r'^v\d+\.\d+\.\d+', tag.name)]
+                if not tags:
+                    return "v0.0.0"
+                
+                # Sort tags by version
+                version_tags = []
+                for tag in tags:
+                    try:
+                        version = semantic_version.Version(tag.name[1:])  # Remove 'v' prefix
+                        version_tags.append((version, tag.name))
+                    except:
+                        continue
+                
+                if version_tags:
+                    version_tags.sort(key=lambda x: x[0], reverse=True)
+                    return version_tags[0][1]
+                
+                return "v0.0.0"
+                
+            except Exception as e:
+                print(f"Error getting version: {e}")
+                return "v0.0.0"
+        
+        def bump_version(current_version, release_type):
+            """Bump version based on release type"""
+            try:
+                # Remove 'v' prefix if present
+                version_str = current_version[1:] if current_version.startswith('v') else current_version
+                version = semantic_version.Version(version_str)
+                
+                if release_type == 'major':
+                    new_version = version.next_major()
+                elif release_type == 'minor':
+                    new_version = version.next_minor()
+                elif release_type == 'patch':
+                    new_version = version.next_patch()
+                elif release_type == 'prerelease':
+                    if version.prerelease:
+                        # Increment prerelease
+                        new_version = version.next_prerelease()
+                    else:
+                        # Create first prerelease
+                        new_version = version.next_minor()
+                        new_version = semantic_version.Version(f"{new_version.major}.{new_version.minor}.{new_version.micro}-rc.1")
+                else:
+                    new_version = version.next_minor()
+                
+                return f"v{new_version}"
+                
+            except Exception as e:
+                print(f"Error bumping version: {e}")
+                return "v1.0.0"
+        
+        # Determine version based on trigger
+        if "${{ github.event_name }}" == "push":
+            # Tag push - use the tag
+            version = "${{ github.ref_name }}"
+            tag_name = version
+        else:
+            # Manual trigger - generate new version
+            current_version = get_latest_version_tag()
+            release_type = "${{ github.event.inputs.release_type }}"
+            version = bump_version(current_version, release_type)
+            tag_name = version
+        
+        # Determine if prerelease
+        is_prerelease = "true" if ("${{ github.event.inputs.pre_release }}" == "true" or "-rc" in version or "-alpha" in version or "-beta" in version) else "false"
+        
+        print(f"version={version[1:] if version.startswith('v') else version}")
+        print(f"tag_name={tag_name}")
+        print(f"is_prerelease={is_prerelease}")
+        
+        print(f"Generated version: {version}")
+        print(f"Is prerelease: {is_prerelease}")
+        EOF
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        python << 'EOF'
+        import git
+        import re
+        from datetime import datetime
+        
+        def generate_changelog():
+            try:
+                repo = git.Repo('.')
+                
+                # Get latest tag
+                tags = list(repo.tags)
+                if tags:
+                    latest_tag = max(tags, key=lambda t: t.commit.committed_datetime)
+                    commits = list(repo.iter_commits(f'{latest_tag}..HEAD'))
+                else:
+                    commits = list(repo.iter_commits('HEAD', max_count=20))
+                
+                changelog_lines = []
+                changelog_lines.append(f"## Release Notes - {datetime.now().strftime('%Y-%m-%d')}")
+                changelog_lines.append("")
+                
+                # Categorize commits
+                features = []
+                fixes = []
+                others = []
+                
+                for commit in commits:
+                    message = commit.message.strip()
+                    if message.startswith(('feat:', 'feature:')):
+                        features.append(f"- {message}")
+                    elif message.startswith(('fix:', 'bugfix:')):
+                        fixes.append(f"- {message}")
+                    elif message.startswith(('docs:', 'test:', 'refactor:', 'style:', 'perf:')):
+                        others.append(f"- {message}")
+                    elif not message.startswith('Merge'):
+                        others.append(f"- {message}")
+                
+                if features:
+                    changelog_lines.append("### New Features")
+                    changelog_lines.extend(features)
+                    changelog_lines.append("")
+                
+                if fixes:
+                    changelog_lines.append("### Bug Fixes")
+                    changelog_lines.extend(fixes)
+                    changelog_lines.append("")
+                
+                if others:
+                    changelog_lines.append("### Other Changes")
+                    changelog_lines.extend(others[:10])  # Limit to 10 items
+                    changelog_lines.append("")
+                
+                changelog = "\n".join(changelog_lines)
+                
+                # Write to file for artifact
+                with open("CHANGELOG.md", "w") as f:
+                    f.write(changelog)
+                
+                # Output for GitHub Actions (escape newlines)
+                changelog_escaped = changelog.replace('\n', '\\n').replace('\r', '\\r')
+                print(f"changelog={changelog_escaped}")
+                
+                return changelog
+                
+            except Exception as e:
+                print(f"Error generating changelog: {e}")
+                simple_changelog = f"## Release Notes - {datetime.now().strftime('%Y-%m-%d')}\\n\\nAutomated release."
+                print(f"changelog={simple_changelog}")
+                return simple_changelog
+        
+        generate_changelog()
+        EOF
+
+    - name: Upload changelog
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-changelog
+        path: CHANGELOG.md
+
+  # Pre-release validation (lightweight tests)
+  pre-release-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [prepare-release]
+    if: github.event.inputs.dry_run != 'true'
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-release-${{ hashFiles('**/requirements*.txt') }}
+
+    - name: Install dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run critical tests only
+      run: |
+        pytest backend/tests/test_comprehensive_units.py \
+          -m "not slow and not external_api" \
+          --tb=short \
+          -x \
+          --maxfail=3
+      env:
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
+        REDIS_URL: redis://localhost:6379/0
+        JWT_SECRET_KEY: test-secret-key
+
+    - name: Validate configuration files
+      run: |
+        python -c "
+        import json
+        import yaml
+        import os
+        
+        # Validate docker-compose files
+        for compose_file in ['docker-compose.yml', 'docker-compose.prod.yml']:
+            if os.path.exists(compose_file):
+                with open(compose_file) as f:
+                    yaml.safe_load(f)
+                print(f'✅ {compose_file} is valid')
+        
+        # Validate package.json
+        if os.path.exists('frontend/web/package.json'):
+            with open('frontend/web/package.json') as f:
+                json.load(f)
+            print('✅ package.json is valid')
+        
+        print('All configuration files validated')
+        "
+
+  # Build release artifacts
+  build-release-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [prepare-release, pre-release-validation]
+    if: github.event.inputs.dry_run != 'true'
+    outputs:
+      backend-image: ${{ steps.build-images.outputs.backend-image }}
+      frontend-image: ${{ steps.build-images.outputs.frontend-image }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push release images
+      id: build-images
+      run: |
+        VERSION="${{ needs.prepare-release.outputs.version }}"
+        TAG_NAME="${{ needs.prepare-release.outputs.tag_name }}"
+        
+        # Build backend image
+        BACKEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:${VERSION}"
+        docker buildx build \
+          --platform linux/amd64 \
+          --file Dockerfile.backend \
+          --tag "$BACKEND_IMAGE" \
+          --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:latest" \
+          --cache-from type=gha,scope=backend-release \
+          --cache-to type=gha,mode=max,scope=backend-release \
+          --push \
+          .
+        
+        # Build frontend image
+        FRONTEND_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${VERSION}"
+        docker buildx build \
+          --platform linux/amd64 \
+          --file Dockerfile.frontend \
+          --tag "$FRONTEND_IMAGE" \
+          --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest" \
+          --cache-from type=gha,scope=frontend-release \
+          --cache-to type=gha,mode=max,scope=frontend-release \
+          --build-arg REACT_APP_VERSION="${VERSION}" \
+          --push \
+          .
+        
+        echo "backend-image=$BACKEND_IMAGE" >> $GITHUB_OUTPUT
+        echo "frontend-image=$FRONTEND_IMAGE" >> $GITHUB_OUTPUT
+
+    - name: Generate build manifest
+      run: |
+        cat << EOF > build-manifest.json
+        {
+          "version": "${{ needs.prepare-release.outputs.version }}",
+          "tag_name": "${{ needs.prepare-release.outputs.tag_name }}",
+          "is_prerelease": ${{ needs.prepare-release.outputs.is_prerelease }},
+          "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "commit_sha": "${{ github.sha }}",
+          "backend_image": "${{ steps.build-images.outputs.backend-image }}",
+          "frontend_image": "${{ steps.build-images.outputs.frontend-image }}",
+          "platform": "linux/amd64"
+        }
+        EOF
+
+    - name: Upload build manifest
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-manifest
+        path: build-manifest.json
+
+  # Create GitHub release
+  create-github-release:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 10
+    needs: [prepare-release, build-release-artifacts]
+    if: github.event.inputs.dry_run != 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download changelog
+      uses: actions/download-artifact@v4
+      with:
+        name: release-changelog
+
+    - name: Download build manifest
+      uses: actions/download-artifact@v4
+      with:
+        name: build-manifest
+
+    - name: Create Git tag (if manual release)
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "${{ needs.prepare-release.outputs.tag_name }}" -m "Release ${{ needs.prepare-release.outputs.tag_name }}"
+        git push origin "${{ needs.prepare-release.outputs.tag_name }}"
+
+    - name: Create GitHub Release
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read changelog
+          let changelog = "Automated release.";
+          try {
+            changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          } catch (e) {
+            console.log("Could not read changelog, using default");
+          }
+          
+          // Read build manifest
+          let buildInfo = "";
+          try {
+            const manifest = JSON.parse(fs.readFileSync('build-manifest.json', 'utf8'));
+            buildInfo = `
+            
+            ## Build Information
+            - **Version**: ${manifest.version}
+            - **Build Date**: ${manifest.build_date}
+            - **Commit**: ${manifest.commit_sha}
+            - **Backend Image**: \`${manifest.backend_image}\`
+            - **Frontend Image**: \`${manifest.frontend_image}\`
+            `;
+          } catch (e) {
+            console.log("Could not read build manifest");
+          }
+          
+          const releaseBody = changelog + buildInfo + `
+          
+          ## Installation
+          
+          ### Docker Images
+          \`\`\`bash
+          docker pull ${{ needs.build-release-artifacts.outputs.backend-image }}
+          docker pull ${{ needs.build-release-artifacts.outputs.frontend-image }}
+          \`\`\`
+          
+          ### Source Code
+          Download the source code archive from the assets below.
+          
+          ---
+          
+          **Generated automatically by GitHub Actions**
+          `;
+          
+          const { data: release } = await github.rest.repos.createRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            tag_name: "${{ needs.prepare-release.outputs.tag_name }}",
+            name: "Release ${{ needs.prepare-release.outputs.tag_name }}",
+            body: releaseBody,
+            draft: false,
+            prerelease: ${{ needs.prepare-release.outputs.is_prerelease }},
+            generate_release_notes: true
+          });
+          
+          console.log(`Created release: ${release.html_url}`);
+          
+          // Store release URL for notifications
+          require('fs').writeFileSync('release-url.txt', release.html_url);
+
+    - name: Upload release URL
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-url
+        path: release-url.txt
+
+  # Security scan of release artifacts
+  security-scan-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-release-artifacts]
+    if: github.event.inputs.dry_run != 'true'
+    
+    steps:
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ needs.build-release-artifacts.outputs.backend-image }}
+        format: 'json'
+        output: 'backend-security-scan.json'
+
+    - name: Check for critical vulnerabilities
+      run: |
+        CRITICAL_VULNS=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' backend-security-scan.json)
+        echo "Critical vulnerabilities found: $CRITICAL_VULNS"
+        
+        if [ "$CRITICAL_VULNS" -gt 0 ]; then
+          echo "❌ Critical vulnerabilities found in release artifacts!"
+          echo "Release should be reviewed before deployment to production."
+          # Don't fail the release, just warn
+        else
+          echo "✅ No critical vulnerabilities found in release artifacts."
+        fi
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: release-security-scan
+        path: backend-security-scan.json
+
+  # Send notifications
+  notify-release:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 5
+    needs: [prepare-release, create-github-release, security-scan-release]
+    if: always() && github.event.inputs.dry_run != 'true'
+    
+    steps:
+    - name: Download release URL
+      uses: actions/download-artifact@v4
+      with:
+        name: release-url
+
+    - name: Send Slack notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ needs.create-github-release.result }}' === 'success' ? 'good' : 'danger',
+              title: '🚀 New Release Available',
+              fields: [{
+                title: 'Version',
+                value: '${{ needs.prepare-release.outputs.tag_name }}',
+                short: true
+              }, {
+                title: 'Type',
+                value: '${{ needs.prepare-release.outputs.is_prerelease }}' === 'true' ? 'Pre-release' : 'Release',
+                short: true
+              }, {
+                title: 'Repository',
+                value: '${{ github.repository }}',
+                short: true
+              }, {
+                title: 'Status',
+                value: '${{ needs.create-github-release.result }}',
+                short: true
+              }],
+              actions: [{
+                type: 'button',
+                text: 'View Release',
+                url: '$(cat release-url.txt 2>/dev/null || echo "https://github.com/${{ github.repository }}/releases")'
+              }],
+              footer: 'Release Management',
+              ts: Math.floor(Date.now() / 1000)
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create release summary
+      run: |
+        echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Version**: ${{ needs.prepare-release.outputs.tag_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Type**: ${{ needs.prepare-release.outputs.is_prerelease == 'true' && 'Pre-release' || 'Release' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Date**: $(date -u +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Build Status" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Validation | ${{ needs.pre-release-validation.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Build Artifacts | ${{ needs.build-release-artifacts.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| GitHub Release | ${{ needs.create-github-release.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security Scan | ${{ needs.security-scan-release.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend: \`${{ needs.build-release-artifacts.outputs.backend-image }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend: \`${{ needs.build-release-artifacts.outputs.frontend-image }}\`" >> $GITHUB_STEP_SUMMARY

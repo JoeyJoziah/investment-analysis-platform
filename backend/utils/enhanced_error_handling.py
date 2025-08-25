@@ -18,9 +18,10 @@ import logging
 import hashlib
 import re
 from pathlib import Path
+from functools import wraps
 
 from .exceptions import *
-from .structured_logging import get_correlation_logger
+from .structured_logging import StructuredLogger, get_correlation_id
 
 logger = logging.getLogger(__name__)
 
@@ -716,7 +717,7 @@ class ErrorHandlingManager:
             self.error_history.append(error_context)
         
         # Log with structured logging
-        correlation_logger = get_correlation_logger(error_context.correlation_id)
+        correlation_logger = StructuredLogger(f"{__name__}.{error_context.correlation_id}")
         log_data = {
             'error_id': error_context.error_id,
             'severity': error_context.severity.name,
@@ -832,6 +833,50 @@ class ErrorHandlingManager:
 
 # Global error handling manager
 error_handler = ErrorHandlingManager()
+
+
+# Utility functions for API error handling
+async def handle_api_error(error: Exception, operation: str, context: Dict[str, Any] = None):
+    """
+    Handle API errors with comprehensive logging and analysis
+    
+    Args:
+        error: The exception that occurred
+        operation: Description of the operation that failed
+        context: Additional context information
+    """
+    if context is None:
+        context = {}
+    
+    context.update({
+        'operation': operation,
+        'service': 'api'
+    })
+    
+    await error_handler.handle_error(error, context, should_raise=False)
+
+
+def validate_stock_symbol(symbol: str) -> bool:
+    """
+    Validate stock symbol format
+    
+    Args:
+        symbol: Stock symbol to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not symbol or not isinstance(symbol, str):
+        return False
+    
+    # Basic validation: alphanumeric, 1-5 characters, uppercase
+    symbol = symbol.strip().upper()
+    return (
+        len(symbol) >= 1 and 
+        len(symbol) <= 5 and 
+        symbol.isalnum() and 
+        symbol.isalpha()  # Only letters for basic validation
+    )
 
 
 # Decorator for automatic error handling

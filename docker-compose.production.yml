@@ -1,0 +1,410 @@
+# Production-optimized Docker Compose Configuration
+# Investment Analysis Platform - Cost-Optimized Production Stack ($50/month target)
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d
+
+version: '3.8'
+
+# Common configuration templates
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+    compress: "true"
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 40s
+
+x-resource-limits: &resource-limits-small
+  limits:
+    cpus: '0.5'
+    memory: 512M
+  reservations:
+    cpus: '0.1'
+    memory: 128M
+
+x-resource-limits-medium: &resource-limits-medium
+  limits:
+    cpus: '1'
+    memory: 1G
+  reservations:
+    cpus: '0.25'
+    memory: 256M
+
+x-resource-limits-large: &resource-limits-large
+  limits:
+    cpus: '2'
+    memory: 2G
+  reservations:
+    cpus: '0.5'
+    memory: 512M
+
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+services:
+  # PostgreSQL Database - Optimized for cost efficiency
+  postgres:
+    image: timescale/timescaledb:2.12.1-pg15
+    container_name: investment_db_prod
+    <<: *restart-policy
+    environment:
+      POSTGRES_DB: investment_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      TIMESCALEDB_TELEMETRY: "off"
+      # Performance tuning for cost optimization
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infrastructure/docker/postgres/postgresql.prod.conf:/etc/postgresql/postgresql.conf:ro
+    command: 
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-large
+    networks:
+      - investment_network
+
+  # Redis Cache - Memory optimized
+  redis:
+    image: redis:7.2-alpine
+    container_name: investment_cache_prod
+    <<: *restart-policy
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory ${REDIS_MAX_MEMORY:-512mb}
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+      --tcp-backlog 511
+      --tcp-keepalive 60
+      --timeout 300
+      --maxclients 1000
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data_prod:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-medium
+    networks:
+      - investment_network
+
+  # Backend API - Production optimized
+  backend:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      args:
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
+      target: runtime
+    image: investment-backend:${VERSION:-latest}
+    container_name: investment_api_prod
+    <<: *restart-policy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKERS=${BACKEND_WORKERS:-4}
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - RATE_LIMIT_ENABLED=true
+      - CACHE_ENABLED=true
+      - METRICS_ENABLED=true
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models:ro
+      - ./data:/app/data
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+    logging: *default-logging
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
+      <<: *resource-limits-large
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        monitor: 60s
+    networks:
+      - investment_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${API_DOMAIN:-localhost}`) && PathPrefix(`/api`)"
+
+  # Frontend Web - CDN-ready optimized build
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: ../../infrastructure/docker/frontend/Dockerfile.optimized
+      args:
+        - REACT_APP_API_URL=${API_URL:-https://api.yourdomain.com}
+        - REACT_APP_WS_URL=${WS_URL:-wss://api.yourdomain.com/ws}
+        - REACT_APP_VERSION=${VERSION:-latest}
+        - REACT_APP_ENVIRONMENT=production
+    image: investment-frontend:${VERSION:-latest}
+    container_name: investment_web_prod
+    <<: *restart-policy
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+    logging: *default-logging
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${FRONTEND_DOMAIN:-localhost}`)"
+
+  # Celery Worker - Background tasks
+  celery_worker:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      target: runtime
+    image: investment-backend:${VERSION:-latest}
+    container_name: investment_worker_prod
+    <<: *restart-policy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
+    volumes:
+      - ./logs:/app/logs
+      - ./models:/app/models:ro
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A backend.tasks.celery_app worker 
+             --loglevel=info 
+             --concurrency=${CELERY_CONCURRENCY:-2}
+             --max-tasks-per-child=1000
+             --time-limit=1800
+             --soft-time-limit=1500"
+    healthcheck:
+      test: ["CMD", "celery", "-A", "backend.tasks.celery_app", "inspect", "ping"]
+      <<: *healthcheck-defaults
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-medium
+    networks:
+      - investment_network
+
+  # Celery Beat Scheduler - Reduced frequency for cost optimization
+  celery_beat:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      target: runtime
+    image: investment-backend:${VERSION:-latest}
+    container_name: investment_scheduler_prod
+    <<: *restart-policy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A backend.tasks.celery_app beat 
+      --loglevel=info 
+      --schedule=/app/data/celerybeat-schedule
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+
+  # Nginx Load Balancer - Production ready
+  nginx:
+    image: nginx:alpine
+    container_name: investment_nginx_prod
+    <<: *restart-policy
+    volumes:
+      - ./infrastructure/docker/frontend/nginx.optimized.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/docker/frontend/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./static:/var/www/static:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    depends_on:
+      - backend
+      - frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/nginx_status"]
+      <<: *healthcheck-defaults
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+
+  # Monitoring Stack - Lightweight for cost optimization
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: investment_prometheus_prod
+    <<: *restart-policy
+    volumes:
+      - ./infrastructure/monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data_prod:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=1GB'
+      - '--web.external-url=http://${PROMETHEUS_DOMAIN:-localhost:9090}'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-medium
+    networks:
+      - investment_network
+
+  # Grafana - Lightweight configuration
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: investment_grafana_prod
+    <<: *restart-policy
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+    volumes:
+      - grafana_data_prod:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      <<: *healthcheck-defaults
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+
+  # Cost Monitoring Service
+  cost_monitor:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      target: runtime
+    image: investment-backend:${VERSION:-latest}
+    container_name: investment_cost_monitor
+    <<: *restart-policy
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - COST_BUDGET_MONTHLY=50
+      - ALERT_THRESHOLD=0.8
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    command: python -m backend.monitoring.cost_monitor
+    deploy:
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+
+volumes:
+  postgres_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/postgres
+  redis_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/redis
+  prometheus_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/prometheus
+  grafana_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/grafana
+
+networks:
+  investment_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

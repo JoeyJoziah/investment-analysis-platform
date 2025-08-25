@@ -1,0 +1,26 @@
+# ETL Pipeline Requirements
+# Data extraction and APIs
+yfinance>=0.2.28
+aiohttp>=3.9.0
+requests>=2.31.0
+tenacity>=8.2.0
+
+# Data processing
+pandas>=2.1.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Technical analysis
+TA-Lib==0.4.28  # Requires system libraries: sudo apt-get install libta-lib0-dev
+pandas-ta>=0.3.14b0  # Alternative to TA-Lib that doesn't require C libraries
+
+# Database
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+
+# Async support
+asyncio-pool>=0.6.0
+
+# Data validation
+pydantic>=2.0.0
+jsonschema>=4.19.0

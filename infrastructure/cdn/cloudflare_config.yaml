@@ -1,0 +1,268 @@
+# Cloudflare CDN Configuration for Investment Analysis Platform
+# Cost-optimized CDN setup with caching rules and performance optimization
+# Designed to work within free tier limits while maximizing performance
+
+# Cloudflare Zone Configuration
+zone:
+  name: "yourdomain.com"  # Replace with your actual domain
+  plan: "free"            # Using free tier for cost optimization
+  
+# DNS Records for CDN optimization
+dns_records:
+  - name: "api"
+    type: "CNAME"
+    content: "your-server-ip.com"
+    proxied: true           # Enable Cloudflare proxy for caching
+    ttl: 1                  # Automatic TTL
+    
+  - name: "www"
+    type: "CNAME"
+    content: "your-server-ip.com"
+    proxied: true
+    ttl: 1
+    
+  - name: "static"
+    type: "CNAME"
+    content: "your-server-ip.com"
+    proxied: true           # Dedicated subdomain for static assets
+    ttl: 1
+
+# Page Rules for caching optimization (3 free rules available)
+page_rules:
+  # Rule 1: Cache static assets aggressively
+  - url: "static.yourdomain.com/*"
+    actions:
+      cache_level: "cache_everything"
+      edge_cache_ttl: 31536000      # 1 year
+      browser_cache_ttl: 31536000   # 1 year
+      always_online: "on"
+      
+  # Rule 2: API caching with short TTL
+  - url: "api.yourdomain.com/api/stocks/prices*"
+    actions:
+      cache_level: "cache_everything"
+      edge_cache_ttl: 300           # 5 minutes
+      browser_cache_ttl: 60         # 1 minute
+      
+  # Rule 3: Main site caching
+  - url: "yourdomain.com/*"
+    actions:
+      cache_level: "standard"
+      edge_cache_ttl: 14400         # 4 hours
+      browser_cache_ttl: 1800       # 30 minutes
+      always_online: "on"
+      security_level: "medium"
+
+# Caching rules for different content types
+cache_rules:
+  static_assets:
+    extensions: [".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot"]
+    edge_ttl: 31536000    # 1 year
+    browser_ttl: 31536000 # 1 year
+    
+  api_responses:
+    paths: ["/api/stocks/prices", "/api/market/overview"]
+    edge_ttl: 300         # 5 minutes
+    browser_ttl: 60       # 1 minute
+    vary_header: true     # Respect Vary header
+    
+  html_content:
+    extensions: [".html"]
+    edge_ttl: 14400       # 4 hours
+    browser_ttl: 1800     # 30 minutes
+    
+  dynamic_content:
+    paths: ["/api/recommendations", "/api/analysis", "/api/portfolio"]
+    edge_ttl: 0           # No caching
+    browser_ttl: 0        # No browser caching
+
+# Performance optimization settings
+performance:
+  # Free tier optimizations
+  minification:
+    css: true
+    html: true
+    js: true
+    
+  compression:
+    gzip: true
+    brotli: true          # Available on free tier
+    
+  # Image optimization (requires Pro plan - disabled for cost optimization)
+  image_optimization:
+    enabled: false        # Would require paid plan
+    
+  # Rocket Loader (free)
+  rocket_loader: true     # Async JavaScript loading
+  
+  # Early Hints (free)
+  early_hints: true       # HTTP/2 Server Push alternative
+
+# Security settings
+security:
+  ssl:
+    mode: "flexible"      # Free SSL
+    tls_version: "1.2"    # Minimum TLS version
+    
+  waf:
+    enabled: false        # Requires paid plan
+    
+  rate_limiting:
+    enabled: false        # Requires paid plan - handle at application level
+    
+  bot_management:
+    enabled: false        # Requires paid plan
+    
+  # Free security features
+  always_use_https: true
+  automatic_https_rewrites: true
+  opportunistic_encryption: true
+
+# Analytics and monitoring
+analytics:
+  # Free tier analytics
+  web_analytics: true
+  
+  # Custom analytics (requires paid plan)
+  custom_events: false
+  
+  # Real User Monitoring (requires paid plan)
+  rum: false
+
+# Workers configuration (for advanced caching logic)
+workers:
+  enabled: false          # Start without workers to stay in free tier
+  
+  # Example worker script for advanced caching (commented out)
+  # script: |
+  #   addEventListener('fetch', event => {
+  #     event.respondWith(handleRequest(event.request))
+  #   })
+  #   
+  #   async function handleRequest(request) {
+  #     const url = new URL(request.url)
+  #     
+  #     // Custom caching logic for API endpoints
+  #     if (url.pathname.startsWith('/api/stocks/prices')) {
+  #       const cacheKey = new Request(url.toString(), request)
+  #       const cache = caches.default
+  #       let response = await cache.match(cacheKey)
+  #       
+  #       if (!response) {
+  #         response = await fetch(request)
+  #         const headers = new Headers(response.headers)
+  #         headers.set('Cache-Control', 'public, max-age=300')
+  #         
+  #         response = new Response(response.body, {
+  #           status: response.status,
+  #           statusText: response.statusText,
+  #           headers: headers
+  #         })
+  #         
+  #         event.waitUntil(cache.put(cacheKey, response.clone()))
+  #       }
+  #       
+  #       return response
+  #     }
+  #     
+  #     return fetch(request)
+  #   }
+
+# Cost monitoring and alerts
+cost_management:
+  # Monitor usage to stay within free tier
+  bandwidth_alert_threshold: 80  # Alert at 80% of free tier limit (100GB)
+  request_alert_threshold: 80    # Alert at 80% of free tier limit (1M requests)
+  
+  # Automatic mitigation strategies
+  auto_throttling:
+    enabled: true
+    threshold: 90           # Start throttling at 90% of limits
+    methods:
+      - reduce_cache_ttl    # Reduce caching to decrease requests
+      - enable_rate_limiting # Enable application-level rate limiting
+
+# Deployment automation
+automation:
+  # Terraform configuration for infrastructure as code
+  terraform:
+    enabled: true
+    
+  # API configuration for automated updates
+  api_config:
+    base_url: "https://api.cloudflare.com/client/v4"
+    authentication: "token"  # Use API token for authentication
+    
+# Monitoring and alerting
+monitoring:
+  health_checks:
+    - name: "main_site"
+      url: "https://yourdomain.com/health"
+      interval: 60          # Check every minute
+      
+    - name: "api_health"
+      url: "https://api.yourdomain.com/api/health"
+      interval: 60
+      
+  notifications:
+    email: "admin@yourdomain.com"
+    webhook: "https://yourdomain.com/webhook/cloudflare-alerts"
+
+# Custom error pages
+error_pages:
+  404:
+    content_type: "text/html"
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Page Not Found - Investment Analysis</title>
+          <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+              .error-code { font-size: 72px; color: #666; }
+              .error-message { font-size: 24px; margin: 20px 0; }
+          </style>
+      </head>
+      <body>
+          <div class="error-code">404</div>
+          <div class="error-message">Investment data not found</div>
+          <p><a href="/">Return to Investment Dashboard</a></p>
+      </body>
+      </html>
+      
+  5xx:
+    content_type: "text/html"
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+          <title>Service Temporarily Unavailable - Investment Analysis</title>
+          <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+              .error-code { font-size: 72px; color: #666; }
+              .error-message { font-size: 24px; margin: 20px 0; }
+          </style>
+      </head>
+      <body>
+          <div class="error-code">Service Unavailable</div>
+          <div class="error-message">Our investment analysis service is temporarily unavailable</div>
+          <p>Please try again in a few minutes</p>
+      </body>
+      </html>
+
+# Content delivery optimization
+content_delivery:
+  # Purge cache configuration
+  purge_strategy:
+    deployment: "purge_everything"  # Clear cache on deployment
+    api_updates: "purge_by_tag"     # Selective purging for API updates
+    
+  # Cache warming (simulate popular requests after cache purge)
+  cache_warming:
+    enabled: true
+    urls:
+      - "https://yourdomain.com/"
+      - "https://api.yourdomain.com/api/stocks/prices?symbols=AAPL,GOOGL,MSFT"
+      - "https://api.yourdomain.com/api/market/overview"
+      - "https://static.yourdomain.com/css/main.css"
+      - "https://static.yourdomain.com/js/main.js"

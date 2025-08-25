@@ -1,0 +1,66 @@
+# Investment Analysis Platform - Constraints File
+# Pin dependency versions for reproducible builds and security
+# Used to prevent dependency conflicts and ensure compatibility
+
+# ============================================================================
+# CORE FRAMEWORK CONSTRAINTS
+# ============================================================================
+fastapi==0.111.0
+uvicorn==0.30.1
+pydantic==2.8.2
+pydantic-settings==2.4.0
+
+# ============================================================================
+# CRITICAL SECURITY CONSTRAINTS
+# ============================================================================
+# Pin cryptography to avoid security vulnerabilities
+cryptography>=43.0.0
+# Pin PyJWT for security
+PyJWT>=2.9.0
+# Pin requests for security patches
+requests>=2.32.3
+
+# ============================================================================
+# ML FRAMEWORK CONSTRAINTS
+# ============================================================================
+# Pin torch to avoid breaking changes
+torch==2.4.0
+# Pin transformers for model compatibility
+transformers==4.43.3
+# Pin scikit-learn for reproducible models
+scikit-learn==1.5.1
+
+# ============================================================================
+# DATA PROCESSING CONSTRAINTS
+# ============================================================================
+# Pin pandas for data compatibility
+pandas==2.2.2
+# Pin numpy for numerical stability
+numpy==1.26.4
+# Pin sqlalchemy for database compatibility
+sqlalchemy==2.0.31
+
+# ============================================================================
+# SYSTEM INTEGRATION CONSTRAINTS
+# ============================================================================
+# Pin Apache Airflow for workflow stability
+apache-airflow==2.9.3
+# Pin Kafka clients for message compatibility
+confluent-kafka==2.5.0
+aiokafka==0.11.0
+
+# ============================================================================
+# COMPATIBILITY CONSTRAINTS
+# ============================================================================
+# Ensure Python 3.12 compatibility
+setuptools>=65.0.0
+wheel>=0.37.0
+pip>=23.0.0
+
+# ============================================================================
+# PERFORMANCE CONSTRAINTS
+# ============================================================================
+# Pin high-performance packages
+orjson>=3.9.0
+ujson>=5.8.0
+msgpack>=1.0.5

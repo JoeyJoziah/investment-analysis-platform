@@ -1,0 +1,38 @@
+# Investment Analysis Platform - Machine Learning Dependencies
+# Heavy ML frameworks and related packages
+# Requires system dependencies: build-essential, python3-dev
+# Note: These are the largest packages and may take significant time to install
+
+-r base.txt
+
+# ============================================================================
+# MACHINE LEARNING FRAMEWORKS
+# ============================================================================
+# PyTorch ecosystem (large download ~2GB)
+torch==2.4.0
+transformers==4.43.3
+tokenizers==0.19.1
+
+# Traditional ML
+scikit-learn==1.5.1
+xgboost==2.1.1
+
+# Time series forecasting
+prophet==1.1.5
+
+# Model interpretability
+shap==0.46.0
+lime==0.2.0.1
+
+# ============================================================================
+# NLP & SENTIMENT ANALYSIS
+# ============================================================================
+nltk==3.9.1
+textblob==0.18.0
+
+# ============================================================================
+# TRADING AGENTS & LLM INTEGRATION
+# ============================================================================
+langchain-anthropic==0.1.23
+langchain-openai==0.1.23
+langgraph==0.2.16

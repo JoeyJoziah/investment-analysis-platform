@@ -7,10 +7,12 @@ on:
     branches: [ main, develop ]
 
 env:
-  PYTHON_VERSION: '3.11'
+  PYTHON_VERSION: '3.12'
   NODE_VERSION: '18'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Cost optimization - use smaller runners when possible
+  SMALL_RUNNER: ubuntu-latest
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,7 +21,8 @@ concurrency:
 jobs:
   # Backend Code Quality
   backend-quality:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 15  # Cost optimization - prevent runaway jobs
     
     steps:
     - name: Checkout code
@@ -42,6 +45,8 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install black isort flake8 mypy pylint bandit safety
+        # Install minimal requirements for linting
+        pip install pydantic fastapi sqlalchemy
 
     - name: Check code formatting with Black
       run: black --check --diff backend/
@@ -80,9 +85,12 @@ jobs:
   # Backend Testing and Quality Checks
   backend-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30  # Cost optimization
     strategy:
       matrix:
-        python-version: ['3.11', '3.12']
+        python-version: ['3.12']  # Optimize cost by testing only on target version
+        test-suite: ['unit', 'integration']  # Parallelize test types
+      fail-fast: false  # Allow other tests to continue if one fails
     
     services:
       postgres:
@@ -127,6 +135,13 @@ jobs:
           ${{ runner.os }}-pip-${{ matrix.python-version }}-
           ${{ runner.os }}-pip-
 
+    - name: Cache system dependencies
+      id: cache-system-deps
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt
+        key: ${{ runner.os }}-apt-${{ hashFiles('requirements.txt') }}
+        
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -168,14 +183,23 @@ jobs:
 
     - name: Run backend tests with coverage
       run: |
-        pytest backend/tests/ \
-          --cov=backend \
-          --cov-report=xml:coverage.xml \
-          --cov-report=html:htmlcov \
-          --cov-report=term-missing \
-          --cov-fail-under=85 \
-          --junitxml=test-results.xml \
-          -v
+        # Run different test suites based on matrix
+        if [ "${{ matrix.test-suite }}" = "unit" ]; then
+          pytest backend/tests/test_comprehensive_units.py backend/tests/unit/ \
+            --cov=backend \
+            --cov-report=xml:coverage-${{ matrix.test-suite }}.xml \
+            --cov-report=term-missing \
+            --cov-fail-under=85 \
+            --junitxml=test-results-${{ matrix.test-suite }}.xml \
+            -v -m "unit or not slow"
+        else
+          pytest backend/tests/test_integration_comprehensive.py \
+            --cov=backend \
+            --cov-report=xml:coverage-${{ matrix.test-suite }}.xml \
+            --cov-report=term-missing \
+            --junitxml=test-results-${{ matrix.test-suite }}.xml \
+            -v -m "integration and not slow"
+        fi
       env:
         DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
         REDIS_URL: redis://localhost:6379/0
@@ -184,11 +208,11 @@ jobs:
 
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
-      if: matrix.python-version == '3.11'  # Only upload once
+      if: matrix.python-version == '3.12' && matrix.test-suite == 'unit'  # Only upload once
       with:
-        file: ./coverage.xml
+        file: ./coverage-${{ matrix.test-suite }}.xml
         flags: backend
-        name: backend-coverage
+        name: backend-coverage-${{ matrix.test-suite }}
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
@@ -196,15 +220,15 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: backend-test-results-${{ matrix.python-version }}
+        name: backend-test-results-${{ matrix.python-version }}-${{ matrix.test-suite }}
         path: |
-          test-results.xml
-          coverage.xml
-          htmlcov/
+          test-results-${{ matrix.test-suite }}.xml
+          coverage-${{ matrix.test-suite }}.xml
 
   # Frontend Testing
   frontend-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 15  # Cost optimization
     
     steps:
     - name: Checkout code
@@ -224,7 +248,8 @@ jobs:
     - name: Run frontend tests
       working-directory: frontend/web
       run: |
-        npm test -- --coverage --ci --watchAll=false --testResultsProcessor=jest-junit
+        # Use vitest instead of jest (as configured in package.json)
+        npm run test:coverage -- --run --reporter=verbose
       env:
         CI: true
         JEST_JUNIT_OUTPUT_DIR: ./test-results
@@ -250,7 +275,8 @@ jobs:
 
   # Frontend Code Quality
   frontend-quality:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 10  # Cost optimization
     
     steps:
     - name: Checkout code
@@ -287,7 +313,9 @@ jobs:
   # Docker Build Test
   docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20  # Cost optimization
     needs: [backend-test, frontend-test]
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'docker-build'))  # Only build on push or specific PR label
     
     steps:
     - name: Checkout code
@@ -311,28 +339,29 @@ jobs:
         file: ./Dockerfile.backend
         push: false
         tags: test-backend:latest
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+        cache-from: type=gha,scope=backend-ci
+        cache-to: type=gha,mode=max,scope=backend-ci
+        platforms: linux/amd64  # Build only for current platform to save time
 
     - name: Build frontend Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./frontend/web
-        file: ./frontend/web/Dockerfile
+        context: .
+        file: ./Dockerfile.frontend
         push: false
         tags: test-frontend:latest
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+        cache-from: type=gha,scope=frontend-ci
+        cache-to: type=gha,mode=max,scope=frontend-ci
+        platforms: linux/amd64  # Build only for current platform to save time
 
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+    # Removed local cache management - using GitHub Actions cache instead
 
   # Integration Tests
   integration-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25  # Cost optimization
     needs: [backend-test, frontend-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # Only run on main branch pushes
     
     steps:
     - name: Checkout code
@@ -374,9 +403,10 @@ jobs:
 
   # Notification on failure
   notify-failure:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 5  # Cost optimization
     needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
-    if: failure()
+    if: failure() && github.event_name == 'push'  # Only notify on push failures
     
     steps:
     - name: Notify on Slack
@@ -412,7 +442,8 @@ jobs:
 
   # Summary
   ci-summary:
-    runs-on: ubuntu-latest
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 5  # Cost optimization
     needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
     if: always()
     

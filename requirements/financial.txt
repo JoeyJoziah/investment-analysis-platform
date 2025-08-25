@@ -1,0 +1,32 @@
+# Investment Analysis Platform - Financial Analysis Dependencies
+# Financial data providers, technical analysis, and statistical tools
+# Requires system dependencies: ta-lib, build-essential
+
+-r base.txt
+
+# ============================================================================
+# FINANCIAL DATA PROVIDERS
+# ============================================================================
+alpha-vantage==2.3.1
+finnhub-python==2.4.20
+polygon-api-client==1.14.1
+yfinance==0.2.40
+
+# ============================================================================
+# TECHNICAL ANALYSIS
+# ============================================================================
+# TA-Lib (requires system ta-lib installation)
+ta-lib==0.4.32
+pandas-ta==0.3.14b0
+
+# ============================================================================
+# STATISTICAL ANALYSIS
+# ============================================================================
+statsmodels==0.14.2
+
+# ============================================================================
+# WEB SCRAPING & DATA EXTRACTION
+# ============================================================================
+aiohttp==3.10.2
+beautifulsoup4==4.12.3
+lxml==5.2.2

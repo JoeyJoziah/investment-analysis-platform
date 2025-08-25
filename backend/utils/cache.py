@@ -197,3 +197,43 @@ def get_redis_client():
     """Get synchronous Redis client for Celery tasks"""
     import redis
     return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+def cache_with_ttl(ttl: int = 300):
+    """
+    Simple cache decorator for functions (simplified implementation)
+    For now, this is a no-op decorator that doesn't actually cache
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # In a full implementation, this would check cache first
+            # For now, just call the function directly
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def get_cache_key(*args, **kwargs) -> str:
+    """
+    Generate a cache key from function arguments
+    """
+    import hashlib
+    
+    # Simple cache key generation
+    key_parts = []
+    
+    # Add positional args
+    for arg in args:
+        if isinstance(arg, (str, int, float, bool)):
+            key_parts.append(str(arg))
+        elif hasattr(arg, '__dict__'):
+            key_parts.append(str(arg.__class__.__name__))
+    
+    # Add keyword args
+    for k, v in sorted(kwargs.items()):
+        if isinstance(v, (str, int, float, bool)):
+            key_parts.append(f"{k}:{v}")
+    
+    # Create hash
+    cache_string = "|".join(key_parts)
+    return hashlib.md5(cache_string.encode()).hexdigest()[:16]

@@ -1,0 +1,206 @@
+groups:
+  - name: investment-platform-critical
+    interval: 30s
+    rules:
+      # Service Availability
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute."
+          
+      # API Performance
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, sum(rate(api_request_duration_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "95th percentile latency is above 2 seconds for 5 minutes"
+          
+      - alert: HighAPIErrorRate
+        expr: sum(rate(api_errors_total[5m])) / sum(rate(api_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is above 5% for 5 minutes"
+          
+      # Database Issues
+      - alert: DatabaseConnectionsHigh
+        expr: db_connections_active > 150
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections"
+          description: "Database has {{ $value }} active connections (threshold: 150)"
+          
+      - alert: DatabaseDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL database is down"
+          description: "PostgreSQL database has been unreachable for more than 1 minute"
+          
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query time is above 1 second"
+          
+      # Cache Performance
+      - alert: LowCacheHitRate
+        expr: (sum(rate(cache_hits_total[5m])) / (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is below 80% for 10 minutes"
+          
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis cache has been unreachable for more than 1 minute"
+          
+      # Resource Usage
+      - alert: HighCPUUsage
+        expr: (1 - avg(irate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for 5 minutes"
+          
+      - alert: HighMemoryUsage
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 85% for 5 minutes"
+          
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is above 90% on {{ $labels.mountpoint }}"
+          
+      # Cost Management
+      - alert: BudgetExceeded
+        expr: cost_budget_usage_percent > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Monthly budget nearly exceeded"
+          description: "Current usage is {{ $value }}% of monthly budget ($50)"
+          
+      - alert: HighDailyCost
+        expr: sum(daily_cost_dollars) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High daily cost detected"
+          description: "Daily cost is ${{ $value }}, projecting above monthly budget"
+          
+      # Data Pipeline Issues
+      - alert: DataPipelineFailure
+        expr: analysis_completed_total{status="failure"} > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data pipeline failures detected"
+          description: "{{ $value }} data pipeline failures in the last minute"
+          
+      - alert: StockAnalysisStalled
+        expr: increase(stocks_analyzed_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stock analysis has stalled"
+          description: "No stocks have been analyzed in the past hour"
+          
+      # ML Model Issues
+      - alert: MLPredictionFailures
+        expr: increase(ml_predictions_total[5m]) == 0 and increase(analysis_completed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ML predictions failing"
+          description: "No ML predictions generated despite active analysis"
+          
+      # External API Issues
+      - alert: ExternalAPIFailureRate
+        expr: sum(rate(external_api_failures_total[5m])) / sum(rate(external_api_calls_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High external API failure rate"
+          description: "External API failure rate is above 10%"
+          
+      - alert: RateLimitExceeded
+        expr: increase(rate_limit_hits_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API rate limits being hit"
+          description: "Rate limits exceeded for {{ $labels.resource }}"
+
+  - name: investment-platform-business
+    interval: 60s
+    rules:
+      # Business Metrics
+      - alert: LowRecommendationGeneration
+        expr: increase(recommendations_generated_total[1h]) < 10
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low recommendation generation"
+          description: "Only {{ $value }} recommendations generated in the past hour"
+          
+      - alert: NoStockDataUpdate
+        expr: increase(stocks_analyzed_total[6h]) == 0
+        for: 6h
+        labels:
+          severity: critical
+        annotations:
+          summary: "Stock data not being updated"
+          description: "No stocks analyzed in the past 6 hours"
+          
+      - alert: MLModelAccuracyDrop
+        expr: ml_prediction_accuracy < 0.7
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ML model accuracy has dropped"
+          description: "Model {{ $labels.model }} accuracy is {{ $value }}, below 70% threshold"

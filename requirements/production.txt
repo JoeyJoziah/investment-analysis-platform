@@ -1,0 +1,17 @@
+# Investment Analysis Platform - Production Dependencies
+# Production-specific packages and deployment tools
+# Optimized for production environments
+
+-r base.txt
+-r database.txt
+-r financial.txt
+-r ml.txt
+-r data_pipeline.txt
+-r monitoring.txt
+
+# ============================================================================
+# DEPLOYMENT & PRODUCTION
+# ============================================================================
+gunicorn==22.0.0
+docker==7.1.0
+websockets==13.0.1

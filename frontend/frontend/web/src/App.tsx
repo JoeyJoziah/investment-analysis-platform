@@ -19,47 +19,136 @@ import Watchlist from './pages/Watchlist';
 import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import Help from './pages/Help';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
+import { useGlobalErrorHandler } from './hooks/useErrorHandler';
 import { initializeApp } from './store/slices/appSlice';
 
 function AppContent() {
   const dispatch = useAppDispatch();
   const { isAuthenticated, isInitialized } = useAppSelector((state) => state.app);
+  const { handleError } = useGlobalErrorHandler();
 
   useEffect(() => {
-    dispatch(initializeApp());
-  }, [dispatch]);
+    const initApp = async () => {
+      try {
+        await dispatch(initializeApp()).unwrap();
+      } catch (error) {
+        handleError(error, 'Failed to initialize application');
+      }
+    };
+    
+    initApp();
+  }, [dispatch, handleError]);
 
   if (!isInitialized) {
     return <div>Loading...</div>;
   }
 
   return (
-    <Router>
-      <Routes>
-        {!isAuthenticated ? (
-          <>
-            <Route path="/login" element={<Login />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </>
-        ) : (
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="recommendations" element={<Recommendations />} />
-            <Route path="analysis/:ticker?" element={<Analysis />} />
-            <Route path="portfolio" element={<Portfolio />} />
-            <Route path="market" element={<MarketOverview />} />
-            <Route path="watchlist" element={<Watchlist />} />
-            <Route path="alerts" element={<Alerts />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="help" element={<Help />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        )}
-      </Routes>
-    </Router>
+    <ErrorBoundary 
+      showDetails={process.env.NODE_ENV === 'development'}
+      onError={(error, errorInfo) => {
+        handleError(error, 'Application error occurred');
+        console.error('App Error Boundary:', error, errorInfo);
+      }}
+    >
+      <Router>
+        <Routes>
+          {!isAuthenticated ? (
+            <>
+              <Route path="/login" element={<Login />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </>
+          ) : (
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route 
+                path="dashboard" 
+                element={
+                  <ErrorBoundary>
+                    <Dashboard />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="recommendations" 
+                element={
+                  <ErrorBoundary>
+                    <Recommendations />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="analysis/:ticker?" 
+                element={
+                  <ErrorBoundary>
+                    <Analysis />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="portfolio" 
+                element={
+                  <ErrorBoundary>
+                    <Portfolio />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="market" 
+                element={
+                  <ErrorBoundary>
+                    <MarketOverview />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="watchlist" 
+                element={
+                  <ErrorBoundary>
+                    <Watchlist />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="alerts" 
+                element={
+                  <ErrorBoundary>
+                    <Alerts />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="reports" 
+                element={
+                  <ErrorBoundary>
+                    <Reports />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="settings" 
+                element={
+                  <ErrorBoundary>
+                    <Settings />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route 
+                path="help" 
+                element={
+                  <ErrorBoundary>
+                    <Help />
+                  </ErrorBoundary>
+                } 
+              />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          )}
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
