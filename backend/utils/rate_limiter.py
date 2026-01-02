@@ -471,3 +471,76 @@ class RateLimitMiddleware:
 
 # Global rate limiter instance
 rate_limiter = RateLimiter()
+
+def rate_limit(
+    requests_per_minute: int = 60,
+    requests_per_hour: int = 1000,
+    key_func: Optional[callable] = None
+):
+    """
+    Simple rate limiting decorator for API endpoints.
+    
+    This is a simplified rate limiter that can be applied to FastAPI endpoints.
+    For more advanced rate limiting features, use the security.rate_limiter module.
+    
+    Args:
+        requests_per_minute: Maximum requests allowed per minute
+        requests_per_hour: Maximum requests allowed per hour
+        key_func: Optional function to extract the rate limit key from request
+        
+    Returns:
+        Decorator function
+    """
+    from functools import wraps
+    from fastapi import Request, HTTPException
+    
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Get request from kwargs if available
+            request: Optional[Request] = kwargs.get('request')
+            
+            # Try to get rate limiter
+            try:
+                # Get the key for rate limiting
+                if key_func and request:
+                    key = key_func(request)
+                elif request:
+                    # Default to client IP
+                    key = f"ip:{request.client.host if request.client else 'unknown'}"
+                else:
+                    key = "default"
+                
+                # Check rate limit using global rate limiter
+                allowed, info = await rate_limiter.check_rate_limit(
+                    key=f"ratelimit:{key}",
+                    limit=requests_per_minute,
+                    window=60  # 1 minute window
+                )
+                
+                if not allowed:
+                    raise HTTPException(
+                        status_code=429,
+                        detail={
+                            "error": "Rate limit exceeded",
+                            "limit": info.limit,
+                            "remaining": info.remaining,
+                            "retry_after": info.retry_after
+                        },
+                        headers={
+                            "X-RateLimit-Limit": str(info.limit),
+                            "X-RateLimit-Remaining": str(info.remaining),
+                            "Retry-After": str(info.retry_after) if info.retry_after else "60"
+                        }
+                    )
+                    
+            except Exception as e:
+                # If rate limiting fails, log and continue
+                import logging
+                logging.getLogger(__name__).warning(f"Rate limiting check failed: {e}")
+            
+            return await func(*args, **kwargs)
+        
+        return wrapper
+    
+    return decorator

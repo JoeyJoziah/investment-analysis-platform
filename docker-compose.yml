@@ -99,7 +99,7 @@ services:
   frontend:
     build:
       context: ./frontend/web
-      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+      dockerfile: Dockerfile
     container_name: investment_web
     environment:
       - REACT_APP_API_URL=http://localhost:8000

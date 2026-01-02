@@ -1,18 +1,12 @@
 #!/bin/bash
-# Log Viewing Script for Investment Platform
+# View logs for services
 
-SERVICE=$1
-FOLLOW=${2:---follow}
-
-echo "📋 Investment Platform Logs"
-echo "=========================="
+SERVICE=${1:-}
 
 if [ -z "$SERVICE" ]; then
-    echo "Showing logs for all services (Ctrl+C to stop)..."
-    echo ""
-    docker-compose logs $FOLLOW
+    echo "Showing logs for all services..."
+    docker compose logs -f
 else
-    echo "Showing logs for $SERVICE service (Ctrl+C to stop)..."
-    echo ""
-    docker-compose logs $FOLLOW $SERVICE
+    echo "Showing logs for $SERVICE..."
+    docker compose logs -f "$SERVICE"
 fi

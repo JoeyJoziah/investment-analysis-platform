@@ -1,28 +1,6 @@
 #!/bin/bash
-# Unified Stop Script for Investment Platform
+# Stop all services
 
-echo "🛑 Stopping Investment Platform"
-echo "=============================="
-
-# Stop all docker-compose services
-docker-compose down
-
-# Option to clean volumes
-if [ "$1" == "--clean" ]; then
-    echo "🧹 Cleaning up volumes and data..."
-    docker-compose down -v
-    docker system prune -f
-    echo "✅ Cleanup complete"
-fi
-
-echo "✅ Platform stopped"
-
-# Show status
-echo ""
-echo "Container status:"
-docker ps --filter "label=com.docker.compose.project=investment-platform" --format "table {{.Names}}\t{{.Status}}"
-
-if [ "$1" != "--clean" ]; then
-    echo ""
-    echo "To completely clean up (including volumes), run: ./stop.sh --clean"
-fi
+echo "Stopping all services..."
+docker compose down
+echo "All services stopped."

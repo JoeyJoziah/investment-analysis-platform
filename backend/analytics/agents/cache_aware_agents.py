@@ -6,14 +6,33 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
-# Add TradingAgents to Python path
-trading_agents_path = os.path.join(os.path.dirname(__file__), '../../../TradingAgents')
-if trading_agents_path not in sys.path:
-    sys.path.insert(0, trading_agents_path)
+# Add TradingAgents to Python path - check multiple possible locations
+trading_agents_paths = [
+    os.path.join(os.path.dirname(__file__), 'TradingAgents'),
+    os.path.join(os.path.dirname(__file__), '../../../TradingAgents'),
+    os.path.join(os.path.dirname(__file__), '../../TradingAgents'),
+]
+for trading_agents_path in trading_agents_paths:
+    if os.path.exists(trading_agents_path) and trading_agents_path not in sys.path:
+        sys.path.insert(0, trading_agents_path)
+        break
 
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.dataflows.interface import set_config
+# Optional TradingAgents imports - fallback to stubs if not available
+TRADING_AGENTS_AVAILABLE = False
+try:
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.dataflows.interface import set_config
+    TRADING_AGENTS_AVAILABLE = True
+except ImportError:
+    # Create stub classes for when TradingAgents is not available
+    class TradingAgentsGraph:
+        def __init__(self, *args, **kwargs):
+            raise NotImplementedError("TradingAgents module not available")
+    DEFAULT_CONFIG = {}
+    def set_config(*args, **kwargs):
+        pass
+    logging.getLogger(__name__).warning("TradingAgents module not available - using stubs")
 
 from backend.utils.cache_manager import CacheManager
 from backend.utils.llm_budget_manager import LLMBudgetManager, BudgetExceededException

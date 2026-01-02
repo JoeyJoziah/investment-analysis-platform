@@ -3,7 +3,7 @@ from typing import Dict, List, Set, Optional, Any
 import json
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,14 +18,14 @@ from backend.models.unified_models import User
 from backend.utils.cache import get_redis
 from backend.config.settings import settings
 
-# Security imports - temporarily commented out due to missing dependencies
-# from backend.security.websocket_security import (
-#     get_websocket_security, secure_websocket, WebSocketSecurityManager,
-#     WebSocketClient, WebSocketMessageType, send_error_message,
-#     validate_subscription_permissions
-# )
-# from backend.security.enhanced_auth import UserRole
-# from backend.security.audit_logging import get_audit_logger, AuditEventType, AuditSeverity
+# Security imports - enabled
+from backend.security.websocket_security import (
+    get_websocket_security, secure_websocket, WebSocketSecurityManager,
+    WebSocketClient, WebSocketMessageType, send_error_message,
+    validate_subscription_permissions
+)
+from backend.security.enhanced_auth import UserRole
+from backend.security.audit_logging import get_audit_logger, AuditEventType, AuditSeverity
 
 # Configure logging
 logger = logging.getLogger(__name__)

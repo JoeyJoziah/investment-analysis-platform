@@ -18,9 +18,8 @@ load_dotenv()
 
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
-    auth, health, admin, cache_management
-    # websocket,  # Temporarily disabled due to missing dependencies
-    # agents,  # Temporarily disabled due to missing dependencies
+    auth, health, admin, cache_management,
+    websocket, agents
 )
 from backend.utils.database import init_db, close_db
 from backend.config.database import initialize_database, cleanup_database
@@ -147,9 +146,9 @@ app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
 app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
-# app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])  # Temporarily disabled
+app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-# app.include_router(agents.router, prefix="/api/agents", tags=["agents"])  # Temporarily disabled
+app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
 
 
