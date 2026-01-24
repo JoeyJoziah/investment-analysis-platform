@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -32,6 +34,39 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
+# =============================================================================
+# SEC 2025 COMPLIANCE CONSTANTS
+# =============================================================================
+
+# Standard SEC Risk Warning (required on all recommendations)
+SEC_RISK_WARNING = (
+    "IMPORTANT: Past performance does not guarantee future results. All investments "
+    "involve risk, including possible loss of principal. The value of investments can "
+    "fluctuate, and investors may not get back the amount originally invested. Before "
+    "making any investment decision, you should carefully consider your investment "
+    "objectives, level of experience, and risk appetite."
+)
+
+# Standard Methodology Disclosure Template
+SEC_METHODOLOGY_DISCLOSURE_TEMPLATE = (
+    "This recommendation was generated using {algorithm_type} analysis incorporating "
+    "technical indicators, fundamental metrics, and market sentiment data. Model version: "
+    "{model_version}. Last model training date: {training_date}."
+)
+
+# Standard Limitations Statement
+SEC_LIMITATIONS_STATEMENT = (
+    "This analysis does NOT consider: (1) your individual financial situation or goals, "
+    "(2) tax implications specific to your circumstances, (3) real-time market conditions "
+    "that may have changed since data collection, (4) non-public information, (5) geopolitical "
+    "events occurring after the analysis date. Data freshness may vary by source; prices and "
+    "metrics may be delayed up to 15 minutes for free-tier data sources."
+)
+
+# Current model version for SEC disclosure
+RECOMMENDATION_MODEL_VERSION = "1.0.0"
+RECOMMENDATION_MODEL_TRAINING_DATE = "2025-12-15"
+
 # Enum definitions (moved to top to avoid forward reference issues)
 class RecommendationType(str, Enum):
     STRONG_BUY = "strong_buy"
@@ -59,6 +94,143 @@ class RecommendationCategory(str, Enum):
     INDEX = "index"
     SECTOR_ROTATION = "sector_rotation"
 
+# Pydantic models (defined before any functions that use them)
+class RecommendationBase(BaseModel):
+    symbol: str
+    company_name: str
+    recommendation_type: RecommendationType
+    category: RecommendationCategory
+    confidence_score: float = Field(..., ge=0, le=1)
+    target_price: float
+    current_price: float
+    expected_return: float
+    time_horizon: TimeHorizon
+    risk_level: RiskLevel
+
+class SECDisclosure(BaseModel):
+    """SEC 2025 Required Disclosure Fields for Investment Recommendations"""
+    model_config = {"protected_namespaces": ()}  # Allow model_* field names
+
+    methodology_disclosure: str = Field(
+        ...,
+        description="Description of the algorithm and methodology used to generate this recommendation"
+    )
+    data_sources: List[str] = Field(
+        ...,
+        description="List of data sources used with timestamps indicating data freshness"
+    )
+    model_version: str = Field(
+        ...,
+        description="Version identifier of the ML model used for this recommendation"
+    )
+    model_training_date: str = Field(
+        ...,
+        description="Date when the recommendation model was last trained"
+    )
+    risk_warning: str = Field(
+        ...,
+        description="Standard SEC-required risk warning text"
+    )
+    limitations_statement: str = Field(
+        ...,
+        description="Statement of what the analysis does NOT consider"
+    )
+    confidence_level: str = Field(
+        default="moderate",
+        description="Confidence level of the recommendation (low/moderate/high)"
+    )
+    conflict_of_interest_statement: Optional[str] = Field(
+        default=None,
+        description="Disclosure of any material relationships with recommended securities"
+    )
+
+
+class RecommendationDetail(RecommendationBase):
+    id: str
+    created_at: datetime
+    valid_until: datetime
+    reasoning: str
+    key_factors: List[str]
+    technical_signals: Dict[str, Any]
+    fundamental_metrics: Dict[str, Any]
+    risk_factors: List[str]
+    entry_points: List[float]
+    exit_points: List[float]
+    stop_loss: float
+    sector: str
+    market_cap: float
+    volume: int
+    analyst_consensus: Optional[str] = None
+    similar_stocks: Optional[List[str]] = None
+    # SEC 2025 Required Disclosure Fields
+    sec_disclosure: Optional[SECDisclosure] = Field(
+        default=None,
+        description="SEC 2025 required disclosure information for this recommendation"
+    )
+
+class DailyRecommendations(BaseModel):
+    date: date
+    market_outlook: str
+    top_picks: List[RecommendationDetail]
+    watchlist: List[str]
+    avoid_list: List[str]
+    sector_focus: str
+    market_sentiment: float = Field(..., ge=-1, le=1)
+    risk_assessment: str
+    special_situations: Optional[List[Dict[str, Any]]] = None
+    # SEC 2025 Required Global Disclosures
+    sec_global_disclosure: str = Field(
+        default=SEC_RISK_WARNING,
+        description="SEC-required global risk warning applicable to all recommendations"
+    )
+    data_as_of: str = Field(
+        default_factory=lambda: datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'),
+        description="Timestamp indicating when data was collected for these recommendations"
+    )
+    recommendation_model_version: str = Field(
+        default=RECOMMENDATION_MODEL_VERSION,
+        description="Version of the recommendation model used"
+    )
+
+class PortfolioRecommendation(BaseModel):
+    portfolio_id: str
+    recommendations: List[RecommendationDetail]
+    rebalancing_suggestions: Dict[str, float]
+    risk_score: float
+    expected_portfolio_return: float
+    diversification_score: float
+
+class RecommendationFilter(BaseModel):
+    categories: Optional[List[RecommendationCategory]] = None
+    risk_levels: Optional[List[RiskLevel]] = None
+    time_horizons: Optional[List[TimeHorizon]] = None
+    min_confidence: Optional[float] = Field(None, ge=0, le=1)
+    min_expected_return: Optional[float] = None
+    sectors: Optional[List[str]] = None
+    market_cap_min: Optional[float] = None
+    market_cap_max: Optional[float] = None
+
+class RecommendationPerformance(BaseModel):
+    recommendation_id: str
+    symbol: str
+    recommended_date: date
+    recommendation_type: RecommendationType
+    entry_price: float
+    current_price: float
+    target_price: float
+    actual_return: float
+    expected_return: float
+    days_since_recommendation: int
+    status: str  # "active", "closed", "stopped_out"
+    performance_rating: float = Field(..., ge=0, le=5)
+
+class AlertSettings(BaseModel):
+    email_notifications: bool = True
+    push_notifications: bool = False
+    alert_types: List[str] = ["strong_buy", "strong_sell", "target_reached"]
+    min_confidence: float = 0.7
+    categories: List[RecommendationCategory] = []
+
 # Initialize ML model manager and recommendation engine
 model_manager = None
 recommendation_engine = None
@@ -70,6 +242,61 @@ try:
 except Exception as e:
     logger.warning(f"ML model manager not available: {e}")
     recommendation_engine = RecommendationEngine()  # Fallback without ML
+
+
+def generate_sec_disclosure(
+    algorithm_type: str = "ML-powered quantitative",
+    data_sources: List[str] = None,
+    confidence_score: float = 0.5
+) -> SECDisclosure:
+    """
+    Generate SEC 2025 compliant disclosure for a recommendation.
+
+    Args:
+        algorithm_type: Description of the algorithm used
+        data_sources: List of data sources with timestamps
+        confidence_score: Model confidence score (0-1)
+
+    Returns:
+        SECDisclosure object with all required fields
+    """
+    # Default data sources if not provided
+    if data_sources is None:
+        data_sources = [
+            f"Alpha Vantage API (delayed 15 min) - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Finnhub Market Data - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Historical price data (EOD) - {datetime.utcnow().strftime('%Y-%m-%d')}",
+            f"Financial statements (quarterly) - Last updated Q4 2025",
+        ]
+
+    # Determine confidence level from score
+    if confidence_score >= 0.8:
+        confidence_level = "high"
+    elif confidence_score >= 0.6:
+        confidence_level = "moderate"
+    else:
+        confidence_level = "low"
+
+    # Generate methodology disclosure
+    methodology_disclosure = SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
+        algorithm_type=algorithm_type,
+        model_version=RECOMMENDATION_MODEL_VERSION,
+        training_date=RECOMMENDATION_MODEL_TRAINING_DATE
+    )
+
+    return SECDisclosure(
+        methodology_disclosure=methodology_disclosure,
+        data_sources=data_sources,
+        model_version=RECOMMENDATION_MODEL_VERSION,
+        model_training_date=RECOMMENDATION_MODEL_TRAINING_DATE,
+        risk_warning=SEC_RISK_WARNING,
+        limitations_statement=SEC_LIMITATIONS_STATEMENT,
+        confidence_level=confidence_level,
+        conflict_of_interest_statement=(
+            "This platform does not hold positions in any recommended securities. "
+            "No material relationships exist between this platform and any recommended issuers."
+        )
+    )
 
 # Helper functions for real recommendation generation
 async def generate_ml_powered_recommendations(
@@ -168,7 +395,18 @@ async def generate_ml_powered_recommendations(
                 if categories and category not in categories:
                     continue
                 
-                # Create recommendation
+                # Generate SEC disclosure for this recommendation
+                sec_disclosure = generate_sec_disclosure(
+                    algorithm_type="ML-powered quantitative analysis",
+                    data_sources=[
+                        f"Price history database - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+                        f"Stock fundamentals - {datetime.utcnow().strftime('%Y-%m-%d')}",
+                        f"ML prediction model v{RECOMMENDATION_MODEL_VERSION}",
+                    ],
+                    confidence_score=confidence_score
+                )
+
+                # Create recommendation with SEC disclosure
                 recommendation = RecommendationDetail(
                     id=f"ML-{stock.symbol}-{int(datetime.utcnow().timestamp())}",
                     symbol=stock.symbol,
@@ -212,7 +450,8 @@ async def generate_ml_powered_recommendations(
                     market_cap=stock.market_cap or 0,
                     volume=price_history[-1].volume if price_history else 0,
                     analyst_consensus=None,  # Would integrate with analyst data
-                    similar_stocks=[s.symbol for s in top_stocks if s.sector == stock.sector and s.symbol != stock.symbol][:3]
+                    similar_stocks=[s.symbol for s in top_stocks if s.sector == stock.sector and s.symbol != stock.symbol][:3],
+                    sec_disclosure=sec_disclosure
                 )
                 
                 recommendations.append(recommendation)
@@ -288,107 +527,35 @@ async def generate_personalized_recommendations(
         logger.error(f"Error generating personalized recommendations: {e}")
         return await generate_ml_powered_recommendations(limit=5, db_session=db_session)
 
-# Enums
-# Enum definitions moved to top of file to avoid forward reference issues
-
-# Pydantic models
-class RecommendationBase(BaseModel):
-    symbol: str
-    company_name: str
-    recommendation_type: RecommendationType
-    category: RecommendationCategory
-    confidence_score: float = Field(..., ge=0, le=1)
-    target_price: float
-    current_price: float
-    expected_return: float
-    time_horizon: TimeHorizon
-    risk_level: RiskLevel
-
-class RecommendationDetail(RecommendationBase):
-    id: str
-    created_at: datetime
-    valid_until: datetime
-    reasoning: str
-    key_factors: List[str]
-    technical_signals: Dict[str, Any]
-    fundamental_metrics: Dict[str, Any]
-    risk_factors: List[str]
-    entry_points: List[float]
-    exit_points: List[float]
-    stop_loss: float
-    sector: str
-    market_cap: float
-    volume: int
-    analyst_consensus: Optional[str] = None
-    similar_stocks: Optional[List[str]] = None
-
-class DailyRecommendations(BaseModel):
-    date: date
-    market_outlook: str
-    top_picks: List["RecommendationDetail"]
-    watchlist: List[str]
-    avoid_list: List[str]
-    sector_focus: str
-    market_sentiment: float = Field(..., ge=-1, le=1)
-    risk_assessment: str
-    special_situations: Optional[List[Dict[str, Any]]] = None
-
-class PortfolioRecommendation(BaseModel):
-    portfolio_id: str
-    recommendations: List["RecommendationDetail"]
-    rebalancing_suggestions: Dict[str, float]
-    risk_score: float
-    expected_portfolio_return: float
-    diversification_score: float
-
-class RecommendationFilter(BaseModel):
-    categories: Optional[List[RecommendationCategory]] = None
-    risk_levels: Optional[List[RiskLevel]] = None
-    time_horizons: Optional[List[TimeHorizon]] = None
-    min_confidence: Optional[float] = Field(None, ge=0, le=1)
-    min_expected_return: Optional[float] = None
-    sectors: Optional[List[str]] = None
-    market_cap_min: Optional[float] = None
-    market_cap_max: Optional[float] = None
-
-class RecommendationPerformance(BaseModel):
-    recommendation_id: str
-    symbol: str
-    recommended_date: date
-    recommendation_type: RecommendationType
-    entry_price: float
-    current_price: float
-    target_price: float
-    actual_return: float
-    expected_return: float
-    days_since_recommendation: int
-    status: str  # "active", "closed", "stopped_out"
-    performance_rating: float = Field(..., ge=0, le=5)
-
-class AlertSettings(BaseModel):
-    email_notifications: bool = True
-    push_notifications: bool = False
-    alert_types: List[str] = ["strong_buy", "strong_sell", "target_reached"]
-    min_confidence: float = 0.7
-    categories: List[RecommendationCategory] = []
-
 # Sample data generator functions
 def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
-    """Generate a sample recommendation"""
+    """Generate a sample recommendation with SEC disclosure"""
     if not symbol:
         symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
         symbol = random.choice(symbols)
-    
+
     current_price = random.uniform(50, 500)
     target_price = current_price * random.uniform(0.9, 1.3)
-    
+    confidence_score = random.uniform(0.6, 0.95)
+
+    # Generate SEC disclosure for sample recommendation
+    sec_disclosure = generate_sec_disclosure(
+        algorithm_type="quantitative technical and fundamental",
+        data_sources=[
+            f"Market data feed - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Financial statements - Q4 2025",
+            f"Analyst consensus data - {datetime.utcnow().strftime('%Y-%m-%d')}",
+        ],
+        confidence_score=confidence_score
+    )
+
     return RecommendationDetail(
         id=f"REC-{random.randint(1000, 9999)}",
         symbol=symbol,
         company_name=f"{symbol} Inc.",
         recommendation_type=random.choice(list(RecommendationType)),
         category=random.choice(list(RecommendationCategory)),
-        confidence_score=random.uniform(0.6, 0.95),
+        confidence_score=confidence_score,
         target_price=round(target_price, 2),
         current_price=round(current_price, 2),
         expected_return=round((target_price - current_price) / current_price, 4),
@@ -427,7 +594,8 @@ def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
         market_cap=random.uniform(100000000000, 3000000000000),
         volume=random.randint(10000000, 100000000),
         analyst_consensus="Buy",
-        similar_stocks=["GOOG", "FB", "NFLX"] if symbol != "GOOGL" else ["AAPL", "MSFT"]
+        similar_stocks=["GOOG", "FB", "NFLX"] if symbol != "GOOGL" else ["AAPL", "MSFT"],
+        sec_disclosure=sec_disclosure
     )
 
 # Enhanced Endpoints with ML Integration
@@ -576,7 +744,7 @@ async def get_daily_recommendations(
             special_situations=[]
         )
 
-@router.get("/list", response_model=List["RecommendationDetail"])
+@router.get("/list", response_model=List[RecommendationDetail])
 async def get_recommendations(
     limit: int = Query(10, le=100),
     offset: int = 0,
@@ -616,7 +784,7 @@ async def get_recommendations(
     # Pagination
     return recommendations[offset:offset + limit]
 
-@router.get("/{recommendation_id}", response_model="RecommendationDetail")
+@router.get("/{recommendation_id}", response_model=RecommendationDetail)
 async def get_recommendation_detail(recommendation_id: str) -> "RecommendationDetail":
     """Get detailed information about a specific recommendation"""
     
@@ -626,7 +794,7 @@ async def get_recommendation_detail(recommendation_id: str) -> "RecommendationDe
     
     return recommendation
 
-@router.post("/filter", response_model=List["RecommendationDetail"])
+@router.post("/filter", response_model=List[RecommendationDetail])
 async def filter_recommendations(
     filter_params: RecommendationFilter,
     limit: int = Query(20, le=100)

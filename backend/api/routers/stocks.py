@@ -32,15 +32,32 @@ from backend.utils.api_cache_decorators import (
     generate_cache_key
 )
 from backend.utils.database_query_cache import cached_query
-# TODO: Fix these imports - functions don't exist in enhanced_error_handling
-from backend.utils.enhanced_error_handling import (
-    handle_api_error,
-    validate_stock_symbol
-)
 from backend.config.settings import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Import error handling utilities with fallback implementations
+try:
+    from backend.utils.enhanced_error_handling import (
+        handle_api_error,
+        validate_stock_symbol
+    )
+except ImportError:
+    # Fallback implementations if enhanced_error_handling has dependency issues
+    import re
+
+    async def handle_api_error(error: Exception, operation: str, context: dict = None):
+        """Fallback error handler that logs the error."""
+        logger.error(f"API error during {operation}: {error}", exc_info=True)
+
+    def validate_stock_symbol(symbol: str) -> bool:
+        """Validate stock symbol format - fallback implementation."""
+        if not symbol or not isinstance(symbol, str):
+            return False
+        symbol = symbol.strip().upper()
+        # Basic validation: 1-5 letters only
+        return bool(re.match(r'^[A-Z]{1,5}$', symbol))
 
 router = APIRouter()
 

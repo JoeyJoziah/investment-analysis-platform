@@ -8,15 +8,20 @@ import os
 from datetime import timedelta
 
 # Get configuration from environment
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', '6379')
-REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
-
-# Build Redis URL
-if REDIS_PASSWORD:
-    REDIS_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}'
+# Prefer REDIS_URL env var if set (for Docker), otherwise build from components
+REDIS_URL_ENV = os.getenv('REDIS_URL')
+if REDIS_URL_ENV:
+    # Use provided REDIS_URL directly (strip db number if present, we add our own)
+    REDIS_URL = REDIS_URL_ENV.rsplit('/', 1)[0] if '/' in REDIS_URL_ENV else REDIS_URL_ENV
 else:
-    REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}'
+    # Build from components for local development
+    REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+    REDIS_PORT = os.getenv('REDIS_PORT', '6379')
+    REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+    if REDIS_PASSWORD:
+        REDIS_URL = f'redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}'
+    else:
+        REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}'
 
 # Create Celery app
 celery_app = Celery(

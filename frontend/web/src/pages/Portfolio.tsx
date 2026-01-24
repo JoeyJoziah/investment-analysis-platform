@@ -463,7 +463,7 @@ const Portfolio: React.FC = () => {
                 Sector Allocation
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
-                <RechartsP pieChart>
+                <RechartsPieChart>
                   <Pie
                     data={Object.entries(metrics?.diversification?.sector || {}).map(
                       ([sector, value]) => ({ name: sector, value })
@@ -566,7 +566,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Top Performers
                 </Typography>
-                {positions
+                {[...positions]
                   .sort((a, b) => b.totalGainPercent - a.totalGainPercent)
                   .slice(0, 5)
                   .map((position) => (
@@ -587,7 +587,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Worst Performers
                 </Typography>
-                {positions
+                {[...positions]
                   .sort((a, b) => a.totalGainPercent - b.totalGainPercent)
                   .slice(0, 5)
                   .map((position) => (
@@ -608,7 +608,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Largest Positions
                 </Typography>
-                {positions
+                {[...positions]
                   .sort((a, b) => b.marketValue - a.marketValue)
                   .slice(0, 5)
                   .map((position) => (

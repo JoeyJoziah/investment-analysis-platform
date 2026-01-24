@@ -19,7 +19,7 @@ load_dotenv()
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
     auth, health, admin, cache_management,
-    websocket, agents
+    websocket, agents, gdpr
 )
 from backend.utils.database import init_db, close_db
 from backend.config.database import initialize_database, cleanup_database
@@ -85,7 +85,12 @@ async def lifespan(app: FastAPI):
     from backend.tasks.scheduler import start_scheduler
     scheduler = await start_scheduler()
     logger.info("Background scheduler started")
-    
+
+    # Start WebSocket cleanup task
+    from backend.api.routers.websocket import start_cleanup_task
+    start_cleanup_task()
+    logger.info("WebSocket cleanup task started")
+
     # Load ML models
     try:
         from backend.ml.model_manager import get_model_manager
@@ -125,9 +130,24 @@ app = FastAPI(
     redoc_url="/api/redoc" if settings.DEBUG else None
 )
 
-# Add comprehensive security middleware stack - temporarily disabled due to missing dependencies
-# from backend.security.security_config import add_comprehensive_security_middleware
-# add_comprehensive_security_middleware(app)
+# Add comprehensive security middleware stack
+# This provides CORS, security headers, rate limiting, input validation, and injection prevention
+try:
+    from backend.security.security_config import add_comprehensive_security_middleware
+    add_comprehensive_security_middleware(app)
+    logger.info("Comprehensive security middleware stack enabled")
+except Exception as e:
+    logger.warning(f"Failed to initialize comprehensive security middleware: {e}")
+    logger.info("Falling back to basic CORS middleware")
+    # Fallback to basic CORS if comprehensive security fails
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://localhost:8000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Add Prometheus monitoring
 app.add_middleware(PrometheusMiddleware)
@@ -150,6 +170,7 @@ app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
+app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
 
 
 @app.exception_handler(HTTPException)

@@ -625,3 +625,16 @@ _security_audit_logger = SecurityAuditLogger()
 def get_security_audit_logger() -> SecurityAuditLogger:
     """Get global security audit logger"""
     return _security_audit_logger
+
+
+def get_security_config() -> SecurityHeadersConfig:
+    """Get security configuration based on environment.
+
+    Alias function for backwards compatibility with security_config.py imports.
+    Returns production config by default, development config in dev environments.
+    """
+    import os
+    environment = os.getenv("ENVIRONMENT", "production").lower()
+    if environment in ["development", "dev", "local"]:
+        return get_development_security_config()
+    return get_production_security_config()

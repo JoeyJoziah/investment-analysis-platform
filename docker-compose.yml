@@ -55,7 +55,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-256m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-256m}"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     ports:
@@ -123,9 +123,12 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
       - ELASTICSEARCH_URL=http://elasticsearch:9200
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
     depends_on:
       - postgres
       - redis
@@ -142,8 +145,11 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_HOST=redis
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
     depends_on:
       - postgres
       - redis
@@ -172,6 +178,7 @@ services:
     depends_on:
       - postgres
       - redis
+    command: standalone
 
   # Prometheus
   prometheus:
@@ -211,8 +218,10 @@ services:
     depends_on:
       - prometheus
 
-  # Node Exporter for system metrics
+  # Node Exporter for system metrics (Linux only)
   node-exporter:
+    profiles:
+      - linux-monitoring
     image: prom/node-exporter:v1.7.0
     container_name: investment_node_exporter
     command:
@@ -224,21 +233,21 @@ services:
       - "9100:9100"
     restart: unless-stopped
 
-  # cAdvisor for container metrics
+  # cAdvisor for container metrics (Linux only)
   cadvisor:
+    profiles:
+      - linux-monitoring
     image: gcr.io/cadvisor/cadvisor:v0.47.2
     container_name: investment_cadvisor
     privileged: true
-    devices:
-      - /dev/kmsg:/dev/kmsg
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /cgroup:/cgroup:ro
+      - /sys/fs/cgroup:/cgroup:ro
     ports:
-      - "8080:8080"
+      - "8081:8080"
     restart: unless-stopped
 
   # PostgreSQL Exporter
