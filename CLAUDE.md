@@ -486,10 +486,17 @@ When tasks span multiple domains, coordinate swarms efficiently:
 - Only using one swarm when multiple are relevant
 - Not giving swarms complete autonomy
 
-## Session Completion Checklist
+## ⚠️ MANDATORY: Session Completion Protocol ⚠️
 
-**IMPORTANT**: After completing work in each session, update tracking documents:
+**CRITICAL**: You MUST execute these steps at the END of EVERY Claude session. This is NOT optional.
 
+### Step 1: Sync to Notion (REQUIRED)
+```bash
+./notion-sync.sh push
+```
+**This command MUST be run before ending ANY session.** It syncs project status to the Notion Product Development Tracker.
+
+### Step 2: Update Tracking Documents
 1. **Update `TODO.md`** with completed items:
    - Mark finished tasks with ~~strikethrough~~ and ✅ COMPLETE
    - Update the "Already Complete" section
@@ -497,9 +504,20 @@ When tasks span multiple domains, coordinate swarms efficiently:
 
 2. **Update `IMPLEMENTATION_STATUS.md`** if major milestones reached
 
-3. **Commit tracking doc updates** along with the code changes
+### Step 3: Commit and Push
+```bash
+git add -A && git commit -m "chore: Update project status" && git push
+```
 
-This ensures context persists across sessions and prevents duplicate work.
+### Verification
+Before ending the session, confirm:
+- [ ] `./notion-sync.sh push` executed successfully
+- [ ] TODO.md updated with session changes
+- [ ] Changes committed and pushed
+
+**IF YOU FORGET TO RUN NOTION SYNC, THE USER'S PROJECT BOARD WILL BE OUT OF DATE.**
+
+This ensures context persists across sessions, prevents duplicate work, and keeps the Notion board synchronized.
 
 ## Available Skills
 
