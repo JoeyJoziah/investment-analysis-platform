@@ -1,0 +1,235 @@
+{
+  "swarm_id": "investment-platform-github-swarm",
+  "version": "1.0.0",
+  "created_at": "2026-01-25",
+  "repository": "JoeyJoziah/investment-analysis-platform",
+  "description": "Comprehensive GitHub swarm for investment analysis platform with automated PR reviews, issue triage, security scanning, and CI/CD health monitoring",
+
+  "configuration": {
+    "focus": "development",
+    "topology": "hierarchical",
+    "max_parallel_agents": 6,
+    "coordination_mode": "event-driven",
+    "consensus_mechanism": "raft"
+  },
+
+  "features": {
+    "auto_pr_enhancements": {
+      "enabled": true,
+      "auto_label": true,
+      "auto_assign_reviewers": true,
+      "code_quality_checks": true,
+      "security_scan_on_pr": true,
+      "test_coverage_gate": 80
+    },
+    "issue_labeling": {
+      "enabled": true,
+      "auto_categorize": true,
+      "priority_detection": true,
+      "component_tagging": true
+    },
+    "code_review_automation": {
+      "enabled": true,
+      "review_complexity_threshold": "medium",
+      "security_review_required": true,
+      "performance_review_enabled": true
+    }
+  },
+
+  "agents": [
+    {
+      "id": "issue-triager",
+      "name": "Issue Triager",
+      "role": "categorize",
+      "description": "Categorizes issues by type, priority, and affected components",
+      "model": "sonnet",
+      "triggers": ["issues.opened", "issues.edited", "issues.reopened"],
+      "capabilities": [
+        "type_classification",
+        "priority_assessment",
+        "component_identification",
+        "duplicate_detection",
+        "assignee_suggestion"
+      ]
+    },
+    {
+      "id": "pr-reviewer",
+      "name": "PR Reviewer",
+      "role": "review",
+      "description": "Reviews code changes for quality, security, and best practices",
+      "model": "opus",
+      "triggers": ["pull_request.opened", "pull_request.synchronize"],
+      "capabilities": [
+        "code_quality_analysis",
+        "security_vulnerability_scan",
+        "best_practices_check",
+        "performance_impact_assessment",
+        "test_coverage_verification"
+      ]
+    },
+    {
+      "id": "documentation-agent",
+      "name": "Documentation Agent",
+      "role": "document",
+      "description": "Tracks documentation updates needed based on code changes",
+      "model": "sonnet",
+      "triggers": ["pull_request.merged", "push"],
+      "capabilities": [
+        "doc_staleness_detection",
+        "api_doc_generation",
+        "changelog_updates",
+        "readme_sync_check"
+      ]
+    },
+    {
+      "id": "test-agent",
+      "name": "Test Agent",
+      "role": "test",
+      "description": "Identifies testing gaps and suggests test improvements",
+      "model": "sonnet",
+      "triggers": ["pull_request.opened", "pull_request.synchronize"],
+      "capabilities": [
+        "coverage_gap_detection",
+        "test_suggestion",
+        "integration_test_check",
+        "regression_risk_assessment"
+      ]
+    },
+    {
+      "id": "security-agent",
+      "name": "Security Agent",
+      "role": "security",
+      "description": "Scans for vulnerabilities and security issues",
+      "model": "opus",
+      "triggers": ["pull_request.opened", "push", "schedule.daily"],
+      "capabilities": [
+        "dependency_vulnerability_scan",
+        "secret_detection",
+        "sql_injection_check",
+        "xss_detection",
+        "authentication_review"
+      ]
+    },
+    {
+      "id": "infrastructure-agent",
+      "name": "Infrastructure Agent",
+      "role": "infrastructure",
+      "description": "Monitors Docker, deployment, and CI/CD health",
+      "model": "sonnet",
+      "triggers": ["workflow_run.completed", "push", "schedule.hourly"],
+      "capabilities": [
+        "docker_config_validation",
+        "cicd_health_check",
+        "deployment_readiness",
+        "resource_optimization",
+        "cost_monitoring"
+      ]
+    }
+  ],
+
+  "labels": {
+    "type": [
+      {"name": "bug", "color": "d73a4a", "description": "Something isn't working"},
+      {"name": "feature", "color": "0075ca", "description": "New feature or request"},
+      {"name": "enhancement", "color": "a2eeef", "description": "Improvement to existing feature"},
+      {"name": "documentation", "color": "0052cc", "description": "Documentation updates"},
+      {"name": "infrastructure", "color": "5319e7", "description": "Docker, CI/CD, deployment"},
+      {"name": "security", "color": "ff0000", "description": "Security vulnerability or concern"},
+      {"name": "performance", "color": "fbca04", "description": "Performance optimization"},
+      {"name": "testing", "color": "1d76db", "description": "Testing improvements"}
+    ],
+    "component": [
+      {"name": "backend", "color": "c5def5", "description": "FastAPI backend"},
+      {"name": "frontend", "color": "bfdadc", "description": "React frontend"},
+      {"name": "ml-models", "color": "d4c5f9", "description": "ML/AI models (Prophet, XGBoost)"},
+      {"name": "database", "color": "f9d0c4", "description": "PostgreSQL/TimescaleDB"},
+      {"name": "data-pipeline", "color": "e99695", "description": "ETL and data processing"},
+      {"name": "api", "color": "c2e0c6", "description": "API endpoints"}
+    ],
+    "priority": [
+      {"name": "P0-critical", "color": "b60205", "description": "Critical - immediate action required"},
+      {"name": "P1-high", "color": "d93f0b", "description": "High priority"},
+      {"name": "P2-medium", "color": "fbca04", "description": "Medium priority"},
+      {"name": "P3-low", "color": "0e8a16", "description": "Low priority"}
+    ],
+    "status": [
+      {"name": "needs-triage", "color": "ededed", "description": "Needs triage by maintainer"},
+      {"name": "in-progress", "color": "fbca04", "description": "Work in progress"},
+      {"name": "ready-for-review", "color": "0e8a16", "description": "Ready for code review"},
+      {"name": "blocked", "color": "d93f0b", "description": "Blocked by dependency"}
+    ]
+  },
+
+  "workflows": {
+    "issue_triage": {
+      "steps": [
+        "classify_type",
+        "assess_priority",
+        "identify_components",
+        "detect_duplicates",
+        "apply_labels",
+        "suggest_assignee"
+      ]
+    },
+    "pr_review": {
+      "steps": [
+        "check_pr_template",
+        "analyze_changes",
+        "run_security_scan",
+        "verify_test_coverage",
+        "check_code_quality",
+        "generate_review_comments",
+        "make_approval_decision"
+      ]
+    },
+    "security_scan": {
+      "steps": [
+        "scan_dependencies",
+        "check_secrets",
+        "analyze_code_patterns",
+        "review_authentication",
+        "generate_security_report"
+      ]
+    },
+    "infrastructure_check": {
+      "steps": [
+        "validate_docker_configs",
+        "check_workflow_health",
+        "assess_deployment_readiness",
+        "monitor_costs",
+        "generate_infrastructure_report"
+      ]
+    }
+  },
+
+  "integrations": {
+    "github_actions": true,
+    "slack_notifications": false,
+    "cost_monitoring": true,
+    "claude_flow": true
+  },
+
+  "budget": {
+    "target_monthly": 50,
+    "currency": "USD",
+    "alert_threshold_percent": 80
+  },
+
+  "repository_context": {
+    "tech_stack": {
+      "backend": ["FastAPI", "Python", "Celery"],
+      "ml": ["Prophet", "XGBoost", "scikit-learn"],
+      "frontend": ["React", "Material-UI", "TypeScript"],
+      "database": ["PostgreSQL", "TimescaleDB", "Redis"],
+      "infrastructure": ["Docker", "docker-compose", "Prometheus", "Grafana"]
+    },
+    "key_directories": {
+      "backend": "/backend",
+      "frontend": "/frontend/web",
+      "infrastructure": "/infrastructure",
+      "ml_models": "/ml_models",
+      "data_pipelines": "/data_pipelines",
+      "tests": "/tests"
+    }
+  }
+}

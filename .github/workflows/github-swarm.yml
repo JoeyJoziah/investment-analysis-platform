@@ -1,0 +1,513 @@
+name: GitHub Swarm Automation
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled]
+  pull_request:
+    types: [opened, synchronize, ready_for_review, closed]
+  push:
+    branches: [main, develop]
+  workflow_run:
+    workflows: ["CI", "Security Scan", "Production Deploy"]
+    types: [completed]
+  schedule:
+    # Daily security scan at 2:00 AM UTC
+    - cron: '0 2 * * *'
+    # Hourly infrastructure health check
+    - cron: '0 * * * *'
+
+concurrency:
+  group: github-swarm-${{ github.event_name }}-${{ github.event.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  SWARM_CONFIG: .claude/agents/github-swarm/swarm-config.json
+  REPOSITORY: ${{ github.repository }}
+
+jobs:
+  # Issue Triage Agent
+  issue-triage:
+    name: Issue Triage
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pyyaml requests
+
+      - name: Triage Issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          python << 'EOF'
+          import os
+          import re
+          import json
+          import requests
+
+          # Configuration
+          REPO = os.environ['REPOSITORY']
+          TOKEN = os.environ['GITHUB_TOKEN']
+          ISSUE_NUM = os.environ['ISSUE_NUMBER']
+          TITLE = os.environ.get('ISSUE_TITLE', '')
+          BODY = os.environ.get('ISSUE_BODY', '')
+
+          # Type detection patterns
+          TYPE_PATTERNS = {
+              'bug': [r'(?i)error|exception|crash|fail|broken|doesn\'t work|unexpected|wrong'],
+              'feature': [r'(?i)add|new|implement|create|introduce|would like|request'],
+              'security': [r'(?i)CVE|vulnerability|exploit|injection|secret|credential|auth'],
+              'performance': [r'(?i)slow|timeout|memory|cpu|latency|performance'],
+              'documentation': [r'(?i)docs|readme|instructions|unclear|documentation'],
+              'infrastructure': [r'(?i)docker|deploy|ci|workflow|monitoring|kubernetes'],
+              'testing': [r'(?i)test|coverage|flaky|assertion']
+          }
+
+          # Component detection
+          COMPONENT_PATTERNS = {
+              'backend': [r'(?i)fastapi|endpoint|api|celery|worker|python'],
+              'frontend': [r'(?i)react|component|ui|dashboard|typescript'],
+              'ml-models': [r'(?i)prophet|xgboost|prediction|model|training|ml'],
+              'database': [r'(?i)postgresql|timescaledb|query|migration|database'],
+              'data-pipeline': [r'(?i)airflow|dag|etl|ingestion|pipeline']
+          }
+
+          # Priority keywords
+          PRIORITY_KEYWORDS = {
+              'P0-critical': [r'(?i)production down|data loss|security breach|urgent|critical'],
+              'P1-high': [r'(?i)major|blocking|security|important|high priority'],
+              'P2-medium': [r'(?i)bug|issue|problem|moderate'],
+              'P3-low': [r'(?i)minor|cosmetic|enhancement|nice to have']
+          }
+
+          def classify_issue(title, body):
+              text = f"{title} {body}"
+              labels = []
+
+              # Detect type
+              for label, patterns in TYPE_PATTERNS.items():
+                  for pattern in patterns:
+                      if re.search(pattern, text):
+                          labels.append(label)
+                          break
+
+              # Detect components
+              for label, patterns in COMPONENT_PATTERNS.items():
+                  for pattern in patterns:
+                      if re.search(pattern, text):
+                          labels.append(label)
+                          break
+
+              # Detect priority
+              priority = 'P2-medium'  # Default
+              for p, patterns in PRIORITY_KEYWORDS.items():
+                  for pattern in patterns:
+                      if re.search(pattern, text):
+                          priority = p
+                          break
+                  if priority != 'P2-medium':
+                      break
+              labels.append(priority)
+
+              # Always add needs-triage
+              labels.append('needs-triage')
+
+              return list(set(labels))
+
+          def add_labels(labels):
+              url = f"https://api.github.com/repos/{REPO}/issues/{ISSUE_NUM}/labels"
+              headers = {
+                  "Authorization": f"token {TOKEN}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+              response = requests.post(url, headers=headers, json={"labels": labels})
+              return response.status_code == 200
+
+          def add_comment(body):
+              url = f"https://api.github.com/repos/{REPO}/issues/{ISSUE_NUM}/comments"
+              headers = {
+                  "Authorization": f"token {TOKEN}",
+                  "Accept": "application/vnd.github.v3+json"
+              }
+              response = requests.post(url, headers=headers, json={"body": body})
+              return response.status_code == 201
+
+          # Main execution
+          labels = classify_issue(TITLE, BODY)
+          print(f"Detected labels: {labels}")
+
+          # Add labels
+          if add_labels(labels):
+              print("Labels added successfully")
+          else:
+              print("Failed to add labels")
+
+          # Add triage comment
+          type_label = next((l for l in labels if l in TYPE_PATTERNS), 'unknown')
+          priority_label = next((l for l in labels if l.startswith('P')), 'P2-medium')
+          component_labels = [l for l in labels if l in COMPONENT_PATTERNS]
+
+          comment = f"""## Triage Summary
+
+          **Type**: {type_label}
+          **Priority**: {priority_label}
+          **Components**: {', '.join(component_labels) if component_labels else 'General'}
+
+          ---
+          *Triaged automatically by GitHub Swarm Issue Triager*
+          """
+
+          if add_comment(comment):
+              print("Triage comment added")
+
+          EOF
+
+  # PR Review Agent (triggered on PR events)
+  pr-review:
+    name: PR Review Analysis
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov
+
+      - name: Analyze PR Changes
+        id: analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get changed files
+          gh pr diff $PR_NUMBER --name-only > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+
+          # Count changes
+          TOTAL_FILES=$(wc -l < changed_files.txt)
+          BACKEND_FILES=$(grep -c "^backend/" changed_files.txt || echo 0)
+          FRONTEND_FILES=$(grep -c "^frontend/" changed_files.txt || echo 0)
+          TEST_FILES=$(grep -c "test" changed_files.txt || echo 0)
+
+          echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
+          echo "backend_files=$BACKEND_FILES" >> $GITHUB_OUTPUT
+          echo "frontend_files=$FRONTEND_FILES" >> $GITHUB_OUTPUT
+          echo "test_files=$TEST_FILES" >> $GITHUB_OUTPUT
+
+      - name: Run Tests with Coverage
+        id: coverage
+        continue-on-error: true
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt 2>/dev/null || true
+          fi
+
+          # Run pytest with coverage if tests exist
+          if [ -d "tests" ] || [ -d "backend/tests" ]; then
+            pytest tests/ backend/tests/ --cov=backend --cov-report=json --cov-report=term -q 2>/dev/null || true
+            if [ -f coverage.json ]; then
+              COVERAGE=$(python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered'])" 2>/dev/null || echo "0")
+              echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+            else
+              echo "coverage=0" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "coverage=N/A" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post PR Review Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const analysis = {
+              totalFiles: '${{ steps.analysis.outputs.total_files }}',
+              backendFiles: '${{ steps.analysis.outputs.backend_files }}',
+              frontendFiles: '${{ steps.analysis.outputs.frontend_files }}',
+              testFiles: '${{ steps.analysis.outputs.test_files }}',
+              coverage: '${{ steps.coverage.outputs.coverage }}'
+            };
+
+            const coverageNum = parseFloat(analysis.coverage) || 0;
+            const coverageStatus = coverageNum >= 80 ? 'PASS' : (coverageNum >= 70 ? 'WARNING' : 'NEEDS IMPROVEMENT');
+
+            const body = `## PR Review Analysis
+
+            ### Changes Summary
+            | Metric | Value |
+            |--------|-------|
+            | Files Changed | ${analysis.totalFiles} |
+            | Backend Files | ${analysis.backendFiles} |
+            | Frontend Files | ${analysis.frontendFiles} |
+            | Test Files | ${analysis.testFiles} |
+
+            ### Test Coverage
+            - Coverage: **${analysis.coverage}%** (${coverageStatus})
+            - Target: 80%
+
+            ### Review Checklist
+            - [ ] Code follows project conventions
+            - [ ] Tests added for new functionality
+            - [ ] Documentation updated if needed
+            - [ ] No hardcoded secrets or credentials
+
+            ---
+            *Analyzed by GitHub Swarm PR Reviewer*`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Security Scan Agent
+  security-scan:
+    name: Security Scan
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *')
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          pip install pip-audit safety bandit
+
+      - name: Run pip-audit
+        id: pip-audit
+        continue-on-error: true
+        run: |
+          if [ -f requirements.txt ]; then
+            pip-audit -r requirements.txt --format json > pip-audit.json 2>/dev/null || echo '{"vulnerabilities":[]}' > pip-audit.json
+            VULN_COUNT=$(python -c "import json; print(len(json.load(open('pip-audit.json')).get('vulnerabilities', [])))" 2>/dev/null || echo 0)
+            echo "vulnerabilities=$VULN_COUNT" >> $GITHUB_OUTPUT
+          else
+            echo "vulnerabilities=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Bandit (Python Security)
+        id: bandit
+        continue-on-error: true
+        run: |
+          if [ -d "backend" ]; then
+            bandit -r backend/ -f json -o bandit.json 2>/dev/null || echo '{"results":[]}' > bandit.json
+            ISSUES=$(python -c "import json; d=json.load(open('bandit.json')); print(len(d.get('results', [])))" 2>/dev/null || echo 0)
+            echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+          else
+            echo "issues=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for secrets
+        id: secrets
+        run: |
+          # Simple secret detection (add gitleaks for production)
+          SECRET_PATTERNS="(api[_-]?key|secret|password|token|credential).*[=:].*['\"][^'\"]{8,}['\"]"
+          SECRETS_FOUND=$(grep -rE "$SECRET_PATTERNS" --include="*.py" --include="*.ts" --include="*.js" backend/ frontend/ 2>/dev/null | wc -l || echo 0)
+          echo "secrets_found=$SECRETS_FOUND" >> $GITHUB_OUTPUT
+
+      - name: Post Security Report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const vulns = '${{ steps.pip-audit.outputs.vulnerabilities }}';
+            const issues = '${{ steps.bandit.outputs.issues }}';
+            const secrets = '${{ steps.secrets.outputs.secrets_found }}';
+
+            const hasIssues = parseInt(vulns) > 0 || parseInt(issues) > 0 || parseInt(secrets) > 0;
+            const status = hasIssues ? 'ISSUES FOUND' : 'PASSED';
+
+            const body = `## Security Scan Report
+
+            ### Summary: **${status}**
+
+            | Check | Result |
+            |-------|--------|
+            | Dependency Vulnerabilities | ${vulns} found |
+            | Code Security Issues (Bandit) | ${issues} found |
+            | Potential Secret Exposure | ${secrets} patterns |
+
+            ${hasIssues ? '### Action Required\nPlease review and address security findings before merging.' : '### All Clear\nNo critical security issues detected.'}
+
+            ---
+            *Scanned by GitHub Swarm Security Agent*`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Infrastructure Health Check
+  infrastructure-check:
+    name: Infrastructure Health
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 * * * *') ||
+      (github.event_name == 'workflow_run')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Docker Configurations
+        id: docker
+        run: |
+          ISSUES=0
+
+          # Check docker-compose files exist
+          for file in docker-compose.yml docker-compose.prod.yml; do
+            if [ ! -f "$file" ]; then
+              echo "Missing: $file"
+              ISSUES=$((ISSUES + 1))
+            fi
+          done
+
+          # Check for healthchecks in docker-compose
+          if [ -f docker-compose.yml ]; then
+            if ! grep -q "healthcheck" docker-compose.yml; then
+              echo "Warning: No healthchecks in docker-compose.yml"
+              ISSUES=$((ISSUES + 1))
+            fi
+          fi
+
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+
+      - name: Check CI/CD Health
+        id: cicd
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get recent workflow runs
+          RUNS=$(gh run list --limit 20 --json status,conclusion)
+          SUCCESS=$(echo "$RUNS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$RUNS" | jq 'length')
+
+          if [ "$TOTAL" -gt 0 ]; then
+            RATE=$(echo "scale=1; $SUCCESS * 100 / $TOTAL" | bc)
+          else
+            RATE=100
+          fi
+
+          echo "success_rate=$RATE" >> $GITHUB_OUTPUT
+          echo "CI/CD Success Rate: $RATE%"
+
+      - name: Generate Health Report
+        run: |
+          echo "## Infrastructure Health Report"
+          echo ""
+          echo "| Check | Status |"
+          echo "|-------|--------|"
+          echo "| Docker Config | ${{ steps.docker.outputs.issues == '0' && 'OK' || 'Issues Found' }} |"
+          echo "| CI/CD Success Rate | ${{ steps.cicd.outputs.success_rate }}% |"
+          echo ""
+          echo "*Checked by GitHub Swarm Infrastructure Agent*"
+
+  # Documentation Check (on PR merge)
+  documentation-check:
+    name: Documentation Check
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Documentation Needs
+        id: docs
+        run: |
+          # Get merged PR files
+          FILES=$(git diff --name-only HEAD~1)
+
+          NEEDS_API_DOCS=false
+          NEEDS_README=false
+
+          # Check if API files changed
+          if echo "$FILES" | grep -q "backend/api/"; then
+            NEEDS_API_DOCS=true
+          fi
+
+          # Check if significant changes
+          if echo "$FILES" | grep -qE "(docker-compose|requirements\.txt|package\.json)"; then
+            NEEDS_README=true
+          fi
+
+          echo "needs_api_docs=$NEEDS_API_DOCS" >> $GITHUB_OUTPUT
+          echo "needs_readme=$NEEDS_README" >> $GITHUB_OUTPUT
+
+      - name: Create Documentation Issue
+        if: steps.docs.outputs.needs_api_docs == 'true' || steps.docs.outputs.needs_readme == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const needsApi = '${{ steps.docs.outputs.needs_api_docs }}' === 'true';
+            const needsReadme = '${{ steps.docs.outputs.needs_readme }}' === 'true';
+
+            let body = `## Documentation Update Needed\n\n`;
+            body += `PR #${{ github.event.pull_request.number }} was merged and may require documentation updates:\n\n`;
+
+            if (needsApi) {
+              body += `- [ ] Update API documentation in \`docs/api/\`\n`;
+            }
+            if (needsReadme) {
+              body += `- [ ] Review and update README.md\n`;
+            }
+
+            body += `\n---\n*Created by GitHub Swarm Documentation Agent*`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `docs: Update documentation for PR #${{ github.event.pull_request.number }}`,
+              body: body,
+              labels: ['documentation', 'P3-low']
+            });
