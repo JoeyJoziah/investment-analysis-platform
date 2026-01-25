@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"
+
+    # GDPR Compliance
+    GDPR_ENCRYPTION_KEY: Optional[str] = None  # Fernet key for PII encryption
+    GDPR_DATA_RETENTION_DAYS: int = 2555  # 7 years for SEC compliance
+
+    # SEC Compliance
+    SEC_AUDIT_RETENTION_YEARS: int = 7
+    SEC_RECOMMENDATION_DISCLOSURE_ENABLED: bool = True
     
     # Cache Settings
     CACHE_TTL_SECONDS: int = 3600  # 1 hour

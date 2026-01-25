@@ -58,14 +58,13 @@ class ResourcePressureLevel(Enum):
 class ResourceMetrics:
     """Comprehensive resource metrics"""
     timestamp: datetime
-    
+
     # CPU metrics
     cpu_percent: float
     cpu_count_logical: int
     cpu_count_physical: int
     cpu_freq_current: float
-    cpu_temp: Optional[float] = None
-    
+
     # Memory metrics
     memory_total_gb: float
     memory_used_gb: float
@@ -73,24 +72,25 @@ class ResourceMetrics:
     memory_percent: float
     swap_total_gb: float
     swap_used_gb: float
-    
+
     # Disk I/O metrics
     disk_read_mb_s: float
     disk_write_mb_s: float
     disk_usage_percent: float
     disk_iops: float
-    
+
     # Network metrics
     network_sent_mb_s: float
     network_recv_mb_s: float
     network_connections: int
-    
+
     # Process metrics
     process_count: int
     thread_count: int
     file_descriptor_count: int
-    
-    # Custom application metrics
+
+    # Fields with defaults (must come last)
+    cpu_temp: Optional[float] = None
     active_requests: int = 0
     queue_size: int = 0
     cache_hit_rate: float = 0.0

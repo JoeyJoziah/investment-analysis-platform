@@ -64,11 +64,32 @@ export const apiConfig = {
       remove: '/api/portfolio/remove',
     },
     
-    // Watchlist
+    // Watchlist - New API endpoints
     watchlist: {
-      list: '/api/watchlist',
-      add: '/api/watchlist/add',
-      remove: '/api/watchlist/remove',
+      // Get all user watchlists
+      list: '/api/watchlists',
+      // Create a new watchlist
+      create: '/api/watchlists',
+      // Get specific watchlist with items
+      get: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      // Update a watchlist
+      update: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      // Delete a watchlist
+      delete: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      // Add item to watchlist
+      addItem: (watchlistId: number) => `/api/watchlists/${watchlistId}/items`,
+      // Update watchlist item
+      updateItem: (watchlistId: number, itemId: number) =>
+        `/api/watchlists/${watchlistId}/items/${itemId}`,
+      // Remove watchlist item
+      removeItem: (watchlistId: number, itemId: number) =>
+        `/api/watchlists/${watchlistId}/items/${itemId}`,
+      // Default watchlist operations
+      default: '/api/watchlists/default',
+      // Add symbol to default watchlist
+      addToDefault: (symbol: string) => `/api/watchlists/default/symbols/${symbol}`,
+      // Remove symbol from default watchlist
+      removeFromDefault: (symbol: string) => `/api/watchlists/default/symbols/${symbol}`,
     },
     
     // News

@@ -752,8 +752,8 @@ async def get_recommendations(
     category: Optional[RecommendationCategory] = None,
     risk_level: Optional[RiskLevel] = None,
     min_confidence: float = Query(0.0, ge=0, le=1),
-    sort_by: str = Query("confidence_score", regex="^(confidence_score|expected_return|created_at)$"),
-    order: str = Query("desc", regex="^(asc|desc)$")
+    sort_by: str = Query("confidence_score", pattern="^(confidence_score|expected_return|created_at)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$")
 ) -> List["RecommendationDetail"]:
     """Get list of recommendations with filters"""
     
@@ -863,7 +863,7 @@ async def get_portfolio_recommendations(portfolio_id: str) -> PortfolioRecommend
 @router.get("/performance/track", response_model=List[RecommendationPerformance])
 async def track_recommendation_performance(
     days_back: int = Query(30, le=365),
-    status: Optional[str] = Query(None, regex="^(active|closed|stopped_out)$")
+    status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
 ) -> List[RecommendationPerformance]:
     """Track performance of past recommendations"""
     
@@ -966,7 +966,7 @@ async def backtest_strategy(
 
 @router.get("/trending")
 async def get_trending_recommendations(
-    timeframe: str = Query("24h", regex="^(1h|24h|7d|30d)$")
+    timeframe: str = Query("24h", pattern="^(1h|24h|7d|30d)$")
 ) -> List[Dict[str, Any]]:
     """Get trending recommendations based on user activity"""
     

@@ -147,6 +147,11 @@ celery_app.conf.update(
             'schedule': timedelta(minutes=5),  # Every 5 minutes during market hours
             'options': {'queue': 'notifications'}
         },
+        'check-watchlist-price-alerts': {
+            'task': 'check_watchlist_price_alerts',
+            'schedule': crontab(minute='*/5', hour='9-16', day_of_week='mon-fri'),  # Every 5 min during market hours
+            'options': {'queue': 'analysis'}
+        },
         
         # Maintenance tasks
         'cleanup-old-data': {

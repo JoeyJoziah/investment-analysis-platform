@@ -8,7 +8,7 @@ from datetime import datetime
 from backend.utils.database import get_db_sync, engine
 from backend.utils.cache import get_redis_client
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(tags=["health"])
 
 @router.get("")
 async def health_check() -> Dict:

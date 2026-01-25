@@ -1,166 +1,206 @@
-# Comprehensive Agent Management System
+# Agent Swarm System
 
-## Investment Analysis Platform - 397 Agent Coordination Framework
+## Investment Analysis Platform - 7 Expert Team Swarms
 
-This directory contains a complete agent management system for coordinating 397 specialized agents across 7 repositories for the investment analysis platform development.
+This directory contains a streamlined agent management system organized into 7 specialized swarms (teams) that coordinate expert knowledge for the investment analysis platform.
 
-## 📁 System Files
+## Quick Start
 
-### Core Configuration Files
-- **`agent_catalog.json`** - Complete catalog of all 397 agents with capabilities and expertise levels
-- **`team_configurations.yaml`** - Detailed specifications for 12 specialized agent teams
-- **`agent_invocation_framework.py`** - Automatic agent selection and coordination system
-- **`performance_dashboard_design.json`** - Comprehensive monitoring system design
-- **`agent_invocation_examples.md`** - 15+ detailed coordination examples
+### Using a Swarm
 
-## 🎯 System Overview
+Swarms are invoked automatically when you describe tasks in their domain, or you can explicitly request one:
 
-### Agent Distribution Across Repositories
-| Repository | Count | Primary Focus |
-|------------|-------|---------------|
-| **furai-subagents** | 137 | Technology-specific experts (130+ technologies) |
-| **voltagent-subagents** | 110 | Enterprise development patterns |
-| **wshobson-agents** | 63 | Financial & business focus |
-| **claude-code-sub-agents** | 38 | Core development & project management |
-| **lst97-subagents** | 37 | Organized business functions |
-| **nuttall-agents** | 7 | Specialized development |
-| **awesome-claude-code-agents** | 5 | Backend & UI engineering |
-| **Total** | **397** | **Complete development coverage** |
-
-### 12 Specialized Agent Teams
-
-1. **Data Pipeline Team** - Airflow, ETL, streaming (Lead: `data-engineer@lst97`)
-2. **ML/AI Team** - PyTorch, models, training (Lead: `ml-engineer@wshobson`)
-3. **Financial Analysis Team** - Quant analysis, trading (Lead: `quant-analyst@wshobson`)
-4. **API Integration Team** - FastAPI, REST APIs (Lead: `api-designer@claude-code`)
-5. **Backend Development Team** - Python, async (Lead: `python-pro@wshobson`)
-6. **Frontend Team** - React, UI/UX (Lead: `frontend-developer@lst97`)
-7. **Database Team** - PostgreSQL, optimization (Lead: `postgres-pro@lst97`)
-8. **DevOps Team** - Docker, K8s, CI/CD (Lead: `deployment-engineer@lst97`)
-9. **Security Team** - Authentication, compliance (Lead: `security-auditor@wshobson`)
-10. **Performance Team** - Optimization, caching (Lead: `performance-optimizer@claude-code`)
-11. **Testing Team** - Test suites, QA (Lead: `test-suite-generator@claude-code`)
-12. **Documentation Team** - Technical writing (Lead: `api-documenter@lst97`)
-
-### 5 Coordination Protocols
-
-1. **Sequential with Parallel Phases** - For data pipelines and complex processes
-2. **Collaborative Research & Development** - For ML/AI and algorithm design
-3. **Domain Expert Led Collaboration** - For financial analysis and specialized work
-4. **Design Review Implementation** - For API development and system interfaces
-5. **Architecture First Development** - For backend systems and infrastructure
-
-## 🚀 Key Features
-
-### Automatic Agent Selection
-- **Task Complexity Analysis** (1-10 scale)
-- **Domain Detection** - Automatic identification of required expertise
-- **Team Selection** - Best-fit teams based on task requirements
-- **Parallel Execution Planning** - Identify parallelizable components
-- **Synthesis Strategy** - Plan for consolidating multi-agent outputs
-
-### Parallel Execution Optimization
-- **Maximum Concurrency**: Up to 5 teams, 4 agents per team in parallel
-- **Synthesis Checkpoints**: After each major phase
-- **Quality Gates**: Parallel reviews with synthesis
-- **Meta-Coordination**: `agent-organizer@lst97` for enterprise tasks
-
-### Performance Monitoring
-- **Team Performance Metrics**: Completion rates, quality scores, efficiency
-- **Agent Utilization Tracking**: Activation frequency, success rates
-- **Synthesis Quality Metrics**: Coherence, completeness, accuracy
-- **Coordination Efficiency**: Handoff success, escalation rates
-
-## 📊 Usage Examples
-
-### Simple Task (Complexity 1-3)
-```bash
-# Single agent direct invocation
-User: "Fix typo in documentation"
-→ documentation-generator@claude-code
+```
+"Use the financial-analysis-swarm to analyze AAPL stock"
+"Have the backend-api-swarm review this endpoint"
+"Ask the team-coordinator which team should handle this"
 ```
 
-### Moderate Task (Complexity 4-6) 
-```bash  
-# Team coordination with parallel phases
-User: "Optimize PostgreSQL query performance"
-→ Database Team (postgres-pro@lst97 + supporting agents)
+### Not Sure Which Team?
+
+Use the **team-coordinator** - it analyzes your request and recommends the optimal team(s).
+
+---
+
+## The 7 Swarms
+
+| Swarm | Purpose | Use When... |
+|-------|---------|-------------|
+| **financial-analysis-swarm** | Stock analysis, ML predictions, quant methods | Analyzing stocks, building models, SEC compliance |
+| **data-ml-pipeline-swarm** | ETL, Airflow DAGs, ML operations | Building pipelines, data ingestion, model training |
+| **backend-api-swarm** | FastAPI, REST APIs, database ops | Creating endpoints, query optimization, auth |
+| **security-compliance-swarm** | SEC/GDPR compliance, security audits | Compliance reviews, security hardening |
+| **infrastructure-devops-swarm** | Docker, deployment, monitoring | DevOps, CI/CD, cost optimization |
+| **ui-visualization-swarm** | React, charts, dashboards | Frontend development, data visualization |
+| **project-quality-swarm** | Code review, testing, architecture | Reviews, tests, documentation |
+
+Plus: **team-coordinator** for routing and multi-team coordination
+
+---
+
+## Directory Structure
+
+```
+.claude/
+├── agents/                          # All agent definitions
+│   ├── # SWARM AGENTS (primary)
+│   ├── financial-analysis-swarm.md
+│   ├── data-ml-pipeline-swarm.md
+│   ├── backend-api-swarm.md
+│   ├── security-compliance-swarm.md
+│   ├── infrastructure-devops-swarm.md
+│   ├── ui-visualization-swarm.md
+│   ├── project-quality-swarm.md
+│   ├── team-coordinator.md
+│   │
+│   ├── # SPECIALIST AGENTS (direct invocation)
+│   ├── data-science-architect.md    # Deep data/analytics expertise
+│   ├── architecture-reviewer.md     # System design review
+│   ├── code-review-expert.md        # Detailed code review
+│   ├── godmode-refactorer.md        # Complex refactoring
+│   └── ui_design.md                 # UI/UX design commands
+│
+├── commands/                        # Slash commands
+│   ├── analyze_codebase.md
+│   └── ui_design.md
+│
+├── archive/                         # Archived legacy files
+│   ├── agent_catalog.json           # Old 397-agent catalog
+│   ├── agent_invocation_framework.py
+│   └── ...
+│
+└── README.md                        # This file
 ```
 
-### Complex Task (Complexity 7-8)
-```bash
-# Multi-team coordination
-User: "Implement WebSocket API with caching"
-→ API Integration + Backend + Performance Teams
-→ Meta-coordinator: agent-organizer@lst97
+---
+
+## Swarm Details
+
+### Financial Analysis Swarm
+**Specialties**: Fundamental analysis, technical indicators, ML/FinBERT, portfolio optimization, risk metrics (VaR, Sharpe), SEC compliance
+
+**Example prompts**:
+- "Analyze AAPL fundamentals and technicals"
+- "Build a momentum indicator for the screener"
+- "Calculate portfolio VaR and Sharpe ratio"
+- "Review recommendation logic for SEC compliance"
+
+### Data & ML Pipeline Swarm
+**Specialties**: Airflow DAGs, ETL design, API rate limiting, TimescaleDB, ML training/serving, data quality
+
+**Example prompts**:
+- "Create an Airflow DAG for daily stock data"
+- "Optimize the pipeline for 6,000 stocks"
+- "Implement API rate limiting with caching"
+- "Set up ML model retraining schedule"
+
+### Backend & API Swarm
+**Specialties**: FastAPI async patterns, REST API design, WebSocket, PostgreSQL/Redis, OAuth2/JWT, repository pattern
+
+**Example prompts**:
+- "Add endpoint for portfolio rebalancing"
+- "Implement WebSocket for real-time prices"
+- "Optimize the recommendations query"
+- "Add OAuth2 authentication flow"
+
+### Security & Compliance Swarm
+**Specialties**: SEC 2025 regulations, GDPR data protection, OWASP security, vulnerability assessment, audit logging
+
+**Example prompts**:
+- "Implement SEC-compliant audit logging"
+- "Review authentication for vulnerabilities"
+- "Ensure GDPR compliance for user data export"
+- "Conduct security audit of the API"
+
+### Infrastructure & DevOps Swarm
+**Specialties**: Docker Compose, Prometheus/Grafana, CI/CD (GitHub Actions), cost optimization (<$50/mo)
+
+**Example prompts**:
+- "Set up Grafana monitoring dashboard"
+- "Optimize Docker for production"
+- "Reduce infrastructure costs"
+- "Configure CI/CD pipeline"
+
+### UI & Visualization Swarm
+**Specialties**: React/TypeScript, Material-UI, Plotly charts, real-time updates, responsive design, accessibility
+
+**Example prompts**:
+- "Create stock price chart component"
+- "Design the portfolio dashboard"
+- "Add real-time price updates"
+- "Improve mobile responsiveness"
+
+### Project & Quality Swarm
+**Specialties**: Code review, pytest/Jest testing, architecture decisions (ADRs), documentation, coverage
+
+**Example prompts**:
+- "Review the new recommendation endpoint"
+- "Add unit tests for portfolio service"
+- "Evaluate the caching architecture"
+- "Update API documentation"
+
+---
+
+## Multi-Team Coordination
+
+For complex tasks spanning multiple domains, the **team-coordinator** recommends coordination strategies:
+
+### Example: "Add a new stock screener feature"
+
+```
+Coordination Strategy:
+
+Phase 1: Financial Analysis Swarm
+- Define screening criteria and calculations
+- Deliverable: Screening logic specification
+
+Phase 2: Backend API Swarm
+- Implement screening endpoints
+- Deliverable: API with /screener endpoints
+
+Phase 3: UI Visualization Swarm
+- Build screener interface
+- Deliverable: React components
+
+Phase 4: Project Quality Swarm
+- Review and test all components
+- Deliverable: Approved, tested feature
 ```
 
-### Enterprise Task (Complexity 9-10)
-```bash
-# Full system implementation with compliance
-User: "Complete authentication system with SEC compliance"
-→ Security + Backend + API + Documentation Teams
-→ Meta-coordination with synthesis checkpoints
-```
+---
 
-## 🔧 Integration with CLAUDE.md
+## Preserved Specialist Agents
 
-The system is fully integrated with the main `CLAUDE.md` file, providing:
+These agents remain available for direct, focused tasks:
 
-### Automatic Agent Invocation
-- **CRITICAL REQUIREMENT**: All prompts automatically invoke appropriate agents
-- **397 Agent Integration**: Complete access to all specialized agents
-- **Team Coordination**: Automatic team selection and coordination
-- **Quality Assurance**: Automatic code review, security validation, documentation
+| Agent | Best For |
+|-------|----------|
+| `data-science-architect` | Deep dive on data architecture |
+| `architecture-reviewer` | System design decisions |
+| `code-review-expert` | Detailed code review |
+| `godmode-refactorer` | Large-scale refactoring |
 
-### Enhanced Project Priority Assignments
-Based on 72% project completion:
-1. **"Activate data pipeline"** → Data Pipeline + Backend Teams
-2. **"Train ML models"** → ML/AI + Data Pipeline Teams
-3. **"Complete frontend pages"** → Frontend + API Integration Teams
-4. **"Implement security compliance"** → Security + Backend Teams
-5. **"Set up production deployment"** → DevOps + Performance Teams
+---
 
-## 🎯 Success Metrics
+## Investment Platform Context
 
-### Team Performance
-- **Task Completion Rate**: Target 95%
-- **Average Completion Time**: Target 240 seconds
-- **Parallel Efficiency**: Target 60% improvement
-- **Quality Score**: Target 85/100
-- **Coordination Effectiveness**: Target 90%
+All swarms understand the platform's constraints:
 
-### Agent Utilization
-- **Activation Frequency**: Target 5 per day
-- **Success Rate**: Target 92%
-- **Specialization Accuracy**: Target 95%
-- **Collaboration Score**: Target 88%
+- **Budget**: Under $50/month operational cost
+- **Scale**: 6,000+ stocks (NYSE, NASDAQ, AMEX)
+- **APIs**: Alpha Vantage (25/day), Finnhub (60/min), Polygon (5/min)
+- **Compliance**: SEC 2025 regulations, GDPR
+- **Stack**: FastAPI, React, PostgreSQL/TimescaleDB, Redis, Docker
 
-### System Efficiency
-- **Synthesis Success Rate**: Target 90%
-- **Handoff Success Rate**: Target 95%
-- **Escalation Rate**: Target <10%
-- **Resource Utilization**: Target 70%
+---
 
-## 📈 Testing Results
+## Migration from Old System
 
-The framework has been tested with 6 representative prompts showing:
-- ✅ **Correct complexity scoring** (2-10 scale)
-- ✅ **Accurate domain detection** (data_pipeline, ml_training, api_development, etc.)
-- ✅ **Appropriate team selection** (single team for moderate, multi-team for complex)
-- ✅ **Parallel component identification** (automatic detection of parallelizable work)
-- ✅ **Meta-coordination triggers** (agent-organizer@lst97 for enterprise tasks)
+The previous 397-agent catalog has been archived. The new swarm system:
 
-## 🔄 Continuous Improvement
+- **Reduces complexity**: 7 teams vs 397 individual agents
+- **Preserves expertise**: Each swarm synthesizes specialist knowledge
+- **Improves routing**: Team-coordinator helps select the right team
+- **Maintains flexibility**: Individual specialist agents still available
 
-### Automatic Optimization
-- **Daily**: Agent utilization analysis and task reallocation
-- **Weekly**: Parallel efficiency improvements and protocol adjustments
-- **Monthly**: Team composition optimization based on performance metrics
-
-### Learning Integration
-- **Performance Feedback**: Continuous learning from task outcomes
-- **Specialization Drift Detection**: Agents working outside expertise
-- **Protocol Effectiveness Evaluation**: Success rates by coordination method
-
-This comprehensive agent management system ensures maximum efficiency through parallel execution, expert specialization, and systematic coordination across all 397 available agents for the investment analysis platform.
+Archived files are in `.claude/archive/` for reference.

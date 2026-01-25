@@ -6,16 +6,11 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 
-# Add TradingAgents to Python path - check multiple possible locations
-trading_agents_paths = [
-    os.path.join(os.path.dirname(__file__), 'TradingAgents'),
-    os.path.join(os.path.dirname(__file__), '../../../TradingAgents'),
-    os.path.join(os.path.dirname(__file__), '../../TradingAgents'),
-]
-for trading_agents_path in trading_agents_paths:
-    if os.path.exists(trading_agents_path) and trading_agents_path not in sys.path:
-        sys.path.insert(0, trading_agents_path)
-        break
+# Add TradingAgents to Python path
+# TradingAgents is located at backend/TradingAgents/
+trading_agents_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../TradingAgents'))
+if os.path.exists(trading_agents_path) and trading_agents_path not in sys.path:
+    sys.path.insert(0, trading_agents_path)
 
 # Optional TradingAgents imports - fallback to stubs if not available
 TRADING_AGENTS_AVAILABLE = False

@@ -137,6 +137,7 @@ class SecurityConfig:
     TRUSTED_HOSTS = [
         "localhost",
         "127.0.0.1",
+        "testserver",  # For testing with FastAPI TestClient
         "investment-analysis.com",
         "api.investment-analysis.com"
     ]
@@ -337,39 +338,40 @@ class PasswordValidator:
     
     @staticmethod
     def generate_secure_password(length: int = 16) -> str:
-        """Generate a secure password"""
+        """Generate a cryptographically secure password"""
         import string
-        import random
-        
+
         # Ensure we have all required character types
         chars = ""
         password = ""
-        
+
         if SecurityConfig.PASSWORD_REQUIRE_UPPERCASE:
             chars += string.ascii_uppercase
-            password += random.choice(string.ascii_uppercase)
-            
+            password += secrets.choice(string.ascii_uppercase)
+
         if SecurityConfig.PASSWORD_REQUIRE_LOWERCASE:
             chars += string.ascii_lowercase
-            password += random.choice(string.ascii_lowercase)
-            
+            password += secrets.choice(string.ascii_lowercase)
+
         if SecurityConfig.PASSWORD_REQUIRE_DIGITS:
             chars += string.digits
-            password += random.choice(string.digits)
-            
+            password += secrets.choice(string.digits)
+
         if SecurityConfig.PASSWORD_REQUIRE_SPECIAL:
             special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
             chars += special_chars
-            password += random.choice(special_chars)
-        
-        # Fill remaining length
+            password += secrets.choice(special_chars)
+
+        # Fill remaining length with cryptographically secure random choices
         for _ in range(length - len(password)):
-            password += random.choice(chars)
-        
-        # Shuffle the password
+            password += secrets.choice(chars)
+
+        # Shuffle the password using Fisher-Yates with secure randomness
         password_list = list(password)
-        random.shuffle(password_list)
-        
+        for i in range(len(password_list) - 1, 0, -1):
+            j = secrets.randbelow(i + 1)
+            password_list[i], password_list[j] = password_list[j], password_list[i]
+
         return ''.join(password_list)
 
 

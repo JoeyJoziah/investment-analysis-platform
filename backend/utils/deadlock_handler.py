@@ -159,7 +159,7 @@ class DeadlockHandler:
     
     def _classify_error(self, error: Exception) -> DeadlockErrorType:
         """Classify error type for appropriate handling"""
-        if isinstance(error, asyncpg.exceptions.SerializationFailureError):
+        if isinstance(error, asyncpg.exceptions.SerializationError):
             return DeadlockErrorType.SERIALIZATION_FAILURE
         elif isinstance(error, asyncpg.exceptions.DeadlockDetectedError):
             return DeadlockErrorType.DEADLOCK_DETECTED

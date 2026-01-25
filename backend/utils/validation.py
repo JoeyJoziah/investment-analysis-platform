@@ -462,3 +462,74 @@ def setup_validation(app):
     """Setup validation middleware for the application"""
     app.add_middleware(ValidationMiddleware)
     logger.info("Input validation middleware configured")
+
+
+def validate_financial_data(
+    data: Dict[str, Any],
+    required_fields: Optional[List[str]] = None,
+    numeric_fields: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Validate financial data dictionary.
+
+    Args:
+        data: Financial data to validate
+        required_fields: List of required fields
+        numeric_fields: List of fields that must be numeric
+
+    Returns:
+        Dictionary with validation status and issues
+    """
+    errors = []
+    warnings = []
+
+    if required_fields is None:
+        required_fields = ['ticker', 'price', 'volume']
+
+    if numeric_fields is None:
+        numeric_fields = ['price', 'volume', 'market_cap', 'pe_ratio']
+
+    # Check required fields
+    for field in required_fields:
+        if field not in data:
+            errors.append(f"Missing required field: {field}")
+
+    # Check numeric fields
+    for field in numeric_fields:
+        if field in data:
+            value = data[field]
+            if value is not None:
+                try:
+                    float(value)
+                except (ValueError, TypeError):
+                    errors.append(f"Field {field} must be numeric")
+
+    # Check price validity
+    if 'price' in data and data['price'] is not None:
+        try:
+            price = float(data['price'])
+            if price <= 0:
+                errors.append("Price must be positive")
+        except (ValueError, TypeError):
+            pass
+
+    # Check volume validity
+    if 'volume' in data and data['volume'] is not None:
+        try:
+            volume = float(data['volume'])
+            if volume < 0:
+                errors.append("Volume cannot be negative")
+        except (ValueError, TypeError):
+            pass
+
+    # Calculate data quality score
+    total_fields = len(data)
+    valid_fields = total_fields - len(errors)
+    quality_score = valid_fields / total_fields if total_fields > 0 else 0
+
+    return {
+        'is_valid': len(errors) == 0,
+        'errors': errors,
+        'warnings': warnings,
+        'data_quality_score': quality_score
+    }

@@ -18,7 +18,8 @@ import {
   Button,
   Collapse,
   useTheme,
-  alpha
+  alpha,
+  Paper
 } from '@mui/material';
 import {
   AttachMoney,
@@ -155,12 +156,12 @@ const CostMonitor: React.FC<CostMetricsProps> = ({ metrics, onRefresh, onSetting
           </Box>
           <Box display="flex" gap={0.5}>
             <Tooltip title="Refresh metrics">
-              <IconButton size="small" onClick={onRefresh}>
+              <IconButton size="small" onClick={onRefresh} aria-label="Refresh cost metrics">
                 <Refresh />
               </IconButton>
             </Tooltip>
             <Tooltip title="Settings">
-              <IconButton size="small" onClick={onSettings}>
+              <IconButton size="small" onClick={onSettings} aria-label="Open cost monitor settings">
                 <Settings />
               </IconButton>
             </Tooltip>

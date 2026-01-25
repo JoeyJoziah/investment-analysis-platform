@@ -21,15 +21,16 @@ from testcontainers.redis import RedisContainer
 
 # Import application modules
 from backend.api.main import app
-from backend.models.database import Base, get_database
+from backend.models.database import Base
+from backend.config.database import get_async_db_session as get_database
 from backend.repositories.stock_repository import StockRepository
 from backend.repositories.recommendation_repository import RecommendationRepository
 from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.utils.cache import CacheManager
-from backend.utils.cost_monitor import EnhancedCostMonitor
+from backend.utils.enhanced_cost_monitor import EnhancedCostMonitor
 from backend.ml.model_manager import ModelManager
-from backend.tasks.analysis_tasks import analyze_stock_task, generate_daily_recommendations_task
+from backend.tasks.analysis_tasks import analyze_stock, run_daily_analysis
 from backend.tests.fixtures.comprehensive_mock_fixtures import (
     mock_external_apis, AlphaVantageMocks, FinnhubMocks, PolygonMocks
 )

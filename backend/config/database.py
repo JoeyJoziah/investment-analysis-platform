@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine
 )
-from sqlalchemy.pool import QueuePool, NullPool
+from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 from sqlalchemy import text, event
 from sqlalchemy.exc import SQLAlchemyError, DisconnectionError, TimeoutError
 import asyncpg
@@ -131,15 +131,14 @@ class AsyncDatabaseManager:
                     "jit": "off",  # Disable JIT for predictable performance
                 },
                 "command_timeout": 60,
-                "prepared_statement_cache_size": self.config.prepared_statement_cache_size,
-                "prepared_statement_name_func": self._prepared_statement_name_func,
+                "statement_cache_size": 0,  # Disable prepared statement caching for compatibility
             }
             
             # Choose pool class based on environment
             if settings.ENVIRONMENT == "testing":
                 poolclass = NullPool
             else:
-                poolclass = QueuePool
+                poolclass = AsyncAdaptedQueuePool
             
             self._engine = create_async_engine(
                 self.config.url,
@@ -264,27 +263,27 @@ class AsyncDatabaseManager:
             yield session
             await session.commit()
             
-        except Exception as e:  # Catch all exceptions for now
+        except asyncpg.exceptions.SerializationError as e:
             # Handle serialization failures (deadlocks)
             await session.rollback()
             self._metrics['deadlocks_detected'] += 1
             logger.warning(f"Serialization failure detected: {e}")
             raise
-            
+
         except asyncpg.exceptions.DeadlockDetectedError as e:
             # Handle explicit deadlocks
             await session.rollback()
             self._metrics['deadlocks_detected'] += 1
             logger.warning(f"Deadlock detected: {e}")
             raise
-            
+
         except (DisconnectionError, TimeoutError) as e:
             # Handle connection issues
             await session.rollback()
             self._metrics['connection_errors'] += 1
             logger.error(f"Connection error in session: {e}")
             raise
-            
+
         except Exception as e:
             # Handle all other errors
             await session.rollback()
@@ -325,7 +324,7 @@ class AsyncDatabaseManager:
                 return result
                 
             except (
-                asyncpg.exceptions.SerializationFailureError,
+                asyncpg.exceptions.SerializationError,
                 asyncpg.exceptions.DeadlockDetectedError,
                 DisconnectionError,
                 TimeoutError

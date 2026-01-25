@@ -18,7 +18,7 @@ from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
 from backend.utils.comprehensive_cache import ComprehensiveCacheManager
-from backend.utils.database_query_cache import QueryCache
+from backend.utils.database_query_cache import QueryCacheManager as QueryCache
 from backend.tasks.celery_app import celery_app
 from backend.repositories import stock_repository, price_repository
 from backend.config.database import get_async_db_session

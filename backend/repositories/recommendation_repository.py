@@ -12,7 +12,8 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
-from backend.models.unified_models import Recommendation, Stock, RecommendationPerformance
+from backend.models.unified_models import Recommendation, Stock
+from backend.models.tables import RecommendationPerformance
 from backend.config.database import get_db_session
 
 logger = logging.getLogger(__name__)

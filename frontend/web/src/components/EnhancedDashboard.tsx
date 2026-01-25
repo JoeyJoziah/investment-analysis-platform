@@ -714,8 +714,6 @@ const EnhancedDashboard: React.FC = () => {
                       )}
                       
                       {/* Add other widgets similarly with enhanced features */}
-                      
-                      {provided.placeholder}
                     </Grid>
                   )}
                 </Draggable>

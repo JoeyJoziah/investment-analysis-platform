@@ -245,7 +245,10 @@ const Dashboard: React.FC = () => {
               Portfolio Performance
             </Typography>
             <StockChart
-              data={portfolioSummary?.performanceHistory}
+              data={portfolioSummary?.performanceHistory?.map((item: { date: string; value: number }) => ({
+                date: item.date,
+                close: item.value,
+              }))}
               height={300}
               showVolume={false}
             />

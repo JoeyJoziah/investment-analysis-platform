@@ -607,26 +607,26 @@ async def rate_limit_dependency(
 ):
     """FastAPI dependency for rate limiting"""
     rate_limiter = get_rate_limiter()
-    status = await rate_limiter.check_rate_limit(request, category, user_id)
-    
-    if not status.allowed:
+    rate_status = await rate_limiter.check_rate_limit(request, category, user_id)
+
+    if not rate_status.allowed:
         # Add rate limit headers
         headers = {
             "X-RateLimit-Limit": str(rate_limiter.default_rules[category].requests),
-            "X-RateLimit-Remaining": str(status.remaining),
-            "X-RateLimit-Reset": str(int(status.reset_time.timestamp()))
+            "X-RateLimit-Remaining": str(rate_status.remaining),
+            "X-RateLimit-Reset": str(int(rate_status.reset_time.timestamp()))
         }
-        
-        if status.retry_after_seconds:
-            headers["Retry-After"] = str(status.retry_after_seconds)
-        
+
+        if rate_status.retry_after_seconds:
+            headers["Retry-After"] = str(rate_status.retry_after_seconds)
+
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",
             headers=headers
         )
-    
-    return status
+
+    return rate_status
 
 
 # Decorator for rate limiting
@@ -641,21 +641,21 @@ def rate_limit(category: RateLimitCategory, custom_rule: Optional[RateLimitRule]
                 if isinstance(arg, Request):
                     request = arg
                     break
-            
+
             if not request:
                 # Look in kwargs
                 request = kwargs.get('request')
-            
+
             if request:
                 rate_limiter = get_rate_limiter()
-                status = await rate_limiter.check_rate_limit(request, category, None, custom_rule)
-                
-                if not status.allowed:
+                rate_status = await rate_limiter.check_rate_limit(request, category, None, custom_rule)
+
+                if not rate_status.allowed:
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         detail="Rate limit exceeded"
                     )
-            
+
             return await func(*args, **kwargs)
         return wrapper
     return decorator

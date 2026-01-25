@@ -304,8 +304,14 @@ async def cleanup_stale_connections_task():
             logger.error(f"Error in cleanup task: {e}")
             await asyncio.sleep(60)
 
-# Start cleanup task
-cleanup_task = asyncio.create_task(cleanup_stale_connections_task())
+# Cleanup task - initialized on startup, not at import time
+cleanup_task: Optional[asyncio.Task] = None
+
+def start_cleanup_task():
+    """Start the cleanup task - call from FastAPI startup event"""
+    global cleanup_task
+    if cleanup_task is None:
+        cleanup_task = asyncio.create_task(cleanup_stale_connections_task())
 
 # Data structures for real-time data
 active_price_streams: Dict[str, asyncio.Task] = {}
@@ -423,7 +429,7 @@ async def market_data_stream_endpoint(websocket: WebSocket):
             await asyncio.sleep(5)  # Update every 5 seconds
             
     except WebSocketDisconnect:
-        print("Market data stream client disconnected")
+        logger.info("Market data stream client disconnected")
 
 @router.websocket("/portfolio/{portfolio_id}")
 async def portfolio_stream(websocket: WebSocket, portfolio_id: str):
@@ -462,7 +468,7 @@ async def portfolio_stream(websocket: WebSocket, portfolio_id: str):
             await asyncio.sleep(3)  # Update every 3 seconds
             
     except WebSocketDisconnect:
-        print(f"Portfolio stream for {portfolio_id} disconnected")
+        logger.info(f"Portfolio stream for {portfolio_id} disconnected")
 
 # Helper functions
 async def handle_secure_client_message(
@@ -712,7 +718,7 @@ async def stream_price_updates(symbol: str):
         except asyncio.CancelledError:
             break
         except Exception as e:
-            print(f"Error streaming price for {symbol}: {e}")
+            logger.error(f"Error streaming price for {symbol}: {e}")
             await asyncio.sleep(5)
 
 async def send_heartbeat(websocket: WebSocket, client_id: str):

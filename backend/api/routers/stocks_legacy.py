@@ -102,8 +102,8 @@ async def get_stocks(
     max_market_cap: Optional[float] = None,
     limit: int = Query(100, le=500),
     offset: int = 0,
-    sort_by: str = Query("market_cap", regex="^(symbol|name|market_cap|current_price|change_percent)$"),
-    order: str = Query("desc", regex="^(asc|desc)$")
+    sort_by: str = Query("market_cap", pattern="^(symbol|name|market_cap|current_price|change_percent)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$")
 ) -> List[Stock]:
     """Get list of stocks with optional filters"""
     
@@ -194,7 +194,7 @@ async def get_stock_history(
     symbol: str,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    interval: str = Query("daily", regex="^(daily|weekly|monthly)$")
+    interval: str = Query("daily", pattern="^(daily|weekly|monthly)$")
 ) -> List[PriceHistory]:
     """Get historical price data for a stock"""
     

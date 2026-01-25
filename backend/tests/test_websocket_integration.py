@@ -15,7 +15,7 @@ import websockets
 from websockets.exceptions import ConnectionClosedError
 
 from backend.api.main import app
-from backend.api.routers.websocket import WebSocketManager, ConnectionManager
+from backend.api.routers.websocket import EnhancedConnectionManager as ConnectionManager, manager
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User
 
@@ -37,7 +37,7 @@ class TestWebSocketIntegration:
     @pytest.fixture
     def websocket_manager(self):
         """Create WebSocket manager instance."""
-        return WebSocketManager()
+        return ConnectionManager()
 
     @pytest.fixture
     def connection_manager(self):

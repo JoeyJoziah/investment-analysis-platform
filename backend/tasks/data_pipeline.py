@@ -431,6 +431,83 @@ app.conf.beat_schedule = {
 }
 
 
+class DataPipeline:
+    """
+    Data Pipeline class that wraps Celery tasks for programmatic access.
+    Used for testing and direct API calls.
+    """
+
+    def __init__(self):
+        self.session = None
+        self._initialized = False
+
+    async def initialize(self):
+        """Initialize the data pipeline."""
+        self._initialized = True
+        logger.info("DataPipeline initialized")
+
+    async def shutdown(self):
+        """Shutdown the data pipeline."""
+        if self.session:
+            self.session.close()
+        self._initialized = False
+        logger.info("DataPipeline shutdown")
+
+    async def ingest_stock_data(self, symbols: List[str]) -> Dict[str, Any]:
+        """Ingest stock data for given symbols."""
+        results = {}
+        for symbol in symbols:
+            try:
+                data = await self._fetch_from_apis(symbol)
+                results[symbol] = data
+            except Exception as e:
+                logger.error(f"Error ingesting {symbol}: {e}")
+                results[symbol] = {"error": str(e)}
+        return results
+
+    async def _fetch_from_apis(self, symbol: str) -> Dict[str, Any]:
+        """Fetch data from external APIs."""
+        # Use yfinance for basic data (no rate limits)
+        try:
+            stock = yf.Ticker(symbol)
+            info = stock.info
+            hist = stock.history(period="1d")
+
+            if not hist.empty:
+                latest = hist.iloc[-1]
+                return {
+                    "symbol": symbol,
+                    "price": float(latest['Close']),
+                    "change": float(latest['Close'] - latest['Open']),
+                    "change_percent": float((latest['Close'] - latest['Open']) / latest['Open'] * 100) if latest['Open'] else 0,
+                    "volume": int(latest['Volume']),
+                    "market_cap": info.get('marketCap', 0),
+                    "pe_ratio": info.get('trailingPE', 0),
+                    "timestamp": datetime.now().isoformat()
+                }
+        except Exception as e:
+            logger.error(f"Error fetching {symbol}: {e}")
+            raise
+
+        return {"symbol": symbol, "error": "No data available"}
+
+    async def process_batch(self, symbols: List[str], batch_size: int = 10) -> List[Dict]:
+        """Process a batch of symbols."""
+        results = []
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i + batch_size]
+            batch_results = await self.ingest_stock_data(batch)
+            results.extend(batch_results.values())
+        return results
+
+    def get_pipeline_status(self) -> Dict[str, Any]:
+        """Get current pipeline status."""
+        return {
+            "initialized": self._initialized,
+            "celery_app": app.control.inspect().active() is not None if app else False
+        }
+
+
 if __name__ == "__main__":
     # Test the pipeline
     result = run_daily_pipeline()

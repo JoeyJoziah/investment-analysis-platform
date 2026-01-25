@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, ClassVar, Dict
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from aiokafka.errors import KafkaError
@@ -46,8 +46,8 @@ class KafkaConfig(BaseModel):
     linger_ms: int = 100
     acks: str = "all"
     
-    # Topics
-    topics = {
+    # Topics (ClassVar since it's a class-level constant)
+    topics: ClassVar[Dict[str, str]] = {
         "stock_prices": "stock-prices",
         "stock_fundamentals": "stock-fundamentals",
         "news_sentiment": "news-sentiment",

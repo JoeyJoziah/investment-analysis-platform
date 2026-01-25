@@ -19,11 +19,10 @@ from fastapi import HTTPException, Depends, Request, status
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from passlib.hash import argon2
-import redis
+import redis.asyncio as aioredis  # Use modern redis async support
 import logging
 from pydantic import BaseModel, EmailStr, validator
 import asyncio
-import aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid

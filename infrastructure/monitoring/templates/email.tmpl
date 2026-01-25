@@ -1,0 +1,356 @@
+{{ define "email.investment_platform.subject" }}
+[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] Investment Platform Alert: {{ .GroupLabels.alertname }}
+{{ end }}
+
+{{ define "email.investment_platform.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Platform Alert</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            padding: 20px 30px;
+            color: white;
+        }
+        .header.firing {
+            background-color: #dc3545;
+        }
+        .header.resolved {
+            background-color: #28a745;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 5px 0 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .alert-card {
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .alert-header {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-header.critical {
+            background-color: #f8d7da;
+            border-bottom: 2px solid #dc3545;
+        }
+        .alert-header.warning {
+            background-color: #fff3cd;
+            border-bottom: 2px solid #ffc107;
+        }
+        .alert-header.info {
+            background-color: #d1ecf1;
+            border-bottom: 2px solid #17a2b8;
+        }
+        .alert-header.resolved {
+            background-color: #d4edda;
+            border-bottom: 2px solid #28a745;
+        }
+        .alert-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .severity-badge {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .severity-critical {
+            background-color: #dc3545;
+            color: white;
+        }
+        .severity-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+        .severity-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .alert-body {
+            padding: 20px;
+        }
+        .alert-description {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+        .alert-meta {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        .alert-meta-row {
+            display: flex;
+            margin-bottom: 8px;
+        }
+        .alert-meta-row:last-child {
+            margin-bottom: 0;
+        }
+        .alert-meta-label {
+            font-weight: 600;
+            width: 140px;
+            color: #6c757d;
+            font-size: 13px;
+        }
+        .alert-meta-value {
+            flex: 1;
+            font-size: 13px;
+        }
+        .labels {
+            margin-top: 15px;
+        }
+        .label {
+            display: inline-block;
+            padding: 3px 8px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .footer {
+            padding: 20px 30px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .compliance-notice {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #fff3cd;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .compliance-notice strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header {{ if eq .Status "firing" }}firing{{ else }}resolved{{ end }}">
+            <h1>
+                {{ if eq .Status "firing" }}
+                    Alert Triggered
+                {{ else }}
+                    Alert Resolved
+                {{ end }}
+            </h1>
+            <p>Investment Analysis Platform - Automated Alert Notification</p>
+        </div>
+
+        <div class="content">
+            {{ if eq .Status "firing" }}
+                {{ range .Alerts.Firing }}
+                <div class="alert-card">
+                    <div class="alert-header {{ .Labels.severity | default "info" }}">
+                        <span class="alert-name">{{ .Labels.alertname }}</span>
+                        <span class="severity-badge severity-{{ .Labels.severity | default "info" }}">
+                            {{ .Labels.severity | default "info" }}
+                        </span>
+                    </div>
+                    <div class="alert-body">
+                        {{ if .Annotations.description }}
+                        <div class="alert-description">
+                            {{ .Annotations.description }}
+                        </div>
+                        {{ end }}
+
+                        <div class="alert-meta">
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Started At:</span>
+                                <span class="alert-meta-value">{{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</span>
+                            </div>
+                            {{ if .Labels.instance }}
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Instance:</span>
+                                <span class="alert-meta-value">{{ .Labels.instance }}</span>
+                            </div>
+                            {{ end }}
+                            {{ if .Labels.service }}
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Service:</span>
+                                <span class="alert-meta-value">{{ .Labels.service }}</span>
+                            </div>
+                            {{ end }}
+                            {{ if .Annotations.summary }}
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Summary:</span>
+                                <span class="alert-meta-value">{{ .Annotations.summary }}</span>
+                            </div>
+                            {{ end }}
+                            {{ if .Annotations.runbook_url }}
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Runbook:</span>
+                                <span class="alert-meta-value"><a href="{{ .Annotations.runbook_url }}">View Runbook</a></span>
+                            </div>
+                            {{ end }}
+                        </div>
+
+                        <div class="labels">
+                            {{ range .Labels.SortedPairs }}
+                            <span class="label">{{ .Name }}={{ .Value }}</span>
+                            {{ end }}
+                        </div>
+                    </div>
+                </div>
+                {{ end }}
+            {{ else }}
+                {{ range .Alerts.Resolved }}
+                <div class="alert-card">
+                    <div class="alert-header resolved">
+                        <span class="alert-name">{{ .Labels.alertname }} - RESOLVED</span>
+                        <span class="severity-badge" style="background-color: #28a745; color: white;">
+                            RESOLVED
+                        </span>
+                    </div>
+                    <div class="alert-body">
+                        {{ if .Annotations.description }}
+                        <div class="alert-description">
+                            {{ .Annotations.description }}
+                        </div>
+                        {{ end }}
+
+                        <div class="alert-meta">
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Started At:</span>
+                                <span class="alert-meta-value">{{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</span>
+                            </div>
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Resolved At:</span>
+                                <span class="alert-meta-value">{{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}</span>
+                            </div>
+                            <div class="alert-meta-row">
+                                <span class="alert-meta-label">Duration:</span>
+                                <span class="alert-meta-value">{{ .EndsAt.Sub .StartsAt }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{ end }}
+            {{ end }}
+
+            <div class="compliance-notice">
+                <strong>SEC Compliance Notice</strong>
+                This is an automated system alert from the Investment Analysis Platform.
+                This notification is generated for operational monitoring purposes and does not constitute
+                investment advice. All system activities are logged in accordance with SEC Rule 17a-4
+                and GDPR data retention requirements.
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>
+                This alert was generated by Prometheus AlertManager at {{ .ExternalURL }}<br>
+                <a href="{{ .ExternalURL }}/#/alerts">View all alerts</a> |
+                <a href="{{ .ExternalURL }}/#/silences">Manage silences</a>
+            </p>
+            <p style="margin-top: 10px;">
+                Investment Analysis Platform - Confidential<br>
+                Do not forward this email to unauthorized recipients.
+            </p>
+            <p style="margin-top: 10px; font-size: 11px; color: #999;">
+                <strong>GDPR Notice:</strong> This is an operational system alert required for platform
+                security and compliance monitoring. To manage your notification preferences or exercise
+                your data protection rights, please contact your system administrator or visit your
+                account settings at <a href="https://{{ .ExternalURL }}/settings/notifications">Notification Preferences</a>.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+{{ end }}
+
+{{ define "email.investment_platform.text" }}
+{{ if eq .Status "firing" }}ALERT FIRING{{ else }}ALERT RESOLVED{{ end }}
+Investment Analysis Platform Alert Notification
+================================================
+
+{{ if eq .Status "firing" }}
+{{ range .Alerts.Firing }}
+Alert: {{ .Labels.alertname }}
+Severity: {{ .Labels.severity | default "info" | toUpper }}
+Started: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+
+{{ if .Annotations.description }}
+Description: {{ .Annotations.description }}
+{{ end }}
+
+{{ if .Annotations.summary }}
+Summary: {{ .Annotations.summary }}
+{{ end }}
+
+Labels:
+{{ range .Labels.SortedPairs }}  - {{ .Name }}: {{ .Value }}
+{{ end }}
+
+---
+{{ end }}
+{{ else }}
+{{ range .Alerts.Resolved }}
+Alert: {{ .Labels.alertname }} - RESOLVED
+Started: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+Resolved: {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}
+Duration: {{ .EndsAt.Sub .StartsAt }}
+
+{{ if .Annotations.description }}
+Description: {{ .Annotations.description }}
+{{ end }}
+
+---
+{{ end }}
+{{ end }}
+
+SEC COMPLIANCE NOTICE:
+This is an automated system alert from the Investment Analysis Platform.
+This notification is generated for operational monitoring purposes and does not
+constitute investment advice. All system activities are logged in accordance
+with SEC Rule 17a-4 and GDPR data retention requirements.
+
+GDPR NOTICE:
+This is an operational system alert required for platform security and compliance
+monitoring. To manage your notification preferences or exercise your data protection
+rights, please contact your system administrator.
+
+================================================
+Generated by Prometheus AlertManager
+{{ .ExternalURL }}
+{{ end }}

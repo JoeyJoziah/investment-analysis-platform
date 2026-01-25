@@ -143,10 +143,11 @@ class WebSocketService {
     }
 
     // Subscribe to watchlist stocks
-    if (state.portfolio.watchlist.length > 0) {
+    const watchlistItems = state.portfolio.watchlist?.items || [];
+    if (watchlistItems.length > 0) {
       this.socket.emit('subscribe', {
         channel: 'stocks',
-        tickers: state.portfolio.watchlist,
+        tickers: watchlistItems.map((item) => item.symbol),
       });
     }
 

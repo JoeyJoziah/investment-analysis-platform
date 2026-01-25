@@ -88,7 +88,13 @@ interface TabPanelProps {
 function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
-    <div hidden={value !== index} {...other}>
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`analysis-tabpanel-${index}`}
+      aria-labelledby={`analysis-tab-${index}`}
+      {...other}
+    >
       {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
@@ -142,24 +148,47 @@ const Analysis: React.FC = () => {
     }
   };
 
-  const handleWatchlistToggle = () => {
+  // Check if ticker is in watchlist
+  const isInWatchlist = watchlist?.items?.some(
+    (item) => item.symbol.toUpperCase() === ticker?.toUpperCase()
+  ) ?? false;
+
+  const handleWatchlistToggle = async () => {
     if (ticker) {
-      if (watchlist.includes(ticker)) {
-        dispatch(removeFromWatchlist(ticker));
-        dispatch(
-          addNotification({
-            type: 'info',
-            message: `${ticker} removed from watchlist`,
-          })
-        );
+      if (isInWatchlist) {
+        try {
+          await dispatch(removeFromWatchlist(ticker)).unwrap();
+          dispatch(
+            addNotification({
+              type: 'info',
+              message: `${ticker} removed from watchlist`,
+            })
+          );
+        } catch (error) {
+          dispatch(
+            addNotification({
+              type: 'error',
+              message: `Failed to remove ${ticker} from watchlist`,
+            })
+          );
+        }
       } else {
-        dispatch(addToWatchlist(ticker));
-        dispatch(
-          addNotification({
-            type: 'success',
-            message: `${ticker} added to watchlist`,
-          })
-        );
+        try {
+          await dispatch(addToWatchlist({ symbol: ticker })).unwrap();
+          dispatch(
+            addNotification({
+              type: 'success',
+              message: `${ticker} added to watchlist`,
+            })
+          );
+        } catch (error) {
+          dispatch(
+            addNotification({
+              type: 'error',
+              message: `Failed to add ${ticker} to watchlist`,
+            })
+          );
+        }
       }
     }
   };
@@ -257,7 +286,7 @@ const Analysis: React.FC = () => {
                 {quote.ticker}
               </Typography>
               <IconButton onClick={handleWatchlistToggle}>
-                {watchlist.includes(ticker) ? (
+                {isInWatchlist ? (
                   <Bookmark color="primary" />
                 ) : (
                   <BookmarkBorder />
@@ -404,13 +433,13 @@ const Analysis: React.FC = () => {
 
       {/* Main Content */}
       <Paper>
-        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)}>
-          <Tab label="Chart" icon={<ShowChart />} />
-          <Tab label="Technical" icon={<Timeline />} />
-          <Tab label="Fundamental" icon={<Assessment />} />
-          <Tab label="News" icon={<Article />} />
-          <Tab label="Options" icon={<CandlestickChart />} />
-          <Tab label="Similar" icon={<Analytics />} />
+        <Tabs value={tabValue} onChange={(_, newValue) => setTabValue(newValue)} aria-label="Stock analysis tabs">
+          <Tab label="Chart" icon={<ShowChart />} id="analysis-tab-0" aria-controls="analysis-tabpanel-0" />
+          <Tab label="Technical" icon={<Timeline />} id="analysis-tab-1" aria-controls="analysis-tabpanel-1" />
+          <Tab label="Fundamental" icon={<Assessment />} id="analysis-tab-2" aria-controls="analysis-tabpanel-2" />
+          <Tab label="News" icon={<Article />} id="analysis-tab-3" aria-controls="analysis-tabpanel-3" />
+          <Tab label="Options" icon={<CandlestickChart />} id="analysis-tab-4" aria-controls="analysis-tabpanel-4" />
+          <Tab label="Similar" icon={<Analytics />} id="analysis-tab-5" aria-controls="analysis-tabpanel-5" />
         </Tabs>
 
         {/* Chart Tab */}
@@ -442,7 +471,7 @@ const Analysis: React.FC = () => {
             </ToggleButtonGroup>
           </Box>
           <Box sx={{ height: 500 }}>
-            {chartData && <StockChart data={chartData} type={chartType} />}
+            {chartData && <StockChart data={chartData.data} chartType={chartType === 'candle' ? 'area' : chartType} />}
           </Box>
         </TabPanel>
 

@@ -11,12 +11,12 @@ import json
 from decimal import Decimal
 
 from backend.tasks.celery_app import celery_app
-from backend.analytics.technical_analysis import TechnicalAnalyzer
-from backend.analytics.fundamental_analysis import FundamentalAnalyzer
-from backend.analytics.sentiment_analysis import SentimentAnalyzer
+from backend.analytics.technical_analysis import TechnicalAnalysisEngine as TechnicalAnalyzer
+from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine as FundamentalAnalyzer
+from backend.analytics.sentiment_analysis import SentimentAnalysisEngine as SentimentAnalyzer
 from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.utils.database import get_db_sync
-from backend.utils.cache import get_redis_client, cache_key
+from backend.utils.cache import get_redis_client, get_cache_key as cache_key
 from backend.models.tables import (
     Stock, PriceHistory, Recommendation, RecommendationPerformance,
     Fundamental, News
@@ -123,8 +123,8 @@ def analyze_stock(self, symbol: str, analysis_types: List[str] = None) -> Dict[s
         
         # Cache results
         redis_client = get_redis_client()
-        cache_key = f"analysis:{symbol}"
-        redis_client.setex(cache_key, 3600, json.dumps(result))  # Cache for 1 hour
+        analysis_cache_key = f"analysis:{symbol}"
+        redis_client.setex(analysis_cache_key, 3600, json.dumps(result))  # Cache for 1 hour
         
         # Store recommendation if score is significant
         if overall_score > 70 or overall_score < 30:
@@ -235,8 +235,8 @@ def calculate_all_indicators() -> Dict[str, Any]:
                     
                     # Cache indicators
                     redis_client = get_redis_client()
-                    cache_key = f"indicators:{stock.symbol}"
-                    redis_client.setex(cache_key, 3600, json.dumps(indicators))
+                    indicators_cache_key = f"indicators:{stock.symbol}"
+                    redis_client.setex(indicators_cache_key, 3600, json.dumps(indicators))
                     
                     results['processed'] += 1
                     
@@ -545,10 +545,190 @@ def calculate_risk_level(analysis_result: Dict[str, Any]) -> str:
     """Calculate risk level from analysis"""
     # Simplified risk calculation
     volatility = analysis_result.get('analysis', {}).get('technical', {}).get('volatility', 0.2)
-    
+
     if volatility < 0.15:
         return 'low'
     elif volatility < 0.25:
         return 'medium'
     else:
         return 'high'
+
+
+@celery_app.task(name="check_watchlist_price_alerts")
+def check_watchlist_price_alerts() -> Dict[str, Any]:
+    """
+    Background task to check if any watchlist items have reached their target prices.
+    Runs every 5 minutes during market hours (9 AM - 4 PM ET, Mon-Fri).
+
+    This task:
+    1. Fetches all watchlist items with alerts enabled
+    2. Compares current prices against target prices
+    3. Sends notifications when targets are reached
+    4. Disables alerts after triggering to prevent spam
+
+    Returns:
+        Dict with alerts_checked count and alerts_triggered count
+    """
+    try:
+        with get_db_sync() as db:
+            from backend.models.tables import WatchlistItem, Watchlist, Stock, PriceHistory, User
+
+            # Get all items with alerts enabled and target prices set
+            alert_items = db.query(WatchlistItem).join(
+                Watchlist, WatchlistItem.watchlist_id == Watchlist.id
+            ).join(
+                Stock, WatchlistItem.stock_id == Stock.id
+            ).filter(
+                and_(
+                    WatchlistItem.alert_enabled == True,
+                    WatchlistItem.target_price.isnot(None)
+                )
+            ).all()
+
+            if not alert_items:
+                logger.info("No watchlist items with active alerts found")
+                return {
+                    'alerts_checked': 0,
+                    'alerts_triggered': 0,
+                    'triggered_details': []
+                }
+
+            alerts_triggered = 0
+            triggered_details = []
+
+            for item in alert_items:
+                try:
+                    # Get the stock
+                    stock = db.query(Stock).filter(Stock.id == item.stock_id).first()
+                    if not stock:
+                        continue
+
+                    # Get current price from cache first, then database
+                    current_price = _get_current_price_sync(stock.symbol, db)
+
+                    if current_price is None:
+                        logger.warning(f"No price data available for {stock.symbol}")
+                        continue
+
+                    target_price = float(item.target_price)
+
+                    # Check if target price has been reached (either above or equal)
+                    if current_price >= target_price:
+                        # Get the watchlist to find user_id
+                        watchlist = db.query(Watchlist).filter(
+                            Watchlist.id == item.watchlist_id
+                        ).first()
+
+                        if not watchlist:
+                            continue
+
+                        # Get user email for notification
+                        user = db.query(User).filter(User.id == watchlist.user_id).first()
+
+                        if user and user.is_active:
+                            # Import and send notification
+                            from backend.tasks.notification_tasks import send_alert_notification
+
+                            # Send the alert notification
+                            send_alert_notification.delay(
+                                email=user.email,
+                                alert_type="price_target_reached",
+                                symbol=stock.symbol,
+                                message=f"{stock.symbol} ({stock.name}) has reached ${current_price:.2f}, hitting your target of ${target_price:.2f}",
+                                current_price=current_price
+                            )
+
+                            # Disable alert after triggering to prevent spam
+                            item.alert_enabled = False
+
+                            alerts_triggered += 1
+                            triggered_details.append({
+                                'symbol': stock.symbol,
+                                'company_name': stock.name,
+                                'target_price': target_price,
+                                'current_price': current_price,
+                                'user_id': watchlist.user_id,
+                                'watchlist_id': item.watchlist_id,
+                                'item_id': item.id
+                            })
+
+                            logger.info(
+                                f"Price alert triggered for {stock.symbol}: "
+                                f"current ${current_price:.2f} >= target ${target_price:.2f}"
+                            )
+
+                except Exception as e:
+                    logger.error(f"Error checking alert for watchlist item {item.id}: {e}")
+                    continue
+
+            # Commit the changes (disabled alerts)
+            db.commit()
+
+            result = {
+                'alerts_checked': len(alert_items),
+                'alerts_triggered': alerts_triggered,
+                'triggered_details': triggered_details
+            }
+
+            logger.info(
+                f"Watchlist price alert check complete: "
+                f"{result['alerts_checked']} checked, {result['alerts_triggered']} triggered"
+            )
+
+            return result
+
+    except Exception as e:
+        logger.error(f"Error in check_watchlist_price_alerts: {e}")
+        return {'error': str(e)}
+
+
+def _get_current_price_sync(symbol: str, db: Session) -> Optional[float]:
+    """
+    Get current price for a symbol from cache or database (synchronous).
+
+    Args:
+        symbol: Stock symbol
+        db: Database session
+
+    Returns:
+        Current price as float or None if not available
+    """
+    try:
+        # Try cache first
+        redis_client = get_redis_client()
+        cache_key = f"stock:price:{symbol}"
+        cached_price = redis_client.get(cache_key)
+
+        if cached_price:
+            try:
+                return float(cached_price)
+            except (ValueError, TypeError):
+                pass
+
+        # Fall back to database - get latest price from PriceHistory
+        from backend.models.tables import Stock, PriceHistory
+
+        stock = db.query(Stock).filter(Stock.symbol == symbol).first()
+        if not stock:
+            return None
+
+        latest_price = db.query(PriceHistory).filter(
+            PriceHistory.stock_id == stock.id
+        ).order_by(PriceHistory.date.desc()).first()
+
+        if latest_price:
+            price = float(latest_price.close)
+
+            # Cache the price for 5 minutes
+            try:
+                redis_client.setex(cache_key, 300, str(price))
+            except Exception as cache_err:
+                logger.warning(f"Failed to cache price for {symbol}: {cache_err}")
+
+            return price
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Error getting current price for {symbol}: {e}")
+        return None

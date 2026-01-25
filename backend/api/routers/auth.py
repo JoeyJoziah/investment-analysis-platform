@@ -94,29 +94,49 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 async def auth_rate_limit(request: Request):
     """Rate limiting for authentication endpoints"""
     rate_limiter = get_rate_limiter()
-    status = await rate_limiter.check_rate_limit(request, RateLimitCategory.AUTHENTICATION)
-    if not status.allowed:
+    rate_status = await rate_limiter.check_rate_limit(request, RateLimitCategory.AUTHENTICATION)
+    if not rate_status.allowed:
         headers = {
-            "X-RateLimit-Remaining": str(status.remaining),
-            "X-RateLimit-Reset": str(int(status.reset_time.timestamp()))
+            "X-RateLimit-Remaining": str(rate_status.remaining),
+            "X-RateLimit-Reset": str(int(rate_status.reset_time.timestamp()))
         }
-        if status.retry_after_seconds:
-            headers["Retry-After"] = str(status.retry_after_seconds)
-        
+        if rate_status.retry_after_seconds:
+            headers["Retry-After"] = str(rate_status.retry_after_seconds)
+
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many authentication attempts. Please try again later.",
             headers=headers
         )
-    return status
+    return rate_status
+
+
+async def registration_rate_limit(request: Request):
+    """Rate limiting for registration endpoints"""
+    rate_limiter = get_rate_limiter()
+    rate_status = await rate_limiter.check_rate_limit(request, RateLimitCategory.REGISTRATION)
+    if not rate_status.allowed:
+        headers = {
+            "X-RateLimit-Remaining": str(rate_status.remaining),
+            "X-RateLimit-Reset": str(int(rate_status.reset_time.timestamp()))
+        }
+        if rate_status.retry_after_seconds:
+            headers["Retry-After"] = str(rate_status.retry_after_seconds)
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many registration attempts. Please try again later.",
+            headers=headers
+        )
+    return rate_status
 
 # Endpoints
 @router.post("/register", response_model=Token)
 async def register(
-    user: UserCreate, 
+    user: UserCreate,
     request: Request,
     db: Session = Depends(get_db_sync),
-    rate_status = Depends(lambda req: get_rate_limiter().check_rate_limit(req, RateLimitCategory.REGISTRATION))
+    _rate_status = Depends(registration_rate_limit)
 ):
     """Register a new user"""
     # Check if user exists
@@ -159,9 +179,9 @@ async def register(
 @router.post("/token", response_model=Token)
 async def login(
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(), 
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db_sync),
-    auth_limit = Depends(auth_rate_limit)
+    _auth_limit = Depends(auth_rate_limit)
 ):
     """Login endpoint for OAuth2"""
     user = authenticate_user(db, form_data.username, form_data.password)
@@ -181,10 +201,10 @@ async def login(
 
 @router.post("/login", response_model=Token)
 async def login_alt(
-    user: UserLogin, 
+    user: UserLogin,
     request: Request,
     db: Session = Depends(get_db_sync),
-    auth_limit = Depends(auth_rate_limit)
+    _auth_limit = Depends(auth_rate_limit)
 ):
     """Alternative login endpoint"""
     db_user = authenticate_user(db, user.email, user.password)

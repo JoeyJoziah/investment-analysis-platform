@@ -22,12 +22,11 @@ from backend.analytics.recommendation_engine import RecommendationEngine, Recomm
 from backend.analytics.technical_analysis import TechnicalAnalysisEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.ml.model_manager import ModelManager
-from backend.ml.backtesting import BacktestEngine, BacktestResults
+from backend.ml.backtesting import BacktestEngine, BacktestResult
 from backend.analytics.portfolio.modern_portfolio_theory import PortfolioOptimizer
 from backend.analytics.portfolio.black_litterman import BlackLittermanOptimizer
 from backend.analytics.fundamental.valuation.dcf_model import DCFModel
 from backend.utils.validation import validate_financial_data
-from backend.tests.fixtures.market_data_fixtures import MarketDataGenerator, MARKET_SCENARIOS
 
 
 @dataclass

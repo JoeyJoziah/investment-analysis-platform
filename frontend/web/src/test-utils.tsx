@@ -70,7 +70,7 @@ interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
 export function renderWithProviders(
   ui: ReactElement,
   {
-    preloadedState = {},
+    preloadedState,
     store = setupStore(preloadedState),
     ...renderOptions
   }: ExtendedRenderOptions = {}
@@ -220,70 +220,107 @@ export const mockPortfolioMetrics = {
 // Default initial states for all slices (to ensure proper state structure)
 export const defaultInitialState = {
   app: {
-    user: null,
+    isInitialized: true,
     isAuthenticated: false,
-    theme: 'light',
-    notifications: [],
+    user: null,
+    themeMode: 'light' as const,
     sidebarOpen: true,
-    loading: false,
-    error: null,
+    searchOpen: false,
+    notifications: [] as Array<{
+      id: string;
+      type: 'success' | 'error' | 'warning' | 'info';
+      message: string;
+      timestamp: number;
+    }>,
+    webSocketConnected: false,
   },
   dashboard: {
-    marketOverview: null,
-    topRecommendations: [],
-    portfolioSummary: null,
-    recentNews: [],
-    marketSentiment: null,
-    costMetrics: null,
+    marketOverview: null as {
+      indices: Array<{ symbol: string; value: number; change: number; changePercent: number }>;
+      heatmap: any[];
+      sectors: Array<{ name: string; change: number; volume: number }>;
+    } | null,
+    topRecommendations: [] as any[],
+    portfolioSummary: null as any,
+    recentNews: [] as any[],
+    marketSentiment: null as {
+      overall: string;
+      score: number;
+      breakdown: { positive: number; neutral: number; negative: number };
+    } | null,
+    costMetrics: null as any,
     loading: false,
-    error: null,
+    error: null as string | null,
   },
   recommendations: {
-    recommendations: [],
-    filteredRecommendations: [],
-    selectedRecommendation: null,
+    recommendations: [] as any[],
+    filteredRecommendations: [] as any[],
+    selectedRecommendation: null as any,
     filters: {
-      action: null,
-      riskLevel: null,
-      sector: null,
+      action: null as string | null,
+      riskLevel: null as string | null,
+      sector: null as string | null,
       minConfidence: 0,
       minReturn: 0,
     },
-    sortBy: 'confidence' as const,
-    sortOrder: 'desc' as const,
+    sortBy: 'confidence' as 'confidence' | 'potential_return' | 'created_at',
+    sortOrder: 'desc' as 'asc' | 'desc',
     pagination: {
       page: 1,
       limit: 20,
       total: 0,
     },
     loading: false,
-    error: null,
+    error: null as string | null,
   },
   portfolio: {
-    positions: [],
-    transactions: [],
-    metrics: null,
-    watchlist: [],
+    positions: [] as any[],
+    transactions: [] as any[],
+    metrics: null as any,
+    watchlist: null as any,
+    watchlistLoading: false,
+    watchlistError: null as string | null,
     isLoading: false,
-    error: null,
-    lastUpdated: null,
+    error: null as string | null,
+    lastUpdated: null as string | null,
   },
   market: {
-    overview: null,
-    indices: [],
-    sectors: [],
-    watchlist: [],
-    loading: false,
-    error: null,
+    indices: [] as Array<{
+      symbol: string;
+      name: string;
+      value: number;
+      change: number;
+      changePercent: number;
+      volume: number;
+      high: number;
+      low: number;
+      previousClose: number;
+      timestamp: string;
+    }>,
+    topGainers: [] as any[],
+    topLosers: [] as any[],
+    mostActive: [] as any[],
+    sectorPerformance: [] as any[],
+    marketNews: [] as any[],
+    marketBreadth: null as any,
+    heatmapData: [] as any[],
+    economicCalendar: [] as any[],
+    isLoading: false,
+    error: null as string | null,
+    lastUpdated: null as string | null,
   },
   stock: {
-    currentStock: null,
-    priceHistory: [],
-    fundamentals: null,
-    technicals: null,
-    news: [],
-    loading: false,
-    error: null,
+    selectedTicker: null as string | null,
+    quote: null as any,
+    chartData: null as any,
+    technicalIndicators: null as any,
+    fundamentalData: null as any,
+    news: [] as any[],
+    optionsChain: null as any,
+    similarStocks: [] as any[],
+    searchResults: [] as any[],
+    isLoading: false,
+    error: null as string | null,
   },
 };
 

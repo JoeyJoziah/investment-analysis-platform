@@ -99,12 +99,12 @@ const Portfolio: React.FC = () => {
 
   useEffect(() => {
     dispatch(fetchPortfolio());
-    dispatch(fetchTransactions());
+    dispatch(fetchTransactions({}));
   }, [dispatch]);
 
   const handleRefresh = () => {
     dispatch(fetchPortfolio());
-    dispatch(fetchTransactions());
+    dispatch(fetchTransactions({}));
     dispatch(
       addNotification({
         type: 'info',

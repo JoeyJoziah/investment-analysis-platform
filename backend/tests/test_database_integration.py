@@ -6,6 +6,7 @@ Tests CRUD operations, transactions, data integrity, and database performance.
 import pytest
 import asyncio
 import json
+import os
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, List, Optional
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -19,8 +20,8 @@ import numpy as np
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database
 from backend.models.unified_models import (
-    User, Stock, Portfolio, PortfolioPosition, Transaction, 
-    PriceData, Recommendation, Alert
+    User, Stock, Portfolio, Position, Transaction,
+    PriceHistory, Recommendation, Alert
 )
 from backend.repositories import (
     user_repository,
@@ -39,9 +40,13 @@ class TestDatabaseIntegration:
     @pytest.fixture
     async def db_session(self):
         """Create test database session."""
-        # In production tests, would use test database
+        # Use environment variable with fallback to default test database
+        test_db_url = os.getenv(
+            "TEST_DATABASE_URL",
+            "postgresql+asyncpg://test_user:test_pass@localhost/test_investment_db"
+        )
         test_engine = create_async_engine(
-            "postgresql+asyncpg://test_user:test_pass@localhost/test_investment_db",
+            test_db_url,
             echo=False
         )
         
@@ -279,7 +284,7 @@ class TestDatabaseIntegration:
             await db_session.commit()
             
             # Create portfolio position
-            position_data = PortfolioPosition(
+            position_data = Position(
                 portfolio_id=created_portfolio.id,
                 symbol=created_stock.symbol,
                 quantity=100,
@@ -333,7 +338,7 @@ class TestDatabaseIntegration:
             await db_session.commit()
             
             # Test single price data insertion
-            price_data = PriceData(
+            price_data = PriceHistory(
                 symbol=created_stock.symbol,
                 date=date.today(),
                 open=150.00,
@@ -356,7 +361,7 @@ class TestDatabaseIntegration:
                 price_date = date.today() - timedelta(days=i)
                 base_price = 150 + (i * 0.5)
                 
-                bulk_prices.append(PriceData(
+                bulk_prices.append(PriceHistory(
                     symbol=created_stock.symbol,
                     date=price_date,
                     open=base_price,
@@ -441,7 +446,7 @@ class TestDatabaseIntegration:
                     session=db_session
                 )
                 
-                position = PortfolioPosition(
+                position = Position(
                     portfolio_id=created_portfolio.id,
                     symbol=created_stock.symbol,
                     quantity=100,
@@ -473,7 +478,7 @@ class TestDatabaseIntegration:
                     )
                     
                     # Cause an intentional error
-                    invalid_position = PortfolioPosition(
+                    invalid_position = Position(
                         portfolio_id=999999,  # Invalid portfolio ID
                         symbol=created_stock.symbol,
                         quantity=50,
@@ -514,7 +519,7 @@ class TestDatabaseIntegration:
                 price_date = date.today() - timedelta(days=i % 365)
                 base_price = 100 + np.random.uniform(-10, 10)
                 
-                bulk_prices.append(PriceData(
+                bulk_prices.append(PriceHistory(
                     symbol=created_stock.symbol,
                     date=price_date,
                     open=base_price,
@@ -741,7 +746,7 @@ class TestDatabaseIntegration:
             bulk_prices = []
             for i in range(5000):  # 5000 records
                 price_date = date.today() - timedelta(days=i % 1000)
-                bulk_prices.append(PriceData(
+                bulk_prices.append(PriceHistory(
                     symbol=created_stock.symbol,
                     date=price_date,
                     open=100 + (i % 100),

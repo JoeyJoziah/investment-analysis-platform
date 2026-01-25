@@ -193,7 +193,7 @@ describe('CostMonitor', () => {
         <CostMonitor metrics={mockCostMetrics} onRefresh={mockRefresh} />
       );
 
-      const refreshButton = screen.getByRole('button', { name: /refresh metrics/i });
+      const refreshButton = screen.getByRole('button', { name: /refresh cost metrics/i });
       await user.click(refreshButton);
 
       expect(mockRefresh).toHaveBeenCalledTimes(1);
@@ -207,7 +207,7 @@ describe('CostMonitor', () => {
         <CostMonitor metrics={mockCostMetrics} onSettings={mockSettings} />
       );
 
-      const settingsButton = screen.getByRole('button', { name: /settings/i });
+      const settingsButton = screen.getByRole('button', { name: /open cost monitor settings/i });
       await user.click(settingsButton);
 
       expect(mockSettings).toHaveBeenCalledTimes(1);

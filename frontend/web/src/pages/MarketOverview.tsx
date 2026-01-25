@@ -102,7 +102,7 @@ const MarketOverview: React.FC = () => {
     dispatch(fetchMarketOverview());
     dispatch(fetchSectorPerformance());
     dispatch(fetchMarketNews({ limit: 10 }));
-    dispatch(fetchHeatmapData());
+    dispatch(fetchHeatmapData({}));
     dispatch(fetchEconomicCalendar());
   }, [dispatch]);
 
@@ -437,7 +437,14 @@ const MarketOverview: React.FC = () => {
                   <XAxis dataKey="sector" angle={-45} textAnchor="end" height={80} />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="changePercent" fill={(entry: any) => entry.changePercent >= 0 ? '#00C49F' : '#FF8042'} />
+                  <Bar
+                    dataKey="changePercent"
+                    fill="#8884d8"
+                  >
+                    {sectorPerformance.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.changePercent >= 0 ? '#00C49F' : '#FF8042'} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Grid>
@@ -495,7 +502,16 @@ const MarketOverview: React.FC = () => {
             Market Heat Map
           </Typography>
           <Box sx={{ height: 600 }}>
-            <MarketHeatmap data={heatmapData} />
+            <MarketHeatmap
+              data={heatmapData.map((item) => ({
+                name: item.name,
+                ticker: item.ticker,
+                value: item.marketCap,
+                change: item.changePercent,
+                volume: item.volume,
+                sector: item.sector,
+              }))}
+            />
           </Box>
         </TabPanel>
 

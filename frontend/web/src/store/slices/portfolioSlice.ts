@@ -55,11 +55,41 @@ export interface PortfolioMetrics {
   };
 }
 
+// Watchlist types matching the new API
+export interface WatchlistItem {
+  id: number;
+  watchlist_id: number;
+  stock_id: number;
+  added_at: string;
+  target_price: number | null;
+  notes: string | null;
+  alert_enabled: boolean;
+  symbol: string;
+  company_name: string;
+  current_price: number | null;
+  price_change: number | null;
+  price_change_percent: number | null;
+}
+
+export interface Watchlist {
+  id: number;
+  name: string;
+  description: string | null;
+  is_public: boolean;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+  items: WatchlistItem[];
+  item_count: number;
+}
+
 interface PortfolioState {
   positions: Position[];
   transactions: Transaction[];
   metrics: PortfolioMetrics | null;
-  watchlist: string[];
+  watchlist: Watchlist | null;
+  watchlistLoading: boolean;
+  watchlistError: string | null;
   isLoading: boolean;
   error: string | null;
   lastUpdated: string | null;
@@ -69,7 +99,9 @@ const initialState: PortfolioState = {
   positions: [],
   transactions: [],
   metrics: null,
-  watchlist: [],
+  watchlist: null,
+  watchlistLoading: false,
+  watchlistError: null,
   isLoading: false,
   error: null,
   lastUpdated: null,
@@ -108,27 +140,118 @@ export const deletePosition = createAsyncThunk(
   }
 );
 
+// Watchlist async thunks - using the new Watchlist API
 export const fetchWatchlist = createAsyncThunk(
   'portfolio/fetchWatchlist',
-  async () => {
-    const response = await apiService.get('/portfolio/watchlist');
-    return response.data;
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get('/api/watchlists/default');
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch watchlist');
+    }
   }
 );
 
 export const addToWatchlist = createAsyncThunk(
   'portfolio/addToWatchlist',
-  async (ticker: string) => {
-    const response = await apiService.post('/portfolio/watchlist', { ticker });
-    return response.data;
+  async (
+    { symbol, targetPrice, notes }: { symbol: string; targetPrice?: number; notes?: string },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiService.post(`/api/watchlists/default/symbols/${symbol}`, {
+        target_price: targetPrice,
+        notes,
+      });
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to add to watchlist');
+    }
   }
 );
 
 export const removeFromWatchlist = createAsyncThunk(
   'portfolio/removeFromWatchlist',
-  async (ticker: string) => {
-    await apiService.delete(`/portfolio/watchlist/${ticker}`);
-    return ticker;
+  async (symbol: string, { rejectWithValue }) => {
+    try {
+      await apiService.delete(`/api/watchlists/default/symbols/${symbol}`);
+      return symbol;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to remove from watchlist');
+    }
+  }
+);
+
+export const updateWatchlistItem = createAsyncThunk(
+  'portfolio/updateWatchlistItem',
+  async (
+    {
+      watchlistId,
+      itemId,
+      updates,
+    }: {
+      watchlistId: number;
+      itemId: number;
+      updates: { target_price?: number | null; notes?: string | null; alert_enabled?: boolean };
+    },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiService.put(
+        `/api/watchlists/${watchlistId}/items/${itemId}`,
+        updates
+      );
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to update watchlist item');
+    }
+  }
+);
+
+// Fetch all user watchlists
+export const fetchAllWatchlists = createAsyncThunk(
+  'portfolio/fetchAllWatchlists',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiService.get('/api/watchlists');
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch watchlists');
+    }
+  }
+);
+
+// Create a new watchlist
+export const createWatchlist = createAsyncThunk(
+  'portfolio/createWatchlist',
+  async (
+    { name, description, isPublic }: { name: string; description?: string; isPublic?: boolean },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await apiService.post('/api/watchlists', {
+        name,
+        description,
+        is_public: isPublic,
+      });
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to create watchlist');
+    }
+  }
+);
+
+// Delete a watchlist
+export const deleteWatchlist = createAsyncThunk(
+  'portfolio/deleteWatchlist',
+  async (watchlistId: number, { rejectWithValue }) => {
+    try {
+      await apiService.delete(`/api/watchlists/${watchlistId}`);
+      return watchlistId;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.detail || 'Failed to delete watchlist');
+    }
   }
 );
 
@@ -144,6 +267,9 @@ const portfolioSlice = createSlice({
     },
     clearError: (state) => {
       state.error = null;
+    },
+    clearWatchlistError: (state) => {
+      state.watchlistError = null;
     },
   },
   extraReducers: (builder) => {
@@ -175,20 +301,76 @@ const portfolioSlice = createSlice({
       .addCase(deletePosition.fulfilled, (state, action) => {
         state.positions = state.positions.filter(p => p.id !== action.payload);
       })
-      // Watchlist
+      // Watchlist - fetch
+      .addCase(fetchWatchlist.pending, (state) => {
+        state.watchlistLoading = true;
+        state.watchlistError = null;
+      })
       .addCase(fetchWatchlist.fulfilled, (state, action) => {
+        state.watchlistLoading = false;
         state.watchlist = action.payload;
       })
+      .addCase(fetchWatchlist.rejected, (state, action) => {
+        state.watchlistLoading = false;
+        state.watchlistError = action.payload as string;
+      })
+      // Watchlist - add item
+      .addCase(addToWatchlist.pending, (state) => {
+        state.watchlistLoading = true;
+        state.watchlistError = null;
+      })
       .addCase(addToWatchlist.fulfilled, (state, action) => {
-        if (!state.watchlist.includes(action.payload)) {
-          state.watchlist.push(action.payload);
+        state.watchlistLoading = false;
+        // Add the new item to the watchlist
+        if (state.watchlist) {
+          state.watchlist.items.push(action.payload);
+          state.watchlist.item_count = state.watchlist.items.length;
         }
       })
+      .addCase(addToWatchlist.rejected, (state, action) => {
+        state.watchlistLoading = false;
+        state.watchlistError = action.payload as string;
+      })
+      // Watchlist - remove item
+      .addCase(removeFromWatchlist.pending, (state) => {
+        state.watchlistLoading = true;
+        state.watchlistError = null;
+      })
       .addCase(removeFromWatchlist.fulfilled, (state, action) => {
-        state.watchlist = state.watchlist.filter(ticker => ticker !== action.payload);
+        state.watchlistLoading = false;
+        if (state.watchlist) {
+          state.watchlist.items = state.watchlist.items.filter(
+            (item) => item.symbol !== action.payload
+          );
+          state.watchlist.item_count = state.watchlist.items.length;
+        }
+      })
+      .addCase(removeFromWatchlist.rejected, (state, action) => {
+        state.watchlistLoading = false;
+        state.watchlistError = action.payload as string;
+      })
+      // Watchlist - update item
+      .addCase(updateWatchlistItem.pending, (state) => {
+        state.watchlistLoading = true;
+        state.watchlistError = null;
+      })
+      .addCase(updateWatchlistItem.fulfilled, (state, action) => {
+        state.watchlistLoading = false;
+        if (state.watchlist) {
+          const index = state.watchlist.items.findIndex(
+            (item) => item.id === action.payload.id
+          );
+          if (index !== -1) {
+            state.watchlist.items[index] = action.payload;
+          }
+        }
+      })
+      .addCase(updateWatchlistItem.rejected, (state, action) => {
+        state.watchlistLoading = false;
+        state.watchlistError = action.payload as string;
       });
   },
 });
 
-export const { updatePosition, clearError } = portfolioSlice.actions;
+export const { updatePosition, clearError, clearWatchlistError } = portfolioSlice.actions;
 export default portfolioSlice.reducer;

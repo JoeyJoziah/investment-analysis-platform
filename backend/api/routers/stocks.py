@@ -230,8 +230,8 @@ async def get_stocks(
     is_active: bool = Query(True, description="Filter active stocks only"),
     limit: int = Query(100, le=500, description="Maximum number of results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
-    sort_by: str = Query("market_cap", regex="^(symbol|name|market_cap|created_at)$", description="Sort field"),
-    order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    sort_by: str = Query("market_cap", pattern="^(symbol|name|market_cap|created_at)$", description="Sort field"),
+    order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> List[StockResponse]:
     """
@@ -358,7 +358,7 @@ async def get_sector_summary(
 
 @router.get("/top-performers", response_model=List[PerformanceResponse])
 async def get_top_performers(
-    timeframe: str = Query("1d", regex="^(1d|1w|1m|3m|6m|1y)$", description="Performance timeframe"),
+    timeframe: str = Query("1d", pattern="^(1d|1w|1m|3m|6m|1y)$", description="Performance timeframe"),
     limit: int = Query(100, le=500, description="Maximum number of results"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> List[PerformanceResponse]:
@@ -660,35 +660,24 @@ async def add_to_watchlist(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> Dict[str, Any]:
     """
-    Add a stock to user's watchlist.
-    
-    Note: This is a placeholder endpoint. In a full implementation,
-    this would require user authentication and actual watchlist management.
+    Add a stock to user's default watchlist.
+
+    DEPRECATED: This endpoint is deprecated. Please use the authenticated
+    endpoint at POST /api/watchlists/default/symbols/{symbol} instead.
+
+    This endpoint requires authentication. Without it, it will return
+    an error directing users to the proper authenticated endpoint.
     """
-    try:
-        # Verify stock exists
-        stock = await stock_repository.get_by_symbol(symbol, session=db)
-        
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{symbol}' not found"
-            )
-        
-        # TODO: Implement actual watchlist functionality with user authentication
-        return {
-            "message": f"Stock {symbol.upper()} added to watchlist",
-            "success": True,
-            "stock_id": stock.id
+    # Direct users to the new authenticated endpoint
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "message": "Authentication required. Use the watchlist API endpoints.",
+            "redirect": f"/api/watchlists/default/symbols/{symbol.upper()}",
+            "method": "POST",
+            "note": "This endpoint is deprecated. Please use the authenticated watchlist API."
         }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error adding to watchlist: {str(e)}"
-        )
+    )
 
 
 @router.delete("/{symbol}/watchlist")
@@ -697,32 +686,21 @@ async def remove_from_watchlist(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> Dict[str, Any]:
     """
-    Remove a stock from user's watchlist.
-    
-    Note: This is a placeholder endpoint. In a full implementation,
-    this would require user authentication and actual watchlist management.
+    Remove a stock from user's default watchlist.
+
+    DEPRECATED: This endpoint is deprecated. Please use the authenticated
+    endpoint at DELETE /api/watchlists/default/symbols/{symbol} instead.
+
+    This endpoint requires authentication. Without it, it will return
+    an error directing users to the proper authenticated endpoint.
     """
-    try:
-        # Verify stock exists
-        stock = await stock_repository.get_by_symbol(symbol, session=db)
-        
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{symbol}' not found"
-            )
-        
-        # TODO: Implement actual watchlist functionality with user authentication
-        return {
-            "message": f"Stock {symbol.upper()} removed from watchlist",
-            "success": True,
-            "stock_id": stock.id
+    # Direct users to the new authenticated endpoint
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "message": "Authentication required. Use the watchlist API endpoints.",
+            "redirect": f"/api/watchlists/default/symbols/{symbol.upper()}",
+            "method": "DELETE",
+            "note": "This endpoint is deprecated. Please use the authenticated watchlist API."
         }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error removing from watchlist: {str(e)}"
-        )
+    )

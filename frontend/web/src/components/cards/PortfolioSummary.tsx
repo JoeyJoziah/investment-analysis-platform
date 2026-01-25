@@ -17,7 +17,8 @@ import {
   Tooltip,
   useTheme,
   alpha,
-  Grid
+  Grid,
+  Paper
 } from '@mui/material';
 import {
   TrendingUp,
@@ -196,7 +197,7 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography variant="h6">Portfolio Overview</Typography>
-          <IconButton size="small">
+          <IconButton size="small" aria-label="Portfolio options menu">
             <MoreVert />
           </IconButton>
         </Box>

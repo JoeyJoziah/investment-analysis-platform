@@ -16,16 +16,23 @@ import redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from backend.utils.circuit_breaker import CircuitBreaker, CircuitState
-from backend.utils.advanced_circuit_breaker import AdvancedCircuitBreaker
+from backend.utils.advanced_circuit_breaker import EnhancedCircuitBreaker as AdvancedCircuitBreaker
 from backend.utils.redis_resilience import ResilientRedisClient, RedisMode
 from backend.utils.resilient_pipeline import ResilientPipeline
 from backend.utils.enhanced_error_handling import (
-    EnhancedErrorHandler,
-    RetryableError,
-    NonRetryableError
+    ErrorHandlingManager as EnhancedErrorHandler,
+    ErrorCategory
 )
-from backend.utils.graceful_shutdown import GracefulShutdownManager
-from backend.utils.disaster_recovery import DisasterRecoveryManager
+# Define error classes for backward compatibility
+class RetryableError(Exception):
+    """Error that can be retried."""
+    pass
+
+class NonRetryableError(Exception):
+    """Error that should not be retried."""
+    pass
+from backend.utils.graceful_shutdown import GracefulShutdownHandler as GracefulShutdownManager
+from backend.utils.disaster_recovery import DisasterRecoveryOrchestrator as DisasterRecoveryManager
 from backend.data_ingestion.robust_api_client import RobustAPIClient
 
 

@@ -73,7 +73,7 @@ interface Recommendation {
 const Recommendations: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { recommendations, isLoading } = useAppSelector((state) => state.recommendations);
+  const { recommendations, loading: isLoading } = useAppSelector((state) => state.recommendations);
   const { watchlist } = useAppSelector((state) => state.portfolio);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -88,11 +88,11 @@ const Recommendations: React.FC = () => {
   });
 
   useEffect(() => {
-    dispatch(fetchRecommendations());
+    dispatch(fetchRecommendations({}));
   }, [dispatch]);
 
   const handleRefresh = () => {
-    dispatch(fetchRecommendations());
+    dispatch(fetchRecommendations({}));
     dispatch(
       addNotification({
         type: 'info',
@@ -101,21 +101,37 @@ const Recommendations: React.FC = () => {
     );
   };
 
+  // Check if a ticker is in watchlist
+  const isInWatchlist = (ticker: string) => {
+    return watchlist?.items?.some(
+      (item) => item.symbol.toUpperCase() === ticker.toUpperCase()
+    ) ?? false;
+  };
+
   const handleWatchlistToggle = async (ticker: string) => {
-    if (watchlist.includes(ticker)) {
-      await dispatch(removeFromWatchlist(ticker));
+    try {
+      if (isInWatchlist(ticker)) {
+        await dispatch(removeFromWatchlist(ticker)).unwrap();
+        dispatch(
+          addNotification({
+            type: 'info',
+            message: `${ticker} removed from watchlist`,
+          })
+        );
+      } else {
+        await dispatch(addToWatchlist({ symbol: ticker })).unwrap();
+        dispatch(
+          addNotification({
+            type: 'success',
+            message: `${ticker} added to watchlist`,
+          })
+        );
+      }
+    } catch (error) {
       dispatch(
         addNotification({
-          type: 'info',
-          message: `${ticker} removed from watchlist`,
-        })
-      );
-    } else {
-      await dispatch(addToWatchlist(ticker));
-      dispatch(
-        addNotification({
-          type: 'success',
-          message: `${ticker} added to watchlist`,
+          type: 'error',
+          message: `Failed to update watchlist`,
         })
       );
     }
@@ -151,9 +167,9 @@ const Recommendations: React.FC = () => {
     }
   };
 
-  const filteredRecommendations = recommendations
-    .filter((rec: Recommendation) => {
-      if (searchQuery && !rec.ticker.includes(searchQuery.toUpperCase()) && 
+  const filteredRecommendations = (recommendations as unknown as Recommendation[])
+    .filter((rec) => {
+      if (searchQuery && !rec.ticker.includes(searchQuery.toUpperCase()) &&
           !rec.companyName.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
       }
@@ -174,7 +190,7 @@ const Recommendations: React.FC = () => {
       }
       return true;
     })
-    .sort((a: Recommendation, b: Recommendation) => {
+    .sort((a, b) => {
       switch (filters.sortBy) {
         case 'confidence':
           return b.confidence - a.confidence;
@@ -187,7 +203,7 @@ const Recommendations: React.FC = () => {
       }
     });
 
-  const uniqueSectors = [...new Set(recommendations.map((r: Recommendation) => r.sector))];
+  const uniqueSectors = [...new Set((recommendations as unknown as Recommendation[]).map((r) => r.sector))];
 
   if (isLoading) {
     return <LinearProgress />;
@@ -368,7 +384,7 @@ const Recommendations: React.FC = () => {
                       size="small"
                       onClick={() => handleWatchlistToggle(rec.ticker)}
                     >
-                      {watchlist.includes(rec.ticker) ? (
+                      {isInWatchlist(rec.ticker) ? (
                         <BookmarkIcon color="primary" />
                       ) : (
                         <BookmarkBorderIcon />
@@ -593,7 +609,7 @@ const Recommendations: React.FC = () => {
                         size="small"
                         onClick={() => handleWatchlistToggle(rec.ticker)}
                       >
-                        {watchlist.includes(rec.ticker) ? (
+                        {isInWatchlist(rec.ticker) ? (
                           <BookmarkIcon fontSize="small" color="primary" />
                         ) : (
                           <BookmarkBorderIcon fontSize="small" />

@@ -22,8 +22,8 @@ from backend.auth.oauth2 import (
     get_current_active_user,
     authenticate_user
 )
-from backend.security.rate_limiter import RateLimiter
-from backend.security.sql_injection_prevention import SQLInjectionPreventer
+from backend.security.rate_limiter import AdvancedRateLimiter as RateLimiter
+from backend.security.sql_injection_prevention import SQLInjectionPrevention
 from backend.security.jwt_manager import JWTManager
 from backend.models.unified_models import User
 from backend.config.settings import settings

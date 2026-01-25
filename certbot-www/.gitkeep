@@ -1,0 +1,2 @@
+# This directory is used by certbot for ACME challenges
+# during Let's Encrypt certificate verification

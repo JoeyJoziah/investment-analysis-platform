@@ -44,6 +44,12 @@ except ImportError:
     PortfolioRepository = None
     portfolio_repository = None
 
+try:
+    from backend.repositories.watchlist_repository import WatchlistRepository, watchlist_repository
+except ImportError:
+    WatchlistRepository = None
+    watchlist_repository = None
+
 __all__ = [
     # Base classes
     'AsyncBaseRepository',
@@ -64,5 +70,7 @@ __all__ = [
     'UserRepository', 
     'user_repository',
     'PortfolioRepository',
-    'portfolio_repository'
+    'portfolio_repository',
+    'WatchlistRepository',
+    'watchlist_repository'
 ]

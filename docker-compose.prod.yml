@@ -2,13 +2,11 @@
 # Investment Analysis Platform - Production Stack
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-version: '3.8'
-
 x-logging: &default-logging
   driver: "json-file"
   options:
-    max-size: "10m"
-    max-file: "3"
+    max-size: "5m"
+    max-file: "2"
 
 x-healthcheck-defaults: &healthcheck-defaults
   interval: 30s
@@ -17,7 +15,7 @@ x-healthcheck-defaults: &healthcheck-defaults
   start_period: 40s
 
 services:
-  # Override backend for production
+  # Override backend for production - Optimized for $50/month budget
   backend:
     build:
       context: .
@@ -25,22 +23,23 @@ services:
     environment:
       - DEBUG=false
       - LOG_LEVEL=INFO
-      - WORKERS=${BACKEND_WORKERS:-4}
+      - WORKERS=${BACKEND_WORKERS:-2}
+    volumes: []  # Remove dev volume mounts
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
     deploy:
-      replicas: ${BACKEND_REPLICAS:-2}
+      replicas: ${BACKEND_REPLICAS:-1}
       resources:
         limits:
-          cpus: '2'
-          memory: 2G
+          cpus: '1.0'
+          memory: 768M
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.25'
+          memory: 384M
 
-  # Override frontend for production
+  # Override frontend for production - Optimized for $50/month budget
   frontend:
     build:
       context: ./frontend/web
@@ -48,33 +47,41 @@ services:
       args:
         - REACT_APP_API_URL=${API_URL:-https://api.yourdomain.com}
         - REACT_APP_WS_URL=${WS_URL:-wss://api.yourdomain.com/ws}
+    volumes: []  # Remove dev volume mounts
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
       test: ["CMD", "curl", "-f", "http://localhost/health"]
     deploy:
-      replicas: ${FRONTEND_REPLICAS:-2}
+      replicas: ${FRONTEND_REPLICAS:-1}
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # Override database for production
+  # Override database for production - Optimized for $50/month budget
   postgres:
-    command: 
+    command:
       - postgres
       - -c
       - shared_preload_libraries=timescaledb
       - -c
-      - max_connections=200
+      - max_connections=100
       - -c
-      - shared_buffers=512MB
+      - shared_buffers=128MB
       - -c
-      - effective_cache_size=2GB
+      - effective_cache_size=384MB
       - -c
-      - maintenance_work_mem=128MB
+      - maintenance_work_mem=64MB
       - -c
-      - work_mem=8MB
+      - work_mem=4MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - checkpoint_completion_target=0.9
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
@@ -82,58 +89,73 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
+          cpus: '1.0'
           memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
-  # Override Redis for production
+  # Override Redis for production - Optimized for $50/month budget
   redis:
     command: >
       redis-server
       --appendonly yes
       --appendfsync everysec
-      --maxmemory ${REDIS_MAX_MEMORY:-1gb}
+      --maxmemory ${REDIS_MAX_MEMORY:-128mb}
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD}
-      --tcp-backlog 511
       --tcp-keepalive 60
-      --timeout 300
+      --save ""
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 1G
+          cpus: '0.25'
+          memory: 150M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # Override Elasticsearch for production
+  # Override Elasticsearch for production - Optimized for $50/month budget
+  # Note: Security is optional, controlled by ELASTICSEARCH_SECURITY_ENABLED
   elasticsearch:
     environment:
-      - xpack.security.enabled=true
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - discovery.type=single-node
+      - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-false}
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme}
+      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-256m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-256m}"
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
-      test: ["CMD-SHELL", "curl -u elastic:${ELASTIC_PASSWORD} -f http://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 2G
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
+  # =============================================================================
   # Production-specific services
+  # =============================================================================
+
+  # Nginx reverse proxy - use HTTP by default, SSL optional
+  # For SSL setup, run ./scripts/init-ssl.sh first
   nginx:
     image: nginx:alpine
     container_name: investment_nginx
     volumes:
-      - ./infrastructure/docker/frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Use nginx.conf for HTTP-only (default), nginx-ssl.conf for HTTPS
+      - ./infrastructure/docker/nginx/${NGINX_CONFIG:-nginx.conf}:/etc/nginx/nginx.conf:ro
       - ./infrastructure/docker/frontend/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
+      # SSL volumes - only mounted if SSL is enabled
       - ./ssl:/etc/nginx/ssl:ro
+      - ./certbot-www:/var/www/certbot:ro
     ports:
       - "80:80"
       - "443:443"
@@ -141,17 +163,60 @@ services:
       - backend
       - frontend
     logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
 
+  # Certbot for automatic SSL certificate renewal
+  # Only runs if SSL_ENABLED=true in environment
+  certbot:
+    image: certbot/certbot:latest
+    container_name: investment_certbot
+    profiles:
+      - ssl
+    volumes:
+      - ./ssl:/etc/letsencrypt:rw
+      - ./certbot-www:/var/www/certbot:rw
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    depends_on:
+      - nginx
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+
+  # Database backup service with S3 support
   backup:
     image: postgres:15-alpine
     container_name: investment_backup
     environment:
       - PGPASSWORD=${DB_PASSWORD}
+      - DB_HOST=postgres
+      - DB_NAME=${DB_NAME:-investment_db}
+      - DB_USER=${DB_USER:-postgres}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+      # S3 Configuration
+      - BACKUP_S3_BUCKET=${BACKUP_S3_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      # Alert webhooks
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-http://backend:8000/api/alerts/backup-webhook}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
     volumes:
       - ./backups:/backups
       - ./scripts/backup.sh:/backup.sh:ro
+      - ./scripts/verify-backup.sh:/verify-backup.sh:ro
+      - ./scripts/restore-backup.sh:/restore-backup.sh:ro
     entrypoint: ["/bin/sh", "-c"]
-    command: ["while true; do /backup.sh; sleep 86400; done"]
+    command: ["apk add --no-cache aws-cli curl && chmod +x /backup.sh && while true; do /backup.sh; sleep 86400; done"]
     depends_on:
       - postgres
     logging: *default-logging
@@ -160,3 +225,110 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
+
+  # AlertManager with email support
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: investment_alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://alertmanager:9093'
+    environment:
+      # SMTP Configuration
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-alerts@investment-platform.local}
+      # Alert recipients
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-admin@investment-platform.local}
+      - COST_ALERT_EMAIL_TO=${COST_ALERT_EMAIL_TO:-finance@investment-platform.local}
+      # Webhook authentication
+      - ALERTMANAGER_WEBHOOK_PASSWORD=${ALERTMANAGER_WEBHOOK_PASSWORD:-changeme}
+    volumes:
+      - ./infrastructure/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./infrastructure/monitoring/templates:/etc/alertmanager/templates:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+
+  # Prometheus for metrics collection - Optimized for $50/month budget
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: investment_prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=500MB'
+    volumes:
+      - ./infrastructure/monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alerts:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Grafana for visualization - Optimized for $50/month budget
+  grafana:
+    image: grafana/grafana:latest
+    container_name: investment_grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3001}
+      - GF_SERVER_ENABLE_GZIP=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_SMTP_ENABLED=${ENABLE_EMAIL_ALERTS:-false}
+      - GF_SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}:${SMTP_PORT:-587}
+      - GF_SMTP_USER=${SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${SMTP_FROM:-alerts@investment-platform.local}
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    logging: *default-logging
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+volumes:
+  alertmanager_data:
+  prometheus_data:
+  grafana_data:

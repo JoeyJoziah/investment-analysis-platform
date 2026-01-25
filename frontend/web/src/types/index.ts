@@ -305,3 +305,51 @@ export interface Notification {
     handler: () => void;
   };
 }
+
+// Watchlist types
+export interface WatchlistItem {
+  id: number;
+  watchlist_id: number;
+  stock_id: number;
+  added_at: string;
+  target_price: number | null;
+  notes: string | null;
+  alert_enabled: boolean;
+  symbol: string;
+  company_name: string;
+  current_price: number | null;
+  price_change: number | null;
+  price_change_percent: number | null;
+}
+
+export interface Watchlist {
+  id: number;
+  name: string;
+  description: string | null;
+  is_public: boolean;
+  user_id: number;
+  created_at: string;
+  updated_at: string;
+  items: WatchlistItem[];
+  item_count: number;
+}
+
+export interface WatchlistCreateRequest {
+  name: string;
+  description?: string;
+  is_public?: boolean;
+}
+
+export interface WatchlistItemCreateRequest {
+  stock_id?: number;
+  symbol?: string;
+  target_price?: number;
+  notes?: string;
+  alert_enabled?: boolean;
+}
+
+export interface WatchlistItemUpdateRequest {
+  target_price?: number | null;
+  notes?: string | null;
+  alert_enabled?: boolean;
+}

@@ -1,0 +1,5 @@
+# This directory holds SSL certificates
+# For production, use Let's Encrypt certificates via init-ssl.sh
+# For development, self-signed certificates can be generated
+#
+# DO NOT commit actual certificates to version control

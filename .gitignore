@@ -11,7 +11,10 @@
 *.key
 *.crt
 secrets/
-ssl/
+ssl/*
+!ssl/.gitkeep
+certbot-www/*
+!certbot-www/.gitkeep
 
 # ============================================================================
 # PYTHON

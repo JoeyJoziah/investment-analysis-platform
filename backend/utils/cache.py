@@ -8,6 +8,9 @@ import json
 import logging
 from backend.config.settings import settings
 
+# Re-export get_cache_manager for backward compatibility
+from backend.utils.cache_manager import get_cache_manager
+
 logger = logging.getLogger(__name__)
 
 # Global Redis connection pool
@@ -234,6 +237,36 @@ def get_cache_key(*args, **kwargs) -> str:
         if isinstance(v, (str, int, float, bool)):
             key_parts.append(f"{k}:{v}")
     
-    # Create hash
+    # Create hash using SHA256 for security
     cache_string = "|".join(key_parts)
-    return hashlib.md5(cache_string.encode()).hexdigest()[:16]
+    return hashlib.sha256(cache_string.encode()).hexdigest()[:16]
+
+
+# Create a default cache instance for backward compatibility
+# This allows imports like: from backend.utils.cache import enhanced_cache
+class _EnhancedCache:
+    """Simple cache wrapper for backward compatibility."""
+
+    def __init__(self):
+        self._cache_manager = None
+
+    async def get(self, key: str) -> Any:
+        """Get value from cache."""
+        if self._cache_manager is None:
+            self._cache_manager = await get_cache_manager()
+        return await self._cache_manager.get(key)
+
+    async def set(self, key: str, value: Any, ttl: int = 300):
+        """Set value in cache."""
+        if self._cache_manager is None:
+            self._cache_manager = await get_cache_manager()
+        await self._cache_manager.set(key, value, ttl)
+
+    async def delete(self, key: str):
+        """Delete value from cache."""
+        if self._cache_manager is None:
+            self._cache_manager = await get_cache_manager()
+        await self._cache_manager.delete(key)
+
+
+enhanced_cache = _EnhancedCache()

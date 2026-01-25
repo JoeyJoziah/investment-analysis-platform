@@ -1,0 +1,114 @@
+# Multi-stage production-optimized Dockerfile for React frontend
+# Optimized for minimal size, security, and CDN-ready static assets
+# Context: frontend/web (from docker-compose)
+
+# Build stage - Node.js for building React app
+FROM node:18-alpine as builder
+
+# Set build-time environment variables
+ENV NODE_ENV=production \
+    NPM_CONFIG_CACHE=/tmp/.npm \
+    GENERATE_SOURCEMAP=false \
+    INLINE_RUNTIME_CHUNK=false
+
+# Install build dependencies
+RUN apk add --no-cache \
+    git \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files (leverage Docker cache)
+# Note: context is frontend/web, so paths are relative to that
+COPY package*.json ./
+
+# Install ALL dependencies (need devDependencies for build)
+RUN npm ci && \
+    npm cache clean --force
+
+# Copy source code
+COPY public/ ./public/
+COPY src/ ./src/
+COPY tsconfig.json vite.config.ts index.html ./
+
+# Build arguments for environment configuration
+ARG REACT_APP_API_URL
+ARG REACT_APP_WS_URL
+ARG REACT_APP_VERSION
+ARG REACT_APP_ENVIRONMENT
+
+# Set build environment variables (Vite uses VITE_ prefix)
+ENV VITE_API_URL=${REACT_APP_API_URL} \
+    VITE_WS_URL=${REACT_APP_WS_URL} \
+    VITE_APP_VERSION=${REACT_APP_VERSION} \
+    VITE_ENVIRONMENT=${REACT_APP_ENVIRONMENT}
+
+# Build the application
+RUN npm run build
+
+# Production stage - Nginx for serving static files
+FROM nginx:alpine as runtime
+
+# Install curl for health checks
+RUN apk add --no-cache curl && rm -rf /var/cache/apk/*
+
+# Copy built application from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Create a simple, working nginx config inline
+RUN echo 'worker_processes auto;\n\
+error_log /var/log/nginx/error.log warn;\n\
+pid /var/run/nginx.pid;\n\
+\n\
+events {\n\
+    worker_connections 1024;\n\
+}\n\
+\n\
+http {\n\
+    include /etc/nginx/mime.types;\n\
+    default_type application/octet-stream;\n\
+    sendfile on;\n\
+    keepalive_timeout 65;\n\
+    gzip on;\n\
+    gzip_types text/plain text/css application/json application/javascript text/xml;\n\
+\n\
+    server {\n\
+        listen 80;\n\
+        server_name _;\n\
+        root /usr/share/nginx/html;\n\
+        index index.html;\n\
+\n\
+        location /health {\n\
+            access_log off;\n\
+            return 200 "OK";\n\
+            add_header Content-Type text/plain;\n\
+        }\n\
+\n\
+        location / {\n\
+            try_files $uri $uri/ /index.html;\n\
+        }\n\
+\n\
+        location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {\n\
+            expires 1y;\n\
+            add_header Cache-Control "public, immutable";\n\
+        }\n\
+\n\
+        add_header X-Frame-Options "SAMEORIGIN" always;\n\
+        add_header X-Content-Type-Options "nosniff" always;\n\
+    }\n\
+}\n\
+' > /etc/nginx/nginx.conf
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost/health || exit 1
+
+# Expose port
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

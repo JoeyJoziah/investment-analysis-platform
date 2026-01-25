@@ -19,7 +19,7 @@ load_dotenv()
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
     auth, health, admin, cache_management,
-    websocket, agents, gdpr
+    websocket, agents, gdpr, watchlist
 )
 from backend.utils.database import init_db, close_db
 from backend.config.database import initialize_database, cleanup_database
@@ -171,6 +171,7 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
 app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
+app.include_router(watchlist.router, prefix="/api", tags=["watchlists"])
 
 
 @app.exception_handler(HTTPException)

@@ -94,7 +94,7 @@ class AgentCapabilitiesResponse(BaseModel):
 # Routes
 
 @router.post("/analyze", response_model=AgentAnalysisResponse)
-@rate_limit(calls=10, period=60)  # 10 calls per minute
+@rate_limit(requests_per_minute=10)  # 10 calls per minute
 async def analyze_stock_with_agents(
     request: AgentAnalysisRequest,
     background_tasks: BackgroundTasks,
@@ -160,7 +160,7 @@ async def analyze_stock_with_agents(
 
 
 @router.post("/batch-analyze")
-@rate_limit(calls=2, period=300)  # 2 calls per 5 minutes
+@rate_limit(requests_per_minute=2)  # 2 calls per 5 minutes (limited)
 async def batch_analyze_stocks(
     request: BatchAnalysisRequest,
     background_tasks: BackgroundTasks,

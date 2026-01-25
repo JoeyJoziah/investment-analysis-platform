@@ -60,7 +60,7 @@ class UnifiedDataIngestion:
         self.rate_limiter = APIRateLimiter()
         self.cache = QueryResultCache(
             strategy=CacheStrategy.TTL,
-            max_size=10000,
+            max_cache_size_mb=100,
             default_ttl=300
         )
         self.processor = ParallelAPIProcessor(
@@ -69,7 +69,7 @@ class UnifiedDataIngestion:
             enable_caching=True,
             enable_rate_limiting=True
         )
-        self.cost_monitor = PersistentCostMonitor(self.db_session)
+        self.cost_monitor = PersistentCostMonitor()
         self.smart_fetcher = SmartDataFetcher(self.cost_monitor)
         
         # Stock tiering configuration

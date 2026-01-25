@@ -61,7 +61,16 @@ class SecretsManager:
         # Initialize encryption
         self.master_key = master_key or os.getenv("MASTER_SECRET_KEY")
         if not self.master_key:
-            raise ValueError("MASTER_SECRET_KEY environment variable required")
+            # For development/testing, generate a temporary key
+            # WARNING: In production, MASTER_SECRET_KEY must be set
+            import warnings
+            warnings.warn(
+                "MASTER_SECRET_KEY not set - using temporary key. "
+                "Set MASTER_SECRET_KEY for production use.",
+                RuntimeWarning
+            )
+            import secrets as sec
+            self.master_key = sec.token_urlsafe(32)
         
         self._fernet = self._initialize_encryption()
         self._secrets_cache: Dict[str, Any] = {}

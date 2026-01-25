@@ -2,17 +2,17 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List, Union
 from decimal import Decimal
-import redis
+import redis.asyncio as aioredis
 import json
 
 logger = logging.getLogger(__name__)
 
 class LLMCostTracker:
     """Track LLM usage costs and patterns"""
-    
-    def __init__(self, redis_client: redis.Redis):
+
+    def __init__(self, redis_client: aioredis.Redis):
         self.redis = redis_client
         
     async def track_usage(
@@ -81,13 +81,14 @@ class LLMBudgetManager:
     """Manages LLM usage budget with strict cost controls"""
     
     def __init__(
-        self, 
+        self,
         monthly_budget: float = 25.0,
-        redis_client: Optional[redis.Redis] = None
+        redis_client: Optional[aioredis.Redis] = None
     ):
         self.monthly_llm_budget = Decimal(str(monthly_budget))
-        self.redis = redis_client or redis.Redis.from_url(
-            os.getenv('REDIS_URL', 'redis://localhost:6379')
+        self.redis = redis_client or aioredis.from_url(
+            os.getenv('REDIS_URL', 'redis://localhost:6379'),
+            decode_responses=False
         )
         self.cost_tracker = LLMCostTracker(self.redis)
         

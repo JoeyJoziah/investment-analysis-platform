@@ -238,7 +238,7 @@ class Stock(Base):
     
     # Status
     is_active = Column(Boolean, default=True)
-    is_tradeable = Column(Boolean, default=True)
+    is_tradable = Column(Boolean, default=True)
     is_delisted = Column(Boolean, default=False)
     delisted_date = Column(Date)
     
@@ -261,7 +261,7 @@ class Stock(Base):
     
     __table_args__ = (
         Index('idx_stock_exchange_sector', 'exchange_id', 'sector_id'),
-        Index('idx_stock_active_tradeable', 'is_active', 'is_tradeable'),
+        Index('idx_stock_active_tradable', 'is_active', 'is_tradable'),
         Index('idx_stock_symbol', 'symbol'),
     )
 

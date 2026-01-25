@@ -24,14 +24,14 @@ from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
-from backend.utils.cost_monitor import CostMonitor, EnhancedCostMonitor
+from backend.utils.cost_monitor import CostMonitor, SmartDataFetcher
 from backend.utils.circuit_breaker import CircuitBreaker
 from backend.utils.cache import CacheManager
 from backend.utils.data_quality import DataQualityChecker
-from backend.ml.model_manager import ModelManager
+from backend.ml.model_manager import ModelManager, get_model_manager
 from backend.repositories.stock_repository import StockRepository
-from backend.security.rate_limiter import RateLimiter
-from backend.models.schemas import StockAnalysis, PriceData
+from backend.security.rate_limiter import AdvancedRateLimiter as RateLimiter
+from backend.models.schemas import Stock, AnalysisResult, PriceHistory
 
 
 class TestRecommendationEngine:
@@ -431,7 +431,7 @@ class TestCostMonitoring:
     
     @pytest.fixture
     def cost_monitor(self):
-        return EnhancedCostMonitor(monthly_budget=50.0)
+        return CostMonitor(monthly_budget=50.0)
     
     def test_api_cost_tracking(self, cost_monitor):
         """Test API cost tracking"""

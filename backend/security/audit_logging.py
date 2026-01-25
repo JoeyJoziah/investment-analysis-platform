@@ -210,30 +210,49 @@ class AuditEventModel:
 
 class TamperProtection:
     """Tamper protection for audit logs"""
-    
+
     def __init__(self):
-        self.secret_key = self._get_signing_key()
-    
-    async def _get_signing_key(self) -> bytes:
-        """Get or create signing key for tamper protection"""
-        vault = get_secrets_vault()
-        
-        key_b64 = await vault.get_secret("audit_signing_key")
+        # Use a synchronous approach for initial key generation
+        # The async version can be used for key rotation
+        self.secret_key = self._get_signing_key_sync()
+        self._initialized = False
+
+    def _get_signing_key_sync(self) -> bytes:
+        """Get or create signing key synchronously for tamper protection"""
+        # Use environment variable or generate a key
+        # In production, this should be loaded from a secure vault
+        key_b64 = os.getenv("AUDIT_SIGNING_KEY")
         if key_b64:
             return base64.b64decode(key_b64)
-        
-        # Generate new signing key
+
+        # Generate new signing key and cache it
         key = os.urandom(32)
-        key_b64 = base64.b64encode(key).decode()
-        
-        await vault.store_secret(
-            "audit_signing_key",
-            key_b64,
-            secret_type="encryption_key",
-            rotation_policy="quarterly"
-        )
-        
         return key
+
+    async def _get_signing_key(self) -> bytes:
+        """Get or create signing key for tamper protection (async version)"""
+        try:
+            vault = get_secrets_vault()
+
+            key_b64 = await vault.get_secret("audit_signing_key")
+            if key_b64:
+                return base64.b64decode(key_b64)
+
+            # Generate new signing key
+            key = os.urandom(32)
+            key_b64 = base64.b64encode(key).decode()
+
+            await vault.store_secret(
+                "audit_signing_key",
+                key_b64,
+                secret_type="encryption_key",
+                rotation_policy="quarterly"
+            )
+
+            return key
+        except Exception:
+            # Fallback to synchronous key
+            return self._get_signing_key_sync()
     
     def calculate_checksum(self, event: AuditEvent) -> str:
         """Calculate checksum for event"""
@@ -278,8 +297,16 @@ class AuditLogStorage:
     """Storage backend for audit logs"""
     
     def __init__(self, storage_path: str = None, redis_url: str = None):
-        self.storage_path = Path(storage_path or os.getenv("AUDIT_LOG_PATH", "/var/log/audit"))
-        self.storage_path.mkdir(parents=True, exist_ok=True)
+        # Use a user-writable directory by default
+        default_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs", "audit")
+        self.storage_path = Path(storage_path or os.getenv("AUDIT_LOG_PATH", default_path))
+        try:
+            self.storage_path.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            # Fallback to temp directory if default fails
+            import tempfile
+            self.storage_path = Path(tempfile.gettempdir()) / "investment_platform_audit"
+            self.storage_path.mkdir(parents=True, exist_ok=True)
         
         self.redis_url = redis_url or os.getenv("REDIS_URL")
         self._redis: Optional[aioredis.Redis] = None

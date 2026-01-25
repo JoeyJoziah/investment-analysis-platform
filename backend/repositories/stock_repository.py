@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
-from backend.models.unified_models import Stock, PriceHistory, TechnicalIndicators, Recommendation, Fundamental
+from backend.models.unified_models import Stock, PriceHistory, TechnicalIndicators, Recommendation, Fundamentals
 from backend.config.database import get_db_session, TransactionIsolationLevel
 
 logger = logging.getLogger(__name__)

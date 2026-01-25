@@ -743,3 +743,44 @@ class TechnicalIndicators(Base):
         Index('idx_technical_indicators_rsi', 'rsi'),
         Index('idx_technical_indicators_trend', 'trend_strength'),
     )
+
+
+# Audit Log for tracking system events
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    action = Column(String(100), nullable=False)
+    entity_type = Column(String(50), nullable=True)
+    entity_id = Column(Integer, nullable=True)
+    details = Column(JSON, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", backref="audit_logs")
+
+    __table_args__ = (
+        Index('idx_audit_logs_user', 'user_id'),
+        Index('idx_audit_logs_action', 'action'),
+        Index('idx_audit_logs_created_at', 'created_at'),
+        Index('idx_audit_logs_entity', 'entity_type', 'entity_id'),
+    )
+
+
+# System Metrics for monitoring
+class SystemMetrics(Base):
+    __tablename__ = "system_metrics"
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=func.now(), nullable=False)
+    metric_type = Column(String(50), nullable=False)
+    metrics = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        Index('idx_system_metrics_timestamp', 'timestamp'),
+        Index('idx_system_metrics_type', 'metric_type'),
+        Index('idx_system_metrics_type_timestamp', 'metric_type', 'timestamp'),
+    )

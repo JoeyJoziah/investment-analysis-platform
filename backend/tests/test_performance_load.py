@@ -29,12 +29,12 @@ from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
-from backend.utils.cost_monitor import EnhancedCostMonitor
+from backend.utils.enhanced_cost_monitor import EnhancedCostMonitor
 from backend.utils.cache import CacheManager
-from backend.utils.parallel_processor import ParallelStockProcessor
+from backend.utils.parallel_processor import StockDataParallelProcessor as ParallelStockProcessor
 from backend.repositories.stock_repository import StockRepository
 from backend.ml.model_manager import ModelManager
-from backend.tasks.analysis_tasks import analyze_stock_task
+from backend.tasks.analysis_tasks import analyze_stock
 from backend.tests.fixtures.comprehensive_mock_fixtures import (
     mock_external_apis, AlphaVantageMocks, FinnhubMocks, PolygonMocks
 )

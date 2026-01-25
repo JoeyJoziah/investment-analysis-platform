@@ -1,6 +1,7 @@
 """
-Simplified Sentiment Analysis Engine
-Basic sentiment analysis without external ML dependencies
+Hybrid Sentiment Analysis Engine
+Combines FinBERT-based analysis with fallback to lexicon approach.
+Uses HuggingFace ProsusAI/finbert for accurate financial sentiment.
 """
 
 import asyncio
@@ -12,8 +13,22 @@ from dataclasses import dataclass
 import logging
 import re
 from collections import defaultdict
+import os
 
 logger = logging.getLogger(__name__)
+
+# Try to import FinBERT analyzer
+try:
+    from backend.analytics.finbert_analyzer import (
+        FinBERTAnalyzer,
+        FinBERTInference,
+        FinBERTResult,
+        HAS_TRANSFORMERS
+    )
+    FINBERT_AVAILABLE = HAS_TRANSFORMERS
+except ImportError:
+    FINBERT_AVAILABLE = False
+    logger.info("FinBERT not available, using lexicon-based sentiment only")
 
 @dataclass
 class SentimentResult:
@@ -39,11 +54,22 @@ class SentimentResult:
 
 class SentimentAnalysisEngine:
     """
-    Simplified sentiment analysis engine using basic text analysis
+    Hybrid sentiment analysis engine with FinBERT and lexicon fallback.
+    Uses FinBERT (ProsusAI/finbert) as primary analyzer when available.
     """
-    
-    def __init__(self):
-        # Simple word lists for basic sentiment analysis
+
+    def __init__(self, use_finbert: bool = True):
+        """
+        Initialize sentiment analysis engine.
+
+        Args:
+            use_finbert: Whether to use FinBERT (default True, falls back if unavailable)
+        """
+        self.use_finbert = use_finbert and FINBERT_AVAILABLE
+        self._finbert_analyzer = None
+        self._finbert_inference = None
+
+        # Simple word lists for basic sentiment analysis (fallback)
         self.positive_words = {
             'buy', 'bull', 'bullish', 'gain', 'gains', 'growth', 'profit', 'profits',
             'rise', 'rising', 'surge', 'soar', 'strong', 'strength', 'outperform',
@@ -65,13 +91,77 @@ class SentimentAnalysisEngine:
             'substantially': 1.5, 'dramatically': 2.0, 'sharply': 1.5,
             'slightly': 0.5, 'somewhat': 0.7, 'moderately': 0.8
         }
-        
-        logger.info("Simplified sentiment analysis engine initialized")
+
+        if self.use_finbert:
+            logger.info("Sentiment analysis engine initialized with FinBERT")
+        else:
+            logger.info("Sentiment analysis engine initialized (lexicon-only mode)")
+
+    async def _ensure_finbert_loaded(self) -> bool:
+        """Lazy load FinBERT model."""
+        if not self.use_finbert:
+            return False
+
+        if self._finbert_analyzer is None:
+            try:
+                self._finbert_analyzer = FinBERTAnalyzer()
+                # Initialize in thread pool to avoid blocking
+                loop = asyncio.get_event_loop()
+                success = await loop.run_in_executor(
+                    None,
+                    self._finbert_analyzer.initialize
+                )
+                if success:
+                    self._finbert_inference = FinBERTInference(
+                        self._finbert_analyzer,
+                        batch_size=16
+                    )
+                    return True
+                else:
+                    logger.warning("FinBERT init failed, using lexicon fallback")
+                    self.use_finbert = False
+                    return False
+            except Exception as e:
+                logger.error(f"Failed to load FinBERT: {e}")
+                self.use_finbert = False
+                return False
+        return True
     
     async def analyze_sentiment(self, text: str, source: str = "unknown") -> SentimentResult:
         """
-        Analyze sentiment of given text using simple word-based approach
+        Analyze sentiment of given text.
+        Uses FinBERT if available, falls back to lexicon approach.
         """
+        # Try FinBERT first
+        if await self._ensure_finbert_loaded():
+            try:
+                result = await self._analyze_with_finbert(text, source)
+                return result
+            except Exception as e:
+                logger.warning(f"FinBERT analysis failed, using fallback: {e}")
+
+        # Fallback to lexicon-based approach
+        return await self._analyze_with_lexicon(text, source)
+
+    async def _analyze_with_finbert(self, text: str, source: str) -> SentimentResult:
+        """Analyze using FinBERT model."""
+        result = await self._finbert_inference.analyze_single_async(text)
+
+        return SentimentResult(
+            score=result.score,
+            confidence=result.confidence,
+            label=result.label,
+            breakdown={
+                'model': 'finbert',
+                'probabilities': result.probabilities
+            },
+            keywords=self._extract_keywords(text.lower()),
+            sources_analyzed=1,
+            timestamp=datetime.utcnow()
+        )
+
+    async def _analyze_with_lexicon(self, text: str, source: str) -> SentimentResult:
+        """Analyze using lexicon-based approach (fallback)."""
         try:
             # Basic text preprocessing
             text_lower = text.lower()
@@ -119,6 +209,7 @@ class SentimentAnalysisEngine:
                 confidence=confidence,
                 label=label,
                 breakdown={
+                    'model': 'lexicon',
                     'positive_score': pos_score,
                     'negative_score': neg_score,
                     'word_count': word_count,
@@ -128,7 +219,7 @@ class SentimentAnalysisEngine:
                 sources_analyzed=1,
                 timestamp=datetime.utcnow()
             )
-            
+
             return result
             
         except Exception as e:
@@ -146,7 +237,8 @@ class SentimentAnalysisEngine:
     
     async def analyze_stock_sentiment(self, ticker: str, texts: List[str]) -> SentimentResult:
         """
-        Analyze sentiment for multiple texts related to a stock
+        Analyze sentiment for multiple texts related to a stock.
+        Uses batch processing with FinBERT for efficiency.
         """
         if not texts:
             return SentimentResult(
@@ -158,11 +250,18 @@ class SentimentAnalysisEngine:
                 sources_analyzed=0,
                 timestamp=datetime.utcnow()
             )
-        
-        # Analyze each text
+
+        # Try FinBERT batch processing for efficiency
+        if await self._ensure_finbert_loaded():
+            try:
+                return await self._batch_analyze_finbert(ticker, texts)
+            except Exception as e:
+                logger.warning(f"FinBERT batch analysis failed: {e}")
+
+        # Fallback to sequential lexicon analysis
         results = []
         for text in texts:
-            result = await self.analyze_sentiment(text, "stock_analysis")
+            result = await self._analyze_with_lexicon(text, "stock_analysis")
             results.append(result)
         
         # Aggregate results
@@ -202,6 +301,7 @@ class SentimentAnalysisEngine:
             confidence=avg_confidence,
             label=label,
             breakdown={
+                'model': 'lexicon',
                 'individual_scores': scores,
                 'individual_confidences': confidences,
                 'text_count': len(texts)
@@ -210,7 +310,54 @@ class SentimentAnalysisEngine:
             sources_analyzed=len(texts),
             timestamp=datetime.utcnow()
         )
-    
+
+    async def _batch_analyze_finbert(
+        self, ticker: str, texts: List[str]
+    ) -> SentimentResult:
+        """Batch analyze texts with FinBERT for efficiency."""
+        # Run batch analysis
+        results = await self._finbert_inference.analyze_batch_async(texts)
+
+        # Aggregate results
+        scores = [r.score for r in results]
+        confidences = [r.confidence for r in results]
+
+        # Confidence-weighted aggregation
+        total_weight = sum(confidences)
+        if total_weight > 0:
+            weighted_score = sum(s * c for s, c in zip(scores, confidences)) / total_weight
+        else:
+            weighted_score = sum(scores) / len(scores) if scores else 0.0
+
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+        # Determine overall label
+        if weighted_score > 0.1:
+            label = 'positive'
+        elif weighted_score < -0.1:
+            label = 'negative'
+        else:
+            label = 'neutral'
+
+        # Extract keywords from all texts
+        all_text = ' '.join(texts)
+        keywords = self._extract_keywords(all_text.lower())
+
+        return SentimentResult(
+            score=max(-1.0, min(1.0, weighted_score)),
+            confidence=avg_confidence,
+            label=label,
+            breakdown={
+                'model': 'finbert',
+                'individual_scores': scores,
+                'individual_confidences': confidences,
+                'text_count': len(texts)
+            },
+            keywords=keywords,
+            sources_analyzed=len(texts),
+            timestamp=datetime.utcnow()
+        )
+
     def _extract_keywords(self, text: str) -> List[str]:
         """Extract basic keywords from text"""
         # Remove common stop words

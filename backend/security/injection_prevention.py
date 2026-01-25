@@ -30,7 +30,7 @@ from starlette.responses import Response as StarletteResponse
 
 # Security libraries
 import bleach
-from bleach.sanitiser import Cleaner
+from bleach import Cleaner
 from bleach.linkifier import Linker
 import html5lib
 

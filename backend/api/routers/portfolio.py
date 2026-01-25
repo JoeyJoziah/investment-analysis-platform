@@ -779,7 +779,7 @@ async def get_transactions(
 @router.get("/{portfolio_id}/performance", response_model=Dict[str, Any])
 async def get_portfolio_performance(
     portfolio_id: str,
-    period: str = Query("1M", regex="^(1D|1W|1M|3M|6M|1Y|3Y|5Y|ALL)$"),
+    period: str = Query("1M", pattern="^(1D|1W|1M|3M|6M|1Y|3Y|5Y|ALL)$"),
     benchmark: str = "SPY"
 ) -> Dict[str, Any]:
     """Get portfolio performance over time"""

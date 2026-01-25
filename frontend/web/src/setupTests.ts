@@ -36,7 +36,7 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
 })) as unknown as typeof IntersectionObserver;
 
 // Mock scrollTo
-window.scrollTo = vi.fn();
+window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 
 // Mock confirm
 window.confirm = vi.fn(() => true);

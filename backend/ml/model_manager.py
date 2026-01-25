@@ -18,41 +18,55 @@ logger = logging.getLogger(__name__)
 
 class ModelManager:
     """Centralized ML model management with error handling"""
-    
-    def __init__(self, models_path: str = "/app/ml_models"):
+
+    def __init__(self, models_path: str = None):
+        # Use environment variable or default to a local directory
+        if models_path is None:
+            models_path = os.getenv("ML_MODELS_PATH")
+            if not models_path:
+                # Default to a path relative to the project
+                base_dir = Path(__file__).parent.parent.parent
+                models_path = str(base_dir / "ml_models")
         self.models_path = Path(models_path)
         self.models: Dict[str, Any] = {}
         self.model_metadata: Dict[str, Dict] = {}
         self.lock = Lock()
         self._initialize_models()
-    
+
     def _initialize_models(self):
         """Initialize and load all available models with error handling"""
         if not self.models_path.exists():
             logger.warning(f"Models directory does not exist: {self.models_path}")
-            self.models_path.mkdir(parents=True, exist_ok=True)
+            try:
+                self.models_path.mkdir(parents=True, exist_ok=True)
+            except (PermissionError, OSError) as e:
+                logger.error(f"ML model manager not available: {e}")
             return
         
         # Define expected models and their loaders
         model_configs = {
             "lstm_price_predictor": {
-                "file": "lstm_model.pt",
-                "loader": self._load_pytorch_model,
+                "file": "lstm_weights.pth",
+                "config_file": "lstm_config.json",
+                "scaler_file": "lstm_scaler.pkl",
+                "loader": self._load_lstm_model,
                 "fallback": self._create_dummy_lstm
             },
             "xgboost_classifier": {
                 "file": "xgboost_model.pkl",
-                "loader": self._load_pickle_model,
+                "config_file": "xgboost_config.json",
+                "scaler_file": "xgboost_scaler.pkl",
+                "loader": self._load_xgboost_model,
                 "fallback": self._create_dummy_xgboost
             },
             "prophet_forecaster": {
-                "file": "prophet_model.pkl",
-                "loader": self._load_pickle_model,
+                "file": "prophet/trained_stocks.json",
+                "loader": self._load_prophet_models,
                 "fallback": self._create_dummy_prophet
             },
             "sentiment_analyzer": {
-                "file": "sentiment_model.pkl",
-                "loader": self._load_pickle_model,
+                "file": "finbert",
+                "loader": self._load_finbert_model,
                 "fallback": self._create_dummy_sentiment
             },
             "risk_assessor": {
@@ -119,7 +133,132 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Failed to load joblib model from {path}: {e}")
             raise
-    
+
+    def _load_lstm_model(self, path: Path):
+        """Load trained LSTM model with config and scaler."""
+        import json
+        try:
+            # Load config
+            config_path = path.parent / 'lstm_config.json'
+            with open(config_path) as f:
+                config = json.load(f)
+
+            # Load scaler
+            scaler_path = path.parent / 'lstm_scaler.pkl'
+            scaler = joblib.load(scaler_path)
+
+            # Import and create model - use direct import to avoid circular issues
+            try:
+                from backend.ml.training.train_lstm import LSTMModel
+            except ImportError:
+                # Fallback: define LSTMModel locally if import fails
+                import torch.nn as nn
+
+                class LSTMModel(nn.Module):
+                    def __init__(self, input_dim, hidden_dim=128, num_layers=3, dropout=0.2):
+                        super(LSTMModel, self).__init__()
+                        self.lstm = nn.LSTM(
+                            input_dim, hidden_dim, num_layers,
+                            batch_first=True, dropout=dropout, bidirectional=True
+                        )
+                        self.attention = nn.MultiheadAttention(hidden_dim * 2, num_heads=8)
+                        self.fc_layers = nn.Sequential(
+                            nn.Linear(hidden_dim * 2, hidden_dim),
+                            nn.ReLU(),
+                            nn.Dropout(dropout),
+                            nn.Linear(hidden_dim, hidden_dim // 2),
+                            nn.ReLU(),
+                            nn.Dropout(dropout),
+                            nn.Linear(hidden_dim // 2, 1)
+                        )
+
+                    def forward(self, x):
+                        lstm_out, _ = self.lstm(x)
+                        attn_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
+                        last_hidden = attn_out[:, -1, :]
+                        return self.fc_layers(last_hidden)
+
+            model = LSTMModel(
+                input_dim=len(config['feature_columns']),
+                hidden_dim=config['hidden_dim'],
+                num_layers=config['num_layers'],
+                dropout=config['dropout']
+            )
+            model.load_state_dict(torch.load(path, map_location='cpu'))
+            model.eval()
+
+            # Return wrapper with config and scaler
+            return {
+                'model': model,
+                'scaler': scaler,
+                'config': config
+            }
+        except Exception as e:
+            logger.error(f"Failed to load LSTM model: {e}")
+            raise
+
+    def _load_xgboost_model(self, path: Path):
+        """Load trained XGBoost model with config and scaler."""
+        import json
+        try:
+            # Load model
+            model = joblib.load(path)
+
+            # Load config
+            config_path = path.parent / 'xgboost_config.json'
+            with open(config_path) as f:
+                config = json.load(f)
+
+            # Load scaler
+            scaler_path = path.parent / 'xgboost_scaler.pkl'
+            scaler = joblib.load(scaler_path)
+
+            return {
+                'model': model,
+                'scaler': scaler,
+                'config': config
+            }
+        except Exception as e:
+            logger.error(f"Failed to load XGBoost model: {e}")
+            raise
+
+    def _load_prophet_models(self, path: Path):
+        """Load trained Prophet models for multiple stocks."""
+        import json
+        try:
+            prophet_dir = path.parent
+
+            # Load list of trained stocks
+            with open(path) as f:
+                trained_stocks = json.load(f)
+
+            # Load models for each stock
+            models = {}
+            for ticker in trained_stocks:
+                model_path = prophet_dir / f'{ticker}_model.pkl'
+                if model_path.exists():
+                    models[ticker] = joblib.load(model_path)
+
+            logger.info(f"Loaded Prophet models for {len(models)} stocks")
+            return {'models': models, 'stocks': trained_stocks}
+        except Exception as e:
+            logger.error(f"Failed to load Prophet models: {e}")
+            raise
+
+    def _load_finbert_model(self, path: Path):
+        """Load FinBERT sentiment analyzer."""
+        try:
+            from backend.analytics.finbert_analyzer import FinBERTAnalyzer
+
+            analyzer = FinBERTAnalyzer()
+            if analyzer.initialize(model_cache_dir=str(path)):
+                return analyzer
+            else:
+                raise Exception("FinBERT initialization failed")
+        except Exception as e:
+            logger.error(f"Failed to load FinBERT: {e}")
+            raise
+
     def _create_dummy_lstm(self):
         """Create dummy LSTM model for fallback"""
         class DummyLSTM:
@@ -208,30 +347,61 @@ class ModelManager:
             # Return safe default prediction
             return self._get_default_prediction(model_name)
     
-    def _predict_lstm(self, model, data):
+    def _predict_lstm(self, model_bundle, data):
         """LSTM-specific prediction with error handling"""
         try:
-            if hasattr(model, 'predict'):
-                return model.predict(data)
-            else:
-                # PyTorch model
+            # Handle new model format (dict with model, scaler, config)
+            if isinstance(model_bundle, dict) and 'model' in model_bundle:
+                model = model_bundle['model']
+                scaler = model_bundle.get('scaler')
+                config = model_bundle.get('config', {})
+
+                # Scale data if scaler available
+                if scaler is not None and hasattr(scaler, 'transform'):
+                    data = scaler.transform(data)
+
+                # PyTorch model inference
                 with torch.no_grad():
                     tensor_data = torch.FloatTensor(data)
                     predictions = model(tensor_data)
+                    return predictions.numpy().flatten()
+            elif hasattr(model_bundle, 'predict'):
+                return model_bundle.predict(data)
+            else:
+                # Fallback for PyTorch model
+                with torch.no_grad():
+                    tensor_data = torch.FloatTensor(data)
+                    predictions = model_bundle(tensor_data)
                     return predictions.numpy()
         except Exception as e:
             logger.error(f"LSTM prediction error: {e}")
             return np.array([100.0])  # Default price
     
-    def _predict_xgboost(self, model, data):
+    def _predict_xgboost(self, model_bundle, data):
         """XGBoost-specific prediction with error handling"""
         try:
-            probabilities = model.predict_proba(data)
-            predictions = model.predict(data)
-            return {
-                "predictions": predictions.tolist(),
-                "probabilities": probabilities.tolist()
-            }
+            # Handle new model format (dict with model, scaler, config)
+            if isinstance(model_bundle, dict) and 'model' in model_bundle:
+                model = model_bundle['model']
+                scaler = model_bundle.get('scaler')
+
+                # Scale data if scaler available
+                if scaler is not None and hasattr(scaler, 'transform'):
+                    data = scaler.transform(data)
+
+                predictions = model.predict(data)
+                return {
+                    "predictions": predictions.tolist(),
+                    "probabilities": None  # XGBRegressor doesn't have predict_proba
+                }
+            else:
+                # Fallback for old format
+                probabilities = model_bundle.predict_proba(data) if hasattr(model_bundle, 'predict_proba') else None
+                predictions = model_bundle.predict(data)
+                return {
+                    "predictions": predictions.tolist(),
+                    "probabilities": probabilities.tolist() if probabilities is not None else None
+                }
         except Exception as e:
             logger.error(f"XGBoost prediction error: {e}")
             return {
@@ -239,11 +409,26 @@ class ModelManager:
                 "probabilities": [[0.5, 0.5]]
             }
     
-    def _predict_prophet(self, model, data):
+    def _predict_prophet(self, model_bundle, data):
         """Prophet-specific prediction with error handling"""
         try:
-            forecast = model.predict(data)
-            return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict('records')
+            # Handle new model format (dict with models per stock)
+            if isinstance(model_bundle, dict) and 'models' in model_bundle:
+                # data should contain 'ticker' and 'df' (future dataframe)
+                ticker = data.get('ticker')
+                future_df = data.get('df')
+
+                if ticker in model_bundle['models']:
+                    model = model_bundle['models'][ticker]
+                    forecast = model.predict(future_df)
+                    return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict('records')
+                else:
+                    logger.warning(f"No Prophet model for {ticker}")
+                    return self._get_default_prediction("prophet_forecaster")
+            else:
+                # Fallback for old format
+                forecast = model_bundle.predict(data)
+                return forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict('records')
         except Exception as e:
             logger.error(f"Prophet prediction error: {e}")
             return [{"ds": datetime.now(), "yhat": 100.0, "yhat_lower": 95.0, "yhat_upper": 105.0}]
@@ -253,10 +438,23 @@ class ModelManager:
         try:
             if isinstance(texts, str):
                 texts = [texts]
-            return model.predict(texts)
+
+            # Handle FinBERT analyzer
+            if hasattr(model, 'analyze_batch'):
+                results = model.analyze_batch(texts)
+                return [
+                    {
+                        "sentiment": r.label,
+                        "score": r.score,
+                        "confidence": r.confidence
+                    }
+                    for r in results
+                ]
+            else:
+                return model.predict(texts)
         except Exception as e:
             logger.error(f"Sentiment prediction error: {e}")
-            return [{"sentiment": "neutral", "score": 0.0} for _ in texts]
+            return [{"sentiment": "neutral", "score": 0.0} for _ in (texts if isinstance(texts, list) else [texts])]
     
     def _predict_risk(self, model, data):
         """Risk assessment with error handling"""

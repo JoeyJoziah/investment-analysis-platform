@@ -96,8 +96,12 @@ monitoring/
 grafana/
 prometheus/
 
-# Scripts (only needed for deployment)
-scripts/
+# Scripts - allow scripts directory but exclude deployment scripts
+!scripts/
+scripts/__pycache__/
 deploy.sh
 start-docker.sh
-*.sh
+setup.sh
+stop.sh
+start.sh
+logs.sh
