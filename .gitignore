@@ -150,3 +150,6 @@ backup/
 venv/
 env/
 .env/
+
+# Notion sync state (contains local task mapping)
+.notion_sync_state.json
