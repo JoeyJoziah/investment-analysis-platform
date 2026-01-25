@@ -241,3 +241,18 @@ pytest backend/tests/ -m "financial"   # Financial model tests
 - Connection pooling
 
 This documentation reflects the current simplified architecture after refactoring to remove complexity while maintaining functionality.
+
+## Session Completion Checklist
+
+**IMPORTANT**: After completing work in each session, update tracking documents:
+
+1. **Update `TODO.md`** with completed items:
+   - Mark finished tasks with ~~strikethrough~~ and ✅ COMPLETE
+   - Update the "Already Complete" section
+   - Update status percentages in header
+
+2. **Update `IMPLEMENTATION_STATUS.md`** if major milestones reached
+
+3. **Commit tracking doc updates** along with the code changes
+
+This ensures context persists across sessions and prevents duplicate work.
