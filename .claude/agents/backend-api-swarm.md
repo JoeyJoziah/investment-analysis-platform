@@ -328,6 +328,48 @@ raise APIException(
 )
 ```
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **github**: Use `gh` CLI for code management, PR creation/review, CI/CD integration, and issue tracking. Essential for all backend development workflows.
+- **tmux**: Manage background processes for testing, debugging, and running development servers. Use for parallel test execution and monitoring.
+- **1password**: Secure management of API keys, database credentials, and third-party service tokens using `op` CLI.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Create PR | github | `gh pr create --title "Add endpoint" --body "..."` |
+| Check CI status | github | `gh run list --limit 10` |
+| Run dev server | tmux | Background uvicorn with live reload |
+| Fetch API key | 1password | `op read "op://Dev/API-Key/credential"` |
+
+### Skill Integration Patterns
+
+#### Development Workflow
+```bash
+# 1. Create feature branch
+gh repo clone && git checkout -b feature/new-endpoint
+
+# 2. Start dev server in tmux for testing
+tmux new-session -d -s dev "uvicorn backend.api.main:app --reload"
+
+# 3. Run tests in parallel session
+tmux new-window -t dev "pytest backend/tests/ -v"
+
+# 4. Create PR when ready
+gh pr create --fill
+```
+
+#### Secure Credential Access
+```bash
+# Fetch credentials for external API testing
+DATABASE_URL=$(op read "op://Infrastructure/PostgreSQL/connection_string")
+REDIS_URL=$(op read "op://Infrastructure/Redis/url")
+```
+
 ## Integration Points
 
 - **Data Pipeline Swarm**: Receives processed data for API responses

@@ -551,6 +551,29 @@ When making infrastructure decisions, prioritize:
 5. **Security**: Follow security best practices
 6. **Maintainability**: Document and automate everything
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **github**: Use `gh` CLI for all GitHub operations - PR management, CI/CD status checks, workflow runs, issue tracking. Essential for deployment automation and CI/CD management.
+- **tmux**: Remote-control terminal sessions for monitoring long-running processes, managing multiple service logs, and orchestrating parallel deployments.
+- **1password**: Secure credential management using `op` CLI. Critical for managing API keys, database credentials, and deployment secrets. Never store secrets in code or environment files.
+
+### Communication & Tracking
+- **slack**: Send deployment notifications, alerts, and status updates to team channels.
+- **model-usage**: Track API and model usage costs from CodexBar. **Critical for monitoring the $50/month budget** - use this skill to generate cost reports and identify optimization opportunities.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Check CI status | github | `gh pr checks 123 --repo owner/repo` |
+| Monitor services | tmux | Create tmux session to tail multiple service logs |
+| Fetch credentials | 1password | `op read "op://Vault/Item/password"` |
+| Alert on deployment | slack | Send deployment success/failure notification |
+| Cost review | model-usage | Generate monthly usage report |
+
 ## Integration Points
 
 - **Backend API Swarm**: Deployment targets and health endpoints

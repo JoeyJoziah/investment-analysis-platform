@@ -579,6 +579,108 @@ When reviewing code, prioritize:
 5. **Maintainability**: Code is readable and maintainable
 6. **Testability**: Code can be tested effectively
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **github**: **Essential for all quality workflows**. Use `gh` CLI for PR reviews, CI/CD status checks, code comments, issue tracking, and managing quality gates.
+- **coding-agent**: Spawn additional coding agents (Codex, Claude Code, Pi) for automated code review, test generation, and parallel quality assessments.
+- **session-logs**: Search and analyze past session logs to understand previous decisions, track recurring issues, and maintain context across reviews.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Review PR | github | `gh pr review --comment` with checklist |
+| Check CI status | github | `gh pr checks <PR>` |
+| Generate tests | coding-agent | Spawn agent to write unit tests |
+| Track quality metrics | github | `gh api repos/.../code-scanning/alerts` |
+| Debug past issues | session-logs | Search for similar problems in history |
+
+### Skill Integration Patterns
+
+#### Comprehensive PR Review
+```bash
+# 1. Get PR details and diff
+gh pr view <PR_NUMBER> --json title,body,files
+gh pr diff <PR_NUMBER>
+
+# 2. Check CI status
+gh pr checks <PR_NUMBER>
+
+# 3. Run local tests
+pytest backend/tests/ --cov --cov-report=term-missing
+
+# 4. Submit review with checklist
+gh pr review <PR_NUMBER> --comment --body "## Code Review: [PR Title]
+
+### Checklist
+- [ ] Logic is correct
+- [ ] Error handling comprehensive
+- [ ] No security vulnerabilities
+- [ ] Tests cover new code
+- [ ] Documentation updated
+
+### Findings
+[Specific feedback]
+
+### Verdict
+[Approve/Request Changes]"
+```
+
+#### Automated Test Generation
+```bash
+# Use coding agent to generate tests for new code
+SCRATCH=$(mktemp -d)
+cd $SCRATCH && git init
+
+# Spawn Codex to write tests (with PTY for interactive terminal)
+bash pty:true workdir:$SCRATCH command:"codex exec --full-auto 'Review the following code and generate comprehensive pytest unit tests:
+[paste code here]
+
+Include:
+- Happy path tests
+- Edge case tests
+- Error handling tests
+- Parameterized tests where appropriate'"
+```
+
+#### Historical Issue Analysis
+```bash
+# Search past sessions for similar issues
+rg -l "similar_error_pattern" ~/.clawdbot/agents/<agentId>/sessions/*.jsonl
+
+# Extract relevant context
+jq -r 'select(.message.role == "assistant") |
+  .message.content[]? |
+  select(.type == "text") |
+  .text' <session>.jsonl | rg -i "fix|solution|resolved"
+```
+
+#### Parallel Code Quality Checks
+```bash
+# Run multiple quality tools in parallel using tmux
+SOCKET="${TMPDIR:-/tmp}/quality-checks.sock"
+tmux -S "$SOCKET" new-session -d -s quality
+
+# Pane 1: Type checking
+tmux -S "$SOCKET" send-keys "mypy backend/ --strict" Enter
+
+# Pane 2: Linting
+tmux -S "$SOCKET" split-window -h
+tmux -S "$SOCKET" send-keys "ruff check backend/" Enter
+
+# Pane 3: Security scan
+tmux -S "$SOCKET" split-window -v
+tmux -S "$SOCKET" send-keys "bandit -r backend/ -ll" Enter
+
+# Pane 4: Tests with coverage
+tmux -S "$SOCKET" select-pane -t 0
+tmux -S "$SOCKET" split-window -v
+tmux -S "$SOCKET" send-keys "pytest --cov=backend --cov-fail-under=80" Enter
+```
+
 ## Integration Points
 
 - **All Swarms**: Reviews code produced by other swarms

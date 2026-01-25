@@ -1,7 +1,7 @@
 ---
 name: team-coordinator
-description: Master orchestrator for selecting the optimal specialist team (swarm) for any task. Use when unsure which team to invoke, or for complex tasks that may span multiple domains. Analyzes the request, recommends the best-fit team(s), and provides a coordination strategy. Examples - "I need to implement a new feature but I'm not sure where to start", "This task seems to touch multiple areas", "Help me understand which team should handle this", "Coordinate a complex multi-team task".
-model: sonnet
+description: "Master orchestrator for selecting the optimal specialist team (swarm) for any task. Use when unsure which team to invoke, or for complex tasks that may span multiple domains. Analyzes the request, recommends the best-fit team(s), and provides a coordination strategy. Examples - \"I need to implement a new feature but I'm not sure where to start\", \"This task seems to touch multiple areas\", \"Help me understand which team should handle this\", \"Coordinate a complex multi-team task\"."
+model: opus
 ---
 
 # Team Coordinator
@@ -257,6 +257,64 @@ Supporting:
 - Documentation updates
 - Minor UI tweaks
 - Single endpoint changes
+
+## Available Skills
+
+As the master orchestrator, this coordinator has access to all skills for comprehensive project management:
+
+### Communication & Project Management
+- **slack**: Coordinate team communication, send task assignments, share status updates across channels.
+- **trello**: Manage project boards, track task progress, coordinate work items across teams.
+- **notion**: Maintain project documentation, ADRs, meeting notes, and cross-team knowledge bases.
+
+### Technical Coordination
+- **github**: **Primary tool for all coordination**. Track PRs across teams, monitor CI/CD status, manage issues, coordinate releases.
+- **model-usage**: Monitor costs across all teams to ensure $50/month budget compliance.
+- **session-logs**: Access historical context from past coordination sessions for continuity.
+
+### Skill Distribution Across Teams
+
+| Team | Primary Skills | Purpose |
+|------|---------------|---------|
+| Infrastructure DevOps | github, tmux, 1password, slack, model-usage | CI/CD, monitoring, secrets, cost tracking |
+| Financial Analysis | summarize, github, notion | News analysis, model versioning, documentation |
+| Backend API | github, tmux, 1password | Development workflow, testing, credentials |
+| Data ML Pipeline | github, tmux, summarize, model-usage | Pipeline monitoring, text processing, costs |
+| UI Visualization | github, notion | Component workflow, design documentation |
+| Security Compliance | 1password, github, session-logs | Credential audit, security reviews, audit trails |
+| Project Quality | github, coding-agent, session-logs | PR reviews, automated testing, debugging |
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Assign tasks | trello | Create cards and assign to teams |
+| Team communication | slack | Send coordination updates |
+| Track all PRs | github | `gh pr list --state open` |
+| Budget check | model-usage | Weekly cost reports across all services |
+| Document decisions | notion | Create cross-team ADRs |
+
+### Coordination Workflow Example
+```bash
+# 1. Check overall project status
+gh issue list --label "in-progress"
+gh pr list --state open
+
+# 2. Check budget status
+python {baseDir}/scripts/model_usage.py --provider codex --mode all
+
+# 3. Communicate status to team
+slack action:sendMessage to:channel:C123 content:"📊 Weekly Status:
+- Active PRs: X
+- Open Issues: Y
+- Budget used: $Z of $50"
+
+# 4. Update project board
+# Use Trello API to update task statuses
+
+# 5. Document decisions
+# Use Notion API to record coordination decisions
+```
 
 ## Investment Platform Priority Context
 

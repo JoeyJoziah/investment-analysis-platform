@@ -430,6 +430,72 @@ When implementing security, prioritize:
 5. **Defense in Depth**: Multiple layers of protection
 6. **Usability**: Security shouldn't make the platform unusable
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **1password**: **Critical for security management**. Use `op` CLI to audit credential access, manage secrets rotation, enforce secure credential policies, and verify no secrets are exposed in code.
+- **github**: Use `gh` CLI for security vulnerability tracking, managing security-related PRs, reviewing security scan results in CI/CD, and tracking security issues.
+- **session-logs**: Analyze past session logs for security audit trails, track what actions were taken during security reviews, and maintain compliance documentation.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Audit credentials | 1password | List and verify vault access policies |
+| Security PR review | github | `gh pr review` with security checklist |
+| Track security issues | github | `gh issue create --label security` |
+| Compliance audit trail | session-logs | Search logs for audit-relevant actions |
+
+### Skill Integration Patterns
+
+#### Credential Security Audit
+```bash
+# 1. Create secure tmux session for credential audit
+SOCKET="${TMPDIR:-/tmp}/security-audit.sock"
+SESSION="security-audit-$(date +%Y%m%d)"
+tmux -S "$SOCKET" new -d -s "$SESSION"
+
+# 2. Sign in to 1Password
+tmux -S "$SOCKET" send-keys "op signin --account company.1password.com" Enter
+
+# 3. List all vaults and verify access
+tmux -S "$SOCKET" send-keys "op vault list" Enter
+
+# 4. Check for any exposed secrets in code
+tmux -S "$SOCKET" send-keys "trufflehog git file://. --only-verified" Enter
+```
+
+#### Security Review Workflow
+```bash
+# 1. Check security scan results from CI
+gh run view --log | grep -i "security\|vulnerability\|snyk"
+
+# 2. Create security review checklist
+gh pr review <PR_NUMBER> --comment --body "## Security Review
+- [ ] No SQL injection vulnerabilities
+- [ ] No hardcoded credentials
+- [ ] Input validation present
+- [ ] Authentication/authorization checked
+- [ ] Sensitive data not logged"
+
+# 3. Track any findings as issues
+gh issue create --title "Security: [Finding]" \
+  --label "security,priority:high" \
+  --body "## Finding\n[Description]\n\n## Remediation\n[Steps]"
+```
+
+#### Compliance Audit Trail
+```bash
+# Search session logs for audit-relevant events
+jq -r 'select(.message.role == "assistant") |
+  .message.content[]? |
+  select(.type == "text") |
+  .text' ~/.clawdbot/agents/<agentId>/sessions/*.jsonl |
+  rg -i "audit|compliance|gdpr|sec|disclosure"
+```
+
 ## Integration Points
 
 - **Backend API Swarm**: Implements auth endpoints, security headers

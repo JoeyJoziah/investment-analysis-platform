@@ -255,6 +255,65 @@ When designing pipelines, prioritize:
 - **System Failures**: Circuit breaker, fallback to cached data
 - **Schema Changes**: Validate early, fail fast, alert for human review
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **github**: Use `gh` CLI for version control of DAGs, pipeline code, and ML models. Track changes to data processing logic.
+- **tmux**: Monitor long-running pipeline jobs, manage multiple Airflow worker sessions, and debug batch processing in parallel terminal sessions.
+- **summarize**: Process and summarize large text datasets (news articles, SEC filings) for the sentiment analysis pipeline.
+- **model-usage**: Track ML model inference costs and API usage. **Critical for staying within the $50/month budget** when running batch predictions across 6,000+ stocks.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Monitor DAG runs | tmux | Multiple panes for Airflow logs, worker status |
+| Version DAG changes | github | `gh pr create` for pipeline modifications |
+| Process news batch | summarize | Extract summaries for FinBERT input |
+| Check ML costs | model-usage | Daily/weekly cost reports for model inference |
+
+### Skill Integration Patterns
+
+#### Pipeline Monitoring Setup
+```bash
+# Create monitoring session with multiple panes
+SOCKET="${TMPDIR:-/tmp}/pipeline-monitor.sock"
+tmux -S "$SOCKET" new-session -d -s pipeline
+
+# Pane 1: Airflow scheduler logs
+tmux -S "$SOCKET" send-keys "docker logs -f airflow-scheduler" Enter
+
+# Pane 2: Worker status
+tmux -S "$SOCKET" split-window -h
+tmux -S "$SOCKET" send-keys "watch docker ps | grep worker" Enter
+
+# Pane 3: Database connections
+tmux -S "$SOCKET" split-window -v
+tmux -S "$SOCKET" send-keys "watch pg_isready" Enter
+```
+
+#### Batch Text Processing for Sentiment
+```bash
+# Process multiple news URLs and extract content for ML pipeline
+for url in "${NEWS_URLS[@]}"; do
+  summarize "$url" --extract-only --json >> raw_news_batch.jsonl
+done
+# Feed extracted text to FinBERT sentiment model
+```
+
+#### Cost Monitoring Workflow
+```bash
+# Check current model usage costs
+python {baseDir}/scripts/model_usage.py --provider codex --mode all
+
+# Alert if approaching budget threshold
+if [ "$CURRENT_COST" -gt "$BUDGET_THRESHOLD" ]; then
+  # Trigger alert and reduce batch sizes
+fi
+```
+
 ## Integration Points
 
 - **Financial Analysis Swarm**: Provides cleaned data for analysis

@@ -189,6 +189,42 @@ When multiple analytical approaches exist, prioritize:
 - **Model Failures**: Fall back to simpler models, clearly communicate reduced confidence
 - **Compliance Gaps**: Halt recommendation generation until compliance issues resolved
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **summarize**: Use `summarize` CLI to analyze financial news articles, earnings call transcripts, SEC filings, and research reports. Essential for sentiment analysis and extracting key information from large documents.
+- **github**: Use `gh` CLI for version control of analysis models, tracking changes to algorithms, and managing research code.
+- **notion**: Document analysis methodologies, maintain research notes, and create data source documentation using the Notion API.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Analyze earnings report | summarize | `summarize "https://sec.gov/filing.html" --model google/gemini-3-flash-preview` |
+| Process news articles | summarize | Extract key points from financial news for sentiment scoring |
+| Document methodology | notion | Create/update analysis methodology documentation |
+| Version control | github | Track changes to prediction models and algorithms |
+
+### Skill Integration Patterns
+
+#### Financial Document Analysis Pipeline
+```bash
+# 1. Fetch and summarize SEC filing
+summarize "https://sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=0000320193&type=10-K" --extract-only
+
+# 2. Use extracted content for FinBERT sentiment analysis
+# 3. Integrate sentiment into recommendation scoring
+```
+
+#### News Sentiment Workflow
+```bash
+# Summarize multiple news sources for a stock
+summarize "https://news-url" --length short --model google/gemini-3-flash-preview
+# Feed summary into sentiment analysis pipeline
+```
+
 ## Integration Points
 
 - **Data Pipeline Swarm**: Receives cleaned, validated market data

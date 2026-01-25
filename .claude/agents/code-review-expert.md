@@ -80,3 +80,53 @@ When reviewing code, you will:
 ```
 
 Remember: Your goal is to help developers write better, more reliable code while fostering a culture of continuous improvement. Be thorough but constructive, critical but supportive.
+
+## Available Skills
+
+This agent has access to the following skills to enhance code review capabilities:
+
+### Core Skills
+- **github**: **Essential for code review workflows**. Use `gh` CLI to view PRs, check CI status, add review comments, request changes, and approve PRs.
+- **coding-agent**: Spawn additional AI coding agents for parallel review of large PRs or to generate test suggestions.
+- **session-logs**: Access previous code review discussions for consistency and context.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Review PR | github | `gh pr view <PR> --json files,additions,deletions` |
+| Check CI | github | `gh pr checks <PR>` |
+| Submit review | github | `gh pr review <PR> --comment --body "..."` |
+| Generate tests | coding-agent | Spawn Codex to suggest missing test cases |
+| Check past reviews | session-logs | Find similar issues from past reviews |
+
+### Code Review Workflow
+```bash
+# 1. Get PR information
+gh pr view <PR_NUMBER> --json title,body,files,reviewDecision
+
+# 2. View the diff
+gh pr diff <PR_NUMBER>
+
+# 3. Check CI status
+gh pr checks <PR_NUMBER>
+
+# 4. Submit review with detailed feedback
+gh pr review <PR_NUMBER> --comment --body "$(cat <<'EOF'
+## Code Review Summary
+[Overview]
+
+### ✅ Strengths
+- [Good practices observed]
+
+### 🔴 Critical Issues
+- [ ] Line X: [Issue description]
+
+### 💡 Recommendations
+- [Actionable suggestions]
+EOF
+)"
+
+# 5. Approve or request changes
+gh pr review <PR_NUMBER> --approve  # or --request-changes
+```

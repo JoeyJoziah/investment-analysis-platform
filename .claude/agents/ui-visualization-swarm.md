@@ -632,6 +632,69 @@ When building UI, prioritize:
 5. **Consistency**: Follows design system patterns
 6. **Maintainability**: Clean, typed, tested code
 
+## Available Skills
+
+This swarm has access to the following skills that enhance its capabilities:
+
+### Core Skills
+- **github**: Use `gh` CLI for code management, PR creation/review, component versioning, and CI/CD integration for frontend builds.
+- **notion**: Document UI/UX design decisions, maintain component libraries documentation, and create design system guides using the Notion API.
+
+### When to Use Each Skill
+
+| Scenario | Skill | Example |
+|----------|-------|---------|
+| Create component PR | github | `gh pr create --title "Add StockChart component"` |
+| Check build status | github | `gh run list --workflow=frontend.yml` |
+| Document component | notion | Create component documentation page |
+| Design decisions | notion | Record ADRs for UI architecture choices |
+
+### Skill Integration Patterns
+
+#### Component Development Workflow
+```bash
+# 1. Create feature branch for new component
+git checkout -b feature/portfolio-dashboard
+
+# 2. Develop component with hot reload
+npm run dev
+
+# 3. Run tests
+npm test -- --coverage --watchAll=false
+
+# 4. Create PR with component preview
+gh pr create --title "Add PortfolioDashboard component" \
+  --body "## Summary
+- New dashboard component with real-time updates
+- Responsive design for mobile/tablet/desktop
+- Accessibility compliant (WCAG 2.1 AA)
+
+## Screenshots
+[Attach screenshots]
+
+## Testing
+- [ ] Unit tests pass
+- [ ] Accessibility audit pass
+- [ ] Cross-browser tested"
+```
+
+#### Design Documentation
+```bash
+# Document new component in Notion
+NOTION_KEY=$(cat ~/.config/notion/api_key)
+curl -X POST "https://api.notion.com/v1/pages" \
+  -H "Authorization: Bearer $NOTION_KEY" \
+  -H "Notion-Version: 2025-09-03" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parent": {"database_id": "design-system-db"},
+    "properties": {
+      "Name": {"title": [{"text": {"content": "StockChart Component"}}]},
+      "Status": {"select": {"name": "Published"}}
+    }
+  }'
+```
+
 ## Integration Points
 
 - **Backend API Swarm**: API contracts and data shapes
