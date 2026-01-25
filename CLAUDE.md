@@ -634,3 +634,232 @@ Use the `skill-creator` skill to build new project-specific skills:
 4. Place in `.claude/skills/<skill-name>/`
 
 See `.claude/skills/skill-creator/SKILL.md` for detailed guidance.
+
+---
+
+## Complete Claude Code Ecosystem Integration
+
+This project integrates **two major Claude Code repositories** for enterprise-grade multi-agent orchestration:
+
+1. **everything-claude-code** from [github.com/affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
+2. **claude-flow** from [github.com/ruvnet/claude-flow](https://github.com/ruvnet/claude-flow)
+
+### Integration Summary
+
+| Category | Everything Claude Code | Claude Flow | Custom | Total |
+|----------|------------------------|-------------|--------|-------|
+| Agents | 9 | 100+ (in 25 dirs) | 6 | 128 |
+| Skills | 11 | 37 | 3 | 71 |
+| Commands | 15 | 23+ (in 19 dirs) | 4 | 164 |
+| Helpers | 4 | 31 | - | 35 |
+| Rules | 8 | - | - | 8 |
+
+### Claude Flow Advanced Capabilities
+
+The claude-flow integration adds:
+
+#### Multi-Agent Orchestration
+- **Queen Orchestrator**: Master agent coordinating all investment workflows
+- **Swarm Topologies**: Mesh (collaborative), Hierarchical (orchestrated), Ring, Star
+- **Consensus Mechanisms**: Raft, BFT, Gossip, CRDT for agent coordination
+
+#### Agent Categories from Claude Flow
+| Category | Purpose |
+|----------|---------|
+| `consensus/` | BFT, Raft, Gossip consensus agents |
+| `hive-mind/` | Collective intelligence coordination |
+| `flow-nexus/` | Flow orchestration and management |
+| `swarm/` | Multi-agent swarm coordination |
+| `sona/` | Self-optimizing neural architecture |
+| `sparc/` | SPARC methodology agents |
+| `github/` | GitHub integration agents |
+| `optimization/` | Performance optimization agents |
+| `reasoning/` | Advanced reasoning agents |
+
+#### Advanced Skills from Claude Flow
+- `agentdb-*`: Advanced memory, learning, vector search
+- `flow-nexus-*`: Neural, platform, swarm orchestration
+- `github-*`: Code review, multi-repo, release management
+- `hive-mind-advanced`: Collective intelligence
+- `sparc-methodology`: SPARC development methodology
+- `swarm-*`: Advanced swarm coordination
+- `v3-*`: V3 implementation skills
+
+#### Helper Scripts
+- `learning-service.mjs`: Continuous learning loop
+- `swarm-hooks.sh`: Swarm coordination hooks
+- `worker-manager.sh`: Background worker management
+- `metrics-db.mjs`: Performance metrics tracking
+- `checkpoint-manager.sh`: State persistence
+
+#### V3 Implementation
+Located in `.claude/v3/`:
+- `@claude-flow/`: Core TypeScript implementation
+- `mcp/`: MCP server (connection pool, session manager, tool registry)
+- `src/`: Coordination, memory, task execution modules
+- `swarm.config.ts`: Swarm configuration
+
+### Custom Investment Analysis Commands
+
+| Command | Description | Agent |
+|---------|-------------|-------|
+| `/underwrite` | Comprehensive deal underwriting | deal-underwriter |
+| `/model` | Build DCF, LBO, financial models | financial-modeler |
+| `/analyze-structure` | Review security packages & liens | - |
+| `/scenario` | Scenario and sensitivity analysis | - |
+
+### Custom Investment Analysis Agents
+
+#### `queen-investment-orchestrator` (.claude/agents/queen-investment-orchestrator.md)
+**Master orchestrator** for coordinating all investment analysis workflows.
+- Routes tasks to optimal specialized agents
+- Coordinates multi-phase deal analysis
+- Manages context across agent handoffs
+- Supports mesh, hierarchical, star topologies
+- Performance targets: 32.3% token reduction, 2.8-4.4x speedup
+
+#### `investment-analyst` (.claude/agents/investment-analyst.md)
+Senior investment analyst for deal analysis, due diligence, and investment memos.
+- Market analysis and industry research
+- Risk-return evaluation
+- Investment memo generation
+- Cannabis and real estate specialization
+
+#### `deal-underwriter` (.claude/agents/deal-underwriter.md)
+Credit underwriter for loans and secured lending transactions.
+- Credit analysis and scoring
+- Collateral evaluation
+- UCC lien analysis
+- Covenant structuring
+- Intercreditor review
+
+#### `financial-modeler` (.claude/agents/financial-modeler.md)
+Expert financial modeler for quantitative analysis.
+- DCF valuations
+- LBO modeling
+- Scenario and sensitivity analysis
+- Returns calculations (IRR, MOIC)
+- Data consolidation automation
+
+#### `risk-assessor` (.claude/agents/risk-assessor.md)
+Portfolio and deal risk assessment specialist.
+- Value at Risk (VaR) calculations
+- Stress testing and scenario analysis
+- Credit risk analysis (PD, LGD, EAD)
+- Regulatory compliance (SEC, Basel III/IV)
+- Concentration risk monitoring
+
+#### `portfolio-manager` (.claude/agents/portfolio-manager.md)
+Portfolio construction and management specialist.
+- Asset allocation (strategic and tactical)
+- Portfolio optimization (Mean-Variance, Risk Parity, Black-Litterman)
+- Performance attribution analysis
+- Rebalancing strategies
+- Risk budgeting
+
+### Custom Investment Skills
+
+#### `financial-modeling` (.claude/skills/financial-modeling/)
+- DCF valuation methodology
+- LBO model framework
+- Scenario analysis patterns
+- Sensitivity table generation
+- Cash flow modeling
+
+#### `deal-structuring` (.claude/skills/deal-structuring/)
+- Security package design
+- UCC lien perfection
+- Intercreditor agreements
+- Covenant structures
+- Collateral analysis
+
+#### `underwriting-analysis` (.claude/skills/underwriting-analysis/)
+- Credit scoring methodology
+- Financial statement spreading
+- Risk assessment framework
+- Due diligence checklists
+
+### Imported Development Commands
+
+| Command | Description |
+|---------|-------------|
+| `/plan` | Create implementation plan before coding |
+| `/tdd` | Test-driven development workflow |
+| `/code-review` | Quality and security review |
+| `/build-fix` | Fix build and compilation errors |
+| `/e2e` | End-to-end test generation |
+| `/refactor-clean` | Remove dead code |
+| `/update-docs` | Sync documentation |
+| `/verify` | Run verification loop |
+| `/learn` | Extract patterns mid-session |
+| `/checkpoint` | Save verification state |
+
+### Investment Analysis Workflow
+
+```
+1. Receive new deal for analysis
+   → /underwrite to perform credit analysis
+
+2. Build financial projections
+   → /model DCF to create valuation
+
+3. Review security package
+   → /analyze-structure for lien priority
+
+4. Stress test assumptions
+   → /scenario for sensitivity analysis
+
+5. Generate investment memo
+   → Use investment-analyst agent
+```
+
+### Integration Manifest
+
+Full component registry: `.claude/integration-manifest.json`
+
+### Orchestration Patterns
+
+Use the Queen Investment Orchestrator for complex workflows:
+
+```
+PATTERN 1: New Deal Analysis
+├─ PARALLEL: investment-analyst + deal-underwriter + financial-modeler
+├─ SEQUENTIAL: credit scoring → projections → collateral valuation
+├─ INTEGRATION: scenario analysis → security package → risk assessment
+└─ DELIVERY: investment memo
+
+PATTERN 2: Portfolio Risk Assessment
+├─ financial-analysis-swarm: Calculate VaR, Sharpe, Sortino
+├─ financial-modeler: Stress test scenarios
+├─ risk-assessor: Generate risk report
+└─ Validate SEC compliance
+
+PATTERN 3: Due Diligence Deep Dive
+├─ deal-underwriter: UCC search, lien analysis
+├─ investment-analyst: Business & market due diligence
+├─ financial-modeler: Validate projections
+└─ deal-underwriter: Structure security package
+```
+
+### Updating from Upstream
+
+**Sync with everything-claude-code:**
+```bash
+git clone --depth 1 https://github.com/affaan-m/everything-claude-code.git /tmp/ecc
+cp /tmp/ecc/agents/*.md .claude/agents/
+cp -r /tmp/ecc/skills/* .claude/skills/
+cp /tmp/ecc/commands/*.md .claude/commands/
+rm -rf /tmp/ecc
+```
+
+**Sync with claude-flow:**
+```bash
+git clone --depth 1 https://github.com/ruvnet/claude-flow.git /tmp/cf
+cp -r /tmp/cf/.claude/agents/* .claude/agents/
+cp -r /tmp/cf/.claude/skills/* .claude/skills/
+cp -r /tmp/cf/.claude/commands/* .claude/commands/
+cp -r /tmp/cf/.claude/helpers/* .claude/helpers/
+rm -rf /tmp/cf
+```
+
+Custom investment-specific components will not be overwritten as they have unique names.

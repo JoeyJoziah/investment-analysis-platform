@@ -1,0 +1,445 @@
+{
+  "manifest_version": "2.0.0",
+  "created_at": "2026-01-25",
+  "updated_at": "2026-01-25",
+  "sources": [
+    {
+      "name": "everything-claude-code",
+      "repository": "https://github.com/affaan-m/everything-claude-code",
+      "integrated": true
+    },
+    {
+      "name": "claude-flow",
+      "repository": "https://github.com/ruvnet/claude-flow",
+      "integrated": true
+    }
+  ],
+  "project": "investment-analysis-platform",
+
+  "agents": {
+    "imported_everything_claude_code": [
+      {
+        "name": "architect",
+        "file": "agents/architect.md",
+        "description": "Software architecture specialist for system design and scalability",
+        "model": "opus"
+      },
+      {
+        "name": "build-error-resolver",
+        "file": "agents/build-error-resolver.md",
+        "description": "Resolves build and compilation errors",
+        "model": "opus"
+      },
+      {
+        "name": "code-reviewer",
+        "file": "agents/code-reviewer.md",
+        "description": "Reviews code for quality, security, and maintainability",
+        "model": "opus"
+      },
+      {
+        "name": "doc-updater",
+        "file": "agents/doc-updater.md",
+        "description": "Updates and synchronizes documentation",
+        "model": "opus"
+      },
+      {
+        "name": "e2e-runner",
+        "file": "agents/e2e-runner.md",
+        "description": "Runs end-to-end tests with Playwright",
+        "model": "opus"
+      },
+      {
+        "name": "planner",
+        "file": "agents/planner.md",
+        "description": "Creates implementation plans before coding",
+        "model": "opus"
+      },
+      {
+        "name": "refactor-cleaner",
+        "file": "agents/refactor-cleaner.md",
+        "description": "Removes dead code and refactors for clarity",
+        "model": "opus"
+      },
+      {
+        "name": "security-reviewer",
+        "file": "agents/security-reviewer.md",
+        "description": "Analyzes code for security vulnerabilities",
+        "model": "opus"
+      },
+      {
+        "name": "tdd-guide",
+        "file": "agents/tdd-guide.md",
+        "description": "Guides test-driven development workflows",
+        "model": "opus"
+      }
+    ],
+    "imported_claude_flow": {
+      "agent_directories": [
+        "analysis",
+        "architecture",
+        "consensus",
+        "core",
+        "custom",
+        "data",
+        "development",
+        "devops",
+        "documentation",
+        "flow-nexus",
+        "github",
+        "goal",
+        "hive-mind",
+        "neural",
+        "optimization",
+        "payments",
+        "reasoning",
+        "sona",
+        "sparc",
+        "specialized",
+        "sublinear",
+        "swarm",
+        "templates",
+        "testing",
+        "v3"
+      ],
+      "specialist_agents": [
+        "database-specialist",
+        "project-coordinator",
+        "python-specialist",
+        "typescript-specialist",
+        "security-auditor",
+        "base-template-generator"
+      ]
+    },
+    "custom_investment": [
+      {
+        "name": "queen-investment-orchestrator",
+        "file": "agents/queen-investment-orchestrator.md",
+        "description": "Master orchestrator for investment analysis workflows",
+        "model": "opus",
+        "domain": "investment-analysis"
+      },
+      {
+        "name": "investment-analyst",
+        "file": "agents/investment-analyst.md",
+        "description": "Senior investment analyst for deal analysis and investment memos",
+        "model": "opus",
+        "domain": "investment-analysis"
+      },
+      {
+        "name": "deal-underwriter",
+        "file": "agents/deal-underwriter.md",
+        "description": "Credit underwriter for loans and secured lending",
+        "model": "opus",
+        "domain": "investment-analysis"
+      },
+      {
+        "name": "financial-modeler",
+        "file": "agents/financial-modeler.md",
+        "description": "Expert financial modeler for DCF, LBO, and valuations",
+        "model": "opus",
+        "domain": "investment-analysis"
+      },
+      {
+        "name": "risk-assessor",
+        "file": "agents/risk-assessor.md",
+        "description": "Portfolio and deal risk assessment specialist",
+        "model": "opus",
+        "domain": "investment-analysis"
+      },
+      {
+        "name": "portfolio-manager",
+        "file": "agents/portfolio-manager.md",
+        "description": "Portfolio construction and management specialist",
+        "model": "opus",
+        "domain": "investment-analysis"
+      }
+    ],
+    "existing_project_swarms": [
+      "architecture-reviewer",
+      "backend-api-swarm",
+      "code-review-expert",
+      "data-ml-pipeline-swarm",
+      "data-science-architect",
+      "financial-analysis-swarm",
+      "godmode-refactorer",
+      "infrastructure-devops-swarm",
+      "project-quality-swarm",
+      "security-compliance-swarm",
+      "team-coordinator",
+      "ui-visualization-swarm"
+    ]
+  },
+
+  "skills": {
+    "imported_everything_claude_code": [
+      "backend-patterns",
+      "clickhouse-io",
+      "coding-standards",
+      "continuous-learning",
+      "eval-harness",
+      "frontend-patterns",
+      "project-guidelines-example",
+      "security-review",
+      "strategic-compact",
+      "tdd-workflow",
+      "verification-loop"
+    ],
+    "imported_claude_flow": [
+      "agentdb-advanced",
+      "agentdb-learning",
+      "agentdb-memory-patterns",
+      "agentdb-optimization",
+      "agentdb-vector-search",
+      "agentic-jujutsu",
+      "flow-nexus-neural",
+      "flow-nexus-platform",
+      "flow-nexus-swarm",
+      "github-code-review",
+      "github-multi-repo",
+      "github-project-management",
+      "github-release-management",
+      "github-workflow-automation",
+      "hive-mind-advanced",
+      "hooks-automation",
+      "pair-programming",
+      "performance-analysis",
+      "reasoningbank-agentdb",
+      "reasoningbank-intelligence",
+      "skill-builder",
+      "sparc-methodology",
+      "stream-chain",
+      "swarm-advanced",
+      "swarm-orchestration",
+      "v3-cli-modernization",
+      "v3-core-implementation",
+      "v3-ddd-architecture",
+      "v3-integration-deep",
+      "v3-mcp-optimization",
+      "v3-memory-unification",
+      "v3-performance-optimization",
+      "v3-security-overhaul",
+      "v3-swarm-coordination",
+      "verification-quality",
+      "worker-benchmarks",
+      "worker-integration"
+    ],
+    "custom_investment": [
+      "financial-modeling",
+      "deal-structuring",
+      "underwriting-analysis"
+    ],
+    "existing_general": [
+      "1password",
+      "github",
+      "slack",
+      "notion",
+      "trello",
+      "summarize",
+      "tmux",
+      "session-logs",
+      "model-usage",
+      "skill-creator",
+      "sec-compliance",
+      "cost-monitor",
+      "api-rate-limiter",
+      "stock-analysis"
+    ]
+  },
+
+  "commands": {
+    "imported_everything_claude_code": [
+      "build-fix",
+      "checkpoint",
+      "code-review",
+      "e2e",
+      "eval",
+      "learn",
+      "orchestrate",
+      "plan",
+      "refactor-clean",
+      "setup-pm",
+      "tdd",
+      "test-coverage",
+      "update-codemaps",
+      "update-docs",
+      "verify"
+    ],
+    "imported_claude_flow": {
+      "command_files": [
+        "claude-flow-help",
+        "claude-flow-memory",
+        "claude-flow-swarm",
+        "sparc"
+      ],
+      "command_directories": [
+        "agents",
+        "analysis",
+        "automation",
+        "coordination",
+        "flow-nexus",
+        "github",
+        "hive-mind",
+        "hooks",
+        "memory",
+        "monitoring",
+        "optimization",
+        "pair",
+        "sparc",
+        "stream-chain",
+        "swarm",
+        "training",
+        "truth",
+        "verify",
+        "workflows"
+      ]
+    },
+    "custom_investment": [
+      {
+        "name": "underwrite",
+        "file": "commands/underwrite.md",
+        "description": "Comprehensive deal underwriting analysis",
+        "invokes": "deal-underwriter"
+      },
+      {
+        "name": "model",
+        "file": "commands/model.md",
+        "description": "Build or analyze financial models",
+        "invokes": "financial-modeler"
+      },
+      {
+        "name": "analyze-structure",
+        "file": "commands/analyze-structure.md",
+        "description": "Analyze deal structure and security packages"
+      },
+      {
+        "name": "scenario",
+        "file": "commands/scenario.md",
+        "description": "Run scenario and sensitivity analysis"
+      }
+    ]
+  },
+
+  "helpers": {
+    "imported_claude_flow": [
+      "adr-compliance.sh",
+      "auto-commit.sh",
+      "checkpoint-manager.sh",
+      "daemon-manager.sh",
+      "ddd-tracker.sh",
+      "github-safe.js",
+      "github-setup.sh",
+      "guidance-hook.sh",
+      "guidance-hooks.sh",
+      "health-monitor.sh",
+      "learning-hooks.sh",
+      "learning-optimizer.sh",
+      "learning-service.mjs",
+      "metrics-db.mjs",
+      "pattern-consolidator.sh",
+      "perf-worker.sh",
+      "quick-start.sh",
+      "security-scanner.sh",
+      "setup-mcp.sh",
+      "standard-checkpoint-hooks.sh",
+      "statusline.cjs",
+      "swarm-comms.sh",
+      "swarm-hooks.sh",
+      "swarm-monitor.sh",
+      "sync-v3-metrics.sh",
+      "update-v3-progress.sh",
+      "v3-quick-status.sh",
+      "v3.sh",
+      "validate-v3-config.sh",
+      "worker-manager.sh"
+    ]
+  },
+
+  "v3_implementation": {
+    "location": ".claude/v3/",
+    "components": [
+      "@claude-flow - Core TypeScript implementation",
+      "mcp/ - MCP server implementation (connection-pool, server, session-manager, tool-registry, tools, transport)",
+      "src/ - Source modules (agent-lifecycle, coordination, infrastructure, mcp, memory, shared, task-execution)",
+      "implementation/ - ADRs, architecture, hooks, init, integration, migration, optimization, planning, plugins, research, security, swarm-plans",
+      "swarm.config.ts - Swarm configuration"
+    ]
+  },
+
+  "rules": {
+    "imported": [
+      "agents",
+      "coding-style",
+      "git-workflow",
+      "hooks",
+      "patterns",
+      "performance",
+      "security",
+      "testing"
+    ]
+  },
+
+  "hooks": {
+    "config_file": "hooks/hooks.json",
+    "hook_scripts": [
+      "hooks/memory-persistence/pre-compact.sh",
+      "hooks/memory-persistence/session-start.sh",
+      "hooks/memory-persistence/session-end.sh",
+      "hooks/strategic-compact/suggest-compact.sh"
+    ]
+  },
+
+  "mcp_configs": {
+    "location": "mcp-configs/mcp-servers.json",
+    "v3_mcp": ".claude/v3/mcp/"
+  },
+
+  "contexts": {
+    "imported": ["dev", "research", "review"]
+  },
+
+  "config_files": {
+    "settings": "settings.local.json",
+    "v3_config": [
+      "config/v3-dependency-optimization.json",
+      "config/v3-performance-targets.json"
+    ]
+  },
+
+  "statusline_scripts": [
+    "statusline.sh",
+    "statusline.mjs",
+    "statusline-command.sh"
+  ],
+
+  "statistics": {
+    "total_agents": 128,
+    "agent_directories": 25,
+    "total_skills": 71,
+    "total_commands": 164,
+    "command_directories": 19,
+    "total_helpers": 31,
+    "total_rules": 8,
+    "hooks": 4,
+    "contexts": 3
+  },
+
+  "orchestration": {
+    "topologies": ["mesh", "hierarchical", "ring", "star"],
+    "consensus_mechanisms": ["raft", "bft", "gossip", "crdt"],
+    "memory_namespaces": [
+      "investment-analysis",
+      "deals",
+      "portfolios",
+      "financial-models",
+      "underwriting-data",
+      "github-operations"
+    ]
+  },
+
+  "performance_targets": {
+    "token_efficiency": "32.3% reduction",
+    "parallel_speedup": "2.8-4.4x",
+    "decision_latency": "<5ms",
+    "solving_accuracy": "84.8%"
+  }
+}
