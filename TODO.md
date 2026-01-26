@@ -44,52 +44,33 @@ The platform is **production-ready** with comprehensive multi-agent AI orchestra
 
 ---
 
-### CRITICAL-1: Fix Broken Cache Decorator ⚠️
-**File:** `backend/utils/cache.py:205-216`
+### ~~CRITICAL-1: Fix Broken Cache Decorator~~ ✅ COMPLETE
+**File:** `backend/utils/cache.py:205-300`
 **Impact:** 90% API performance degradation - cache is NO-OP!
-**Time:** 2 hours
+**Completed:** 2026-01-26
 
-- [ ] Replace no-op decorator with actual Redis caching
-- [ ] Implement async wrapper with TTL support
-- [ ] Add cache key generation from function args
-- [ ] Test cache hit/miss rates
-- [ ] Update all endpoints using `@cache_with_ttl`
+- [x] Replace no-op decorator with actual Redis caching
+- [x] Implement async wrapper with TTL support
+- [x] Add cache key generation from function args
+- [x] Test cache hit/miss rates
+- [x] Update all endpoints using `@cache_with_ttl`
 
-```python
-# Current (broken):
-def cache_with_ttl(ttl: int = 300):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            return func(*args, **kwargs)  # NO CACHING!
-        return wrapper
-    return decorator
-
-# Fix: Implement actual caching with Redis
-```
+**Implementation:** See `INTEGRATION_SUMMARY.md` for verification details.
 
 ---
 
-### CRITICAL-2: Parallelize External API Calls
+### ~~CRITICAL-2: Parallelize External API Calls~~ ✅ COMPLETE
 **File:** `backend/api/routers/analysis.py:335-404`
 **Impact:** 300-500% latency increase (4-6s → 1.5-2s)
-**Time:** 4 hours
+**Completed:** 2026-01-26
 
-- [ ] Refactor sequential API calls to use `asyncio.gather()`
-- [ ] Add `return_exceptions=True` for graceful degradation
-- [ ] Implement timeout handling per API source
-- [ ] Test parallel execution timing
-- [ ] Update error handling for partial failures
+- [x] Refactor sequential API calls to use `asyncio.gather()`
+- [x] Add `return_exceptions=True` for graceful degradation
+- [x] Implement timeout handling per API source
+- [x] Test parallel execution timing
+- [x] Update error handling for partial failures
 
-```python
-# Fix: Execute all data fetching in parallel
-results = await asyncio.gather(
-    fetch_technical_indicators(symbol, request.period),
-    price_repository.get_price_history(...),
-    fetch_fundamental_data(symbol),
-    fetch_sentiment_data(symbol),
-    return_exceptions=True
-)
-```
+**Implementation:** Uses `fetch_parallel_with_fallback()` and `safe_async_call()` helpers.
 
 ---
 
@@ -117,45 +98,46 @@ all_price_histories = await price_repository.get_bulk_price_history(
 
 ---
 
-### CRITICAL-4: Eliminate Elasticsearch (Budget Fix)
+### ~~CRITICAL-4: Eliminate Elasticsearch (Budget Fix)~~ ✅ COMPLETE
 **File:** `docker-compose.yml`
 **Impact:** $15-20/month savings, simpler stack
-**Time:** 2 hours
+**Completed:** 2026-01-26
 
-- [ ] Remove elasticsearch service from docker-compose.yml
-- [ ] Remove elasticsearch-exporter service
-- [ ] Add PostgreSQL full-text search to stock_repository.py
-- [ ] Update prometheus.yml to remove ES scrape config
-- [ ] Test search functionality with PG FTS
+- [x] Remove elasticsearch service from docker-compose.yml
+- [x] Remove elasticsearch-exporter service
+- [x] Add PostgreSQL full-text search to stock_repository.py
+- [x] Update prometheus.yml to remove ES scrape config
+- [x] Test search functionality with PG FTS
+
+**Implementation:** PostgreSQL FTS with pg_trgm extension replaces Elasticsearch.
 
 ---
 
-### HIGH-1: Add Missing Database Indexes
-**Files:** Database migrations
+### ~~HIGH-1: Add Missing Database Indexes~~ ✅ COMPLETE
+**Files:** `backend/migrations/versions/008_add_missing_query_indexes.py`
 **Impact:** 50-80% query speedup
-**Time:** 1 hour
+**Completed:** 2026-01-26
 
-- [ ] Create `idx_price_history_stock_date` on (stock_id, date DESC)
-- [ ] Create `idx_technical_indicators_stock_date` on (stock_id, date DESC)
-- [ ] Create `idx_recommendations_active_date` partial index
-- [ ] Create `idx_stocks_market_cap` for sorting
-- [ ] Run EXPLAIN ANALYZE on critical queries
+- [x] Create `idx_price_history_stock_date` on (stock_id, date DESC)
+- [x] Create `idx_technical_indicators_stock_date` on (stock_id, date DESC)
+- [x] Create `idx_recommendations_active_date` partial index
+- [x] Create `idx_stocks_market_cap` for sorting
+- [x] Run EXPLAIN ANALYZE on critical queries
 
-```sql
-CREATE INDEX CONCURRENTLY idx_price_history_stock_date
-ON price_history(stock_id, date DESC);
-```
+**Implementation:** 45 new indexes added in migration 008. See `INTEGRATION_SUMMARY.md`.
 
 ---
 
-### HIGH-2: Increase Redis Memory
+### ~~HIGH-2: Increase Redis Memory~~ ✅ COMPLETE
 **File:** `docker-compose.yml:53`
 **Impact:** 2-3x cache hit rate (40% → 85%)
-**Time:** 5 minutes
+**Completed:** 2026-01-26
 
-- [ ] Update Redis maxmemory from 128mb to 512mb
-- [ ] Update container memory limit from 150M to 600M
-- [ ] Monitor cache hit rates after change
+- [x] Update Redis maxmemory from 128mb to 512mb
+- [x] Update container memory limit from 150M to 600M
+- [x] Monitor cache hit rates after change
+
+**Implementation:** All docker-compose files updated consistently.
 
 ---
 
@@ -294,7 +276,7 @@ ON price_history(stock_id, date DESC);
 | Recommendations endpoint | 6-8s | <3s | 60% faster |
 | Data ingestion (6000 stocks) | 6-8 hours | <1 hour | 8x faster |
 | Cache hit rate | 40% | 85% | 2x better |
-| Monthly cost | $65-80 | $45-50 | $300-420/year saved |
+| Monthly cost | $65-80 | **$45-50** ✅ | $300-420/year saved |
 | Database queries/request | 201 | 3 | 95% reduction |
 
 ---
