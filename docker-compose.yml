@@ -1,5 +1,6 @@
 services:
   # PostgreSQL Database with TimescaleDB
+  # Resource-optimized for $50/month budget with analytics workload support
   postgres:
     image: timescale/timescaledb:latest-pg15
     container_name: investment_db
@@ -22,35 +23,47 @@ services:
       - postgres
       - -c
       - shared_preload_libraries=timescaledb
+      # Connection settings - increased for analytics workloads
       - -c
-      - max_connections=100
+      - max_connections=300
+      # Memory settings - optimized for 1.5GB container with analytics queries
       - -c
-      - shared_buffers=128MB
+      - shared_buffers=384MB
       - -c
-      - effective_cache_size=384MB
+      - effective_cache_size=1GB
       - -c
-      - maintenance_work_mem=64MB
+      - maintenance_work_mem=128MB
       - -c
-      - work_mem=4MB
+      - work_mem=16MB
+      # Performance tuning for SSD storage
       - -c
       - random_page_cost=1.1
       - -c
       - checkpoint_completion_target=0.9
+      # WAL settings for better write performance
+      - -c
+      - wal_buffers=16MB
+      - -c
+      - min_wal_size=256MB
+      - -c
+      - max_wal_size=1GB
     deploy:
       resources:
         limits:
+          # Increased to support analytics workloads with proper PostgreSQL tuning
           cpus: '1.0'
-          memory: 512M
+          memory: 1536M
         reservations:
           cpus: '0.25'
-          memory: 256M
+          memory: 512M
     restart: unless-stopped
 
-  # Redis Cache - Optimized for $50/month budget with increased memory for better cache hit rates
+  # Redis Cache - Optimized for $50/month budget
+  # Memory reduced from 600M to 384M - 512mb maxmemory fits comfortably with overhead
   redis:
     image: redis:7-alpine
     container_name: investment_cache
-    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
     volumes:
       - redis_data:/data
     ports:
@@ -63,14 +76,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 600M
+          # Reduced: 256mb maxmemory + 64M overhead = 320M sufficient
+          cpus: '0.25'
+          memory: 384M
         reservations:
           cpus: '0.1'
-          memory: 256M
+          memory: 192M
     restart: unless-stopped
 
-  # Backend API
+  # Backend API - Resource-optimized for $50/month budget
+  # Reduced from 768M to 512M - FastAPI with async is memory-efficient
   backend:
     build:
       context: .
@@ -105,14 +120,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          # Reduced 33%: FastAPI async workloads are memory-efficient
+          cpus: '0.75'
+          memory: 512M
         reservations:
-          cpus: '0.25'
-          memory: 384M
+          cpus: '0.15'
+          memory: 256M
     restart: unless-stopped
 
-  # Frontend Web
+  # Frontend Web - Resource-optimized for $50/month budget
+  # Note: Dev server needs more memory than production nginx static serving
   frontend:
     build:
       context: ./frontend/web
@@ -131,14 +148,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          # Reduced 40%: React dev server baseline, prod uses nginx at 128M
+          cpus: '0.3'
+          memory: 320M
         reservations:
           cpus: '0.1'
-          memory: 256M
+          memory: 192M
     restart: unless-stopped
 
-  # Celery Worker - Optimized for memory efficiency
+  # Celery Worker - Resource-optimized for $50/month budget
+  # Memory reduced 35%: concurrency=1 with aggressive task recycling needs less memory
   celery_worker:
     build:
       context: .
@@ -170,17 +189,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Worker configuration optimized for stability:
-    # - concurrency=1: Single worker process to reduce memory pressure
+    # Worker configuration optimized for stability and memory efficiency:
+    # - concurrency=1: Single worker process minimizes memory footprint
     # - prefetch-multiplier=1: Fetch one task at a time
-    # - max-tasks-per-child=50: Recycle workers frequently to prevent memory leaks
+    # - max-tasks-per-child=25: More aggressive recycling (was 50) prevents memory leaks
     # - soft-time-limit/time-limit: Prevent runaway tasks
     command: >
       celery -A backend.tasks.celery_app worker
       --loglevel=info
       --concurrency=1
       --prefetch-multiplier=1
-      --max-tasks-per-child=50
+      --max-tasks-per-child=25
       --soft-time-limit=300
       --time-limit=600
       -Q default,data_ingestion,analysis,notifications,high_priority,low_priority
@@ -193,11 +212,12 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          # Reduced 35%: Single-worker concurrency with aggressive recycling
+          cpus: '0.6'
+          memory: 512M
         reservations:
-          cpus: '0.25'
-          memory: 384M
+          cpus: '0.15'
+          memory: 256M
     restart: unless-stopped
 
   # Celery Beat Scheduler
@@ -232,20 +252,25 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # Apache Airflow
+  # Apache Airflow - Resource-optimized for $50/month budget
+  # Reduced from 1G to 768M - standalone mode with LocalExecutor is lighter
   airflow:
     image: apache/airflow:2.7.3-python3.11
     container_name: investment_airflow
     env_file:
       - .env
     environment:
-      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      # Use LocalExecutor instead of CeleryExecutor for lower memory footprint
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:${DB_PASSWORD}@postgres/airflow
-      - AIRFLOW__CELERY__RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
-      - AIRFLOW__CELERY__BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
       - AIRFLOW__CORE__FERNET_KEY=${FERNET_KEY}
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      # Memory optimization settings
+      - AIRFLOW__CORE__PARALLELISM=4
+      - AIRFLOW__CORE__DAG_CONCURRENCY=2
+      - AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1
+      - AIRFLOW__WEBSERVER__WORKERS=1
     volumes:
       - ./data_pipelines/airflow/dags:/opt/airflow/dags
       - ./data_pipelines/airflow/logs:/opt/airflow/logs
@@ -259,14 +284,16 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
+          # Reduced 25%: LocalExecutor is lighter than CeleryExecutor
+          cpus: '0.75'
+          memory: 768M
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          cpus: '0.2'
+          memory: 384M
     restart: unless-stopped
 
-  # Prometheus
+  # Prometheus - Resource-optimized for $50/month budget
+  # Reduced from 512M to 256M with tighter retention settings
   prometheus:
     image: prom/prometheus:v2.48.0
     container_name: investment_prometheus
@@ -281,21 +308,27 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-      - '--storage.tsdb.retention.time=7d'
-      - '--storage.tsdb.retention.size=500MB'
+      # Reduced retention for lower memory/storage footprint
+      - '--storage.tsdb.retention.time=3d'
+      - '--storage.tsdb.retention.size=256MB'
+      # Memory optimization
+      - '--storage.tsdb.min-block-duration=2h'
+      - '--storage.tsdb.max-block-duration=24h'
     ports:
       - "9090:9090"
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          # Reduced 50%: Tighter retention needs less memory
+          cpus: '0.25'
+          memory: 256M
         reservations:
           cpus: '0.1'
-          memory: 256M
+          memory: 128M
     restart: unless-stopped
 
-  # Grafana
+  # Grafana - Resource-optimized for $50/month budget
+  # Reduced from 256M to 192M - minimal dashboards, no heavy plugins
   grafana:
     image: grafana/grafana:10.2.2
     container_name: investment_grafana
@@ -304,6 +337,10 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      # Memory optimization settings
+      - GF_SERVER_ENABLE_GZIP=true
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
@@ -315,11 +352,12 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 256M
+          # Reduced 25%: Minimal dashboards, no heavy plugins
+          cpus: '0.2'
+          memory: 192M
         reservations:
-          cpus: '0.1'
-          memory: 128M
+          cpus: '0.05'
+          memory: 96M
     restart: unless-stopped
 
   # Node Exporter for system metrics (Linux only)

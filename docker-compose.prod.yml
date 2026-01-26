@@ -16,6 +16,7 @@ x-healthcheck-defaults: &healthcheck-defaults
 
 services:
   # Override backend for production - Optimized for $50/month budget
+  # Reduced from 768M to 512M - Gunicorn with async workers is efficient
   backend:
     build:
       context: .
@@ -34,6 +35,10 @@ services:
       - "120"
       - --keep-alive
       - "5"
+      - --max-requests
+      - "1000"
+      - --max-requests-jitter
+      - "100"
       - --access-logfile
       - "-"
       - --error-logfile
@@ -51,11 +56,12 @@ services:
       replicas: ${BACKEND_REPLICAS:-1}
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          # Reduced 33%: Async workers with request recycling are memory-efficient
+          cpus: '0.75'
+          memory: 512M
         reservations:
-          cpus: '0.25'
-          memory: 384M
+          cpus: '0.2'
+          memory: 256M
 
   # Override frontend for production - Optimized for $50/month budget
   frontend:
@@ -80,26 +86,42 @@ services:
           cpus: '0.1'
           memory: 64M
 
-  # Override database for production - Optimized for $50/month budget
+  # Override database for production - Optimized for analytics workloads
+  # Memory increased to support 1GB shared_buffers for 6000+ stock analysis
   postgres:
     command:
       - postgres
       - -c
       - shared_preload_libraries=timescaledb
+      # Connection settings - increased for analytics workloads
       - -c
-      - max_connections=100
+      - max_connections=300
+      # Memory settings - tuned for 2GB container with heavy analytics
       - -c
-      - shared_buffers=128MB
+      - shared_buffers=1GB
       - -c
-      - effective_cache_size=384MB
+      - effective_cache_size=1536MB
       - -c
-      - maintenance_work_mem=64MB
+      - maintenance_work_mem=256MB
       - -c
-      - work_mem=4MB
+      - work_mem=16MB
+      # Performance tuning
       - -c
       - random_page_cost=1.1
       - -c
       - checkpoint_completion_target=0.9
+      # WAL settings for better write performance
+      - -c
+      - wal_buffers=32MB
+      - -c
+      - min_wal_size=512MB
+      - -c
+      - max_wal_size=2GB
+      # Query optimization
+      - -c
+      - default_statistics_target=100
+      - -c
+      - effective_io_concurrency=200
     logging: *default-logging
     healthcheck:
       <<: *healthcheck-defaults
@@ -107,20 +129,21 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          # Production needs more memory for 1GB shared_buffers
+          cpus: '1.5'
+          memory: 2G
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.5'
+          memory: 1G
 
-  # Override Redis for production - Increased memory for better cache hit rates
-  # Memory increased from 128MB to 512MB for 2-3x improved cache performance
+  # Override Redis for production - Optimized for cost-efficiency
+  # Memory reduced: 384mb maxmemory fits in 512M container with overhead
   redis:
     command: >
       redis-server
       --appendonly yes
       --appendfsync everysec
-      --maxmemory ${REDIS_MAX_MEMORY:-512mb}
+      --maxmemory ${REDIS_MAX_MEMORY:-384mb}
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD}
       --tcp-keepalive 60
@@ -132,8 +155,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 600M
+          # Reduced 15%: 384mb maxmemory + overhead fits in 512M
+          cpus: '0.3'
+          memory: 512M
         reservations:
           cpus: '0.1'
           memory: 256M
@@ -143,6 +167,7 @@ services:
   # =============================================================================
 
   # Override Celery worker for production - Memory-optimized for stability
+  # Reduced from 768M to 640M with aggressive task recycling
   celery_worker:
     build:
       context: .
@@ -165,17 +190,17 @@ services:
       - OPENBLAS_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - NUMEXPR_NUM_THREADS=1
-    # Production worker configuration:
-    # - concurrency=2: Two worker processes for parallel task execution
+    # Production worker configuration - memory optimized:
+    # - concurrency=2: Two workers for parallelism within memory budget
     # - prefetch-multiplier=1: Fetch one task at a time per worker
-    # - max-tasks-per-child=50: Frequent recycling prevents memory accumulation
-    # - Queues: Listen to all queues for full task coverage
+    # - max-tasks-per-child=25: Aggressive recycling prevents memory leaks (was 50)
+    # - Queues: All queues for full task coverage
     command: >
       celery -A backend.tasks.celery_app worker
       --loglevel=info
       --concurrency=2
       --prefetch-multiplier=1
-      --max-tasks-per-child=50
+      --max-tasks-per-child=25
       --soft-time-limit=300
       --time-limit=600
       -Q default,data_ingestion,analysis,notifications,high_priority,low_priority
@@ -189,11 +214,12 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 768M
+          # Reduced 17%: Aggressive task recycling keeps memory stable
+          cpus: '0.75'
+          memory: 640M
         reservations:
-          cpus: '0.25'
-          memory: 384M
+          cpus: '0.2'
+          memory: 320M
 
   # Override Celery beat for production
   celery_beat:
@@ -341,6 +367,7 @@ services:
           memory: 128M
 
   # Prometheus for metrics collection - Optimized for $50/month budget
+  # Memory optimized with tighter retention settings
   prometheus:
     image: prom/prometheus:latest
     container_name: investment_prometheus
@@ -348,8 +375,12 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
-      - '--storage.tsdb.retention.time=7d'
-      - '--storage.tsdb.retention.size=500MB'
+      # Tighter retention for lower memory/storage footprint
+      - '--storage.tsdb.retention.time=3d'
+      - '--storage.tsdb.retention.size=256MB'
+      # Memory optimization
+      - '--storage.tsdb.min-block-duration=2h'
+      - '--storage.tsdb.max-block-duration=24h'
     volumes:
       - ./infrastructure/monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
       - ./infrastructure/monitoring/alerts:/etc/prometheus/rules:ro
@@ -363,13 +394,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
+          # Kept at 256M - already optimized
+          cpus: '0.2'
           memory: 256M
         reservations:
           cpus: '0.1'
           memory: 128M
 
   # Grafana for visualization - Optimized for $50/month budget
+  # Memory at 128M - minimal dashboards, optimized settings
   grafana:
     image: grafana/grafana:latest
     container_name: investment_grafana
@@ -381,6 +414,9 @@ services:
       - GF_SERVER_ENABLE_GZIP=true
       - GF_ANALYTICS_REPORTING_ENABLED=false
       - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      # Memory optimization
+      - GF_RENDERING_CONCURRENT_RENDER_REQUEST_LIMIT=1
+      - GF_ALERTING_ENABLED=false
       - GF_SMTP_ENABLED=${ENABLE_EMAIL_ALERTS:-false}
       - GF_SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}:${SMTP_PORT:-587}
       - GF_SMTP_USER=${SMTP_USER:-}
@@ -400,10 +436,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
+          # Kept at 128M - already optimized for minimal dashboards
+          cpus: '0.15'
           memory: 128M
         reservations:
-          cpus: '0.1'
+          cpus: '0.05'
           memory: 64M
 
 volumes:

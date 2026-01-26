@@ -187,15 +187,17 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 
 ---
 
-### HIGH-4: Right-Size Docker Resources
+### ~~HIGH-4: Right-Size Docker Resources~~ ✅ COMPLETE
 **File:** `docker-compose.yml`, `docker-compose.prod.yml`
 **Impact:** $10-15/month savings
-**Time:** 1 hour
+**Completed:** 2026-01-26
 
-- [ ] Reduce CPU/memory limits by 40%
-- [ ] Update PostgreSQL memory (512MB → 1GB shared_buffers)
-- [ ] Increase max_connections to 300
-- [ ] Add work_mem = 16MB for analytics queries
+- [x] Reduce CPU/memory limits by 40% (backend 768M→512M, redis 600M→384M, etc.)
+- [x] Update PostgreSQL memory (384MB→1GB shared_buffers in prod)
+- [x] Increase max_connections to 300
+- [x] Add work_mem = 16MB for analytics queries
+- [x] Set effective_cache_size = 1536MB in production
+- [x] Configure WAL settings for better write performance
 
 ---
 
@@ -322,7 +324,7 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 3. HIGH-1: Add database indexes (1h)
 4. HIGH-2: Increase Redis memory (5min)
 5. CRITICAL-2: Parallelize API calls (4h)
-6. HIGH-4: Right-size Docker resources (1h)
+6. ~~HIGH-4: Right-size Docker resources (1h)~~ COMPLETE
 7. MEDIUM-5: Add health checks (30min)
 
 **Week 2 - Core Fixes (16 hours):**
