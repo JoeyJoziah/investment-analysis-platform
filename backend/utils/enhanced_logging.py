@@ -25,7 +25,14 @@ import aiofiles
 from functools import wraps
 import hashlib
 import gzip
-import json_logging
+
+# json_logging is optional - provides enhanced JSON formatting
+try:
+    import json_logging
+    JSON_LOGGING_AVAILABLE = True
+except ImportError:
+    JSON_LOGGING_AVAILABLE = False
+    json_logging = None
 
 # Elasticsearch is optional - removed to save $15-20/month
 # Using file-based logging and PostgreSQL full-text search instead
@@ -40,8 +47,9 @@ except ImportError:
 
 from .exceptions import *
 
-# Configure JSON logging
-json_logging.init_non_web()
+# Configure JSON logging if available
+if JSON_LOGGING_AVAILABLE and json_logging:
+    json_logging.init_non_web()
 
 logger = logging.getLogger(__name__)
 
