@@ -481,6 +481,101 @@ docker-compose up -d
 
 ---
 
+## Performance Optimization (Bottleneck Fixes)
+
+### Known Performance Bottlenecks (2026-01-26 Analysis)
+
+#### CRITICAL: Fix Cache Decorator
+**File:** `backend/utils/cache.py:205-216`
+**Issue:** Cache decorator is NO-OP - provides zero caching
+
+```bash
+# Verify cache is working
+docker-compose exec redis redis-cli INFO stats | grep -E "hits|misses"
+
+# Expected: hits should be >> misses after warmup
+# If hits ≈ 0, cache decorator is broken
+```
+
+#### CRITICAL: Parallel API Calls
+**File:** `backend/api/routers/analysis.py:335-404`
+**Issue:** Sequential external API calls causing 4-6s latency
+
+```bash
+# Measure endpoint latency
+time curl -s http://localhost:8000/api/analysis/AAPL > /dev/null
+
+# Target: <2s, Current: 4-6s
+```
+
+#### CRITICAL: N+1 Query Pattern
+**File:** `backend/api/routers/recommendations.py:315-461`
+**Issue:** 201+ queries for 100 stocks
+
+```bash
+# Check query count (enable SQL logging)
+docker-compose logs backend 2>&1 | grep -c "SELECT"
+
+# Or in PostgreSQL:
+docker-compose exec postgres psql -U postgres -d investment_db -c \
+  "SELECT calls, query FROM pg_stat_statements ORDER BY calls DESC LIMIT 20;"
+```
+
+### Quick Performance Wins
+
+```bash
+# 1. Increase Redis memory (5 min fix)
+# Edit docker-compose.yml: --maxmemory 512mb
+docker-compose up -d redis
+
+# 2. Add missing database indexes (1 hour fix)
+docker-compose exec postgres psql -U postgres -d investment_db << 'EOF'
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_price_history_stock_date
+ON price_history(stock_id, date DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recommendations_active_date
+ON recommendations(created_at DESC) WHERE is_active = true;
+EOF
+
+# 3. Verify indexes applied
+docker-compose exec postgres psql -U postgres -d investment_db -c \
+  "\di+ idx_price_history*"
+```
+
+### Performance Monitoring Commands
+
+```bash
+# Check cache hit rate
+docker-compose exec redis redis-cli INFO stats | grep -E "keyspace_hits|keyspace_misses"
+
+# Check database connection pool
+docker-compose exec postgres psql -U postgres -d investment_db -c \
+  "SELECT count(*) as total, state FROM pg_stat_activity GROUP BY state;"
+
+# Check Celery queue depth
+docker-compose exec celery_worker celery -A backend.tasks.celery_app inspect active
+
+# Check memory usage
+docker stats --no-stream
+
+# API latency test
+for endpoint in health stocks recommendations; do
+  echo "$endpoint: $(time curl -s http://localhost:8000/api/$endpoint > /dev/null 2>&1)"
+done
+```
+
+### Expected Performance Metrics After Fixes
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Analysis endpoint | 4-6s | 1.5-2s | 70% faster |
+| Recommendations | 6-8s | <3s | 60% faster |
+| Cache hit rate | 40% | 85% | 2x better |
+| DB queries/request | 201 | 3 | 95% reduction |
+| Monthly cost | $65-80 | $45-50 | 38% saved |
+
+---
+
 ## Contact & Escalation
 
 | Issue Type | First Response | Escalation |

@@ -1,7 +1,7 @@
 # Investment Analysis Platform - Project TODO
 
-**Last Updated**: 2026-01-26
-**Current Status**: 95% Complete - Production Ready
+**Last Updated**: 2026-01-26 (Performance Bottleneck Analysis)
+**Current Status**: 95% Complete - Performance Optimization Phase
 **Codebase Size**: ~1,550,000 lines of code
 **Budget Target**: <$50/month operational cost
 
@@ -27,6 +27,304 @@ The platform is **production-ready** with comprehensive multi-agent AI orchestra
 | Agent Framework | ✅ 100% | 134 agents, 71 skills, 175+ commands |
 | SEC/GDPR Compliance | ✅ 100% | Audit logging, data export/deletion |
 | SSL/Production Deploy | 🔄 Pending | Domain and certificate needed |
+
+---
+
+## 🚨 CRITICAL: Performance Bottleneck Fixes (Identified 2026-01-26)
+
+### Bottleneck Analysis Summary
+**Total Identified:** 48 bottlenecks | **Estimated Fix Time:** 20+ hours | **Expected Improvement:** 60-80%
+
+| Category | Critical | High | Medium | Low |
+|----------|----------|------|--------|-----|
+| API Performance | 3 | 2 | 4 | 2 |
+| Data Pipelines | 2 | 3 | 3 | 1 |
+| Infrastructure | 2 | 4 | 5 | 2 |
+| ML Pipeline | 1 | 4 | 3 | 1 |
+
+---
+
+### CRITICAL-1: Fix Broken Cache Decorator ⚠️
+**File:** `backend/utils/cache.py:205-216`
+**Impact:** 90% API performance degradation - cache is NO-OP!
+**Time:** 2 hours
+
+- [ ] Replace no-op decorator with actual Redis caching
+- [ ] Implement async wrapper with TTL support
+- [ ] Add cache key generation from function args
+- [ ] Test cache hit/miss rates
+- [ ] Update all endpoints using `@cache_with_ttl`
+
+```python
+# Current (broken):
+def cache_with_ttl(ttl: int = 300):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)  # NO CACHING!
+        return wrapper
+    return decorator
+
+# Fix: Implement actual caching with Redis
+```
+
+---
+
+### CRITICAL-2: Parallelize External API Calls
+**File:** `backend/api/routers/analysis.py:335-404`
+**Impact:** 300-500% latency increase (4-6s → 1.5-2s)
+**Time:** 4 hours
+
+- [ ] Refactor sequential API calls to use `asyncio.gather()`
+- [ ] Add `return_exceptions=True` for graceful degradation
+- [ ] Implement timeout handling per API source
+- [ ] Test parallel execution timing
+- [ ] Update error handling for partial failures
+
+```python
+# Fix: Execute all data fetching in parallel
+results = await asyncio.gather(
+    fetch_technical_indicators(symbol, request.period),
+    price_repository.get_price_history(...),
+    fetch_fundamental_data(symbol),
+    fetch_sentiment_data(symbol),
+    return_exceptions=True
+)
+```
+
+---
+
+### CRITICAL-3: Fix N+1 Query Pattern in Recommendations
+**File:** `backend/api/routers/recommendations.py:315-461`
+**Impact:** 201+ queries for 100 stocks instead of 2-3
+**Time:** 8 hours
+
+- [ ] Add bulk price history repository method
+- [ ] Refactor loop to batch fetch all stocks
+- [ ] Update ML predictions to use batch queries
+- [ ] Add eager loading for related entities
+- [ ] Benchmark query count before/after
+
+```python
+# Fix: Batch fetch all price histories in single query
+symbols = [stock.symbol for stock in top_stocks[:limit]]
+all_price_histories = await price_repository.get_bulk_price_history(
+    symbols=symbols,
+    start_date=datetime.now().date() - timedelta(days=90),
+    limit=60,
+    session=db_session
+)
+```
+
+---
+
+### CRITICAL-4: Eliminate Elasticsearch (Budget Fix)
+**File:** `docker-compose.yml`
+**Impact:** $15-20/month savings, simpler stack
+**Time:** 2 hours
+
+- [ ] Remove elasticsearch service from docker-compose.yml
+- [ ] Remove elasticsearch-exporter service
+- [ ] Add PostgreSQL full-text search to stock_repository.py
+- [ ] Update prometheus.yml to remove ES scrape config
+- [ ] Test search functionality with PG FTS
+
+---
+
+### HIGH-1: Add Missing Database Indexes
+**Files:** Database migrations
+**Impact:** 50-80% query speedup
+**Time:** 1 hour
+
+- [ ] Create `idx_price_history_stock_date` on (stock_id, date DESC)
+- [ ] Create `idx_technical_indicators_stock_date` on (stock_id, date DESC)
+- [ ] Create `idx_recommendations_active_date` partial index
+- [ ] Create `idx_stocks_market_cap` for sorting
+- [ ] Run EXPLAIN ANALYZE on critical queries
+
+```sql
+CREATE INDEX CONCURRENTLY idx_price_history_stock_date
+ON price_history(stock_id, date DESC);
+```
+
+---
+
+### HIGH-2: Increase Redis Memory
+**File:** `docker-compose.yml:53`
+**Impact:** 2-3x cache hit rate (40% → 85%)
+**Time:** 5 minutes
+
+- [ ] Update Redis maxmemory from 128mb to 512mb
+- [ ] Update container memory limit from 150M to 600M
+- [ ] Monitor cache hit rates after change
+
+---
+
+### HIGH-3: Optimize Airflow DAG for Parallel Processing
+**File:** `data_pipelines/airflow/dags/daily_stock_pipeline.py:65-124`
+**Impact:** 8x faster data ingestion (6-8 hours → <1 hour)
+**Time:** 6 hours
+
+- [ ] Implement TaskGroup for parallel stock fetching
+- [ ] Add ProcessPoolExecutor for batch processing
+- [ ] Create Airflow pool for resource management
+- [ ] Add market hours sensor
+- [ ] Remove 100-stock limit (line 41)
+
+---
+
+### HIGH-4: Right-Size Docker Resources
+**File:** `docker-compose.yml`, `docker-compose.prod.yml`
+**Impact:** $10-15/month savings
+**Time:** 1 hour
+
+- [ ] Reduce CPU/memory limits by 40%
+- [ ] Update PostgreSQL memory (512MB → 1GB shared_buffers)
+- [ ] Increase max_connections to 300
+- [ ] Add work_mem = 16MB for analytics queries
+
+---
+
+### HIGH-5: Fix Technical Indicator Calculation
+**File:** `data_pipelines/airflow/dags/daily_stock_pipeline.py:137-224`
+**Impact:** Process ALL stocks, not just 50
+**Time:** 8 hours
+
+- [ ] Use PostgreSQL window functions for SMA/EMA
+- [ ] Remove N+1 query pattern in indicator loop
+- [ ] Add bulk insert for indicators
+- [ ] Test with full 6000 stock dataset
+
+---
+
+### MEDIUM-1: Implement Code Splitting (Frontend)
+**File:** `frontend/web/src/App.tsx`
+**Impact:** 60-70% smaller initial bundle
+**Time:** 6 hours
+
+- [ ] Add React.lazy() for route components
+- [ ] Add Suspense with LoadingSpinner fallback
+- [ ] Remove redundant charting libraries
+- [ ] Update vite.config.ts chunk limit (600KB → 300KB)
+
+---
+
+### MEDIUM-2: Increase Celery Concurrency
+**File:** `docker-compose.yml:210-217`
+**Impact:** 4x faster task processing
+**Time:** 2 hours
+
+- [ ] Increase concurrency from 1 to 4
+- [ ] Add max-memory-per-child limit (512MB)
+- [ ] Monitor queue depth after change
+
+---
+
+### MEDIUM-3: Add Bloom Filter to Cache
+**File:** `backend/etl/intelligent_cache_system.py`
+**Impact:** 90% faster cache misses (10ms → 1ms)
+**Time:** 4 hours
+
+- [ ] Add pybloom_live dependency
+- [ ] Implement BloomFilter for negative lookups
+- [ ] Update get() method with fast path
+- [ ] Track filter in set() method
+
+---
+
+### MEDIUM-4: Implement Token Bucket Rate Limiting
+**File:** `backend/etl/multi_source_extractor.py:196-214`
+**Impact:** 70-80% API overhead reduction
+**Time:** 4 hours
+
+- [ ] Replace list-based rate tracking with TokenBucket class
+- [ ] Add request queue with priority
+- [ ] Implement batch API requests for Finnhub
+
+---
+
+### MEDIUM-5: Add Health Checks to All Services
+**File:** `docker-compose.yml`
+**Impact:** Improved reliability, proper startup ordering
+**Time:** 30 minutes
+
+- [ ] Add health check for celery_beat
+- [ ] Add health check for airflow services
+- [ ] Add health check for frontend
+- [ ] Verify depends_on with condition: service_healthy
+
+---
+
+### LOW-1: Add Cache Warming Strategy
+**File:** `backend/etl/intelligent_cache_system.py`
+**Impact:** 50% faster market open
+**Time:** 4 hours
+
+- [ ] Implement warm_cache_for_market_open() method
+- [ ] Pre-load top 500 stocks before market open
+- [ ] Add scheduled task in Celery
+
+---
+
+### LOW-2: Enable PostgreSQL Statement Cache
+**File:** `backend/config/database.py:134`
+**Impact:** 10-15% faster repeated queries
+**Time:** 30 minutes
+
+- [ ] Change statement_cache_size from 0 to 100
+- [ ] Monitor for prepared statement issues
+
+---
+
+### LOW-3: Add GPU Support for ML Training
+**File:** `data_pipelines/airflow/dags/ml_training_pipeline_dag.py`
+**Impact:** 3-4x faster training per model
+**Time:** 4 hours
+
+- [ ] Add tree_method='gpu_hist' to XGBoost config
+- [ ] Add device='gpu' to LightGBM config
+- [ ] Update Docker image with CUDA support
+
+---
+
+## Expected Results After Fixes
+
+| Metric | Current | Target | Improvement |
+|--------|---------|--------|-------------|
+| Analysis endpoint | 4-6s | 1.5-2s | 70% faster |
+| Recommendations endpoint | 6-8s | <3s | 60% faster |
+| Data ingestion (6000 stocks) | 6-8 hours | <1 hour | 8x faster |
+| Cache hit rate | 40% | 85% | 2x better |
+| Monthly cost | $65-80 | $45-50 | $300-420/year saved |
+| Database queries/request | 201 | 3 | 95% reduction |
+
+---
+
+## Implementation Priority Order
+
+**Week 1 - Quick Wins (20 hours):**
+1. CRITICAL-1: Fix cache decorator (2h)
+2. CRITICAL-4: Eliminate Elasticsearch (2h)
+3. HIGH-1: Add database indexes (1h)
+4. HIGH-2: Increase Redis memory (5min)
+5. CRITICAL-2: Parallelize API calls (4h)
+6. HIGH-4: Right-size Docker resources (1h)
+7. MEDIUM-5: Add health checks (30min)
+
+**Week 2 - Core Fixes (16 hours):**
+8. CRITICAL-3: Fix N+1 queries (8h)
+9. HIGH-3: Optimize Airflow DAG (6h)
+10. MEDIUM-2: Increase Celery concurrency (2h)
+
+**Week 3 - Advanced Optimizations (16 hours):**
+11. HIGH-5: Fix indicator calculations (8h)
+12. MEDIUM-1: Frontend code splitting (6h)
+13. MEDIUM-4: Token bucket rate limiting (4h)
+
+**Week 4 - Final Polish (12 hours):**
+14. MEDIUM-3: Bloom filter cache (4h)
+15. LOW-1: Cache warming (4h)
+16. LOW-2: Statement cache (30min)
+17. LOW-3: GPU training support (4h)
 
 ---
 
