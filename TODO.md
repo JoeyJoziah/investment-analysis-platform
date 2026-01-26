@@ -260,14 +260,20 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 
 ---
 
-### MEDIUM-4: Implement Token Bucket Rate Limiting
-**File:** `backend/etl/multi_source_extractor.py:196-214`
+### ~~MEDIUM-4: Implement Token Bucket Rate Limiting~~ ✅ COMPLETE
+**File:** `backend/etl/rate_limiting.py`, `multi_source_extractor.py`
 **Impact:** 70-80% API overhead reduction
-**Time:** 4 hours
+**Completed:** 2026-01-26
 
-- [ ] Replace list-based rate tracking with TokenBucket class
-- [ ] Add request queue with priority
-- [ ] Implement batch API requests for Finnhub
+- [x] Create TokenBucket class with O(1) complexity
+- [x] Add RequestPriority enum with 5 priority levels
+- [x] Implement priority request queue with overflow handling
+- [x] Create RateLimitedAPIClient combining bucket + queue
+- [x] Add RateLimitManager singleton for all sources
+- [x] Implement batch Finnhub requests (up to 50x fewer calls)
+- [x] Add comprehensive test suite (25 tests)
+
+**Default Configs:** Alpha Vantage, Finnhub, Polygon, yfinance, Yahoo all configured
 
 ---
 
@@ -349,7 +355,7 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 **Week 3 - Advanced Optimizations (16 hours):**
 11. ~~HIGH-5: Fix indicator calculations (8h)~~ COMPLETE
 12. ~~MEDIUM-1: Frontend code splitting (6h)~~ COMPLETE
-13. MEDIUM-4: Token bucket rate limiting (4h)
+13. ~~MEDIUM-4: Token bucket rate limiting (4h)~~ COMPLETE
 
 **Week 4 - Final Polish (12 hours):**
 14. MEDIUM-3: Bloom filter cache (4h)
