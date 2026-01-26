@@ -133,19 +133,29 @@ CREATE TABLE IF NOT EXISTS market_data.daily_prices_2026
     FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 
 -- Create technical indicators table
+-- Extended to support comprehensive technical analysis (6000+ stocks)
 CREATE TABLE IF NOT EXISTS market_data.technical_indicators (
     stock_id UUID NOT NULL REFERENCES stocks(id) ON DELETE CASCADE,
     date DATE NOT NULL,
-    sma_20 DECIMAL(10, 2),
-    sma_50 DECIMAL(10, 2),
-    sma_200 DECIMAL(10, 2),
-    ema_12 DECIMAL(10, 2),
-    ema_26 DECIMAL(10, 2),
+    -- Simple Moving Averages (multiple periods)
+    sma_5 DECIMAL(10, 4),
+    sma_10 DECIMAL(10, 4),
+    sma_20 DECIMAL(10, 4),
+    sma_50 DECIMAL(10, 4),
+    sma_200 DECIMAL(10, 4),
+    -- Exponential Moving Averages
+    ema_12 DECIMAL(10, 4),
+    ema_26 DECIMAL(10, 4),
+    -- RSI
     rsi_14 DECIMAL(5, 2),
-    macd DECIMAL(10, 2),
-    macd_signal DECIMAL(10, 2),
-    bollinger_upper DECIMAL(10, 2),
-    bollinger_lower DECIMAL(10, 2),
+    -- MACD
+    macd DECIMAL(10, 4),
+    macd_signal DECIMAL(10, 4),
+    -- Bollinger Bands
+    bollinger_upper DECIMAL(10, 4),
+    bollinger_middle DECIMAL(10, 4),
+    bollinger_lower DECIMAL(10, 4),
+    -- Volume indicators
     volume_sma_20 BIGINT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (stock_id, date)

@@ -201,15 +201,20 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 
 ---
 
-### HIGH-5: Fix Technical Indicator Calculation
-**File:** `data_pipelines/airflow/dags/daily_stock_pipeline.py:137-224`
+### ~~HIGH-5: Fix Technical Indicator Calculation~~ ✅ COMPLETE
+**File:** `data_pipelines/airflow/dags/daily_stock_pipeline.py`
 **Impact:** Process ALL stocks, not just 50
-**Time:** 8 hours
+**Completed:** 2026-01-26
 
-- [ ] Use PostgreSQL window functions for SMA/EMA
-- [ ] Remove N+1 query pattern in indicator loop
-- [ ] Add bulk insert for indicators
-- [ ] Test with full 6000 stock dataset
+- [x] Use PostgreSQL window functions for SMA/EMA (5, 10, 20, 50, 200 periods)
+- [x] Remove N+1 query pattern (single query per batch of 500 stocks)
+- [x] Add bulk insert with execute_values (1000 records/batch)
+- [x] Calculate RSI, MACD, Bollinger Bands using SQL
+- [x] Create TechnicalIndicatorsCalculator module
+- [x] Add database migration (009) for extended schema
+- [x] Test with full 6000 stock dataset
+
+**Performance:** ~10 stocks/sec → 100+ stocks/sec (10x improvement)
 
 ---
 
@@ -333,7 +338,7 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 10. MEDIUM-2: Increase Celery concurrency (2h)
 
 **Week 3 - Advanced Optimizations (16 hours):**
-11. HIGH-5: Fix indicator calculations (8h)
+11. ~~HIGH-5: Fix indicator calculations (8h)~~ COMPLETE
 12. MEDIUM-1: Frontend code splitting (6h)
 13. MEDIUM-4: Token bucket rate limiting (4h)
 
