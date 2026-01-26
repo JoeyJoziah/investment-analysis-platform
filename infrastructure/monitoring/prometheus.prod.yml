@@ -49,11 +49,8 @@ scrape_configs:
       - targets: ['redis-exporter:9121']
     scrape_interval: 30s
 
-  # Elasticsearch
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch-exporter:9114']
-    scrape_interval: 30s
+  # Elasticsearch - REMOVED to save $15-20/month
+  # Using PostgreSQL full-text search instead
 
   # Nginx
   - job_name: 'nginx'

@@ -125,12 +125,8 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: /metrics
 
-  # Elasticsearch metrics
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch:9200']
-    scrape_interval: 30s
-    metrics_path: /_prometheus/metrics
+  # Elasticsearch metrics - REMOVED to save $15-20/month
+  # Using PostgreSQL full-text search instead
 
   # Airflow webserver metrics
   - job_name: 'airflow-webserver'

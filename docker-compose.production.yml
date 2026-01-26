@@ -129,7 +129,7 @@ services:
       - WORKERS=${BACKEND_WORKERS:-4}
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      # Elasticsearch removed to save $15-20/month - using PostgreSQL full-text search instead
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - RATE_LIMIT_ENABLED=true

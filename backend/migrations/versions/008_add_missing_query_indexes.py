@@ -20,8 +20,8 @@ from sqlalchemy import text
 
 
 # revision identifiers, used by Alembic.
-revision = '008_add_missing_query_indexes'
-down_revision = '007_advanced_compression_optimization'
+revision = '008'
+down_revision = '007'
 branch_labels = None
 depends_on = None
 

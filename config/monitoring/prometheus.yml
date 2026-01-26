@@ -44,10 +44,8 @@ scrape_configs:
     static_configs:
       - targets: ['redis:9121']
 
-  # Elasticsearch
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch:9114']
+  # Elasticsearch - REMOVED to save $15-20/month
+  # Using PostgreSQL full-text search instead
 
   # Node Exporter (system metrics)
   - job_name: 'node'
