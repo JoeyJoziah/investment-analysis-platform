@@ -637,7 +637,7 @@ jobs:
     permissions:
       issues: write
       contents: read
-      repository-repository-projects: write
+      repository-projects: write
 
     steps:
     - name: Checkout repository
