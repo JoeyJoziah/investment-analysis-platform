@@ -1,0 +1,53 @@
+---
+language:
+- en
+task_categories:
+- time-series-forecasting
+- tabular-classification
+tags:
+- finance
+- stock-market
+- investment
+- technical-indicators
+size_categories:
+- 10K<n<100K
+license: mit
+---
+
+# Investment Analysis ML Training Dataset
+
+This dataset contains processed stock market data for training ML models
+in the Investment Analysis Platform.
+
+## Dataset Structure
+
+- **train**: Training data (70% of samples)
+- **validation**: Validation data (15% of samples)
+- **test**: Test data (15% of samples)
+
+## Features
+
+The dataset includes 80+ features:
+- Price data (OHLCV)
+- Technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands, etc.)
+- Fundamental metrics (P/E, Market Cap, etc.)
+- Derived features (returns, volatility, momentum)
+
+## Labels
+
+- Future returns at multiple horizons (1d, 5d, 10d, 20d)
+- Direction signals
+- Risk-adjusted returns
+
+## Versioning
+
+Datasets are versioned using semantic versioning (major.minor.patch).
+Each version includes metadata about:
+- Date range covered
+- Number of stocks
+- Feature columns
+- Data hash for reproducibility
+
+## Privacy
+
+This is a private repository for internal use.

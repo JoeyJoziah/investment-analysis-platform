@@ -1,13 +1,15 @@
 {
   "model_type": "prophet",
-  "training_completed": "2026-01-24T21:19:33.800243",
-  "stocks_trained": 3,
+  "training_completed": "2026-01-25T02:48:33.251458",
+  "stocks_trained": 0,
   "stocks_failed": 0,
+  "skipped": true,
+  "skip_reason": "Prophet incompatible with pandas 3.0.0",
   "average_metrics": {
-    "mse": 136.33550981274672,
-    "mae": 7.766582734342207,
-    "mape": 2.493981671055533,
-    "directional_accuracy": 0.5816186556927297
+    "mse": null,
+    "mae": null,
+    "mape": null,
+    "directional_accuracy": null
   },
   "config": {
     "yearly_seasonality": true,
@@ -16,48 +18,5 @@
     "changepoint_prior_scale": 0.05,
     "forecast_days": 30
   },
-  "stock_results": [
-    {
-      "ticker": "AAPL",
-      "data_points": 487,
-      "mse": 27.304932765816734,
-      "mae": 3.9701439930746742,
-      "mape": 1.8183772299925332,
-      "directional_accuracy": 0.5905349794238683,
-      "forecast": {
-        "last_date": "2026-02-22 00:00:00",
-        "last_prediction": 275.7005650935528,
-        "lower_bound": 268.61222648579127,
-        "upper_bound": 283.3236201941999
-      }
-    },
-    {
-      "ticker": "ADBE",
-      "data_points": 487,
-      "mse": 346.6698016125369,
-      "mae": 14.765269965256243,
-      "mape": 3.413793547486198,
-      "directional_accuracy": 0.5864197530864198,
-      "forecast": {
-        "last_date": "2026-02-22 00:00:00",
-        "last_prediction": 364.42594253572764,
-        "lower_bound": 341.390281597974,
-        "upper_bound": 385.94174341937594
-      }
-    },
-    {
-      "ticker": "AMZN",
-      "data_points": 487,
-      "mse": 35.03179505988656,
-      "mae": 4.564334244695703,
-      "mape": 2.249774235687868,
-      "directional_accuracy": 0.5679012345679012,
-      "forecast": {
-        "last_date": "2026-02-22 00:00:00",
-        "last_prediction": 218.50948321710757,
-        "lower_bound": 210.32948492670516,
-        "upper_bound": 226.61135112244426
-      }
-    }
-  ]
+  "stock_results": []
 }
