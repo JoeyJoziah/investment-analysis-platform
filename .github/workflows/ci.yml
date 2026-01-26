@@ -21,7 +21,7 @@ concurrency:
 jobs:
   # Backend Code Quality
   backend-quality:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15  # Cost optimization - prevent runaway jobs
     
     steps:
@@ -227,7 +227,7 @@ jobs:
 
   # Frontend Testing
   frontend-test:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15  # Cost optimization
     
     steps:
@@ -275,7 +275,7 @@ jobs:
 
   # Frontend Code Quality
   frontend-quality:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10  # Cost optimization
     
     steps:
@@ -403,7 +403,7 @@ jobs:
 
   # Notification on failure
   notify-failure:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5  # Cost optimization
     needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
     if: failure() && github.event_name == 'push'  # Only notify on push failures
@@ -442,7 +442,7 @@ jobs:
 
   # Summary
   ci-summary:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5  # Cost optimization
     needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
     if: always()
@@ -463,7 +463,7 @@ jobs:
 
   # Sync boards after CI completion
   sync-boards:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -483,7 +483,7 @@ jobs:
 
   # Memory and Resource Usage Testing
   resource-monitoring:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     
     steps:
@@ -593,7 +593,7 @@ jobs:
 
   # Consolidate and report results
   generate-performance-report:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [api-performance-test, database-performance-test, resource-monitoring]
     if: always()

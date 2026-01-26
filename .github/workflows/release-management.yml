@@ -42,7 +42,7 @@ concurrency:
 jobs:
   # Generate release version and validate
   prepare-release:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -395,7 +395,7 @@ jobs:
 
   # Create GitHub release
   create-github-release:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [prepare-release, build-release-artifacts]
     if: github.event.inputs.dry_run != 'true'
@@ -530,7 +530,7 @@ jobs:
 
   # Send notifications
   notify-release:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [prepare-release, create-github-release, security-scan-release]
     if: always() && github.event.inputs.dry_run != 'true'

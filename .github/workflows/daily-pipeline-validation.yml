@@ -35,7 +35,7 @@ concurrency:
 jobs:
   # Validate data sources and API connectivity
   validate-data-sources:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event.inputs.pipeline_type == 'all' || github.event.inputs.pipeline_type == 'data-ingestion' || github.event.inputs.pipeline_type == ''
     outputs:
@@ -375,7 +375,7 @@ jobs:
 
   # Validate recommendation engine
   validate-recommendations:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event.inputs.pipeline_type == 'all' || github.event.inputs.pipeline_type == 'recommendations' || github.event.inputs.pipeline_type == ''
     
@@ -443,7 +443,7 @@ jobs:
 
   # Consolidate validation results
   generate-daily-report:
-    runs-on: ${{ env.SMALL_RUNNER }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [validate-data-sources, validate-etl-pipeline, validate-ml-pipeline, validate-recommendations]
     if: always()
