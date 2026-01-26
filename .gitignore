@@ -153,3 +153,10 @@ env/
 
 # Notion sync state (contains local task mapping)
 .notion_sync_state.json
+# Local Claude runtime state
+.claude-flow/
+.swarm/
+.claude/settings.json
+.claude/evals/
+.claude/helpers/
+
