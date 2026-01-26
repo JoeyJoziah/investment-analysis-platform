@@ -264,15 +264,17 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 
 ---
 
-### MEDIUM-5: Add Health Checks to All Services
-**File:** `docker-compose.yml`
+### ~~MEDIUM-5: Add Health Checks to All Services~~ ✅ COMPLETE
+**File:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose.prod.yml`
 **Impact:** Improved reliability, proper startup ordering
-**Time:** 30 minutes
+**Completed:** 2026-01-26
 
-- [ ] Add health check for celery_beat
-- [ ] Add health check for airflow services
-- [ ] Add health check for frontend
-- [ ] Verify depends_on with condition: service_healthy
+- [x] Add health checks for all 15+ services
+- [x] Add health check for celery_beat (PID file check)
+- [x] Add health check for airflow services (HTTP /health)
+- [x] Add health check for frontend (curl localhost:3000)
+- [x] Update all depends_on with condition: service_healthy
+- [x] Add dev-specific health checks (flower, pgadmin, redis-commander)
 
 ---
 
@@ -330,7 +332,7 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 4. HIGH-2: Increase Redis memory (5min)
 5. CRITICAL-2: Parallelize API calls (4h)
 6. ~~HIGH-4: Right-size Docker resources (1h)~~ COMPLETE
-7. MEDIUM-5: Add health checks (30min)
+7. ~~MEDIUM-5: Add health checks (30min)~~ COMPLETE
 
 **Week 2 - Core Fixes (16 hours):**
 8. ~~CRITICAL-3: Fix N+1 queries (8h)~~ COMPLETE
