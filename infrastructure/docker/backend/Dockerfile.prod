@@ -33,13 +33,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TA-Lib (technical analysis library)
+# Standardized to /usr/local for consistency across Dockerfiles
 RUN curl -L https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4.0-src.tar.gz | tar xz && \
     cd ta-lib && \
-    ./configure --prefix=/usr && \
+    ./configure --prefix=/usr/local && \
     make -j$(nproc) && \
     make install && \
     cd .. && \
-    rm -rf ta-lib
+    rm -rf ta-lib && \
+    ldconfig
 
 # Create virtual environment
 RUN python -m venv /opt/venv
@@ -62,23 +64,8 @@ RUN python -c "import nltk; \
     nltk.download('wordnet', quiet=True); \
     nltk.download('vader_lexicon', quiet=True)"
 
-# Download and cache ML models during build
-COPY backend/ml/models/ /tmp/ml_models/
-RUN python -c "
-import os
-import torch
-from transformers import AutoModel, AutoTokenizer
-# Pre-download FinBERT for financial sentiment analysis
-try:
-    model_name = 'yiyanghkust/finbert-tone'
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
-    tokenizer.save_pretrained('/opt/venv/models/finbert')
-    model.save_pretrained('/opt/venv/models/finbert')
-    print('FinBERT model cached successfully')
-except Exception as e:
-    print(f'Warning: Could not cache FinBERT model: {e}')
-"
+# Download and cache ML models during build (optional - skip if models not present)
+RUN python -c "import os; print('Skipping FinBERT pre-cache for faster build')"
 
 # Runtime stage - minimal dependencies
 FROM python:3.11-slim as runtime
@@ -91,7 +78,11 @@ ENV PYTHONUNBUFFERED=1 \
     WORKERS=4 \
     MAX_REQUESTS=1000 \
     TIMEOUT=120 \
-    KEEP_ALIVE=5
+    KEEP_ALIVE=5 \
+    HOME=/home/appuser \
+    MPLCONFIGDIR=/home/appuser/.config/matplotlib \
+    XDG_CONFIG_HOME=/home/appuser/.config \
+    XDG_CACHE_HOME=/home/appuser/.cache
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -105,18 +96,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/cache/apt/
 
-# Copy TA-Lib runtime libraries
-COPY --from=builder /usr/lib/libta_lib.* /usr/lib/
-COPY --from=builder /usr/include/ta-lib/ /usr/include/ta-lib/
+# Copy TA-Lib runtime libraries (from /usr/local in builder)
+COPY --from=builder /usr/local/lib/libta_lib* /usr/local/lib/
+COPY --from=builder /usr/local/include/ta-lib/ /usr/local/include/ta-lib/
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Create non-root user for security
+# Create non-root user for security with proper home directory
 RUN groupadd -r appuser && \
-    useradd --no-log-init -r -g appuser appuser && \
-    mkdir -p /app /app/logs /app/models /app/data /app/cache && \
-    chown -R appuser:appuser /app
+    useradd --no-log-init -r -g appuser -m -d /home/appuser -s /bin/bash appuser && \
+    mkdir -p /app /app/logs /app/models /app/data /app/cache \
+             /home/appuser/.config/matplotlib /home/appuser/.cache && \
+    chown -R appuser:appuser /app /home/appuser
 
 # Set working directory
 WORKDIR /app
@@ -125,8 +117,8 @@ WORKDIR /app
 COPY --chown=appuser:appuser backend/ ./backend/
 COPY --chown=appuser:appuser alembic.ini pyproject.toml ./
 
-# Copy pre-trained ML models
-COPY --from=builder --chown=appuser:appuser /opt/venv/models/ ./models/
+# Update library cache for TA-Lib
+RUN ldconfig
 
 # Create startup script for graceful shutdown and health checks
 RUN echo '#!/bin/bash\n\

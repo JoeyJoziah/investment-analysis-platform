@@ -1,15 +1,15 @@
 # Feature Checklist
 
-**Last Updated**: 2025-01-24
-**Overall Completion**: 90%
+**Last Updated**: 2026-01-25 (Session 2 - Docker Fixes Applied)
+**Overall Completion**: 89%
 
 ## Core Features
 
 ### Stock Data Management
-- [x] Database schema for stocks (39 tables created)
+- [x] Database schema for stocks (22 tables created)
 - [x] Price history tables (TimescaleDB optimized)
 - [x] Fundamental data models
-- [x] 20,674 stocks loaded from NYSE, NASDAQ, AMEX
+- [ ] Stock data loaded (NYSE/NASDAQ/AMEX) - 0 stocks currently
 - [x] WebSocket real-time updates (framework ready)
 - [x] Data validation pipeline
 - [x] Automated data refresh (Celery scheduled)
@@ -36,14 +36,15 @@
 
 ### Machine Learning
 - [x] Model manager framework
-- [x] ML database tables (ml_models, ml_predictions)
+- [x] ML database tables (ml_predictions)
 - [x] Training pipeline structure
 - [x] Model validation framework
 - [x] Backtesting system structure
-- [ ] LSTM model training (needs execution)
-- [ ] XGBoost training (needs execution)
-- [ ] Prophet forecasting (needs execution)
+- [x] LSTM model trained (5.1 MB weights)
+- [x] XGBoost trained (690 KB model)
+- [x] Prophet forecasting (3 stock models: AAPL, ADBE, AMZN)
 - [ ] Online learning updates
+- [ ] Expand Prophet to all stocks
 
 ### Sentiment Analysis
 - [x] Sentiment models
@@ -77,14 +78,14 @@
 
 ### User Management
 - [x] User models (comprehensive)
-- [x] Role-based access (6 roles: super_admin, admin, analyst, premium_user, basic_user, free_user)
+- [x] Role-based access (6 roles)
 - [x] OAuth2 authentication (implemented)
 - [x] JWT tokens (with refresh)
 - [x] Enhanced security (rate limiting, audit logs)
 - [x] User registration endpoint
 - [x] Profile management
 - [x] Preferences settings
-- [x] Watchlist management (complete - 940 lines API, 767 lines repository)
+- [x] Watchlist management (complete API)
 
 ## API Endpoints
 
@@ -125,7 +126,7 @@
 - [x] GET /api/portfolio/{id}/performance
 - [x] POST /api/portfolio/{id}/transaction
 
-### Watchlist Endpoints (NEW - Complete)
+### Watchlist Endpoints
 - [x] GET /api/watchlists
 - [x] POST /api/watchlists
 - [x] GET /api/watchlists/{id}
@@ -133,11 +134,7 @@
 - [x] DELETE /api/watchlists/{id}
 - [x] GET /api/watchlists/default
 - [x] POST /api/watchlists/{id}/items
-- [x] PUT /api/watchlists/{id}/items/{item_id}
 - [x] DELETE /api/watchlists/{id}/items/{item_id}
-- [x] POST /api/watchlists/default/symbols/{symbol}
-- [x] DELETE /api/watchlists/default/symbols/{symbol}
-- [x] GET /api/watchlists/check/{symbol}
 
 ### User Endpoints
 - [x] POST /api/auth/login
@@ -233,18 +230,19 @@
 
 ## Infrastructure
 
-### Docker Services
-- [x] PostgreSQL/TimescaleDB (running, 20,674 stocks)
-- [x] Redis cache (configured)
-- [x] Elasticsearch (ready)
-- [x] Backend API (working)
-- [x] Frontend web (React ready)
-- [x] Celery workers (configured)
-- [x] Celery beat (scheduler ready)
-- [x] Prometheus (monitoring ready)
-- [x] Grafana (dashboards configured)
-- [x] Nginx proxy (production ready)
-- [x] AlertManager (alerts configured)
+### Docker Services (12 Running - All Healthy)
+- [x] PostgreSQL/TimescaleDB ✅ healthy (3+ hours)
+- [x] Redis cache ✅ healthy (3+ hours)
+- [x] Elasticsearch ✅ healthy (3+ hours)
+- [x] Celery workers ✅ healthy (3+ hours)
+- [x] Celery beat ✅ healthy (3+ hours)
+- [x] Apache Airflow (running)
+- [x] Prometheus (running)
+- [x] Grafana (running)
+- [x] AlertManager (running)
+- [x] PostgreSQL Exporter (running)
+- [x] Redis Exporter (running)
+- [x] Elasticsearch Exporter (running)
 
 ### Monitoring
 - [x] Prometheus setup
@@ -261,7 +259,7 @@
 - [x] Password hashing (bcrypt)
 - [x] Rate limiting (advanced with Redis)
 - [x] CORS configuration
-- [x] API key management (vault integrated)
+- [x] API key management
 - [x] SSL/TLS setup (script ready)
 - [x] Security headers (comprehensive)
 - [x] Audit logging (structured)
@@ -273,7 +271,7 @@
 
 ## Testing
 
-### Test Files Present (25+ files)
+### Test Files Present (20 files)
 - [x] test_api_integration.py
 - [x] test_database_integration.py
 - [x] test_security_integration.py
@@ -284,7 +282,9 @@
 - [x] test_resilience_integration.py
 - [x] test_comprehensive_units.py
 - [x] test_data_pipeline_integration.py
-- [ ] test_watchlist.py (MISSING - recommended)
+- [x] test_watchlist.py
+- [x] test_database_fixes.py
+- [x] + 8 more test files
 
 ### Test Infrastructure
 - [x] Pytest configured
@@ -298,17 +298,17 @@
 ### Technical Docs
 - [x] README.md
 - [x] CLAUDE.md
-- [x] TODO.md (created)
 - [x] API documentation (Swagger/OpenAPI)
 - [x] Architecture documented
 - [x] Database schema in models
 
 ### Context Documentation
-- [x] overall_project_status.md (updated)
-- [x] deployment_readiness.md (updated)
+- [x] overall_project_status.md
+- [x] deployment_readiness.md
 - [x] feature_checklist.md (this file)
 - [x] project_structure.md
 - [x] recommendations.md
+- [x] identified_issues.md
 
 ## Deployment
 
@@ -325,6 +325,7 @@
 - [x] Monitoring setup
 - [ ] SSL certificate (pending config)
 - [ ] SMTP alerts (pending config)
+- [ ] GDPR encryption key in .env (CRITICAL - missing)
 
 ## Compliance & Legal
 
@@ -336,33 +337,54 @@
 - [x] Data portability
 - [x] Right to be forgotten
 
+## Configuration Status
+
+### Critical Missing Configuration
+- [ ] GDPR_ENCRYPTION_KEY in .env (BLOCKS BACKEND)
+- [ ] investment_user database role
+- [ ] Stock data loaded
+
+### Optional Configuration
+- [ ] SSL_DOMAIN for HTTPS
+- [ ] SMTP credentials for alerts
+- [ ] AWS S3 for backups
+- [ ] Slack webhook for notifications
+
 ## Total Progress Summary
 
 | Category | Completion |
 |----------|------------|
-| Core Features | 90% |
+| Core Features | 85% |
 | API Endpoints | 95% |
 | Frontend Components | 80% |
 | Data Pipeline | 85% |
-| Infrastructure | 90% |
+| Infrastructure | 95% |
 | Security | 95% |
 | Testing | 60% |
 | Documentation | 90% |
-| **Overall** | **90%** |
+| Configuration | 70% |
+| **Overall** | **88%** |
 
 ## Remaining Items
 
+### Critical (Blocking)
+1. [ ] Add GDPR_ENCRYPTION_KEY to .env
+2. [ ] Create investment_user database role
+3. [ ] Load stock data into database
+4. [x] ~~Fix unhealthy containers~~ ✅ All healthy (3+ hours)
+
 ### High Priority
-1. [ ] Configure SSL certificate
-2. [ ] Configure SMTP for alerts
-3. [ ] Test production deployment
+5. [ ] Configure SSL certificate
+6. [ ] Start backend/frontend Docker services
+7. [ ] Test production deployment
 
 ### Medium Priority
-4. [ ] Add watchlist unit tests
-5. [ ] Train ML models
-6. [ ] E2E testing
+8. [ ] Configure SMTP for alerts
+9. [ ] Expand Prophet models beyond 3 stocks
+10. [ ] Increase test coverage to 80%
+11. [ ] E2E testing
 
 ### Low Priority
-7. [ ] OpenAI/Anthropic keys (optional)
-8. [ ] AWS backup configuration (optional)
-9. [ ] Slack notifications (optional)
+12. [ ] OpenAI/Anthropic keys (optional)
+13. [ ] AWS backup configuration (optional)
+14. [ ] Slack notifications (optional)

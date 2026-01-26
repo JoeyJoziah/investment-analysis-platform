@@ -2,7 +2,7 @@
 # Multi-stage build for optimal size and security
 
 # Build args
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.11
 ARG BUILD_ENV=production
 
 # Stage 1: Builder
@@ -76,7 +76,7 @@ COPY --from=builder /usr/local/share/nltk_data /usr/local/share/nltk_data
 RUN ldconfig
 
 # Set environment variables for development
-ENV PYTHONPATH=/app:/root/.local/lib/python3.12/site-packages \
+ENV PYTHONPATH=/app:/root/.local/lib/python3.11/site-packages \
     PYTHONUNBUFFERED=1 \
     PATH=/root/.local/bin:$PATH \
     NLTK_DATA=/usr/local/share/nltk_data \
@@ -99,8 +99,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Create non-root user for security with proper home directory
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -m -d /home/appuser -s /bin/bash appuser && \
+    mkdir -p /home/appuser/.config/matplotlib /home/appuser/.cache && \
+    chown -R appuser:appuser /home/appuser
 
 # Set working directory
 WORKDIR /app
@@ -117,22 +120,25 @@ COPY --from=builder /usr/local/share/nltk_data /usr/local/share/nltk_data
 
 # Copy application code
 COPY --chown=appuser:appuser backend /app/backend
-COPY --chown=appuser:appuser models /app/models
 COPY --chown=appuser:appuser scripts /app/scripts
 COPY --chown=appuser:appuser alembic.ini /app/
 
-# Create necessary directories
+# Create necessary directories and fix ownership of all appuser directories
 RUN mkdir -p /app/logs /app/data /app/ml_models /app/cache && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app /home/appuser
 
 # Update library cache
 RUN ldconfig
 
 # Set environment variables
-ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages \
+ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.11/site-packages \
     PYTHONUNBUFFERED=1 \
     PATH=/home/appuser/.local/bin:$PATH \
-    NLTK_DATA=/usr/local/share/nltk_data
+    NLTK_DATA=/usr/local/share/nltk_data \
+    HOME=/home/appuser \
+    MPLCONFIGDIR=/home/appuser/.config/matplotlib \
+    XDG_CONFIG_HOME=/home/appuser/.config \
+    XDG_CACHE_HOME=/home/appuser/.cache
 
 # Switch to non-root user
 USER appuser

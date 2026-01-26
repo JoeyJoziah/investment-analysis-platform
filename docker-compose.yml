@@ -56,7 +56,7 @@ services:
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -77,7 +77,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-256m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-256m}"
+      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-512m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-512m}"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     ports:
@@ -87,6 +87,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    restart: unless-stopped
 
   # Backend API
   backend:
@@ -104,8 +113,9 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
       - ./models:/app/models
+      - ./ml_models:/app/ml_models
     ports:
       - "8000:8000"
     depends_on:
@@ -114,8 +124,23 @@ services:
       redis:
         condition: service_healthy
       elasticsearch:
-        condition: service_healthy
-    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --reload
+        condition: service_started
+    command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 120
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 384M
+    restart: unless-stopped
 
   # Frontend Web
   frontend:
@@ -133,8 +158,17 @@ services:
     volumes:
       - ./frontend/web:/app
       - /app/node_modules
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    restart: unless-stopped
 
-  # Celery Worker
+  # Celery Worker - Optimized for memory efficiency
   celery_worker:
     build:
       context: .
@@ -149,12 +183,53 @@ services:
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      # Matplotlib and home directory configuration
+      - HOME=/home/appuser
+      - MPLCONFIGDIR=/tmp/matplotlib
+      - XDG_CONFIG_HOME=/tmp
+      - XDG_CACHE_HOME=/tmp
+      # Memory optimization for ML workloads
+      - MALLOC_TRIM_THRESHOLD_=100000
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
     volumes:
       - ./backend:/app/backend
     depends_on:
-      - postgres
-      - redis
-    command: celery -A backend.tasks.celery_app worker --loglevel=info
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Worker configuration optimized for stability:
+    # - concurrency=1: Single worker process to reduce memory pressure
+    # - prefetch-multiplier=1: Fetch one task at a time
+    # - max-tasks-per-child=50: Recycle workers frequently to prevent memory leaks
+    # - soft-time-limit/time-limit: Prevent runaway tasks
+    command: >
+      celery -A backend.tasks.celery_app worker
+      --loglevel=info
+      --concurrency=1
+      --prefetch-multiplier=1
+      --max-tasks-per-child=50
+      --soft-time-limit=300
+      --time-limit=600
+      -Q default,data_ingestion,analysis,notifications,high_priority,low_priority
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A backend.tasks.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 60s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 384M
+    restart: unless-stopped
 
   # Celery Beat Scheduler
   celery_beat:
@@ -173,9 +248,20 @@ services:
     volumes:
       - ./backend:/app/backend
     depends_on:
-      - postgres
-      - redis
-    command: celery -A backend.tasks.celery_app beat --loglevel=info
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    command: ["sh", "-c", "rm -f /tmp/celerybeat.pid && celery -A backend.tasks.celery_app beat --loglevel=info --pidfile=/tmp/celerybeat.pid"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat.pid && kill -0 $$(cat /tmp/celerybeat.pid) || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
   # Apache Airflow
   airflow:
@@ -201,6 +287,15 @@ services:
       - postgres
       - redis
     command: standalone
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    restart: unless-stopped
 
   # Prometheus
   prometheus:
@@ -221,6 +316,14 @@ services:
       - '--storage.tsdb.retention.size=500MB'
     ports:
       - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
     restart: unless-stopped
 
   # Grafana
@@ -240,6 +343,15 @@ services:
       - "3001:3000"
     depends_on:
       - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    restart: unless-stopped
 
   # Node Exporter for system metrics (Linux only)
   node-exporter:
@@ -283,6 +395,11 @@ services:
       - "9187:9187"
     depends_on:
       - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
     restart: unless-stopped
 
   # Redis Exporter
@@ -296,6 +413,11 @@ services:
       - "9121:9121"
     depends_on:
       - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
     restart: unless-stopped
 
   # Elasticsearch Exporter
@@ -311,6 +433,11 @@ services:
       - "9114:9114"
     depends_on:
       - elasticsearch
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
     restart: unless-stopped
 
   # Nginx Exporter
@@ -323,6 +450,11 @@ services:
       - "9113:9113"
     depends_on:
       - nginx
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
     restart: unless-stopped
 
   # AlertManager
@@ -338,6 +470,14 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
     restart: unless-stopped
 
   # Nginx Reverse Proxy
@@ -353,6 +493,15 @@ services:
     depends_on:
       - backend
       - frontend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+    restart: unless-stopped
 
 volumes:
   postgres_data:
