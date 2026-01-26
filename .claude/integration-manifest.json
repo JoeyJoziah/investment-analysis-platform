@@ -1,5 +1,5 @@
 {
-  "manifest_version": "2.0.0",
+  "manifest_version": "2.1.0",
   "created_at": "2026-01-25",
   "updated_at": "2026-01-25",
   "sources": [
@@ -154,6 +154,73 @@
         "domain": "investment-analysis"
       }
     ],
+    "github_swarm": {
+      "directory": "agents/github-swarm/",
+      "description": "Comprehensive GitHub automation swarm for repository management",
+      "agents": [
+        {
+          "name": "github-swarm-coordinator",
+          "file": "agents/github-swarm/github-swarm-coordinator.md",
+          "description": "Master coordinator for GitHub swarm orchestration",
+          "model": "opus",
+          "topology": "hierarchical"
+        },
+        {
+          "name": "issue-triager",
+          "file": "agents/github-swarm/issue-triager.md",
+          "description": "Categorizes and triages GitHub issues",
+          "model": "sonnet",
+          "triggers": ["issues.opened", "issues.edited"]
+        },
+        {
+          "name": "pr-reviewer",
+          "file": "agents/github-swarm/pr-reviewer.md",
+          "description": "Reviews PRs for quality, security, and best practices",
+          "model": "opus",
+          "triggers": ["pull_request.opened", "pull_request.synchronize"]
+        },
+        {
+          "name": "test-agent",
+          "file": "agents/github-swarm/test-agent.md",
+          "description": "Identifies testing gaps and coverage issues",
+          "model": "sonnet",
+          "triggers": ["pull_request.opened", "pull_request.synchronize"]
+        },
+        {
+          "name": "security-agent",
+          "file": "agents/github-swarm/security-agent.md",
+          "description": "Scans for vulnerabilities and security issues",
+          "model": "opus",
+          "triggers": ["pull_request.opened", "push", "schedule.daily"]
+        },
+        {
+          "name": "documentation-agent",
+          "file": "agents/github-swarm/documentation-agent.md",
+          "description": "Tracks documentation updates needed",
+          "model": "sonnet",
+          "triggers": ["pull_request.merged", "push"]
+        },
+        {
+          "name": "infrastructure-agent",
+          "file": "agents/github-swarm/infrastructure-agent.md",
+          "description": "Monitors Docker, CI/CD, and infrastructure health",
+          "model": "sonnet",
+          "triggers": ["workflow_run.completed", "schedule.hourly"]
+        }
+      ],
+      "configuration": {
+        "file": "agents/github-swarm/swarm-config.json",
+        "topology": "hierarchical",
+        "max_parallel_agents": 6,
+        "features": {
+          "auto_pr_enhancements": true,
+          "issue_labeling": true,
+          "code_review_automation": true
+        }
+      },
+      "github_actions_workflow": ".github/workflows/github-swarm.yml",
+      "init_script": "agents/github-swarm/init-labels.sh"
+    },
     "existing_project_swarms": [
       "architecture-reviewer",
       "backend-api-swarm",
@@ -316,7 +383,25 @@
         "file": "commands/scenario.md",
         "description": "Run scenario and sensitivity analysis"
       }
-    ]
+    ],
+    "github_swarm": {
+      "name": "github-swarm",
+      "file": "commands/github-swarm.md",
+      "description": "Commands for operating the GitHub automation swarm",
+      "subcommands": [
+        "init",
+        "status",
+        "analyze-pr",
+        "triage-issue",
+        "security-scan",
+        "test-coverage",
+        "doc-audit",
+        "infra-check",
+        "cost-report",
+        "daily-summary",
+        "full-scan"
+      ]
+    }
   },
 
   "helpers": {
@@ -351,6 +436,9 @@
       "v3.sh",
       "validate-v3-config.sh",
       "worker-manager.sh"
+    ],
+    "github_swarm": [
+      "agents/github-swarm/init-labels.sh"
     ]
   },
 
@@ -412,15 +500,16 @@
   ],
 
   "statistics": {
-    "total_agents": 128,
-    "agent_directories": 25,
+    "total_agents": 134,
+    "agent_directories": 26,
     "total_skills": 71,
-    "total_commands": 164,
+    "total_commands": 175,
     "command_directories": 19,
-    "total_helpers": 31,
+    "total_helpers": 32,
     "total_rules": 8,
     "hooks": 4,
-    "contexts": 3
+    "contexts": 3,
+    "github_swarm_agents": 7
   },
 
   "orchestration": {
@@ -441,5 +530,18 @@
     "parallel_speedup": "2.8-4.4x",
     "decision_latency": "<5ms",
     "solving_accuracy": "84.8%"
+  },
+
+  "github_swarm": {
+    "repository": "JoeyJoziah/investment-analysis-platform",
+    "focus": "development",
+    "budget_target": "$50/month",
+    "features": {
+      "auto_pr_enhancements": true,
+      "issue_labeling": true,
+      "code_review_automation": true,
+      "security_scanning": "daily",
+      "infrastructure_monitoring": "hourly"
+    }
   }
 }
