@@ -21,13 +21,15 @@ import json
 import logging
 import multiprocessing
 import os
-import pickle
 import psutil
 import sys
 import time
 import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# SECURITY: Removed pickle import - using JSON for checkpoints to prevent
+# arbitrary code execution vulnerabilities
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
@@ -589,41 +591,35 @@ class EnhancedBackgroundLoader:
         return additional_stocks
     
     def save_progress(self):
-        """Save current progress to file"""
+        """
+        Save current progress to file.
+        SECURITY: Uses JSON only - pickle removed to prevent code execution vulnerabilities.
+        """
         try:
             progress_data = asdict(self.progress)
             # Convert sets to lists for JSON serialization
             progress_data['completed_tickers'] = list(self.progress.completed_tickers)
             progress_data['failed_tickers'] = list(self.progress.failed_tickers)
             progress_data['last_checkpoint'] = datetime.now().isoformat()
-            
+
             with open(self.progress_file, 'w') as f:
                 json.dump(progress_data, f, indent=2, default=str)
-                
-            # Also save binary checkpoint for faster loading
-            with open(self.checkpoint_file, 'wb') as f:
-                pickle.dump(self.progress, f)
-                
+
             self.logger.debug("Progress saved successfully")
-            
+
         except Exception as e:
             self.logger.error(f"Error saving progress: {e}")
-    
+
     def load_progress(self) -> bool:
-        """Load progress from file"""
+        """
+        Load progress from file.
+        SECURITY: Uses JSON only - pickle removed to prevent code execution vulnerabilities.
+        """
         try:
-            # Try binary checkpoint first (faster)
-            if os.path.exists(self.checkpoint_file):
-                with open(self.checkpoint_file, 'rb') as f:
-                    self.progress = pickle.load(f)
-                self.logger.info("Progress loaded from checkpoint")
-                return True
-                
-            # Fall back to JSON
             if os.path.exists(self.progress_file):
                 with open(self.progress_file, 'r') as f:
                     data = json.load(f)
-                    
+
                 self.progress = LoadingProgress(
                     total_stocks=data.get('total_stocks', 0),
                     completed_stocks=data.get('completed_stocks', 0),
@@ -633,13 +629,13 @@ class EnhancedBackgroundLoader:
                     completed_tickers=set(data.get('completed_tickers', [])),
                     failed_tickers=set(data.get('failed_tickers', []))
                 )
-                
+
                 self.logger.info("Progress loaded from JSON")
                 return True
-                
+
         except Exception as e:
             self.logger.error(f"Error loading progress: {e}")
-            
+
         return False
     
     def get_existing_stocks(self) -> Set[str]:

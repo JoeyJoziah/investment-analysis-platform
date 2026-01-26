@@ -7,7 +7,7 @@ Trains essential models with available packages
 import os
 import sys
 import json
-import pickle
+import joblib  # SECURITY: Use joblib instead of pickle for safer ML model serialization
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -246,8 +246,8 @@ def save_models(models, output_dir):
     
     for name, model in models.items():
         model_path = output_dir / f"{name}.pkl"
-        with open(model_path, 'wb') as f:
-            pickle.dump(model, f)
+        # SECURITY: Use joblib instead of pickle for safer serialization
+        joblib.dump(model, model_path)
         print(f"   ✅ Saved {name} to {model_path}")
     
     # Save metadata

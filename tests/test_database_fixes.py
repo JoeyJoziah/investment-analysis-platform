@@ -4,6 +4,7 @@ Tests all the fixes implemented for the identified error patterns
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -104,17 +105,23 @@ class TestDatabaseSchemaFixes:
         assert new_exchange is not None
         assert new_exchange.code == "TSE"
 
+@pytest_asyncio.fixture
+async def async_db_manager():
+    """Create test async database manager for async tests"""
+    db_manager = AsyncDatabaseManager("sqlite+aiosqlite:///:memory:")
+    await db_manager.initialize()
+
+    # Create tables for in-memory SQLite
+    async with db_manager.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    yield db_manager
+    await db_manager.close()
+
+
 class TestAsyncDatabaseFixes:
     """Test async database operation fixes"""
-    
-    @pytest.fixture
-    async def async_db_manager(self):
-        """Create test async database manager"""
-        db_manager = AsyncDatabaseManager("sqlite+aiosqlite:///:memory:")
-        await db_manager.initialize()
-        yield db_manager
-        await db_manager.close()
-    
+
     @pytest.mark.asyncio
     async def test_async_session_context_manager(self, async_db_manager):
         """Test that async session context manager works without Future errors"""
@@ -390,12 +397,7 @@ def setup_test_logging():
     """Setup logging for tests"""
     logging.getLogger().setLevel(logging.DEBUG)
 
-# Pytest markers for test categorization
-pytest.mark.database = pytest.mark.mark("database", "Database-related tests")
-pytest.mark.async_ops = pytest.mark.mark("async_ops", "Async operation tests")
-pytest.mark.data_quality = pytest.mark.mark("data_quality", "Data quality tests")
-pytest.mark.error_handling = pytest.mark.mark("error_handling", "Error handling tests")
-pytest.mark.integration = pytest.mark.mark("integration", "Integration tests")
+# Pytest markers are registered in pytest.ini
 
 if __name__ == "__main__":
     # Run tests directly
