@@ -151,8 +151,11 @@ venv/
 env/
 .env/
 
-# Notion sync state (contains local task mapping)
+# Sync state files (contain local task mapping)
 .notion_sync_state.json
+.sync_state.json
+.github_board_sync_state.json
+.sync_logs/
 # Local Claude runtime state
 .claude-flow/
 .swarm/

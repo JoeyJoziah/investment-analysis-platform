@@ -202,17 +202,141 @@ def get_redis_client():
     return redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
-def cache_with_ttl(ttl: int = 300):
+def cache_with_ttl(ttl: int = 300, prefix: str = None, skip_args: int = 0):
     """
-    Simple cache decorator for functions (simplified implementation)
-    For now, this is a no-op decorator that doesn't actually cache
+    Cache decorator for async functions with Redis backend.
+
+    Caches function results in Redis with specified TTL. Falls back to
+    direct function execution if Redis is unavailable.
+
+    Args:
+        ttl: Time-to-live in seconds for cached values (default: 300 = 5 minutes)
+        prefix: Optional cache key prefix (default: function module + name)
+        skip_args: Number of positional args to skip in key generation
+                   (useful for skipping 'self', 'request', 'db' params)
+
+    Example:
+        @cache_with_ttl(ttl=300)
+        async def get_stock_analysis(ticker: str) -> dict:
+            ...
+
+    Note: Objects like db sessions and request objects are automatically
+    excluded from cache key generation.
     """
+    import functools
+    import inspect
+    import hashlib
+
+    # Types to exclude from cache key generation (non-serializable or request-specific)
+    EXCLUDED_TYPES = (
+        'AsyncSession', 'Session', 'Request', 'Response', 'WebSocket',
+        'BackgroundTasks', 'User', 'HTTPConnection'
+    )
+
+    def _serialize_arg(arg: Any) -> str:
+        """Serialize an argument for cache key generation."""
+        if arg is None:
+            return "None"
+        if isinstance(arg, (str, int, float, bool)):
+            return str(arg)
+        if isinstance(arg, (list, tuple)):
+            return f"[{','.join(_serialize_arg(a) for a in arg)}]"
+        if isinstance(arg, dict):
+            sorted_items = sorted(arg.items(), key=lambda x: str(x[0]))
+            return f"{{{','.join(f'{k}:{_serialize_arg(v)}' for k, v in sorted_items)}}}"
+        if hasattr(arg, 'model_dump'):  # Pydantic v2
+            return _serialize_arg(arg.model_dump())
+        if hasattr(arg, 'dict'):  # Pydantic v1
+            return _serialize_arg(arg.dict())
+        # For other objects, use class name (they won't be part of cache key logic)
+        return f"<{type(arg).__name__}>"
+
+    def _should_include_arg(arg: Any) -> bool:
+        """Check if argument should be included in cache key."""
+        type_name = type(arg).__name__
+        return type_name not in EXCLUDED_TYPES
+
+    def _generate_cache_key(func_name: str, args: tuple, kwargs: dict, skip: int) -> str:
+        """Generate a deterministic cache key from function name and arguments."""
+        key_parts = [func_name]
+
+        # Process positional args (skip first N as specified)
+        for arg in args[skip:]:
+            if _should_include_arg(arg):
+                key_parts.append(_serialize_arg(arg))
+
+        # Process keyword args (sorted for consistency)
+        for k, v in sorted(kwargs.items()):
+            if _should_include_arg(v):
+                key_parts.append(f"{k}={_serialize_arg(v)}")
+
+        # Create hash for long keys to keep them manageable
+        key_string = "|".join(key_parts)
+        if len(key_string) > 200:
+            key_hash = hashlib.sha256(key_string.encode()).hexdigest()[:16]
+            return f"{func_name}:{key_hash}"
+
+        return key_string.replace(" ", "_")
+
     def decorator(func):
-        def wrapper(*args, **kwargs):
-            # In a full implementation, this would check cache first
-            # For now, just call the function directly
+        # Determine the cache key prefix
+        func_prefix = prefix or f"{func.__module__}.{func.__name__}"
+
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            # Generate cache key
+            cache_key = f"cache:{func_prefix}:{_generate_cache_key(func.__name__, args, kwargs, skip_args)}"
+
+            try:
+                # Try to get from cache
+                redis_client = await get_redis()
+                cached_value = await redis_client.get(cache_key)
+
+                if cached_value is not None:
+                    logger.debug(f"Cache HIT for key: {cache_key}")
+                    try:
+                        return json.loads(cached_value)
+                    except json.JSONDecodeError:
+                        # Return raw value if not JSON
+                        return cached_value
+
+                logger.debug(f"Cache MISS for key: {cache_key}")
+
+            except Exception as e:
+                # Redis unavailable - proceed without cache
+                logger.warning(f"Redis cache lookup failed: {e}")
+                result = await func(*args, **kwargs)
+                return result
+
+            # Execute the function
+            result = await func(*args, **kwargs)
+
+            # Store result in cache
+            try:
+                serialized = _serialize_result(result)
+                await redis_client.setex(cache_key, ttl, serialized)
+                logger.debug(f"Cached result for key: {cache_key} (TTL: {ttl}s)")
+
+            except (TypeError, ValueError) as e:
+                logger.warning(f"Failed to serialize result for caching: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to store in cache: {e}")
+
+            return result
+
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            # For sync functions, just execute without caching
+            # (Redis operations are async, would need different approach)
+            logger.debug(f"Sync function {func.__name__} called - cache skipped")
             return func(*args, **kwargs)
-        return wrapper
+
+        # Return appropriate wrapper based on function type
+        if inspect.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+
     return decorator
 
 

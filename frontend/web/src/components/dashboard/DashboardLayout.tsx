@@ -28,7 +28,7 @@ import HoldingsSection from './HoldingsSection';
 import AllocationPanel from '../panels/AllocationPanel';
 import MarketOverviewPanel from '../panels/MarketOverviewPanel';
 import NewsFeedPanel from '../panels/NewsFeedPanel';
-import { WebSocketIndicator } from '../WebSocketIndicator';
+import WebSocketIndicator from '../WebSocketIndicator';
 
 // Types
 import {

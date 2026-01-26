@@ -1,7 +1,10 @@
 #!/bin/bash
 # Start services
 
+set -euo pipefail
+
 MODE=${1:-dev}
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "Starting Investment Analysis Platform in $MODE mode..."
 
@@ -31,3 +34,11 @@ echo "API Docs:     http://localhost:8000/docs"
 echo ""
 echo "Use ./logs.sh to view logs"
 echo "Use ./stop.sh to stop all services"
+
+# Trigger board sync in background after services start
+SYNC_SCRIPT="$SCRIPT_DIR/.claude/hooks/board-sync/sync-boards.sh"
+if [ -x "$SYNC_SCRIPT" ]; then
+    export BOARD_SYNC_TRIGGER="start-script"
+    "$SYNC_SCRIPT" --silent &
+    echo "[Board Sync] Triggered in background"
+fi

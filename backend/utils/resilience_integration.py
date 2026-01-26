@@ -517,7 +517,7 @@ class InvestmentAnalysisResilienceSystem:
         await backup_manager.register_backup_source(
             "database_backup",
             "/var/lib/postgresql/data",
-            from .disaster_recovery import BackupType.FULL,
+            BackupType.FULL,
             "daily",
             retention_days=7
         )

@@ -46,11 +46,11 @@ services:
           memory: 256M
     restart: unless-stopped
 
-  # Redis Cache - Optimized for $50/month budget
+  # Redis Cache - Optimized for $50/month budget with increased memory for better cache hit rates
   redis:
     image: redis:7-alpine
     container_name: investment_cache
-    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 128mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
     volumes:
       - redis_data:/data
     ports:
@@ -63,38 +63,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 150M
+          cpus: '0.5'
+          memory: 600M
         reservations:
           cpus: '0.1'
-          memory: 64M
-    restart: unless-stopped
-
-  # Elasticsearch
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
-    container_name: investment_search
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-512m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-512m}"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 512M
+          memory: 256M
     restart: unless-stopped
 
   # Backend API
@@ -108,7 +81,6 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -123,8 +95,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      elasticsearch:
-        condition: service_started
     command: uvicorn backend.api.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 120
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
@@ -182,7 +152,6 @@ services:
       - REDIS_HOST=redis
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       # Matplotlib and home directory configuration
       - HOME=/home/appuser
       - MPLCONFIGDIR=/tmp/matplotlib
