@@ -110,7 +110,7 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
-      repository-projects: write
+      repository-repository-projects: write
     outputs:
       items_synced: ${{ steps.sync.outputs.items_processed }}
       project_id: ${{ steps.sync.outputs.project_id }}

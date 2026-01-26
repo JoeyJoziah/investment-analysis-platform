@@ -37,7 +37,7 @@ permissions:
   contents: read
   issues: write
   pull-requests: write
-  projects: write
+  repository-projects: write
 
 env:
   PROJECT_TITLE: "Investment Analysis Platform"

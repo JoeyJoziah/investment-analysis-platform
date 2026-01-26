@@ -521,7 +521,7 @@ jobs:
     permissions:
       issues: write
       contents: read
-      repository-projects: write
+      repository-repository-projects: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -635,7 +635,7 @@ jobs:
     permissions:
       pull-requests: write
       contents: read
-      repository-projects: write
+      repository-repository-projects: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -747,7 +747,7 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
-      repository-projects: write
+      repository-repository-projects: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

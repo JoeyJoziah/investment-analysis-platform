@@ -680,7 +680,7 @@ jobs:
       issues: write
       pull-requests: write
       contents: read
-      repository-projects: write
+      repository-repository-projects: write
 
     steps:
     - name: Checkout repository
