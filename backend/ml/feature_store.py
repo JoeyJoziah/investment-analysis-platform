@@ -5,8 +5,8 @@ Provides centralized feature management, versioning, and quality monitoring
 
 import os
 import json
-import pickle
 import hashlib
+# SECURITY: Removed pickle import - using JSON/joblib to prevent code execution
 import logging
 from typing import Dict, List, Optional, Any, Union, Callable, Tuple
 from dataclasses import dataclass, asdict
@@ -666,34 +666,46 @@ class FeatureStore:
                                    timestamp: datetime,
                                    data_sources: Dict[str, pd.DataFrame],
                                    computed_features: pd.DataFrame) -> pd.Series:
-        """Execute Python computation logic"""
-        
-        try:
-            # Create execution context
-            context = {
-                'entity_ids': entity_ids,
-                'timestamp': timestamp,
-                'data_sources': data_sources,
-                'features': computed_features,
-                'np': np,
-                'pd': pd,
-                'datetime': datetime,
-                'logger': logger
-            }
-            
-            # Execute computation
-            exec(feature_def.computation_logic, context)
-            
-            # Return the result (should be stored in 'result' variable)
-            if 'result' in context:
-                return pd.Series(context['result'], index=entity_ids)
-            else:
-                logger.error(f"No 'result' variable found in computation for {feature_def.name}")
-                return pd.Series(np.nan, index=entity_ids)
-                
-        except Exception as e:
-            logger.error(f"Error executing Python computation for {feature_def.name}: {e}")
-            return pd.Series(np.nan, index=entity_ids)
+        """
+        Handle unregistered feature computation requests.
+
+        SECURITY NOTE: Previously used exec() to run arbitrary code from feature_def.computation_logic.
+        This was a critical security vulnerability (arbitrary code execution).
+        Now only pre-registered computation functions are allowed.
+
+        To add a new feature computation:
+        1. Add a method like _compute_<feature_name>() to this class
+        2. Register it in _get_computation_function() builtin_features dict
+        3. Or use register_computation() to register a callable at runtime
+        """
+        # SECURITY: Do NOT use exec() - it allows arbitrary code execution
+        # Instead, require all computations to be pre-registered functions
+
+        logger.error(
+            f"SECURITY: Refusing to execute unregistered computation for feature '{feature_def.name}'. "
+            f"Computation logic must be registered as a named function. "
+            f"Use register_computation('{feature_def.name}', callable) or add to builtin_features."
+        )
+
+        # Return NaN values instead of executing arbitrary code
+        return pd.Series(np.nan, index=entity_ids)
+
+    def register_computation(self, feature_name: str, computation_func: Callable) -> None:
+        """
+        Register a safe computation function for a feature.
+
+        This is the secure way to add custom feature computations.
+
+        Args:
+            feature_name: Name of the feature
+            computation_func: Callable that takes (entity_ids, timestamp, data_sources, computed_features)
+                            and returns a pd.Series
+        """
+        if not callable(computation_func):
+            raise ValueError(f"computation_func must be callable, got {type(computation_func)}")
+
+        self.computation_cache[feature_name] = computation_func
+        logger.info(f"Registered computation function for feature: {feature_name}")
     
     # Built-in feature computation functions
     def _compute_price_return_1d(self, entity_ids: List[str], timestamp: datetime, 

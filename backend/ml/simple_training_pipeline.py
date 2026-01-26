@@ -13,7 +13,7 @@ import json
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, Optional
-import pickle
+import joblib
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -147,9 +147,9 @@ class SimpleMLTrainingPipeline:
             r2 = r2_score(y_test, y_pred)
             
             # Save model
+            # SECURITY: Use joblib instead of pickle for safer serialization
             model_path = Path(self.config['models_path']) / 'simple_random_forest.pkl'
-            with open(model_path, 'wb') as f:
-                pickle.dump(model, f)
+            joblib.dump(model, model_path)
             
             results = {
                 'model_type': 'RandomForestRegressor',

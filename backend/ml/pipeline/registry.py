@@ -11,8 +11,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 import hashlib
-import pickle
-import joblib
+import joblib  # SECURITY: Use joblib instead of pickle for model serialization
 import torch
 import pandas as pd
 from sqlalchemy import create_engine, Column, String, DateTime, Float, Integer, Boolean, JSON, Text

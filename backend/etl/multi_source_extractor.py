@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import sqlite3
 import hashlib
 from dataclasses import dataclass
-import pickle
+# SECURITY: Removed pickle - using JSON for safer serialization
 
 # Import our web scrapers
 from .web_scrapers import get_scraper, WebScraperBase
@@ -221,28 +221,30 @@ class MultiSourceStockExtractor:
     async def _get_cached_data(self, ticker: str, source: str) -> Optional[Dict]:
         """Check for cached data"""
         cache_key = f"{ticker}_{source}_{datetime.now().strftime('%Y%m%d')}"
-        cache_file = os.path.join(self.cache_dir, f"{cache_key}.pkl")
-        
+        # SECURITY: Use JSON files instead of pickle
+        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
+
         if os.path.exists(cache_file):
             try:
                 # Check if cache is still valid
                 file_time = datetime.fromtimestamp(os.path.getmtime(cache_file))
                 if (datetime.now() - file_time).total_seconds() < self.cache_expiry_hours * 3600:
-                    with open(cache_file, 'rb') as f:
-                        return pickle.load(f)
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        return json.load(f)
             except Exception as e:
                 logger.debug(f"Error loading cache for {cache_key}: {e}")
-        
+
         return None
-    
+
     async def _save_to_cache(self, ticker: str, source: str, data: Dict):
         """Save data to cache"""
         cache_key = f"{ticker}_{source}_{datetime.now().strftime('%Y%m%d')}"
-        cache_file = os.path.join(self.cache_dir, f"{cache_key}.pkl")
-        
+        # SECURITY: Use JSON files instead of pickle
+        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
+
         try:
-            with open(cache_file, 'wb') as f:
-                pickle.dump(data, f)
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
         except Exception as e:
             logger.debug(f"Error saving cache for {cache_key}: {e}")
     

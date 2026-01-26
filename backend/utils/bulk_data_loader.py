@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import json
 import gzip
-import pickle
+# SECURITY: Removed pickle import - using JSON for data serialization
 from pathlib import Path
 import psutil
 import time

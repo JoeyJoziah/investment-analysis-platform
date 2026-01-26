@@ -12,10 +12,12 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple, Set
 from dataclasses import dataclass, asdict
 from concurrent.futures import ProcessPoolExecutor
-import pickle
 import random
 import time
 from pathlib import Path
+
+# SECURITY: Removed pickle import - using JSON for results to prevent
+# arbitrary code execution vulnerabilities from untrusted data
 
 from .multi_source_extractor import MultiSourceStockExtractor, ExtractionResult, extract_stocks_data
 
@@ -341,9 +343,19 @@ class DistributedBatchProcessor:
                     await asyncio.sleep(delay)
             
             # Save results
-            results_file = self.results_dir / f"{job.job_id}_results.pkl"
-            with open(results_file, 'wb') as f:
-                pickle.dump(results, f)
+            # SECURITY: Use JSON instead of pickle to prevent code execution vulnerabilities
+            results_file = self.results_dir / f"{job.job_id}_results.json"
+            # Convert results to JSON-serializable format
+            serializable_results = []
+            for result in results:
+                if hasattr(result, '__dict__'):
+                    serializable_results.append(result.__dict__)
+                elif isinstance(result, dict):
+                    serializable_results.append(result)
+                else:
+                    serializable_results.append(str(result))
+            with open(results_file, 'w') as f:
+                json.dump(serializable_results, f, indent=2, default=str)
             
             # Mark job as completed
             job.status = 'completed'

@@ -51,10 +51,17 @@ celery_app.conf.update(
     result_persistent=True,
     result_compression='gzip',
     
-    # Worker settings
-    worker_prefetch_multiplier=4,
-    worker_max_tasks_per_child=1000,
+    # Worker settings - Optimized for memory efficiency to prevent OOM kills
+    # Lower prefetch to reduce memory pressure from queued tasks
+    worker_prefetch_multiplier=1,
+    # Recycle workers frequently to prevent memory leaks (especially with ML models)
+    worker_max_tasks_per_child=50,
     worker_disable_rate_limits=False,
+    # Use 'solo' pool for single-process execution (better for ML workloads)
+    # Can be overridden in docker-compose with --pool=prefork if needed
+    # worker_pool='solo',
+    # Memory optimization settings
+    worker_max_memory_per_child=400000,  # 400MB per worker child (in KB)
     
     # Task execution settings
     task_track_started=True,
@@ -195,34 +202,100 @@ class TaskPriority:
     HIGH = 9
     CRITICAL = 10
 
-# Custom task base class
+# Custom task base class with memory management
 from celery import Task
+import gc
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class BaseTask(Task):
-    """Base task with additional logging and error handling"""
-    
+    """Base task with additional logging, error handling, and memory management"""
+
     autoretry_for = (Exception,)
     retry_kwargs = {'max_retries': 3, 'countdown': 60}
-    
+
     def before_start(self, task_id, args, kwargs):
         """Called before task execution"""
-        print(f"Starting task {self.name} with id {task_id}")
-    
+        logger.info(f"Starting task {self.name} with id {task_id}")
+
     def after_return(self, status, retval, task_id, args, kwargs, einfo):
-        """Called after task execution"""
-        print(f"Task {self.name} with id {task_id} completed with status {status}")
-    
+        """Called after task execution - includes memory cleanup"""
+        logger.info(f"Task {self.name} with id {task_id} completed with status {status}")
+        # Force garbage collection after each task to prevent memory accumulation
+        # This is especially important for ML tasks that load large models
+        gc.collect()
+
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         """Called on task failure"""
-        print(f"Task {self.name} with id {task_id} failed: {exc}")
-        # Here you could send alerts, log to database, etc.
-    
+        logger.error(f"Task {self.name} with id {task_id} failed: {exc}")
+        # Force cleanup on failure too
+        gc.collect()
+
     def on_retry(self, exc, task_id, args, kwargs, einfo):
         """Called when task is retried"""
-        print(f"Retrying task {self.name} with id {task_id} due to {exc}")
+        logger.warning(f"Retrying task {self.name} with id {task_id} due to {exc}")
+        # Cleanup before retry
+        gc.collect()
 
 # Register base task
 celery_app.Task = BaseTask
+
+
+# =============================================================================
+# Memory Monitoring and Worker Signals
+# =============================================================================
+from celery.signals import worker_ready, worker_shutdown, task_postrun, task_failure
+import resource
+
+
+def get_memory_usage_mb():
+    """Get current memory usage in MB"""
+    try:
+        # Get memory usage from /proc/self/status (Linux)
+        with open('/proc/self/status', 'r') as f:
+            for line in f:
+                if line.startswith('VmRSS:'):
+                    return int(line.split()[1]) / 1024  # Convert KB to MB
+    except (FileNotFoundError, IOError):
+        # Fallback for non-Linux systems
+        try:
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            return usage.ru_maxrss / 1024  # macOS returns in bytes, Linux in KB
+        except Exception:
+            return 0
+    return 0
+
+
+@worker_ready.connect
+def on_worker_ready(sender, **kwargs):
+    """Log when worker is ready"""
+    logger.info(f"Celery worker ready. Initial memory: {get_memory_usage_mb():.1f} MB")
+
+
+@worker_shutdown.connect
+def on_worker_shutdown(sender, **kwargs):
+    """Log when worker shuts down"""
+    logger.info(f"Celery worker shutting down. Final memory: {get_memory_usage_mb():.1f} MB")
+
+
+@task_postrun.connect
+def on_task_postrun(sender=None, task_id=None, task=None, retval=None, state=None, **kwargs):
+    """Log memory usage after each task"""
+    memory_mb = get_memory_usage_mb()
+    if memory_mb > 300:  # Log warning if memory exceeds 300MB
+        logger.warning(f"High memory usage after task {sender.name}: {memory_mb:.1f} MB")
+    elif memory_mb > 200:  # Log info if memory exceeds 200MB
+        logger.info(f"Memory usage after task {sender.name}: {memory_mb:.1f} MB")
+
+
+@task_failure.connect
+def on_task_failure(sender=None, task_id=None, exception=None, traceback=None, **kwargs):
+    """Log memory on task failure for debugging OOM issues"""
+    memory_mb = get_memory_usage_mb()
+    logger.error(f"Task {sender.name} failed. Memory at failure: {memory_mb:.1f} MB")
+
 
 if __name__ == '__main__':
     celery_app.start()

@@ -7,7 +7,6 @@ import asyncio
 import aiofiles
 import json
 import gzip
-import pickle
 import hashlib
 import sqlite3
 from datetime import datetime, timedelta
@@ -62,48 +61,58 @@ class CacheStats:
 
 class CompressionManager:
     """Handles data compression for cache storage"""
-    
+
     @staticmethod
     def compress_data(data: Any, method: str = 'gzip') -> tuple[bytes, float]:
-        """Compress data and return compressed bytes + ratio"""
+        """
+        Compress data and return compressed bytes + ratio.
+
+        SECURITY: Uses JSON serialization only (no pickle).
+        Data must be JSON-serializable.
+        """
         try:
-            # Serialize data
-            if isinstance(data, (dict, list)):
-                serialized = json.dumps(data).encode('utf-8')
-            else:
-                serialized = pickle.dumps(data)
-            
+            # SECURITY: Use JSON only - no pickle to prevent arbitrary code execution
+            serialized = json.dumps(data, default=str).encode('utf-8')
+
             original_size = len(serialized)
-            
+
             if method == 'gzip':
                 compressed = gzip.compress(serialized)
             else:
                 compressed = serialized
-            
+
             compressed_size = len(compressed)
             compression_ratio = compressed_size / original_size if original_size > 0 else 1.0
-            
+
             return compressed, compression_ratio
-            
+
         except Exception as e:
-            logger.warning(f"Compression failed: {e}")
-            return pickle.dumps(data), 1.0
-    
+            logger.warning(f"Compression failed (data must be JSON-serializable): {e}")
+            # Return JSON-serialized error marker instead of pickle
+            error_data = json.dumps({"__error__": str(e)}).encode('utf-8')
+            return error_data, 1.0
+
     @staticmethod
     def decompress_data(compressed_bytes: bytes, method: str = 'gzip') -> Any:
-        """Decompress and deserialize data"""
+        """
+        Decompress and deserialize data.
+
+        SECURITY: Uses JSON deserialization only (no pickle).
+        """
         try:
             if method == 'gzip':
                 decompressed = gzip.decompress(compressed_bytes)
             else:
                 decompressed = compressed_bytes
-            
-            # Try JSON first, then pickle
-            try:
-                return json.loads(decompressed.decode('utf-8'))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                return pickle.loads(decompressed)
-                
+
+            # SECURITY: JSON only - do NOT use pickle fallback
+            return json.loads(decompressed.decode('utf-8'))
+
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            # SECURITY: Do NOT fall back to pickle - it allows arbitrary code execution
+            logger.error(f"Decompression failed - data not JSON compatible: {e}")
+            return None
+
         except Exception as e:
             logger.error(f"Decompression failed: {e}")
             return None
@@ -197,14 +206,20 @@ class MemoryTierCache:
                 return False
     
     def _estimate_size(self, data: Any) -> int:
-        """Estimate memory size of data"""
+        """
+        Estimate memory size of data.
+        SECURITY: Uses JSON for size estimation - no pickle to prevent code execution.
+        """
         try:
             if isinstance(data, str):
                 return len(data.encode('utf-8'))
             elif isinstance(data, (dict, list)):
-                return len(json.dumps(data).encode('utf-8'))
+                return len(json.dumps(data, default=str).encode('utf-8'))
+            elif hasattr(data, '__dict__'):
+                return len(json.dumps(data.__dict__, default=str).encode('utf-8'))
             else:
-                return len(pickle.dumps(data))
+                # For other types, use string representation
+                return len(str(data).encode('utf-8'))
         except:
             return 1024  # Default estimate
     
@@ -798,14 +813,20 @@ class IntelligentCacheManager:
         return results
     
     def _estimate_data_size(self, data: Any) -> int:
-        """Estimate size of data in bytes"""
+        """
+        Estimate size of data in bytes.
+        SECURITY: Uses JSON for size estimation - no pickle to prevent code execution.
+        """
         try:
             if isinstance(data, str):
                 return len(data.encode('utf-8'))
             elif isinstance(data, (dict, list)):
-                return len(json.dumps(data).encode('utf-8'))
+                return len(json.dumps(data, default=str).encode('utf-8'))
+            elif hasattr(data, '__dict__'):
+                return len(json.dumps(data.__dict__, default=str).encode('utf-8'))
             else:
-                return len(pickle.dumps(data))
+                # For other types, use string representation
+                return len(str(data).encode('utf-8'))
         except:
             return 1024  # Default estimate
     

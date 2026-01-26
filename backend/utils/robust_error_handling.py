@@ -8,7 +8,7 @@ import sys
 import traceback
 import functools
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, List, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
@@ -405,7 +405,7 @@ class BatchProcessingErrorHandler:
                 'batch_name': self.batch_name,
                 'item_id': item_id,
                 'batch_progress': f"{self.processed_count + self.error_count} items processed",
-                **context
+                **(context or {})
             },
             severity=ErrorSeverity.MEDIUM
         )

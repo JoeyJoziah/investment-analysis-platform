@@ -8,7 +8,6 @@ import asyncio
 import json
 import logging
 import hashlib
-import pickle
 import zlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Union, Callable
@@ -18,6 +17,9 @@ import redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import numpy as np
+
+# SECURITY: Removed pickle import - using JSON serialization instead to prevent
+# arbitrary code execution vulnerabilities from untrusted cache data
 
 logger = logging.getLogger(__name__)
 
@@ -136,21 +138,60 @@ class ProductionCacheOptimizer:
         key_string = f"{cache_type}:{':'.join(key_parts)}"
         return hashlib.sha256(key_string.encode()).hexdigest()[:32]
     
+    def _json_serializer(self, obj: Any) -> Any:
+        """Custom JSON serializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, np.ndarray):
+            return {'__numpy__': True, 'data': obj.tolist(), 'dtype': str(obj.dtype)}
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, datetime):
+            return {'__datetime__': True, 'value': obj.isoformat()}
+        elif isinstance(obj, timedelta):
+            return {'__timedelta__': True, 'seconds': obj.total_seconds()}
+        elif hasattr(obj, '__dict__'):
+            return {'__object__': True, 'type': type(obj).__name__, 'data': obj.__dict__}
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    def _json_deserializer(self, obj: Dict) -> Any:
+        """Custom JSON deserializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, dict):
+            if obj.get('__numpy__'):
+                return np.array(obj['data'], dtype=obj['dtype'])
+            elif obj.get('__datetime__'):
+                return datetime.fromisoformat(obj['value'])
+            elif obj.get('__timedelta__'):
+                return timedelta(seconds=obj['seconds'])
+            elif obj.get('__object__'):
+                # Note: Only deserialize data as dict, not reconstruct arbitrary objects
+                return obj['data']
+        return obj
+
     def _serialize_data(self, data: Any, use_compression: bool = False) -> bytes:
-        """Serialize data with optional compression"""
-        serialized = pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
-        
+        """
+        Serialize data with optional compression.
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        """
+        serialized = json.dumps(data, default=self._json_serializer).encode('utf-8')
+
         if use_compression:
             serialized = zlib.compress(serialized, level=6)  # Balanced compression
-        
+
         return serialized
-    
+
     def _deserialize_data(self, data: bytes, use_compression: bool = False) -> Any:
-        """Deserialize data with optional decompression"""
+        """
+        Deserialize data with optional decompression.
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        """
         if use_compression:
             data = zlib.decompress(data)
-        
-        return pickle.loads(data)
+
+        def object_hook(obj):
+            return self._json_deserializer(obj)
+
+        return json.loads(data.decode('utf-8'), object_hook=object_hook)
     
     async def get(self, key_parts: List[str], cache_type: str = 'default') -> Optional[Any]:
         """

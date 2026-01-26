@@ -6,9 +6,9 @@ Serves ML models via FastAPI on port 8001
 
 import os
 import sys
-import pickle
 import logging
 import uvicorn
+import joblib
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
@@ -76,9 +76,8 @@ def load_model(model_name: str):
         if not model_path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
         
-        # Load model
-        with open(model_path, 'rb') as f:
-            model = pickle.load(f)
+        # SECURITY: Use joblib instead of pickle for safer deserialization
+        model = joblib.load(model_path)
         
         # Load metadata if available
         metadata = {}

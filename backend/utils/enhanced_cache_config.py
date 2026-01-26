@@ -13,7 +13,7 @@ from enum import Enum
 import json
 import gzip
 import zlib
-import pickle
+# SECURITY: Removed pickle import - using JSON for cache serialization
 from collections import defaultdict
 import psutil
 import threading

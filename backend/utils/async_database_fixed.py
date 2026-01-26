@@ -34,16 +34,36 @@ class AsyncDatabaseManager:
     async def initialize(self):
         """Initialize async database engine with proper configuration"""
         try:
-            # Create async engine with proper pool configuration
-            self.engine = create_async_engine(
-                self.database_url.replace('postgresql://', 'postgresql+asyncpg://'),
-                pool_size=10,
-                max_overflow=self.max_connections - 10,
-                pool_timeout=30,
-                pool_recycle=3600,
-                pool_pre_ping=True,
-                echo=False
-            )
+            # Detect database type from URL
+            is_sqlite = 'sqlite' in self.database_url.lower()
+
+            if is_sqlite:
+                # SQLite with aiosqlite - StaticPool doesn't accept pool parameters
+                engine_url = self.database_url
+                if not engine_url.startswith('sqlite+aiosqlite://'):
+                    engine_url = engine_url.replace('sqlite://', 'sqlite+aiosqlite://')
+
+                self.engine = create_async_engine(
+                    engine_url,
+                    echo=False
+                )
+            else:
+                # PostgreSQL with asyncpg - use connection pooling
+                engine_url = self.database_url
+                if engine_url.startswith('postgresql://'):
+                    engine_url = engine_url.replace('postgresql://', 'postgresql+asyncpg://')
+                elif engine_url.startswith('postgres://'):
+                    engine_url = engine_url.replace('postgres://', 'postgresql+asyncpg://')
+
+                self.engine = create_async_engine(
+                    engine_url,
+                    pool_size=10,
+                    max_overflow=self.max_connections - 10,
+                    pool_timeout=30,
+                    pool_recycle=3600,
+                    pool_pre_ping=True,
+                    echo=False
+                )
             
             # Create session factory
             self.async_session_factory = async_sessionmaker(

@@ -8,10 +8,10 @@ import asyncio
 import hashlib
 import logging
 import lz4.frame
-import pickle
 import gzip
 import zlib
 import json
+# SECURITY: Removed pickle import - using JSON for cache serialization
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from datetime import datetime, timedelta

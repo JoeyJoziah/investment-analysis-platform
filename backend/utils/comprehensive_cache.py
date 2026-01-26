@@ -20,8 +20,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from threading import RLock
 from functools import wraps
 import hashlib
-import pickle
 import gzip
+
+import numpy as np
 
 import redis.asyncio as redis
 from sqlalchemy import text
@@ -201,22 +202,61 @@ class ComprehensiveCacheManager:
         
         return f"{prefix}:{identifier}"
     
+    def _json_serializer(self, obj: Any) -> Any:
+        """Custom JSON serializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, np.ndarray):
+            return {'__numpy__': True, 'data': obj.tolist(), 'dtype': str(obj.dtype)}
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, datetime):
+            return {'__datetime__': True, 'value': obj.isoformat()}
+        elif isinstance(obj, timedelta):
+            return {'__timedelta__': True, 'seconds': obj.total_seconds()}
+        elif hasattr(obj, '__dict__'):
+            return {'__object__': True, 'type': type(obj).__name__, 'data': obj.__dict__}
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+    def _json_deserializer(self, obj: Dict) -> Any:
+        """Custom JSON deserializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, dict):
+            if obj.get('__numpy__'):
+                return np.array(obj['data'], dtype=obj['dtype'])
+            elif obj.get('__datetime__'):
+                return datetime.fromisoformat(obj['value'])
+            elif obj.get('__timedelta__'):
+                return timedelta(seconds=obj['seconds'])
+            elif obj.get('__object__'):
+                # Note: Only deserialize data as dict, not reconstruct arbitrary objects
+                return obj['data']
+        return obj
+
     def _serialize_data(self, data: Any) -> bytes:
-        """Serialize data with optional compression"""
-        serialized = pickle.dumps(data)
-        
+        """
+        Serialize data with optional compression.
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        """
+        serialized = json.dumps(data, default=self._json_serializer).encode('utf-8')
+
         if len(serialized) > self.config.compression_threshold:
             serialized = gzip.compress(serialized)
             return b'gzip:' + serialized
-        
+
         return serialized
-    
+
     def _deserialize_data(self, data: bytes) -> Any:
-        """Deserialize data with compression support"""
+        """
+        Deserialize data with compression support.
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        """
         if data.startswith(b'gzip:'):
             data = gzip.decompress(data[5:])
-        
-        return pickle.loads(data)
+
+        def object_hook(obj):
+            return self._json_deserializer(obj)
+
+        return json.loads(data.decode('utf-8'), object_hook=object_hook)
     
     async def get(
         self,

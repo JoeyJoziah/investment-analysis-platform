@@ -6,8 +6,8 @@ Advanced pipeline management for processing 6,000+ stocks with comprehensive err
 import asyncio
 import time
 import json
-import pickle
 import hashlib
+# SECURITY: Removed pickle import - using JSON for state serialization
 from typing import Any, Dict, List, Optional, Callable, Union, TypeVar, Generic
 from dataclasses import dataclass, asdict
 from enum import Enum

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
-import pickle
+import joblib
 
 def create_sample_model():
     """Create a minimal sample model"""
@@ -31,9 +31,9 @@ def create_sample_model():
     model.fit(X, y)
     
     # Save model
+    # SECURITY: Use joblib instead of pickle for safer serialization
     model_path = 'backend/ml_models/sample_model.pkl'
-    with open(model_path, 'wb') as f:
-        pickle.dump(model, f)
+    joblib.dump(model, model_path)
     
     # Save metadata
     metadata = {

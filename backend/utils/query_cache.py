@@ -5,13 +5,13 @@ Provides intelligent caching for expensive database queries with automatic inval
 
 import hashlib
 import json
-import pickle
 import time
 from typing import Any, Dict, List, Optional, Callable, Union, Tuple
 from datetime import datetime, timedelta
 from functools import wraps
 import asyncio
 from enum import Enum
+import io
 
 import redis.asyncio as aioredis
 import redis
@@ -20,6 +20,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import Select
 import pandas as pd
 import numpy as np
+
+# SECURITY: Removed pickle import - using JSON serialization instead to prevent
+# arbitrary code execution vulnerabilities from untrusted cache data
 
 import logging
 
@@ -366,64 +369,83 @@ class QueryResultCache:
                 else:
                     break
     
+    def _json_serializer(self, obj: Any) -> Any:
+        """Custom JSON serializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, np.ndarray):
+            return {'__numpy__': True, 'data': obj.tolist(), 'dtype': str(obj.dtype)}
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, datetime):
+            return {'__datetime__': True, 'value': obj.isoformat()}
+        elif isinstance(obj, timedelta):
+            return {'__timedelta__': True, 'seconds': obj.total_seconds()}
+        elif isinstance(obj, pd.Timestamp):
+            return {'__pd_timestamp__': True, 'value': obj.isoformat()}
+        elif isinstance(obj, pd.Series):
+            return {'__pd_series__': True, 'data': obj.to_list(), 'index': obj.index.to_list()}
+        elif hasattr(obj, '__dict__'):
+            return {'__object__': True, 'type': type(obj).__name__, 'data': obj.__dict__}
+        return str(obj)
+
+    def _json_deserializer(self, obj: Dict) -> Any:
+        """Custom JSON deserializer for complex types - SECURITY: Replaces pickle"""
+        if isinstance(obj, dict):
+            if obj.get('__numpy__'):
+                return np.array(obj['data'], dtype=obj['dtype'])
+            elif obj.get('__datetime__'):
+                return datetime.fromisoformat(obj['value'])
+            elif obj.get('__timedelta__'):
+                return timedelta(seconds=obj['seconds'])
+            elif obj.get('__pd_timestamp__'):
+                return pd.Timestamp(obj['value'])
+            elif obj.get('__pd_series__'):
+                return pd.Series(obj['data'], index=obj['index'])
+            elif obj.get('__object__'):
+                return obj['data']
+        return obj
+
     def _serialize(self, data: Any) -> bytes:
-        """Serialize data for caching."""
+        """
+        Serialize data for caching.
+        SECURITY: Uses JSON/parquet instead of pickle to prevent code execution.
+        """
         if isinstance(data, pd.DataFrame):
-            # Use parquet for DataFrames
-            return data.to_parquet()
-        elif isinstance(data, (list, dict)):
-            # Use JSON for simple structures
-            return json.dumps(data, default=str).encode()
+            # Use parquet for DataFrames (includes type marker)
+            return b'PARQUET:' + data.to_parquet()
         else:
-            # Add trusted marker for pickle serialization
-            trusted_marker = b'CACHE_V1_TRUSTED'
-            pickled_data = pickle.dumps(data)
-            return trusted_marker + pickled_data
-    
+            # Use JSON with custom serializer for all other types
+            return b'JSON:' + json.dumps(data, default=self._json_serializer).encode('utf-8')
+
     def _deserialize(self, data: bytes) -> Any:
-        """Deserialize cached data with security checks."""
+        """
+        Deserialize cached data.
+        SECURITY: Uses JSON/parquet instead of pickle to prevent code execution.
+        """
         try:
-            # Try JSON first (safest)
-            return json.loads(data.decode())
-        except:
-            try:
-                # Try msgpack (safer than pickle)
-                import msgpack
-                return msgpack.unpackb(data, raw=False, strict_map_key=False)
-            except:
+            # Check for type markers
+            if data.startswith(b'PARQUET:'):
+                return pd.read_parquet(io.BytesIO(data[8:]))
+            elif data.startswith(b'JSON:'):
+                return json.loads(data[5:].decode('utf-8'), object_hook=self._json_deserializer)
+            else:
+                # Legacy format - try JSON first (safest)
                 try:
-                    # Try parquet for DataFrames
-                    import io
+                    return json.loads(data.decode('utf-8'), object_hook=self._json_deserializer)
+                except:
+                    pass
+                # Try parquet for DataFrames
+                try:
                     return pd.read_parquet(io.BytesIO(data))
                 except:
-                    # Only use pickle for trusted data with verification
-                    if self._is_trusted_source(data):
-                        try:
-                            # Use restricted unpickler for safety
-                            import io
-                            import pickle
-                            
-                            # Remove trusted marker before unpickling
-                            actual_data = data[16:] if len(data) > 16 else data
-                            
-                            class RestrictedUnpickler(pickle.Unpickler):
-                                def find_class(self, module, name):
-                                    # Only allow safe modules
-                                    ALLOWED_MODULES = {
-                                        'pandas', 'numpy', 'datetime', 
-                                        'collections', 'builtins'
-                                    }
-                                    if module.split('.')[0] not in ALLOWED_MODULES:
-                                        raise pickle.UnpicklingError(f"Unsafe module: {module}")
-                                    return super().find_class(module, name)
-                            
-                            return RestrictedUnpickler(io.BytesIO(actual_data)).load()
-                        except Exception as e:
-                            logger.error(f"Failed to deserialize with restricted pickle: {e}")
-                            return None
-                    else:
-                        logger.warning("Untrusted data source, skipping pickle deserialization")
-                        return None
+                    pass
+                # Unable to deserialize safely
+                logger.warning("Unable to deserialize data safely, returning None")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to deserialize cache data: {e}")
+            return None
     
     def _is_trusted_source(self, data: bytes) -> bool:
         """Check if data is from a trusted source."""

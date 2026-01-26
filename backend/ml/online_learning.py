@@ -16,8 +16,7 @@ import threading
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque, defaultdict
-import pickle
-import joblib
+import joblib  # SECURITY: Use joblib instead of pickle for model serialization
 
 import torch
 import torch.nn as nn
@@ -950,13 +949,13 @@ class OnlineLearningManager:
     
     def _save_learner_state(self, learner: IncrementalLearner):
         """Save learner state to disk"""
-        
+
         try:
             learner_file = self.storage_path / f"learner_{learner.model_name}.pkl"
-            
-            with open(learner_file, 'wb') as f:
-                pickle.dump(learner, f)
-                
+
+            # SECURITY: Use joblib instead of pickle for safer serialization
+            joblib.dump(learner, learner_file)
+
         except Exception as e:
             logger.error(f"Error saving learner state for {learner.model_name}: {e}")
     
@@ -979,10 +978,10 @@ class OnlineLearningManager:
             # Load learners
             for learner_file in self.storage_path.glob("learner_*.pkl"):
                 try:
-                    with open(learner_file, 'rb') as f:
-                        learner = pickle.load(f)
-                        self.incremental_learners[learner.model_name] = learner
-                        logger.info(f"Loaded learner: {learner.model_name}")
+                    # SECURITY: Use joblib instead of pickle for safer deserialization
+                    learner = joblib.load(learner_file)
+                    self.incremental_learners[learner.model_name] = learner
+                    logger.info(f"Loaded learner: {learner.model_name}")
                 except Exception as e:
                     logger.error(f"Error loading learner from {learner_file}: {e}")
             

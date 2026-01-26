@@ -210,22 +210,22 @@ class CacheMonitor:
         """Get comprehensive cost analysis"""
         api_metrics = await self._collect_api_usage_metrics()
         
-        total_daily_cost = sum(m['estimated_daily_cost'] for m in api_metrics)
-        total_monthly_cost = sum(m['estimated_monthly_cost'] for m in api_metrics)
-        
+        total_daily_cost = sum(m.estimated_daily_cost for m in api_metrics)
+        total_monthly_cost = sum(m.estimated_monthly_cost for m in api_metrics)
+
         # Calculate savings from caching
         cache_manager = await get_cache_manager()
         cache_metrics = await cache_manager.get_metrics()
         api_calls_saved = cache_metrics['cache_metrics']['api_calls_saved']
         estimated_savings = cache_metrics['cache_metrics']['estimated_cost_savings']
-        
+
         # Cost breakdown by provider
         cost_breakdown = {}
         for metrics in api_metrics:
-            cost_breakdown[metrics['provider']] = {
-                'daily_cost': metrics['estimated_daily_cost'],
-                'monthly_cost': metrics['estimated_monthly_cost'],
-                'usage_percentage': (metrics['daily_calls'] / metrics['daily_limit']) * 100 if metrics['daily_limit'] > 0 else 0
+            cost_breakdown[metrics.provider] = {
+                'daily_cost': metrics.estimated_daily_cost,
+                'monthly_cost': metrics.estimated_monthly_cost,
+                'usage_percentage': (metrics.daily_calls / metrics.daily_limit) * 100 if metrics.daily_limit > 0 else 0
             }
         
         # Budget utilization
@@ -349,8 +349,8 @@ class CacheMonitor:
                 # Update API usage
                 api_metrics = await self._collect_api_usage_metrics()
                 for metrics in api_metrics:
-                    api_usage.labels(provider=metrics['provider'], period='daily').set(metrics['daily_calls'])
-                    api_usage.labels(provider=metrics['provider'], period='monthly').set(metrics['monthly_calls'])
+                    api_usage.labels(provider=metrics.provider, period='daily').set(metrics.daily_calls)
+                    api_usage.labels(provider=metrics.provider, period='monthly').set(metrics.monthly_calls)
                 
                 await asyncio.sleep(30)  # Update every 30 seconds
                 
@@ -381,14 +381,14 @@ class CacheMonitor:
                 # Check API usage
                 api_metrics = await self._collect_api_usage_metrics()
                 for metrics in api_metrics:
-                    usage_ratio = metrics['daily_calls'] / metrics['daily_limit'] if metrics['daily_limit'] > 0 else 0
+                    usage_ratio = metrics.daily_calls / metrics.daily_limit if metrics.daily_limit > 0 else 0
                     if usage_ratio > self.alert_thresholds['high_api_usage']:
                         alerts.append({
                             'type': 'high_api_usage',
                             'severity': 'critical',
-                            'message': f"{metrics['provider']} API usage is at {usage_ratio:.2%} of daily limit",
+                            'message': f"{metrics.provider} API usage is at {usage_ratio:.2%} of daily limit",
                             'timestamp': datetime.utcnow(),
-                            'provider': metrics['provider']
+                            'provider': metrics.provider
                         })
                 
                 # Process alerts (with cooldown to prevent spam)

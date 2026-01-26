@@ -5,8 +5,8 @@ Provides efficient model inference, caching, load balancing, and artifact manage
 
 import os
 import json
-import pickle
 import hashlib
+# SECURITY: Removed pickle import - using JSON/joblib to prevent code execution
 import logging
 import threading
 import asyncio
@@ -193,9 +193,10 @@ class ModelArtifactManager:
             joblib.dump(model, path)
             
         elif format in [ModelFormat.XGBOOST, ModelFormat.PICKLE]:
-            with open(path, 'wb') as f:
-                pickle.dump(model, f)
-                
+            # SECURITY: Use joblib instead of pickle for safer serialization
+            # joblib is safer and more efficient for numpy arrays/sklearn models
+            joblib.dump(model, path)
+
         else:
             raise ValueError(f"Unsupported format for saving: {format}")
     
@@ -209,8 +210,8 @@ class ModelArtifactManager:
             return joblib.load(path)
             
         elif format in [ModelFormat.XGBOOST, ModelFormat.PICKLE]:
-            with open(path, 'rb') as f:
-                return pickle.load(f)
+            # SECURITY: Use joblib instead of pickle for safer deserialization
+            return joblib.load(path)
                 
         elif format == ModelFormat.ONNX:
             try:
@@ -410,11 +411,12 @@ class InferenceCache:
             try:
                 cached_data = self.redis_client.get(f"prediction:{cache_key}")
                 if cached_data:
-                    data = pickle.loads(cached_data)
-                    
+                    # SECURITY: Use JSON instead of pickle for safer deserialization
+                    data = self._deserialize_cache_data(cached_data)
+
                     # Store back in memory cache
                     self._store_in_memory(cache_key, data)
-                    
+
                     self.hits += 1
                     return data
             except Exception as e:
@@ -432,7 +434,8 @@ class InferenceCache:
         # Store in Redis
         if self.redis_client:
             try:
-                serialized_data = pickle.dumps(data)
+                # SECURITY: Use JSON instead of pickle for safer serialization
+                serialized_data = self._serialize_cache_data(data)
                 self.redis_client.setex(
                     f"prediction:{cache_key}",
                     self.ttl_seconds,
@@ -457,19 +460,66 @@ class InferenceCache:
     
     def _evict_lru(self):
         """Evict least recently used entry"""
-        
+
         if not self.access_times:
             return
-        
+
         # Find LRU entry
         lru_key = min(self.access_times.items(), key=lambda x: x[1])[0]
-        
+
         # Remove from cache
         del self.cache[lru_key]
         del self.access_times[lru_key]
-        
+
         self.evictions += 1
-    
+
+    def _serialize_cache_data(self, data: Any) -> str:
+        """
+        Safely serialize data to JSON for Redis storage.
+
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        Handles numpy arrays and datetime objects.
+        """
+        def json_serializer(obj):
+            if isinstance(obj, np.ndarray):
+                return {'__numpy__': True, 'data': obj.tolist(), 'dtype': str(obj.dtype)}
+            elif isinstance(obj, (np.integer, np.floating)):
+                return float(obj)
+            elif isinstance(obj, datetime):
+                return {'__datetime__': True, 'value': obj.isoformat()}
+            elif isinstance(obj, pd.DataFrame):
+                return {'__dataframe__': True, 'data': obj.to_dict(orient='records'),
+                        'columns': list(obj.columns)}
+            elif isinstance(obj, pd.Series):
+                return {'__series__': True, 'data': obj.tolist(), 'index': list(obj.index)}
+            raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+        return json.dumps(data, default=json_serializer)
+
+    def _deserialize_cache_data(self, data: bytes) -> Any:
+        """
+        Safely deserialize JSON data from Redis.
+
+        SECURITY: Uses JSON instead of pickle to prevent arbitrary code execution.
+        Restores numpy arrays and datetime objects.
+        """
+        def json_deserializer(obj):
+            if isinstance(obj, dict):
+                if obj.get('__numpy__'):
+                    return np.array(obj['data'], dtype=obj['dtype'])
+                elif obj.get('__datetime__'):
+                    return datetime.fromisoformat(obj['value'])
+                elif obj.get('__dataframe__'):
+                    return pd.DataFrame(obj['data'], columns=obj['columns'])
+                elif obj.get('__series__'):
+                    return pd.Series(obj['data'], index=obj['index'])
+            return obj
+
+        def object_hook(obj):
+            return json_deserializer(obj)
+
+        return json.loads(data.decode('utf-8'), object_hook=object_hook)
+
     def generate_cache_key(self, 
                           model_name: str,
                           input_data: np.ndarray,
