@@ -181,10 +181,10 @@
             {{ if eq .Status "firing" }}
                 {{ range .Alerts.Firing }}
                 <div class="alert-card">
-                    <div class="alert-header {{ .Labels.severity | default "info" }}">
+                    <div class="alert-header {{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}info{{ end }}">
                         <span class="alert-name">{{ .Labels.alertname }}</span>
-                        <span class="severity-badge severity-{{ .Labels.severity | default "info" }}">
-                            {{ .Labels.severity | default "info" }}
+                        <span class="severity-badge severity-{{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}info{{ end }}">
+                            {{ if .Labels.severity }}{{ .Labels.severity }}{{ else }}info{{ end }}
                         </span>
                     </div>
                     <div class="alert-body">
@@ -307,7 +307,7 @@ Investment Analysis Platform Alert Notification
 {{ if eq .Status "firing" }}
 {{ range .Alerts.Firing }}
 Alert: {{ .Labels.alertname }}
-Severity: {{ .Labels.severity | default "info" | toUpper }}
+Severity: {{ if .Labels.severity }}{{ .Labels.severity | toUpper }}{{ else }}INFO{{ end }}
 Started: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
 
 {{ if .Annotations.description }}

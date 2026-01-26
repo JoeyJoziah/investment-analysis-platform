@@ -24,7 +24,9 @@
         "eamodio.gitlens",
         "ms-azuretools.vscode-docker",
         "redhat.vscode-yaml",
-        "streetsidesoftware.code-spell-checker"
+        "streetsidesoftware.code-spell-checker",
+        "mtxr.sqltools",
+        "HuggingFace.huggingface-vscode-chat"
       ],
       "settings": {
         "python.defaultInterpreter": "/usr/local/bin/python",
