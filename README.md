@@ -1,8 +1,12 @@
-# 📈 Investment Analysis Platform
+# Investment Analysis Platform
 
 A comprehensive, AI-powered investment analysis and recommendation platform designed to analyze 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
 
-## 🚀 Quick Start
+**Status**: 95% Production Ready | **Budget**: <$50/month | **Codebase**: ~1,550,000 LOC
+
+---
+
+## Quick Start
 
 ```bash
 # 1. Initial setup (run once)
@@ -14,59 +18,83 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 # 3. Access the application
 # Frontend: http://localhost:3000
 # API Docs: http://localhost:8000/docs
+# Grafana:  http://localhost:3001
 ```
 
-## 📋 Features
+---
 
+## Features
+
+### Core Capabilities
 - **Real-time Stock Analysis**: Technical, fundamental, and sentiment analysis
 - **AI-Powered Recommendations**: ML models including LSTM, XGBoost, and Prophet
 - **Portfolio Management**: Track and optimize investment portfolios
+- **Watchlist Management**: Custom stock watchlists with alerts
+- **Real-time Updates**: WebSocket-based live data streaming
+
+### Technical Features
 - **Cost Optimized**: Designed to run under $50/month using free API tiers
 - **Fully Automated**: Daily analysis without manual intervention
-- **Compliance Ready**: GDPR and SEC compliant architecture
+- **Compliance Ready**: GDPR and SEC 2025 compliant architecture
+- **Multi-Agent AI**: 134 specialized AI agents for various tasks
+- **Scalable**: Handles 6,000+ stocks with intelligent caching
 
-## 🏗️ Architecture
+---
+
+## Architecture
 
 ```
-├── backend/           # FastAPI backend with ML models
-│   ├── ml/           # ML pipeline and models
-│   │   ├── pipeline/ # ML orchestration and training
-│   │   └── models/   # Model implementations
-│   └── api/          # REST API endpoints
-├── frontend/          # React web application
-├── data_pipelines/    # Apache Airflow DAGs
-├── infrastructure/    # Docker and Kubernetes configs
-├── scripts/          # Utility scripts
-├── models/           # Trained ML models
-└── tests/            # Test suites
+investment-analysis-platform/
+├── backend/                    # FastAPI backend (32 directories)
+│   ├── api/                    # REST API endpoints (13 routers)
+│   ├── models/                 # SQLAlchemy ORM models
+│   ├── ml/                     # ML pipeline (22 modules)
+│   ├── etl/                    # ETL processors (17 modules)
+│   ├── tasks/                  # Celery task queue (9 modules)
+│   ├── utils/                  # Utilities (91 modules)
+│   └── migrations/             # Alembic migrations
+├── frontend/web/               # React application
+│   ├── src/components/         # UI components (12 directories)
+│   ├── src/pages/              # Page components (15 files)
+│   ├── src/store/              # Redux state (6 slices)
+│   └── src/hooks/              # Custom hooks
+├── data_pipelines/airflow/     # Apache Airflow DAGs
+├── infrastructure/             # Docker, monitoring configs
+├── ml_models/                  # Trained ML model artifacts
+├── scripts/                    # Automation scripts (72 files)
+├── .claude/                    # AI Agent framework
+│   ├── agents/                 # 134 AI agents
+│   ├── skills/                 # 71 skills
+│   ├── commands/               # 175+ commands
+│   └── rules/                  # 8 coding rules
+└── .github/workflows/          # CI/CD (14 workflows)
 ```
 
-## 🛠️ Technology Stack
+---
 
-- **Backend**: FastAPI, Python 3.11
-- **Frontend**: React, TypeScript, Material-UI
-- **Database**: PostgreSQL, TimescaleDB
-- **Cache**: Redis
-- **ML/AI**: PyTorch, scikit-learn, Prophet
-- **Orchestration**: Apache Airflow
-- **Container**: Docker, Kubernetes
+## Technology Stack
 
-## 📝 Available Commands
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | FastAPI 0.115+, Python 3.12, Uvicorn/Gunicorn |
+| **Frontend** | React 18.2, TypeScript 5.3, Redux Toolkit, Material-UI 5.14 |
+| **Database** | PostgreSQL 15 + TimescaleDB (time-series) |
+| **Cache** | Redis 7.0 (multi-layer caching) |
+| **Search** | Elasticsearch 8.11 |
+| **Task Queue** | Celery 5.4 + Redis backend |
+| **Data Pipelines** | Apache Airflow 2.7.3 |
+| **ML/AI** | PyTorch 2.4, XGBoost 2.1, Prophet 1.1.5, FinBERT |
+| **Monitoring** | Prometheus, Grafana 10.2, AlertManager |
+| **Containerization** | Docker 7.1, docker-compose |
+| **CI/CD** | GitHub Actions (14 workflows) |
 
-### Using Make
+---
+
+## Available Commands
+
+### Shell Scripts
 ```bash
-make help          # Show all available commands
-make setup         # Initial project setup
-make up            # Start development environment
-make down          # Stop all services
-make test          # Run tests
-make logs          # View logs
-make clean         # Clean up everything
-```
-
-### Using Scripts
-```bash
-./setup.sh         # Initial setup with secure passwords
+./setup.sh         # Initial setup with secure credentials
 ./start.sh dev     # Start development environment
 ./start.sh prod    # Start production environment
 ./start.sh test    # Run tests
@@ -74,9 +102,8 @@ make clean         # Clean up everything
 ./stop.sh --clean  # Stop and clean volumes
 ./logs.sh          # View all logs
 ./logs.sh backend  # View specific service logs
+./notion-sync.sh   # Sync with Notion tracker
 ```
-
-## 🔧 Development
 
 ### Backend Development
 ```bash
@@ -87,7 +114,7 @@ pip install -r requirements.txt
 uvicorn backend.api.main:app --reload
 
 # Run tests
-pytest backend/tests/
+pytest backend/tests/ --cov=backend
 
 # Format code
 black backend/ --line-length 88
@@ -109,170 +136,267 @@ npm test
 npm run build
 ```
 
-## 🗄️ Database
+---
 
-### Migrations
-```bash
-# Run migrations
-make db-migrate
-
-# Rollback migration
-make db-rollback
-
-# Access database
-make db-shell
-```
-
-## 📊 API Endpoints
+## API Endpoints
 
 ### Main API (Port 8000)
-- `GET /api/health` - Health check
-- `GET /api/stocks/{ticker}` - Stock data and analysis
-- `GET /api/recommendations` - AI recommendations
-- `POST /api/portfolio` - Portfolio management
-- `GET /api/analysis/{ticker}` - Detailed analysis
-- `WS /ws` - WebSocket for real-time updates
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/stocks` | GET | List all stocks |
+| `/api/stocks/{ticker}` | GET | Stock details |
+| `/api/recommendations` | GET | AI recommendations |
+| `/api/analysis/{ticker}` | GET | Detailed analysis |
+| `/api/portfolio` | GET/POST | Portfolio management |
+| `/api/watchlists` | GET/POST | Watchlist operations |
+| `/api/ws` | WS | Real-time WebSocket |
+| `/docs` | GET | Swagger documentation |
 
 ### ML API (Port 8001)
-- `GET /health` - ML service health check
-- `GET /models` - List available ML models
-- `POST /predict` - Make predictions
-- `POST /predict/stock_price` - Stock-specific predictions
-- `POST /retrain` - Trigger model retraining
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | ML service health |
+| `/models` | GET | List ML models |
+| `/predict` | POST | Make predictions |
+| `/predict/stock_price` | POST | Stock predictions |
+| `/retrain` | POST | Trigger retraining |
 
-## 🔐 Environment Variables
+---
 
-Copy `.env.template` to `.env` and update with your API keys:
+## ML Models
+
+The platform includes a comprehensive ML pipeline for automated stock analysis:
+
+### Trained Models
+| Model | Purpose | File |
+|-------|---------|------|
+| LSTM | Neural network predictions | lstm_weights.pth (5.1MB) |
+| XGBoost | Gradient boosting | xgboost_model.pkl (274KB) |
+| Prophet | Time-series forecasting | prophet/ directory |
+
+### ML Features
+- **Automated Training**: Daily retraining with performance monitoring
+- **Real-time Inference**: <100ms prediction latency
+- **Model Versioning**: Automatic versioning and rollback
+- **Performance Monitoring**: Drift detection and alerting
+- **Backtesting**: Strategy validation engine
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
 
 ```bash
 # Required API Keys (free tiers available)
-ALPHA_VANTAGE_API_KEY=your_key
-FINNHUB_API_KEY=your_key
-POLYGON_API_KEY=your_key
+ALPHA_VANTAGE_API_KEY=your_key     # 25 calls/day
+FINNHUB_API_KEY=your_key           # 60 calls/minute
+POLYGON_API_KEY=your_key           # 5 calls/minute
 NEWS_API_KEY=your_key
 
-# Generated automatically by setup.sh
+# Auto-generated by setup.sh
 DB_PASSWORD=auto_generated
 REDIS_PASSWORD=auto_generated
 SECRET_KEY=auto_generated
 JWT_SECRET_KEY=auto_generated
+
+# Optional
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## 📈 Cost Optimization
+---
 
-The platform is designed to operate under $50/month by:
-- Using free API tiers effectively
-- Intelligent caching strategies
-- Batch processing during off-peak hours
-- Auto-scaling down during idle periods
+## Monitoring & Observability
 
-## 🤖 Machine Learning Pipeline
+### Service URLs
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Frontend | http://localhost:3000 | Web application |
+| Backend API | http://localhost:8000 | REST API |
+| API Docs | http://localhost:8000/docs | Swagger UI |
+| ML API | http://localhost:8001 | ML service |
+| Grafana | http://localhost:3001 | Dashboards |
+| Prometheus | http://localhost:9090 | Metrics |
 
-The platform includes a comprehensive ML pipeline for automated stock analysis and prediction.
+### Production Monitoring
+- Prometheus metrics collection
+- Grafana dashboards (API, Database, ML, System)
+- AlertManager for notifications
+- Real-time performance tracking
 
-### Quick ML Setup
-```bash
-# Start ML services
-docker-compose up -d ml-api
+---
 
-# Train your first model
-python3 backend/ml/simple_training_pipeline.py --train
-
-# Make a prediction
-curl -X POST http://localhost:8001/predict \
-  -H "Content-Type: application/json" \
-  -d '{"features": [1.2, 0.8, 150.5], "model_name": "sample_model"}'
-```
-
-### ML Features
-- **Multi-Model Support**: LSTM, XGBoost, Prophet models
-- **Automated Training**: Daily retraining with performance monitoring
-- **Real-time Inference**: <100ms prediction latency
-- **Model Versioning**: Automatic model versioning and rollback
-- **Performance Monitoring**: Drift detection and alerting
-
-### ML Documentation
-- [🚀 ML Quick Start Guide](ML_QUICKSTART.md) - Get started in 5 minutes
-- [📖 ML Pipeline Documentation](ML_PIPELINE_DOCUMENTATION.md) - Complete technical reference
-- [🔧 ML API Reference](ML_API_REFERENCE.md) - API endpoints and examples
-- [⚙️ ML Operations Guide](ML_OPERATIONS_GUIDE.md) - Production operations
-
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run all tests
-make test
+./start.sh test
 
-# Run with coverage
-pytest --cov=backend --cov-report=html
+# Backend tests with coverage
+pytest backend/tests/ --cov=backend --cov-report=html
 
-# Test ML pipeline
-pytest backend/tests/test_ml_pipeline.py
+# Frontend tests
+cd frontend/web && npm test
 
-# View coverage report
-open htmlcov/index.html
+# Specific test markers
+pytest -m "unit"        # Unit tests
+pytest -m "integration" # Integration tests
+pytest -m "financial"   # Financial model tests
 ```
 
-## 🚀 Deployment
+### Coverage Requirements
+- Minimum: 85%
+- Backend: 86 tests passing
+- Frontend: 84 tests passing
 
-### Production Deployment
+---
+
+## Deployment
+
+### Development
 ```bash
-# Start production environment
+./start.sh dev
+```
+
+### Production
+```bash
+# Configure SSL first
+./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
+
+# Start production
 ./start.sh prod
 
 # Monitor services
-docker-compose logs -f
-
-# Access monitoring
-http://localhost:3001  # Grafana dashboard
+docker compose logs -f
 ```
 
-### Kubernetes Deployment
-```bash
-# Apply configurations
-kubectl apply -f infrastructure/kubernetes/
+### Docker Services
+- PostgreSQL 15 + TimescaleDB
+- Redis 7 (caching)
+- Elasticsearch 8.11 (search)
+- Backend (FastAPI)
+- Frontend (React + Nginx)
+- Celery Worker & Beat
+- Prometheus, Grafana, AlertManager (production)
 
-# Check status
-kubectl get pods -n investment-platform
-```
+---
 
-## 📚 Documentation
+## AI Agent Framework
 
-### API Documentation
-- [API Documentation](http://localhost:8000/docs) - Interactive API docs
-- [ML API Documentation](http://localhost:8001/docs) - ML API interactive docs
+The platform integrates a sophisticated multi-agent AI system:
 
-### ML Pipeline Documentation
-- [🚀 ML Quick Start Guide](ML_QUICKSTART.md) - Get started in 5 minutes
-- [📖 ML Pipeline Documentation](ML_PIPELINE_DOCUMENTATION.md) - Complete technical reference
-- [🔧 ML API Reference](ML_API_REFERENCE.md) - API endpoints and examples
-- [⚙️ ML Operations Guide](ML_OPERATIONS_GUIDE.md) - Production operations
+### Statistics
+| Category | Count |
+|----------|-------|
+| AI Agents | 134 |
+| Skills | 71 |
+| Commands | 175+ |
+| Helper Scripts | 32 |
 
-### System Documentation
-- [Architecture Guide](docs/architecture/README.md) - System architecture
-- [Development Guide](docs/guides/development.md) - Development practices
-- [Deployment Guide](docs/deployment/README.md) - Deployment instructions
-- [CLAUDE.md](CLAUDE.md) - Project development guidelines
+### Primary Swarms
+- **infrastructure-devops-swarm**: Docker, CI/CD, deployment
+- **data-ml-pipeline-swarm**: ETL, Airflow, ML training
+- **financial-analysis-swarm**: Stock analysis, predictions
+- **backend-api-swarm**: FastAPI, REST APIs
+- **ui-visualization-swarm**: React, dashboards
+- **project-quality-swarm**: Code review, testing
+- **security-compliance-swarm**: SEC/GDPR compliance
 
-## 🤝 Contributing
+### Custom Investment Agents
+- queen-investment-orchestrator
+- investment-analyst
+- deal-underwriter
+- financial-modeler
+- risk-assessor
+- portfolio-manager
+
+See [CLAUDE.md](CLAUDE.md) for detailed agent documentation.
+
+---
+
+## Cost Optimization
+
+Designed to operate under **$50/month**:
+
+| Component | Estimated Cost |
+|-----------|---------------|
+| Database | ~$10 |
+| Compute | ~$15 |
+| Storage | ~$5 |
+| APIs | ~$10 |
+| **Total** | **~$40/month** |
+
+### Strategies
+- Free API tier optimization
+- Multi-layer intelligent caching
+- Batch processing during off-peak hours
+- Auto-scaling with resource limits
+
+---
+
+## Compliance
+
+### SEC 2025
+- Investment recommendation disclosures
+- Audit logging for all recommendations
+- Risk disclosure statements
+- Suitability assessments
+
+### GDPR
+- Data export endpoints
+- Right to be forgotten (deletion)
+- Consent management
+- Data anonymization
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CLAUDE.md](CLAUDE.md) | Development guidelines & agent framework |
+| [TODO.md](TODO.md) | Project task tracking |
+| [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Detailed status report |
+| [ML_QUICKSTART.md](ML_QUICKSTART.md) | ML quick start guide |
+| [ML_PIPELINE_DOCUMENTATION.md](ML_PIPELINE_DOCUMENTATION.md) | ML technical reference |
+| [/docs](http://localhost:8000/docs) | Interactive API documentation |
+
+---
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests
+4. Run tests (`./start.sh test`)
 5. Submit a pull request
 
-## 📄 License
+### Code Standards
+- Python: Black (88 chars), isort, mypy, flake8
+- TypeScript: ESLint, Prettier
+- Test coverage: 85% minimum
+- Conventional commits
+
+---
+
+## License
 
 MIT License - see LICENSE file for details
 
-## 🙏 Acknowledgments
+---
+
+## Acknowledgments
 
 - Alpha Vantage for market data
 - Finnhub for real-time quotes
 - Polygon.io for historical data
 - NewsAPI for sentiment analysis
+- Claude Code for AI agent framework
 
 ---
 
-**Built with ❤️ for automated investment analysis**
+**Built for automated investment analysis**
+
+*Last updated: 2026-01-26*
