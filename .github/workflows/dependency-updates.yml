@@ -497,7 +497,7 @@ jobs:
                 short: true
               }, {
                 title: 'Update Type',
-                value: '${{ github.event.inputs.update_type || "all" }}',
+                value: "${{ github.event.inputs.update_type || 'all' }}",
                 short: true
               }, {
                 title: 'Vulnerabilities Found',

@@ -422,11 +422,11 @@ jobs:
                 short: true
               }, {
                 title: 'Cleanup Type',
-                value: '${{ github.event.inputs.cleanup_type || "all" }}',
+                value: "${{ github.event.inputs.cleanup_type || 'all' }}",
                 short: true
               }, {
                 title: 'Dry Run',
-                value: '${{ github.event.inputs.dry_run || "true" }}',
+                value: "${{ github.event.inputs.dry_run || 'true' }}",
                 short: true
               }, {
                 title: 'Artifacts',

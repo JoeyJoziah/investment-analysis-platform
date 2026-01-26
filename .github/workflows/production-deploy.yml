@@ -566,7 +566,7 @@ jobs:
                 short: true
               }, {
                 title: 'Release Notes',
-                value: '${{ github.event.release.html_url || "Manual deployment" }}'
+                value: "${{ github.event.release.html_url || 'Manual deployment' }}"
               }],
               actions: [{
                 type: 'button',

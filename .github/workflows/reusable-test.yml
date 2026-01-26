@@ -176,8 +176,9 @@ jobs:
         fi
 
     - name: Upload coverage to Codecov
-      if: inputs.upload-coverage == true && secrets.codecov-token != ''
+      if: inputs.upload-coverage == true
       uses: codecov/codecov-action@v4
+      continue-on-error: true
       with:
         file: ./backend-coverage.xml
         flags: backend
@@ -251,8 +252,9 @@ jobs:
         fi
 
     - name: Upload coverage to Codecov
-      if: inputs.upload-coverage == true && secrets.codecov-token != ''
+      if: inputs.upload-coverage == true
       uses: codecov/codecov-action@v4
+      continue-on-error: true
       with:
         files: ./frontend/web/coverage/lcov.info
         flags: frontend
