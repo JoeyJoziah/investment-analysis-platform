@@ -164,7 +164,7 @@ services:
     restart: unless-stopped
 
   # Celery Worker - Resource-optimized for $50/month budget
-  # Memory reduced 35%: concurrency=1 with aggressive task recycling needs less memory
+  # Performance optimized: concurrency=4 for 4x faster task processing
   celery_worker:
     build:
       context: .
@@ -196,17 +196,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Worker configuration optimized for stability and memory efficiency:
-    # - concurrency=1: Single worker process minimizes memory footprint
-    # - prefetch-multiplier=1: Fetch one task at a time
-    # - max-tasks-per-child=25: More aggressive recycling (was 50) prevents memory leaks
-    # - soft-time-limit/time-limit: Prevent runaway tasks
+    # Worker configuration optimized for throughput with memory safety:
+    # - concurrency=4: 4x parallelism for faster task processing
+    # - pool=prefork: Process-based isolation prevents memory sharing issues
+    # - prefetch-multiplier=1: Fetch one task at a time per worker (prevents memory spikes)
+    # - max-tasks-per-child=25: Aggressive recycling prevents memory leaks
+    # - max-memory-per-child=512MB: Hard memory limit triggers worker recycling
+    # - soft-time-limit/time-limit: Prevent runaway tasks (5min soft, 10min hard)
     command: >
       celery -A backend.tasks.celery_app worker
       --loglevel=info
-      --concurrency=1
+      --pool=prefork
+      --concurrency=4
       --prefetch-multiplier=1
       --max-tasks-per-child=25
+      --max-memory-per-child=524288
       --soft-time-limit=300
       --time-limit=600
       -Q default,data_ingestion,analysis,notifications,high_priority,low_priority
@@ -219,12 +223,13 @@ services:
     deploy:
       resources:
         limits:
-          # Reduced 35%: Single-worker concurrency with aggressive recycling
-          cpus: '0.6'
-          memory: 512M
+          # Increased for 4 workers: ~200MB base + 4 workers * 150MB peak = ~800M
+          # Container overhead + safety margin = 1024M total
+          cpus: '2.0'
+          memory: 1024M
         reservations:
-          cpus: '0.15'
-          memory: 256M
+          cpus: '0.5'
+          memory: 512M
     restart: unless-stopped
 
   # Celery Beat Scheduler
@@ -467,6 +472,36 @@ services:
         limits:
           cpus: '0.1'
           memory: 64M
+    restart: unless-stopped
+
+  # Celery Exporter - Monitors Celery worker metrics
+  # Essential for tracking queue depth, task throughput, and worker health
+  celery-exporter:
+    image: danihodovic/celery-exporter:0.10.4
+    container_name: investment_celery_exporter
+    environment:
+      - CE_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    ports:
+      - "9540:9540"
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9540/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
     restart: unless-stopped
 
   # Nginx Exporter

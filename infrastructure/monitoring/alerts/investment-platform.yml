@@ -126,6 +126,52 @@ groups:
           summary: "High daily cost detected"
           description: "Daily cost is ${{ $value }}, projecting above monthly budget"
           
+      # Celery Worker Issues
+      - alert: CeleryWorkerDown
+        expr: up{job="celery"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Celery worker is down"
+          description: "Celery worker has been unreachable for more than 2 minutes"
+
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Celery queue backlog"
+          description: "Queue {{ $labels.queue }} has {{ $value }} pending tasks"
+
+      - alert: CeleryTaskFailureRate
+        expr: sum(rate(celery_task_failed_total[5m])) / sum(rate(celery_task_received_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Celery task failure rate"
+          description: "Task failure rate is {{ $value | humanizePercentage }}"
+
+      - alert: CeleryWorkerMemoryHigh
+        expr: celery_worker_memory_usage_bytes / 1024 / 1024 > 450
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery worker memory high"
+          description: "Worker {{ $labels.hostname }} using {{ $value }}MB (limit: 512MB)"
+
+      - alert: CeleryTaskTimeout
+        expr: increase(celery_task_timed_out_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery tasks timing out"
+          description: "{{ $value }} tasks timed out in the last 5 minutes"
+
       # Data Pipeline Issues
       - alert: DataPipelineFailure
         expr: analysis_completed_total{status="failure"} > 0

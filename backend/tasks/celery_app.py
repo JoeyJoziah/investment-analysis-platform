@@ -51,17 +51,37 @@ celery_app.conf.update(
     result_persistent=True,
     result_compression='gzip',
     
-    # Worker settings - Optimized for memory efficiency to prevent OOM kills
-    # Lower prefetch to reduce memory pressure from queued tasks
+    # Worker settings - Optimized for 4x throughput with memory safety
+    # -------------------------------------------------------------------------
+    # These settings work with concurrency=4 workers in docker-compose
+    #
+    # Memory Budget per Container (1024MB dev / 1280MB prod):
+    #   - Base Celery overhead: ~100MB
+    #   - 4 workers * 200MB peak each: ~800MB
+    #   - Safety margin: ~180-380MB
+    # -------------------------------------------------------------------------
+
+    # Prefetch multiplier: 1 task per worker to prevent memory spikes
+    # With concurrency=4, this means max 4 tasks queued at once
     worker_prefetch_multiplier=1,
-    # Recycle workers frequently to prevent memory leaks (especially with ML models)
-    worker_max_tasks_per_child=50,
+
+    # Worker recycling: Recycle after 25 tasks to prevent memory leaks
+    # This is especially important for ML tasks that load large models
+    # CLI override: --max-tasks-per-child=25
+    worker_max_tasks_per_child=25,
+
+    # Rate limits: Enabled to respect API quotas
     worker_disable_rate_limits=False,
-    # Use 'solo' pool for single-process execution (better for ML workloads)
-    # Can be overridden in docker-compose with --pool=prefork if needed
-    # worker_pool='solo',
-    # Memory optimization settings
-    worker_max_memory_per_child=400000,  # 400MB per worker child (in KB)
+
+    # Pool type: prefork provides process isolation for memory safety
+    # Each worker runs in its own process, preventing shared memory issues
+    # CLI override: --pool=prefork
+    worker_pool='prefork',
+
+    # Memory limit per worker child: 512MB (524288 KB)
+    # Workers exceeding this are automatically recycled
+    # CLI override: --max-memory-per-child=524288
+    worker_max_memory_per_child=524288,  # 512MB in KB
     
     # Task execution settings
     task_track_started=True,

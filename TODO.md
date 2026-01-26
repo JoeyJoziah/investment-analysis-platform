@@ -230,14 +230,17 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 
 ---
 
-### MEDIUM-2: Increase Celery Concurrency
-**File:** `docker-compose.yml:210-217`
+### ~~MEDIUM-2: Increase Celery Concurrency~~ ✅ COMPLETE
+**File:** `docker-compose.yml`, `docker-compose.prod.yml`, `backend/tasks/celery_app.py`
 **Impact:** 4x faster task processing
-**Time:** 2 hours
+**Completed:** 2026-01-26
 
-- [ ] Increase concurrency from 1 to 4
-- [ ] Add max-memory-per-child limit (512MB)
-- [ ] Monitor queue depth after change
+- [x] Increase concurrency from 1 to 4 (dev and prod)
+- [x] Add max-memory-per-child limit (512MB)
+- [x] Set explicit pool=prefork for process isolation
+- [x] Add celery-exporter service for monitoring
+- [x] Add Celery alerting rules (queue backlog, memory, failures)
+- [x] Update container resources (1GB dev, 1.28GB prod)
 
 ---
 
@@ -337,7 +340,7 @@ with ThreadPoolExecutor(max_workers=MAX_PARALLEL_BATCHES) as executor:
 **Week 2 - Core Fixes (16 hours):**
 8. ~~CRITICAL-3: Fix N+1 queries (8h)~~ COMPLETE
 9. ~~HIGH-3: Optimize Airflow DAG (6h)~~ COMPLETE
-10. MEDIUM-2: Increase Celery concurrency (2h)
+10. ~~MEDIUM-2: Increase Celery concurrency (2h)~~ COMPLETE
 
 **Week 3 - Advanced Optimizations (16 hours):**
 11. ~~HIGH-5: Fix indicator calculations (8h)~~ COMPLETE
