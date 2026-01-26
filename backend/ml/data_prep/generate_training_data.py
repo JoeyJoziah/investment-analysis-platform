@@ -3,15 +3,18 @@
 ML Training Data Generator
 Generates real training data from yfinance for ML model training.
 Uses free APIs with no rate limits.
+
+Supports automatic upload to HuggingFace Hub for centralized dataset storage.
 """
 
 import os
 import sys
 import logging
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 import warnings
+import json
 
 import numpy as np
 import pandas as pd
@@ -26,6 +29,15 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# HuggingFace Hub integration (lazy import to avoid import errors if not installed)
+def get_dataset_manager():
+    """Lazy load HF Dataset manager."""
+    try:
+        from backend.ml.dataset_hub import get_dataset_manager as _get_dm
+        return _get_dm()
+    except ImportError:
+        return None
 
 
 # S&P 100 stocks - diversified across sectors (free to fetch from yfinance)
@@ -410,6 +422,47 @@ class MLTrainingDataGenerator:
             'metadata': metadata
         }
 
+    def upload_to_hf_hub(self, version_type: str = "patch") -> bool:
+        """
+        Upload generated dataset to HuggingFace Hub.
+
+        Args:
+            version_type: Type of version bump ("major", "minor", "patch")
+
+        Returns:
+            True if upload successful, False otherwise
+        """
+        dataset_manager = get_dataset_manager()
+        if not dataset_manager:
+            logger.warning("HuggingFace Dataset manager not available. Skipping upload.")
+            return False
+
+        if not os.getenv("HF_HUB_ENABLED", "false").lower() == "true":
+            logger.info("HF Hub upload disabled (HF_HUB_ENABLED != true)")
+            return False
+
+        processed_dir = self.output_dir / 'processed'
+        if not processed_dir.exists():
+            logger.warning(f"Processed data directory not found: {processed_dir}")
+            return False
+
+        logger.info("Uploading dataset to HuggingFace Hub...")
+
+        result = dataset_manager.upload_from_local(
+            local_processed_dir=processed_dir,
+            version_type=version_type
+        )
+
+        if result:
+            logger.info(f"Dataset uploaded to HF Hub as v{result.version}")
+            logger.info(f"  Total samples: {result.total_samples}")
+            logger.info(f"  Stocks: {result.stock_count}")
+            logger.info(f"  Features: {result.feature_count}")
+            return True
+        else:
+            logger.error("Failed to upload dataset to HF Hub")
+            return False
+
 
 def main():
     """Main entry point for data generation."""
@@ -422,6 +475,11 @@ def main():
                         help='Years of historical data to fetch')
     parser.add_argument('--max-stocks', type=int, default=None,
                         help='Maximum number of stocks to process (None for all)')
+    parser.add_argument('--upload-to-hf', action='store_true',
+                        help='Upload dataset to HuggingFace Hub after generation')
+    parser.add_argument('--hf-version-type', type=str, default='patch',
+                        choices=['major', 'minor', 'patch'],
+                        help='Version bump type for HF upload')
 
     args = parser.parse_args()
 
@@ -437,6 +495,10 @@ def main():
         print(f"Train samples: {len(result['train'])}")
         print(f"Val samples: {len(result['val'])}")
         print(f"Test samples: {len(result['test'])}")
+
+        # Upload to HuggingFace Hub if requested
+        if args.upload_to_hf:
+            generator.upload_to_hf_hub(version_type=args.hf_version_type)
 
 
 if __name__ == '__main__':

@@ -1,11 +1,14 @@
 """
 Machine Learning Model Manager
 Handles loading, caching, and inference for all ML models
+
+Supports HuggingFace Hub integration for cloud model storage.
 """
 
 import os
-import pickle
-import joblib
+import json
+import shutil
+import joblib  # SECURITY: Use joblib instead of pickle for model serialization
 import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -16,10 +19,18 @@ from threading import Lock
 
 logger = logging.getLogger(__name__)
 
-class ModelManager:
-    """Centralized ML model management with error handling"""
 
-    def __init__(self, models_path: str = None):
+# HuggingFace Hub model name mapping
+HF_MODEL_MAP = {
+    "lstm_price_predictor": "lstm",
+    "xgboost_classifier": "xgboost",
+    "prophet_forecaster": "prophet"
+}
+
+class ModelManager:
+    """Centralized ML model management with error handling and HuggingFace Hub fallback"""
+
+    def __init__(self, models_path: str = None, enable_hf_fallback: bool = None):
         # Use environment variable or default to a local directory
         if models_path is None:
             models_path = os.getenv("ML_MODELS_PATH")
@@ -31,10 +42,101 @@ class ModelManager:
         self.models: Dict[str, Any] = {}
         self.model_metadata: Dict[str, Dict] = {}
         self.lock = Lock()
+
+        # HuggingFace Hub fallback configuration
+        if enable_hf_fallback is None:
+            enable_hf_fallback = os.getenv("HF_AUTO_DOWNLOAD", "true").lower() == "true"
+        self.enable_hf_fallback = enable_hf_fallback
+        self._hf_client = None
+
         self._initialize_models()
 
+    @property
+    def hf_client(self):
+        """Lazy-load HuggingFace Hub client"""
+        if self._hf_client is None and self.enable_hf_fallback:
+            try:
+                from backend.ml.hf_hub_client import get_hf_hub_client
+                self._hf_client = get_hf_hub_client()
+            except Exception as e:
+                logger.warning(f"HuggingFace Hub client not available: {e}")
+                self._hf_client = False  # Mark as unavailable
+        return self._hf_client if self._hf_client is not False else None
+
+    def _download_from_hf_hub(self, model_name: str) -> Optional[Path]:
+        """Download model from HuggingFace Hub if not found locally"""
+        if not self.hf_client:
+            return None
+
+        hf_model_name = HF_MODEL_MAP.get(model_name)
+        if not hf_model_name:
+            logger.debug(f"No HF Hub mapping for {model_name}")
+            return None
+
+        logger.info(f"Model {model_name} not found locally, downloading from HF Hub...")
+        try:
+            cached_path = self.hf_client.download_model(hf_model_name, "latest")
+            if cached_path and cached_path.exists():
+                logger.info(f"Downloaded {model_name} from HF Hub to {cached_path}")
+                # Copy files to expected local location
+                self._copy_from_hf_cache(cached_path, model_name)
+                return cached_path
+        except Exception as e:
+            logger.warning(f"Failed to download {model_name} from HF Hub: {e}")
+
+        return None
+
+    def _copy_from_hf_cache(self, cache_path: Path, model_name: str):
+        """Copy model files from HF cache to local models directory"""
+        try:
+            if model_name == "lstm_price_predictor":
+                # Copy LSTM files
+                for src_name, dst_name in [
+                    ("weights.pth", "lstm_weights.pth"),
+                    ("scaler.pkl", "lstm_scaler.pkl"),
+                    ("config.json", "lstm_config.json")
+                ]:
+                    src = cache_path / src_name
+                    dst = self.models_path / dst_name
+                    if src.exists():
+                        shutil.copy(src, dst)
+                        logger.debug(f"Copied {src_name} -> {dst_name}")
+
+            elif model_name == "xgboost_classifier":
+                # Copy XGBoost files
+                for src_name, dst_name in [
+                    ("model.pkl", "xgboost_model.pkl"),
+                    ("scaler.pkl", "xgboost_scaler.pkl"),
+                    ("config.json", "xgboost_config.json")
+                ]:
+                    src = cache_path / src_name
+                    dst = self.models_path / dst_name
+                    if src.exists():
+                        shutil.copy(src, dst)
+                        logger.debug(f"Copied {src_name} -> {dst_name}")
+
+            elif model_name == "prophet_forecaster":
+                # Copy Prophet files
+                prophet_dir = self.models_path / "prophet"
+                prophet_dir.mkdir(exist_ok=True)
+
+                # Copy metadata files
+                for f in ["trained_stocks.json", "prophet_training_results.json"]:
+                    src = cache_path / f
+                    if src.exists():
+                        shutil.copy(src, prophet_dir / f)
+
+                # Copy model files
+                models_dir = cache_path / "models"
+                if models_dir.exists():
+                    for model_file in models_dir.glob("*_model.pkl"):
+                        shutil.copy(model_file, prophet_dir / model_file.name)
+
+        except Exception as e:
+            logger.warning(f"Error copying files from HF cache: {e}")
+
     def _initialize_models(self):
-        """Initialize and load all available models with error handling"""
+        """Initialize and load all available models with error handling and HF Hub fallback"""
         if not self.models_path.exists():
             logger.warning(f"Models directory does not exist: {self.models_path}")
             try:
@@ -42,7 +144,7 @@ class ModelManager:
             except (PermissionError, OSError) as e:
                 logger.error(f"ML model manager not available: {e}")
             return
-        
+
         # Define expected models and their loaders
         model_configs = {
             "lstm_price_predictor": {
@@ -79,13 +181,19 @@ class ModelManager:
         for model_name, config in model_configs.items():
             try:
                 model_path = self.models_path / config["file"]
+
+                # Try HF Hub fallback if local file not found
+                if not model_path.exists() and self.enable_hf_fallback:
+                    self._download_from_hf_hub(model_name)
+
                 if model_path.exists():
                     self.models[model_name] = config["loader"](model_path)
                     self.model_metadata[model_name] = {
                         "loaded_at": datetime.utcnow(),
                         "path": str(model_path),
                         "size": model_path.stat().st_size,
-                        "status": "loaded"
+                        "status": "loaded",
+                        "source": "local"
                     }
                     logger.info(f"Successfully loaded model: {model_name}")
                 else:
@@ -118,12 +226,17 @@ class ModelManager:
             raise
     
     def _load_pickle_model(self, path: Path):
-        """Load pickled model with error handling"""
+        """
+        Load model with error handling.
+
+        SECURITY: Uses joblib instead of pickle for safer deserialization.
+        pickle.load() is vulnerable to arbitrary code execution.
+        """
         try:
-            with open(path, 'rb') as f:
-                return pickle.load(f)
+            # SECURITY: Use joblib instead of pickle
+            return joblib.load(path)
         except Exception as e:
-            logger.error(f"Failed to load pickle model from {path}: {e}")
+            logger.error(f"Failed to load model from {path}: {e}")
             raise
     
     def _load_joblib_model(self, path: Path):

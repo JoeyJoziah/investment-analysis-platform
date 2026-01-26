@@ -1,8 +1,12 @@
 """
 Airflow DAG for ML Model Training Pipeline with Automated Retraining
+
+Supports HuggingFace Hub integration for:
+- Downloading training datasets from HF Hub
+- Uploading trained models to HF Hub
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from airflow import DAG
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.bash_operator import BashOperator
@@ -17,6 +21,27 @@ import logging
 
 # Add backend to path
 sys.path.append('/app')
+
+# HuggingFace Hub integration helpers
+def get_hf_hub_enabled():
+    """Check if HF Hub is enabled."""
+    return os.getenv("HF_HUB_ENABLED", "false").lower() == "true"
+
+def get_hf_hub_client():
+    """Get HF Hub client if available."""
+    try:
+        from backend.ml.hf_hub_client import get_hf_hub_client as _get_client
+        return _get_client()
+    except ImportError:
+        return None
+
+def get_dataset_manager():
+    """Get HF Dataset manager if available."""
+    try:
+        from backend.ml.dataset_hub import get_dataset_manager as _get_dm
+        return _get_dm()
+    except ImportError:
+        return None
 
 from backend.ml.pipeline import (
     MLOrchestrator,
@@ -187,17 +212,64 @@ def check_drift(**context):
 
 
 def prepare_training_data(**context):
-    """Prepare training data for all models"""
+    """Prepare training data for all models.
+
+    First attempts to download from HuggingFace Hub if enabled.
+    Falls back to local database if HF Hub is unavailable.
+    """
     import pandas as pd
     from sqlalchemy import create_engine
-    
+    from pathlib import Path
+
+    dataset_version = None
+
+    # Try to download from HuggingFace Hub first
+    if get_hf_hub_enabled():
+        try:
+            dataset_manager = get_dataset_manager()
+            if dataset_manager:
+                logger.info("Attempting to download training data from HuggingFace Hub...")
+
+                # Try to download latest version
+                train_df = dataset_manager.download_as_dataframe(version="latest", split="train")
+
+                if train_df is not None and len(train_df) > 0:
+                    # Get version info
+                    versions = dataset_manager.list_versions()
+                    dataset_version = versions[-1] if versions else "unknown"
+
+                    logger.info(f"Downloaded {len(train_df)} samples from HF Hub (version {dataset_version})")
+
+                    # Save to temporary location
+                    data_path = f"/tmp/training_data_hf_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.parquet"
+                    train_df.to_parquet(data_path, index=False)
+
+                    # Store path and statistics
+                    context['task_instance'].xcom_push(key='training_data_path', value=data_path)
+                    context['task_instance'].xcom_push(key='training_data_source', value='huggingface_hub')
+                    context['task_instance'].xcom_push(key='dataset_version', value=dataset_version)
+                    context['task_instance'].xcom_push(key='training_data_stats', value={
+                        'samples': len(train_df),
+                        'features': len(train_df.columns),
+                        'stocks': train_df['ticker'].nunique() if 'ticker' in train_df.columns else 0,
+                        'source': 'huggingface_hub',
+                        'version': dataset_version
+                    })
+
+                    return data_path
+        except Exception as e:
+            logger.warning(f"Failed to download from HF Hub: {e}. Falling back to database.")
+
+    # Fallback: Query from database
+    logger.info("Loading training data from database...")
+
     # Get database connection
     db_url = Variable.get("DATABASE_URL")
     engine = create_engine(db_url)
-    
+
     # Query for training data
     query = """
-    SELECT 
+    SELECT
         ph.*,
         ti.*,
         s.sector,
@@ -209,32 +281,34 @@ def prepare_training_data(**context):
     WHERE ph.date >= CURRENT_DATE - INTERVAL '2 years'
     ORDER BY ph.date
     """
-    
+
     df = pd.read_sql(query, engine)
-    
+
     # Basic feature engineering
     df['returns'] = df.groupby('stock_id')['close'].pct_change()
     df['volatility'] = df.groupby('stock_id')['returns'].rolling(20).std().reset_index(0, drop=True)
     df['volume_ratio'] = df['volume'] / df.groupby('stock_id')['volume'].rolling(20).mean().reset_index(0, drop=True)
-    
+
     # Create target variable (next day return)
     df['future_return'] = df.groupby('stock_id')['returns'].shift(-1)
-    
+
     # Remove NaN values
     df = df.dropna()
-    
+
     # Save to temporary location
-    data_path = f"/tmp/training_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+    data_path = f"/tmp/training_data_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.parquet"
     df.to_parquet(data_path)
-    
+
     # Store path and statistics
     context['task_instance'].xcom_push(key='training_data_path', value=data_path)
+    context['task_instance'].xcom_push(key='training_data_source', value='database')
     context['task_instance'].xcom_push(key='training_data_stats', value={
         'samples': len(df),
         'features': len(df.columns),
-        'stocks': df['stock_id'].nunique()
+        'stocks': df['stock_id'].nunique(),
+        'source': 'database'
     })
-    
+
     return data_path
 
 
@@ -523,15 +597,121 @@ def monitor_deployment(**context):
     return "monitoring_active"
 
 
+def upload_models_to_hf_hub(**context):
+    """Upload trained models to HuggingFace Hub.
+
+    This task runs after training and uploads successfully trained models
+    to HuggingFace Hub for centralized storage and version management.
+    """
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    if not get_hf_hub_enabled():
+        logger.info("HF Hub upload disabled (HF_HUB_ENABLED != true)")
+        return "hf_upload_skipped"
+
+    hf_client = get_hf_hub_client()
+    if not hf_client:
+        logger.warning("HF Hub client not available")
+        return "hf_upload_skipped"
+
+    training_results = context['task_instance'].xcom_pull(key='training_results')
+    dataset_version = context['task_instance'].xcom_pull(key='dataset_version')
+
+    if not training_results:
+        logger.warning("No training results to upload")
+        return "hf_upload_no_results"
+
+    uploaded = []
+    failed = []
+
+    for result in training_results:
+        if result['status'] != 'completed':
+            logger.info(f"Skipping {result['model_name']} - not completed")
+            continue
+
+        model_name = result['model_name']
+        model_dir = Path(f"/app/ml_models/{model_name}")
+
+        if not model_dir.exists():
+            logger.warning(f"Model directory not found: {model_dir}")
+            failed.append(model_name)
+            continue
+
+        try:
+            # Create temp directory for upload
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+
+                # Copy all model files
+                for f in model_dir.glob("*"):
+                    if f.is_file():
+                        shutil.copy(f, temp_path / f.name)
+
+                # Save training metadata
+                metadata = {
+                    "trained_at": datetime.now(timezone.utc).isoformat(),
+                    "training_metrics": result.get('metrics', {}),
+                    "training_duration_seconds": result.get('duration', 0),
+                    "dataset_version": dataset_version,
+                    "airflow_dag_run": context.get('dag_run', {}).run_id if context.get('dag_run') else None
+                }
+
+                with open(temp_path / "airflow_training_metadata.json", 'w') as f:
+                    json.dump(metadata, f, indent=2, default=str)
+
+                # Determine version
+                versions = hf_client.list_versions(model_name)
+                if versions:
+                    latest = max(versions, key=lambda v: [int(x) for x in v.split(".")])
+                    parts = [int(x) for x in latest.split(".")]
+                    parts[2] += 1  # patch bump
+                    version = ".".join(str(p) for p in parts)
+                else:
+                    version = "1.0.0"
+
+                # Upload
+                upload_result = hf_client.upload_model(
+                    model_name=model_name,
+                    version=version,
+                    local_dir=temp_path,
+                    commit_message=f"Airflow pipeline training v{version} - {datetime.now(timezone.utc).isoformat()}",
+                    metadata=metadata
+                )
+
+                if upload_result:
+                    logger.info(f"Uploaded {model_name} v{version} to HF Hub")
+                    uploaded.append({"model": model_name, "version": version})
+                else:
+                    logger.error(f"Failed to upload {model_name}")
+                    failed.append(model_name)
+
+        except Exception as e:
+            logger.error(f"Error uploading {model_name}: {e}")
+            failed.append(model_name)
+
+    context['task_instance'].xcom_push(key='hf_upload_results', value={
+        'uploaded': uploaded,
+        'failed': failed
+    })
+
+    if failed:
+        return f"hf_upload_partial ({len(uploaded)} uploaded, {len(failed)} failed)"
+
+    return f"hf_upload_success ({len(uploaded)} models)"
+
+
 def cleanup(**context):
     """Clean up temporary files and resources"""
     import shutil
-    
+    from pathlib import Path
+
     # Remove temporary training data
     data_path = context['task_instance'].xcom_pull(key='training_data_path')
     if data_path and os.path.exists(data_path):
         os.remove(data_path)
-    
+
     # Clean up old models (keep last 5 versions)
     models_dir = Path("/app/ml_models")
     if models_dir.exists():
@@ -541,7 +721,7 @@ def cleanup(**context):
                 if len(versions) > 5:
                     for old_version in versions[:-5]:
                         shutil.rmtree(old_version)
-    
+
     return "cleanup_complete"
 
 
@@ -600,6 +780,12 @@ task_monitor = PythonOperator(
     dag=dag,
 )
 
+task_hf_upload = PythonOperator(
+    task_id='upload_models_to_hf_hub',
+    python_callable=upload_models_to_hf_hub,
+    dag=dag,
+)
+
 task_cleanup = PythonOperator(
     task_id='cleanup',
     python_callable=cleanup,
@@ -608,11 +794,18 @@ task_cleanup = PythonOperator(
 )
 
 # Define task dependencies
+# Main training pipeline
 task_init >> [task_quality, task_drift]
 task_quality >> task_prepare
 task_drift >> task_prepare
 task_prepare >> task_train
 task_train >> task_evaluate
-task_evaluate >> task_deploy
+
+# After evaluation: deploy and upload to HF Hub in parallel
+task_evaluate >> [task_deploy, task_hf_upload]
+
+# Deployment branch
 task_deploy >> [task_ab_test, task_monitor]
-[task_ab_test, task_monitor] >> task_cleanup
+
+# All post-training tasks complete before cleanup
+[task_ab_test, task_monitor, task_hf_upload] >> task_cleanup

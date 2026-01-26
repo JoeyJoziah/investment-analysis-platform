@@ -2,13 +2,17 @@
 """
 LSTM Model Training Script
 Trains LSTM model for stock price prediction using PyTorch.
+
+Supports automatic upload to HuggingFace Hub for centralized model storage.
 """
 
 import os
 import sys
 import logging
+import tempfile
+import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple, Any
 import json
 
@@ -26,6 +30,15 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# HuggingFace Hub integration (lazy import to avoid import errors if not installed)
+def get_hf_client():
+    """Lazy load HF Hub client."""
+    try:
+        from backend.ml.hf_hub_client import get_hf_hub_client
+        return get_hf_hub_client()
+    except ImportError:
+        return None
 
 
 class StockSequenceDataset(Dataset):
@@ -403,6 +416,85 @@ class LSTMTrainer:
 
         logger.info(f"Model saved to {model_path}")
 
+    def upload_to_hf_hub(self, version: str = None, version_type: str = "patch") -> bool:
+        """
+        Upload trained model to HuggingFace Hub.
+
+        Args:
+            version: Explicit version string (e.g., "1.0.0"). If None, auto-increment.
+            version_type: Type of version bump if auto-incrementing ("major", "minor", "patch")
+
+        Returns:
+            True if upload successful, False otherwise
+        """
+        hf_client = get_hf_client()
+        if not hf_client:
+            logger.warning("HuggingFace Hub client not available. Skipping upload.")
+            return False
+
+        if not os.getenv("HF_HUB_ENABLED", "false").lower() == "true":
+            logger.info("HF Hub upload disabled (HF_HUB_ENABLED != true)")
+            return False
+
+        logger.info("Uploading LSTM model to HuggingFace Hub...")
+
+        # Create temp directory with model files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Copy model files with clean names
+            files_to_copy = [
+                ("lstm_weights.pth", "weights.pth"),
+                ("lstm_scaler.pkl", "scaler.pkl"),
+                ("lstm_config.json", "config.json"),
+                ("lstm_training_results.json", "training_results.json"),
+            ]
+
+            for src_name, dst_name in files_to_copy:
+                src = self.model_dir / src_name
+                if src.exists():
+                    shutil.copy(src, temp_path / dst_name)
+                    logger.info(f"  Prepared {src_name} -> {dst_name}")
+
+            # Determine version
+            if not version:
+                versions = hf_client.list_versions("lstm")
+                if versions:
+                    latest = max(versions, key=lambda v: [int(x) for x in v.split(".")])
+                    parts = [int(x) for x in latest.split(".")]
+                    if version_type == "major":
+                        parts = [parts[0] + 1, 0, 0]
+                    elif version_type == "minor":
+                        parts = [parts[0], parts[1] + 1, 0]
+                    else:  # patch
+                        parts = [parts[0], parts[1], parts[2] + 1]
+                    version = ".".join(str(p) for p in parts)
+                else:
+                    version = "1.0.0"
+
+            # Upload to HF Hub
+            result = hf_client.upload_model(
+                model_name="lstm",
+                version=version,
+                local_dir=temp_path,
+                commit_message=f"LSTM model v{version} - trained {datetime.now(timezone.utc).isoformat()}",
+                metadata={
+                    "model_type": "pytorch",
+                    "architecture": "LSTM with attention",
+                    "trained_at": datetime.now(timezone.utc).isoformat(),
+                    "hidden_dim": self.hidden_dim,
+                    "num_layers": self.num_layers,
+                    "sequence_length": self.sequence_length,
+                }
+            )
+
+            if result:
+                logger.info(f"LSTM model uploaded to HF Hub as v{version}")
+                return True
+            else:
+                logger.error("Failed to upload LSTM model to HF Hub")
+                return False
+
 
 def main():
     """Main entry point."""
@@ -416,6 +508,13 @@ def main():
     parser.add_argument('--sequence-length', type=int, default=60)
     parser.add_argument('--hidden-dim', type=int, default=128)
     parser.add_argument('--learning-rate', type=float, default=0.001)
+    parser.add_argument('--upload-to-hf', action='store_true',
+                        help='Upload model to HuggingFace Hub after training')
+    parser.add_argument('--hf-version', type=str, default=None,
+                        help='Specific version for HF upload (e.g., "1.2.0")')
+    parser.add_argument('--hf-version-type', type=str, default='patch',
+                        choices=['major', 'minor', 'patch'],
+                        help='Version bump type if auto-incrementing')
 
     args = parser.parse_args()
 
@@ -431,6 +530,13 @@ def main():
 
     results = trainer.train()
     print(f"\nTraining complete! Final val loss: {results.get('final_val_loss', 'N/A')}")
+
+    # Upload to HuggingFace Hub if requested
+    if args.upload_to_hf:
+        trainer.upload_to_hf_hub(
+            version=args.hf_version,
+            version_type=args.hf_version_type
+        )
 
 
 if __name__ == '__main__':

@@ -5,8 +5,7 @@ Provides comprehensive model versioning with semantic versioning and model regis
 
 import os
 import json
-import pickle
-import joblib
+import joblib  # SECURITY: Use joblib instead of pickle for model serialization
 import hashlib
 import logging
 from typing import Dict, Any, Optional, List, Tuple, Union
@@ -69,6 +68,12 @@ class ModelVersion:
     git_commit: Optional[str] = None
     parent_version: Optional[str] = None
     is_champion: bool = False
+    # HuggingFace Hub integration
+    hf_hub_uploaded: bool = False
+    hf_hub_commit: Optional[str] = None
+    # Dataset lineage
+    dataset_version: Optional[str] = None
+    dataset_repo: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -105,29 +110,100 @@ class ABTestConfig:
 
 class ModelVersionManager:
     """
-    Comprehensive model version management system
+    Comprehensive model version management system with HuggingFace Hub integration
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  registry_path: str = "/app/ml_models/registry",
                  storage_path: str = "/app/ml_models/versions",
-                 enable_git_tracking: bool = False):
+                 enable_git_tracking: bool = False,
+                 enable_hf_hub: bool = None):
         self.registry_path = Path(registry_path)
         self.storage_path = Path(storage_path)
         self.enable_git_tracking = enable_git_tracking
         self.lock = threading.Lock()
-        
+
+        # HuggingFace Hub integration
+        if enable_hf_hub is None:
+            enable_hf_hub = os.getenv("HF_HUB_ENABLED", "true").lower() == "true"
+        self.enable_hf_hub = enable_hf_hub
+        self._hf_client = None
+
         # Create directories
         self.registry_path.mkdir(parents=True, exist_ok=True)
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Load existing registry
         self.registry_file = self.registry_path / "registry.json"
         self.ab_tests_file = self.registry_path / "ab_tests.json"
         self.model_registry = self._load_registry()
         self.ab_tests = self._load_ab_tests()
-        
+
         logger.info(f"Model version manager initialized with {len(self.model_registry)} models")
+
+    @property
+    def hf_client(self):
+        """Lazy-load HuggingFace Hub client"""
+        if self._hf_client is None and self.enable_hf_hub:
+            try:
+                from backend.ml.hf_hub_client import get_hf_hub_client
+                self._hf_client = get_hf_hub_client()
+            except Exception as e:
+                logger.warning(f"HuggingFace Hub client not available: {e}")
+                self._hf_client = False  # Mark as unavailable
+        return self._hf_client if self._hf_client is not False else None
+
+    def upload_to_hf_hub(self, model_name: str, version: str) -> bool:
+        """Upload a registered model version to HuggingFace Hub"""
+        if not self.hf_client:
+            logger.warning("HuggingFace Hub client not available")
+            return False
+
+        if model_name not in self.model_registry:
+            logger.error(f"Model {model_name} not found in registry")
+            return False
+
+        if version not in self.model_registry[model_name]:
+            logger.error(f"Version {version} not found for model {model_name}")
+            return False
+
+        model_version = self.model_registry[model_name][version]
+        model_dir = Path(model_version.model_path).parent
+
+        if not model_dir.exists():
+            logger.error(f"Model directory not found: {model_dir}")
+            return False
+
+        try:
+            result = self.hf_client.upload_model(
+                model_name=model_name,
+                version=version,
+                local_dir=model_dir,
+                commit_message=f"Upload {model_name} v{version}: {model_version.description}",
+                metadata={
+                    "model_type": model_version.model_type.value,
+                    "stage": model_version.stage.value,
+                    "metrics": model_version.metrics,
+                    "created_at": model_version.created_at.isoformat()
+                }
+            )
+
+            if result:
+                # Update model version with HF Hub info
+                model_version.hf_hub_uploaded = True
+                model_version.hf_hub_commit = result.commit_hash
+                self._save_registry()
+
+                # Sync registry to HF Hub
+                self.hf_client.sync_registry(self.registry_file)
+
+                logger.info(f"Uploaded {model_name} v{version} to HuggingFace Hub")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to upload to HuggingFace Hub: {e}")
+
+        return False
     
     def _load_registry(self) -> Dict[str, Dict[str, ModelVersion]]:
         """Load model registry from disk"""
@@ -252,12 +328,11 @@ class ModelVersionManager:
         elif model_type in [ModelType.SKLEARN, ModelType.ENSEMBLE]:
             joblib.dump(model, model_path)
         elif model_type in [ModelType.XGBOOST, ModelType.LIGHTGBM, ModelType.PROPHET]:
-            with open(model_path, 'wb') as f:
-                pickle.dump(model, f)
+            # SECURITY: Use joblib instead of pickle for safer serialization
+            joblib.dump(model, model_path)
         else:
-            # Generic pickle fallback
-            with open(model_path, 'wb') as f:
-                pickle.dump(model, f)
+            # SECURITY: Use joblib for all model types (safer than pickle)
+            joblib.dump(model, model_path)
         
         return model_path.stat().st_size
     
@@ -519,9 +594,9 @@ class ModelVersionManager:
             elif model_version.model_type in [ModelType.SKLEARN, ModelType.ENSEMBLE]:
                 model = joblib.load(model_path)
             else:
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f)
-            
+                # SECURITY: Use joblib instead of pickle for safer deserialization
+                model = joblib.load(model_path)
+
             return model, model_version
             
         except Exception as e:
