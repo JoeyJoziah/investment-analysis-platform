@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-01-26T00:00:00Z",
+  "description": "Shared context for cross-agent memory synchronization in investment-analysis-platform",
+
+  "sessions": [],
+
+  "patterns": {
+    "description": "Reusable patterns learned across sessions",
+    "items": []
+  },
+
+  "decisions": {
+    "description": "Architectural and design decisions",
+    "items": []
+  },
+
+  "namespaces": {
+    "investment-analysis": {
+      "description": "Investment deal data and analysis results",
+      "agents": ["queen-investment-orchestrator", "investment-analyst", "deal-underwriter", "financial-modeler", "risk-assessor", "portfolio-manager"],
+      "items": []
+    },
+    "deals": {
+      "description": "Individual deal records",
+      "agents": ["deal-underwriter", "investment-analyst"],
+      "items": []
+    },
+    "portfolios": {
+      "description": "Portfolio data and metrics",
+      "agents": ["portfolio-manager", "risk-assessor", "financial-analysis-swarm"],
+      "items": []
+    },
+    "financial-models": {
+      "description": "Model templates and results",
+      "agents": ["financial-modeler"],
+      "items": []
+    },
+    "github-operations": {
+      "description": "PR, issue, and CI/CD data",
+      "agents": ["github-swarm-coordinator", "issue-triager", "pr-reviewer", "test-agent", "security-agent", "documentation-agent", "infrastructure-agent"],
+      "items": []
+    },
+    "development": {
+      "description": "Code patterns and decisions",
+      "agents": ["backend-api-swarm", "ui-visualization-swarm", "coder"],
+      "items": []
+    },
+    "coordination": {
+      "description": "Cross-agent communication and findings",
+      "agents": ["*"],
+      "items": []
+    }
+  },
+
+  "agentCommunication": {
+    "description": "Recent inter-agent messages for context sharing",
+    "messages": []
+  },
+
+  "synchronization": {
+    "protocol": {
+      "sessionStart": "Load shared context and recent patterns",
+      "duringExecution": "Store findings to coordination namespace",
+      "sessionEnd": "Consolidate learnings to patterns namespace"
+    },
+    "lastSync": null
+  }
+}

@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Unified agent registry with routing configuration for investment-analysis-platform",
+  "created_at": "2026-01-26",
+
+  "auto_discovery": {
+    "enabled": true,
+    "paths": [
+      ".claude/agents/**/*.md"
+    ],
+    "exclude": [
+      "README.md",
+      "MIGRATION_SUMMARY.md",
+      "HEALTH_ASSESSMENT.md",
+      "_templates/*"
+    ]
+  },
+
+  "command_routing": {
+    "investment_commands": {
+      "/underwrite": {
+        "agent": "deal-underwriter",
+        "model": "opus",
+        "description": "Comprehensive deal underwriting analysis"
+      },
+      "/model": {
+        "agent": "financial-modeler",
+        "model": "opus",
+        "description": "Build DCF, LBO, and financial models"
+      },
+      "/analyze-structure": {
+        "agent": "deal-underwriter",
+        "model": "opus",
+        "description": "Analyze deal structure and security packages"
+      },
+      "/scenario": {
+        "agent": "financial-modeler",
+        "model": "opus",
+        "description": "Run scenario and sensitivity analysis"
+      },
+      "/stock-analysis": {
+        "agent": "financial-analysis-swarm",
+        "model": "opus",
+        "description": "Comprehensive stock analysis"
+      }
+    },
+
+    "development_commands": {
+      "/plan": {
+        "agent": "planner",
+        "model": "opus",
+        "description": "Create implementation plan before coding"
+      },
+      "/build-fix": {
+        "agent": "build-error-resolver",
+        "model": "opus",
+        "description": "Fix build and compilation errors"
+      },
+      "/code-review": {
+        "agent": "code-reviewer",
+        "model": "opus",
+        "description": "Review code for quality and security"
+      },
+      "/tdd": {
+        "agent": "tdd-guide",
+        "model": "opus",
+        "description": "Test-driven development workflow"
+      },
+      "/e2e": {
+        "agent": "e2e-runner",
+        "model": "opus",
+        "description": "End-to-end testing with Playwright"
+      },
+      "/refactor-clean": {
+        "agent": "refactor-cleaner",
+        "model": "opus",
+        "description": "Remove dead code and refactor"
+      },
+      "/update-docs": {
+        "agent": "doc-updater",
+        "model": "opus",
+        "description": "Update and synchronize documentation"
+      }
+    },
+
+    "infrastructure_commands": {
+      "/docker": {
+        "agent": "infrastructure-devops-swarm",
+        "model": "opus",
+        "description": "Docker and container operations"
+      },
+      "/deploy": {
+        "agent": "infrastructure-devops-swarm",
+        "model": "opus",
+        "description": "Deployment operations"
+      },
+      "/monitoring": {
+        "agent": "infrastructure-devops-swarm",
+        "model": "opus",
+        "description": "Monitoring and alerting setup"
+      }
+    },
+
+    "github_commands": {
+      "/github-swarm": {
+        "agent": "github-swarm-coordinator",
+        "model": "opus",
+        "description": "GitHub automation swarm coordination"
+      }
+    }
+  },
+
+  "keyword_patterns": {
+    "investment-analysis": {
+      "pattern": "underwrite|credit|loan|collateral|lien|ucc|security.package",
+      "agents": ["deal-underwriter", "investment-analyst"],
+      "priority": 1
+    },
+    "financial-modeling": {
+      "pattern": "dcf|lbo|valuation|model|projection|scenario|sensitivity",
+      "agents": ["financial-modeler"],
+      "priority": 1
+    },
+    "portfolio-risk": {
+      "pattern": "stock|portfolio|risk|var|sharpe|sortino|beta|drawdown|volatility",
+      "agents": ["financial-analysis-swarm", "risk-assessor", "portfolio-manager"],
+      "priority": 1
+    },
+    "infrastructure": {
+      "pattern": "docker|kubernetes|k8s|deploy|ci.?cd|github.?actions|pipeline|prometheus|grafana",
+      "agents": ["infrastructure-devops-swarm"],
+      "priority": 2
+    },
+    "backend": {
+      "pattern": "api|endpoint|fastapi|rest|graphql|database|postgres|timescale|redis|celery",
+      "agents": ["backend-api-swarm"],
+      "priority": 2
+    },
+    "frontend": {
+      "pattern": "react|component|dashboard|chart|visualization|ui|ux|material.?ui",
+      "agents": ["ui-visualization-swarm"],
+      "priority": 2
+    },
+    "data-ml": {
+      "pattern": "etl|pipeline|airflow|dag|ml|model|training|prophet|xgboost|feature",
+      "agents": ["data-ml-pipeline-swarm", "data-science-architect"],
+      "priority": 2
+    },
+    "quality": {
+      "pattern": "test|coverage|pytest|jest|e2e|integration|unit|quality|lint",
+      "agents": ["project-quality-swarm", "tdd-guide", "e2e-runner"],
+      "priority": 3
+    },
+    "security": {
+      "pattern": "security|vulnerability|audit|compliance|gdpr|sec|permission|access",
+      "agents": ["security-compliance-swarm", "security-reviewer"],
+      "priority": 2
+    }
+  },
+
+  "swarm_configurations": {
+    "investment-analysis": {
+      "coordinator": "queen-investment-orchestrator",
+      "agents": [
+        "investment-analyst",
+        "deal-underwriter",
+        "financial-modeler",
+        "risk-assessor",
+        "portfolio-manager"
+      ],
+      "topology": "hierarchical",
+      "memory_namespace": "investment-analysis",
+      "patterns": {
+        "new_deal": ["investment-analyst", "deal-underwriter", "financial-modeler"],
+        "portfolio_risk": ["financial-analysis-swarm", "risk-assessor"],
+        "due_diligence": ["deal-underwriter", "investment-analyst", "financial-modeler"],
+        "refinancing": ["deal-underwriter", "financial-modeler", "investment-analyst"]
+      }
+    },
+    "development": {
+      "coordinator": "team-coordinator",
+      "agents": [
+        "backend-api-swarm",
+        "ui-visualization-swarm",
+        "data-ml-pipeline-swarm",
+        "project-quality-swarm",
+        "infrastructure-devops-swarm"
+      ],
+      "topology": "mesh",
+      "memory_namespace": "development"
+    },
+    "github-automation": {
+      "coordinator": "github-swarm-coordinator",
+      "agents": [
+        "issue-triager",
+        "pr-reviewer",
+        "test-agent",
+        "security-agent",
+        "documentation-agent",
+        "infrastructure-agent"
+      ],
+      "topology": "hierarchical",
+      "memory_namespace": "github-operations",
+      "config_file": "agents/github-swarm/swarm-config.json"
+    }
+  },
+
+  "execution_modes": {
+    "parallel": {
+      "description": "Run multiple agents simultaneously for independent tasks",
+      "use_cases": [
+        "code-reviewer + security-reviewer",
+        "test-agent + documentation-agent",
+        "financial-modeler + risk-assessor"
+      ]
+    },
+    "sequential": {
+      "description": "Run agents in order when outputs feed inputs",
+      "use_cases": [
+        "architect -> coder -> tester",
+        "investment-analyst -> deal-underwriter -> financial-modeler"
+      ]
+    },
+    "hierarchical": {
+      "description": "Coordinator agent manages sub-agents",
+      "use_cases": [
+        "queen-investment-orchestrator coordinates investment agents",
+        "github-swarm-coordinator coordinates github agents"
+      ]
+    }
+  },
+
+  "model_routing": {
+    "opus": {
+      "use_for": [
+        "Complex architectural decisions",
+        "Financial modeling and analysis",
+        "Security reviews",
+        "Code reviews",
+        "Orchestration"
+      ],
+      "agents": [
+        "queen-investment-orchestrator",
+        "investment-analyst",
+        "deal-underwriter",
+        "financial-modeler",
+        "risk-assessor",
+        "architect",
+        "code-reviewer",
+        "security-reviewer"
+      ]
+    },
+    "sonnet": {
+      "use_for": [
+        "General development",
+        "Testing",
+        "Documentation",
+        "Issue triage"
+      ],
+      "agents": [
+        "coder",
+        "tester",
+        "doc-updater",
+        "issue-triager"
+      ]
+    },
+    "haiku": {
+      "use_for": [
+        "Lightweight frequent tasks",
+        "Simple queries",
+        "Status checks"
+      ],
+      "agents": []
+    }
+  },
+
+  "memory_namespaces": {
+    "investment-analysis": {
+      "description": "Investment deal data and analysis results",
+      "agents": ["queen-investment-orchestrator", "investment-analyst", "deal-underwriter", "financial-modeler", "risk-assessor", "portfolio-manager"]
+    },
+    "deals": {
+      "description": "Individual deal records",
+      "agents": ["deal-underwriter", "investment-analyst"]
+    },
+    "portfolios": {
+      "description": "Portfolio data and metrics",
+      "agents": ["portfolio-manager", "risk-assessor", "financial-analysis-swarm"]
+    },
+    "financial-models": {
+      "description": "Model templates and results",
+      "agents": ["financial-modeler"]
+    },
+    "github-operations": {
+      "description": "PR, issue, and CI/CD data",
+      "agents": ["github-swarm-coordinator", "issue-triager", "pr-reviewer", "test-agent", "security-agent", "documentation-agent", "infrastructure-agent"]
+    },
+    "development": {
+      "description": "Code patterns and decisions",
+      "agents": ["backend-api-swarm", "ui-visualization-swarm", "coder"]
+    },
+    "patterns": {
+      "description": "Learned patterns and strategies",
+      "agents": ["*"]
+    },
+    "coordination": {
+      "description": "Cross-agent communication and findings",
+      "agents": ["*"]
+    }
+  },
+
+  "default_fallback": {
+    "agent": "team-coordinator",
+    "model": "opus",
+    "description": "Routes unknown tasks to team coordinator for optimal agent selection"
+  }
+}
