@@ -1,0 +1,811 @@
+# Notion-GitHub Bidirectional Sync Workflow
+# Investment Analysis Platform
+#
+# Performs scheduled and on-demand bidirectional synchronization
+# between Notion database and GitHub Issues/Projects
+
+name: Notion-GitHub Sync
+
+on:
+  schedule:
+    # Sync every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      direction:
+        description: 'Sync direction'
+        required: true
+        default: 'bidirectional'
+        type: choice
+        options:
+          - bidirectional
+          - github_to_notion
+          - notion_to_github
+      conflict_resolution:
+        description: 'Conflict resolution strategy'
+        required: true
+        default: 'github_wins'
+        type: choice
+        options:
+          - github_wins
+          - notion_wins
+          - newest_wins
+      dry_run:
+        description: 'Dry run (no actual changes)'
+        required: false
+        default: false
+        type: boolean
+      full_sync:
+        description: 'Full sync (include closed items)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: notion-github-sync
+  cancel-in-progress: false
+
+env:
+  NOTION_DATABASE_ID: "2f3b9fc9-1d9d-8026-9719-f82b0e311f50"
+  SYNC_LOG_RETENTION_DAYS: 30
+
+jobs:
+  # Pre-sync validation
+  validate-credentials:
+    runs-on: ubuntu-latest
+    outputs:
+      github_valid: ${{ steps.check.outputs.github_valid }}
+      notion_valid: ${{ steps.check.outputs.notion_valid }}
+      can_proceed: ${{ steps.check.outputs.can_proceed }}
+    steps:
+      - name: Validate Credentials
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          GITHUB_VALID="true"
+          NOTION_VALID="true"
+
+          # Check GitHub token
+          if ! gh auth status &>/dev/null; then
+            echo "::warning::GitHub authentication may have issues"
+            GITHUB_VALID="partial"
+          fi
+
+          # Check Notion token
+          if [[ -z "$NOTION_TOKEN" ]]; then
+            echo "::warning::Notion token not configured"
+            NOTION_VALID="false"
+          else
+            # Test Notion API
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer $NOTION_TOKEN" \
+              -H "Notion-Version: 2022-06-28" \
+              "https://api.notion.com/v1/users/me")
+
+            if [[ "$RESPONSE" != "200" ]]; then
+              echo "::warning::Notion token validation failed (HTTP $RESPONSE)"
+              NOTION_VALID="false"
+            fi
+          fi
+
+          # Determine if we can proceed
+          CAN_PROCEED="true"
+          if [[ "$GITHUB_VALID" == "false" && "$NOTION_VALID" == "false" ]]; then
+            CAN_PROCEED="false"
+          fi
+
+          echo "github_valid=$GITHUB_VALID" >> $GITHUB_OUTPUT
+          echo "notion_valid=$NOTION_VALID" >> $GITHUB_OUTPUT
+          echo "can_proceed=$CAN_PROCEED" >> $GITHUB_OUTPUT
+
+          echo "GitHub: $GITHUB_VALID"
+          echo "Notion: $NOTION_VALID"
+          echo "Can Proceed: $CAN_PROCEED"
+
+  # GitHub to Notion sync
+  sync-github-to-notion:
+    runs-on: ubuntu-latest
+    needs: validate-credentials
+    if: |
+      needs.validate-credentials.outputs.can_proceed == 'true' &&
+      needs.validate-credentials.outputs.notion_valid == 'true' &&
+      (github.event.inputs.direction == 'github_to_notion' || github.event.inputs.direction == 'bidirectional' || github.event.inputs.direction == '')
+    permissions:
+      issues: read
+      pull-requests: read
+    outputs:
+      items_created: ${{ steps.sync.outputs.created }}
+      items_updated: ${{ steps.sync.outputs.updated }}
+      items_skipped: ${{ steps.sync.outputs.skipped }}
+      errors: ${{ steps.sync.outputs.errors }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pyyaml
+
+      - name: Sync GitHub to Notion
+        id: sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DATABASE_ID: ${{ env.NOTION_DATABASE_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          FULL_SYNC: ${{ github.event.inputs.full_sync || 'false' }}
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import requests
+          from datetime import datetime, timedelta
+
+          # Configuration
+          GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+          NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+          DATABASE_ID = os.environ.get('DATABASE_ID', '')
+          REPO = os.environ.get('GITHUB_REPOSITORY', '')
+          DRY_RUN = os.environ.get('DRY_RUN', 'false') == 'true'
+          FULL_SYNC = os.environ.get('FULL_SYNC', 'false') == 'true'
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_TOKEN}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          github_headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json"
+          }
+
+          # Statistics
+          stats = {
+              "created": 0,
+              "updated": 0,
+              "skipped": 0,
+              "errors": 0
+          }
+
+          # Status mapping
+          LABEL_TO_STATUS = {
+              'in progress': 'In Progress',
+              'in_progress': 'In Progress',
+              'review': 'In Review',
+              'in review': 'In Review',
+              'testing': 'Testing',
+              'done': 'Done',
+              'completed': 'Done',
+              'blocked': 'Blocked',
+              'backlog': 'Backlog'
+          }
+
+          LABEL_TO_PRIORITY = {
+              'p0-critical': 'Critical',
+              'critical': 'Critical',
+              'p1-high': 'High',
+              'high': 'High',
+              'priority:high': 'High',
+              'p2-medium': 'Medium',
+              'medium': 'Medium',
+              'priority:medium': 'Medium',
+              'p3-low': 'Low',
+              'low': 'Low',
+              'priority:low': 'Low'
+          }
+
+          LABEL_TO_CATEGORY = {
+              'backend': 'Backend',
+              'frontend': 'Frontend',
+              'infrastructure': 'Infrastructure',
+              'ml-pipeline': 'ML Pipeline',
+              'data-pipeline': 'Data Pipeline',
+              'security': 'Security',
+              'documentation': 'Documentation',
+              'testing': 'Testing'
+          }
+
+          def get_github_items():
+              """Fetch issues and PRs from GitHub"""
+              items = []
+
+              # Fetch issues
+              state = "all" if FULL_SYNC else "open"
+              page = 1
+              while True:
+                  url = f"https://api.github.com/repos/{REPO}/issues"
+                  params = {"state": state, "per_page": 100, "page": page}
+                  response = requests.get(url, headers=github_headers, params=params)
+
+                  if response.status_code != 200:
+                      print(f"GitHub API error: {response.status_code}")
+                      break
+
+                  data = response.json()
+                  if not data:
+                      break
+
+                  for item in data:
+                      if 'pull_request' not in item:  # Skip PRs in issues endpoint
+                          items.append({
+                              "type": "issue",
+                              "number": item.get("number"),
+                              "title": item.get("title", ""),
+                              "state": item.get("state"),
+                              "url": item.get("html_url", ""),
+                              "labels": [l.get("name", "").lower() for l in item.get("labels", [])],
+                              "created_at": item.get("created_at"),
+                              "updated_at": item.get("updated_at"),
+                              "body": item.get("body", "") or "",
+                              "assignees": [a.get("login") for a in item.get("assignees", [])]
+                          })
+
+                  page += 1
+                  if page > 10:  # Limit to 1000 items
+                      break
+
+              # Fetch PRs separately
+              page = 1
+              while True:
+                  url = f"https://api.github.com/repos/{REPO}/pulls"
+                  params = {"state": state, "per_page": 100, "page": page}
+                  response = requests.get(url, headers=github_headers, params=params)
+
+                  if response.status_code != 200:
+                      break
+
+                  data = response.json()
+                  if not data:
+                      break
+
+                  for item in data:
+                      items.append({
+                          "type": "pull_request",
+                          "number": item.get("number"),
+                          "title": item.get("title", ""),
+                          "state": item.get("state"),
+                          "url": item.get("html_url", ""),
+                          "labels": [l.get("name", "").lower() for l in item.get("labels", [])],
+                          "created_at": item.get("created_at"),
+                          "updated_at": item.get("updated_at"),
+                          "body": item.get("body", "") or "",
+                          "assignees": [a.get("login") for a in item.get("assignees", [])]
+                      })
+
+                  page += 1
+                  if page > 5:  # Limit PRs
+                      break
+
+              return items
+
+          def get_notion_items():
+              """Fetch existing items from Notion database"""
+              items = {}
+              url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+              has_more = True
+              next_cursor = None
+
+              while has_more:
+                  payload = {"page_size": 100}
+                  if next_cursor:
+                      payload["start_cursor"] = next_cursor
+
+                  response = requests.post(url, headers=notion_headers, json=payload)
+
+                  if response.status_code != 200:
+                      print(f"Notion query error: {response.status_code}")
+                      break
+
+                  data = response.json()
+                  for item in data.get("results", []):
+                      props = item.get("properties", {})
+                      gh_num = props.get("GitHub Issue", {}).get("number")
+                      if gh_num:
+                          items[gh_num] = {
+                              "page_id": item.get("id"),
+                              "last_edited": item.get("last_edited_time"),
+                              "properties": props
+                          }
+
+                  has_more = data.get("has_more", False)
+                  next_cursor = data.get("next_cursor")
+
+              return items
+
+          def extract_metadata(item):
+              """Extract status, priority, category from labels"""
+              status = "To Do"
+              priority = "Medium"
+              category = None
+
+              # Check state first
+              if item.get("state") == "closed":
+                  status = "Done"
+
+              # Check labels
+              for label in item.get("labels", []):
+                  # Status
+                  for key, val in LABEL_TO_STATUS.items():
+                      if key in label:
+                          status = val
+                          break
+
+                  # Priority
+                  for key, val in LABEL_TO_PRIORITY.items():
+                      if key == label or key in label:
+                          priority = val
+                          break
+
+                  # Category
+                  for key, val in LABEL_TO_CATEGORY.items():
+                      if key == label:
+                          category = val
+                          break
+
+              return status, priority, category
+
+          def create_notion_page(item):
+              """Create a new Notion page"""
+              status, priority, category = extract_metadata(item)
+
+              # Prepare properties
+              properties = {
+                  "Name": {
+                      "title": [{"text": {"content": item.get("title", "Untitled")[:2000]}}]
+                  },
+                  "Status": {"select": {"name": status}},
+                  "Priority": {"select": {"name": priority}},
+                  "GitHub Issue": {"number": item.get("number", 0)},
+                  "GitHub URL": {"url": item.get("url", "")},
+                  "Type": {"select": {"name": "Issue" if item.get("type") == "issue" else "PR"}}
+              }
+
+              if category:
+                  properties["Category"] = {"select": {"name": category}}
+
+              payload = {
+                  "parent": {"database_id": DATABASE_ID},
+                  "properties": properties
+              }
+
+              if DRY_RUN:
+                  print(f"[DRY RUN] Would create: #{item.get('number')} - {item.get('title', '')[:50]}")
+                  return True
+
+              url = "https://api.notion.com/v1/pages"
+              response = requests.post(url, headers=notion_headers, json=payload)
+
+              if response.status_code == 200:
+                  return True
+              else:
+                  print(f"Create failed for #{item.get('number')}: {response.status_code}")
+                  return False
+
+          def update_notion_page(page_id, item, existing):
+              """Update existing Notion page"""
+              status, priority, category = extract_metadata(item)
+
+              properties = {
+                  "Name": {
+                      "title": [{"text": {"content": item.get("title", "Untitled")[:2000]}}]
+                  },
+                  "Status": {"select": {"name": status}},
+                  "Priority": {"select": {"name": priority}}
+              }
+
+              if category:
+                  properties["Category"] = {"select": {"name": category}}
+
+              if DRY_RUN:
+                  print(f"[DRY RUN] Would update: #{item.get('number')} - {item.get('title', '')[:50]}")
+                  return True
+
+              url = f"https://api.notion.com/v1/pages/{page_id}"
+              response = requests.patch(url, headers=notion_headers, json={"properties": properties})
+
+              return response.status_code == 200
+
+          # Main sync logic
+          print("Fetching GitHub items...")
+          github_items = get_github_items()
+          print(f"Found {len(github_items)} GitHub items")
+
+          print("Fetching Notion items...")
+          notion_items = get_notion_items()
+          print(f"Found {len(notion_items)} existing Notion items")
+
+          # Process each GitHub item
+          for item in github_items:
+              num = item.get("number")
+              try:
+                  if num in notion_items:
+                      # Check if update needed (GitHub updated more recently)
+                      gh_updated = item.get("updated_at", "")
+                      notion_updated = notion_items[num].get("last_edited", "")
+
+                      if gh_updated > notion_updated:
+                          if update_notion_page(notion_items[num]["page_id"], item, notion_items[num]):
+                              stats["updated"] += 1
+                              print(f"Updated: #{num}")
+                          else:
+                              stats["errors"] += 1
+                      else:
+                          stats["skipped"] += 1
+                  else:
+                      # Create new page
+                      if create_notion_page(item):
+                          stats["created"] += 1
+                          print(f"Created: #{num}")
+                      else:
+                          stats["errors"] += 1
+              except Exception as e:
+                  print(f"Error processing #{num}: {e}")
+                  stats["errors"] += 1
+
+          # Write outputs
+          output_file = os.environ.get('GITHUB_OUTPUT', '')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  for key, val in stats.items():
+                      f.write(f"{key}={val}\n")
+
+          print(f"\nSync complete:")
+          print(f"  Created: {stats['created']}")
+          print(f"  Updated: {stats['updated']}")
+          print(f"  Skipped: {stats['skipped']}")
+          print(f"  Errors: {stats['errors']}")
+          PYTHON_SCRIPT
+
+  # Notion to GitHub sync
+  sync-notion-to-github:
+    runs-on: ubuntu-latest
+    needs: [validate-credentials, sync-github-to-notion]
+    if: |
+      always() &&
+      needs.validate-credentials.outputs.can_proceed == 'true' &&
+      needs.validate-credentials.outputs.notion_valid == 'true' &&
+      (github.event.inputs.direction == 'notion_to_github' || github.event.inputs.direction == 'bidirectional' || github.event.inputs.direction == '')
+    permissions:
+      issues: write
+      contents: read
+    outputs:
+      items_updated: ${{ steps.sync.outputs.updated }}
+      conflicts_logged: ${{ steps.sync.outputs.conflicts }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pyyaml
+
+      - name: Sync Notion to GitHub
+        id: sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DATABASE_ID: ${{ env.NOTION_DATABASE_ID }}
+          CONFLICT_RESOLUTION: ${{ github.event.inputs.conflict_resolution || 'github_wins' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python << 'PYTHON_SCRIPT'
+          import os
+          import json
+          import requests
+          from datetime import datetime
+
+          # Configuration
+          GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+          NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+          DATABASE_ID = os.environ.get('DATABASE_ID', '')
+          REPO = os.environ.get('GITHUB_REPOSITORY', '')
+          CONFLICT_RESOLUTION = os.environ.get('CONFLICT_RESOLUTION', 'github_wins')
+          DRY_RUN = os.environ.get('DRY_RUN', 'false') == 'true'
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_TOKEN}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          github_headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json"
+          }
+
+          stats = {"updated": 0, "conflicts": 0, "skipped": 0, "errors": 0}
+          conflict_log = []
+
+          # Reverse status mapping for GitHub labels
+          STATUS_TO_LABEL = {
+              'In Progress': 'in progress',
+              'In Review': 'in review',
+              'Testing': 'testing',
+              'Done': 'done',
+              'Blocked': 'blocked',
+              'Backlog': 'backlog'
+          }
+
+          PRIORITY_TO_LABEL = {
+              'Critical': 'P0-critical',
+              'High': 'P1-high',
+              'Medium': 'P2-medium',
+              'Low': 'P3-low'
+          }
+
+          def get_notion_items():
+              """Fetch items from Notion that have GitHub Issue numbers"""
+              items = []
+              url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+              has_more = True
+              next_cursor = None
+
+              while has_more:
+                  payload = {"page_size": 100}
+                  if next_cursor:
+                      payload["start_cursor"] = next_cursor
+
+                  response = requests.post(url, headers=notion_headers, json=payload)
+
+                  if response.status_code != 200:
+                      break
+
+                  data = response.json()
+                  for item in data.get("results", []):
+                      props = item.get("properties", {})
+                      gh_num = props.get("GitHub Issue", {}).get("number")
+
+                      if gh_num:
+                          items.append({
+                              "notion_id": item.get("id"),
+                              "github_issue": gh_num,
+                              "last_edited": item.get("last_edited_time"),
+                              "status": props.get("Status", {}).get("select", {}).get("name"),
+                              "priority": props.get("Priority", {}).get("select", {}).get("name"),
+                              "title": "".join([t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])])
+                          })
+
+                  has_more = data.get("has_more", False)
+                  next_cursor = data.get("next_cursor")
+
+              return items
+
+          def get_github_issue(issue_num):
+              """Fetch a single GitHub issue"""
+              url = f"https://api.github.com/repos/{REPO}/issues/{issue_num}"
+              response = requests.get(url, headers=github_headers)
+
+              if response.status_code == 200:
+                  return response.json()
+              return None
+
+          def update_github_labels(issue_num, notion_status, notion_priority, current_labels):
+              """Update GitHub issue labels based on Notion status"""
+              # Build new label set
+              new_labels = []
+
+              # Keep non-status/priority labels
+              for label in current_labels:
+                  name = label.get("name", "").lower()
+                  is_status = any(s.lower() in name for s in STATUS_TO_LABEL.values())
+                  is_priority = any(p.lower() in name for p in PRIORITY_TO_LABEL.values())
+
+                  if not is_status and not is_priority:
+                      new_labels.append(label.get("name"))
+
+              # Add new status label
+              if notion_status and notion_status in STATUS_TO_LABEL:
+                  new_labels.append(STATUS_TO_LABEL[notion_status])
+
+              # Add new priority label
+              if notion_priority and notion_priority in PRIORITY_TO_LABEL:
+                  new_labels.append(PRIORITY_TO_LABEL[notion_priority])
+
+              if DRY_RUN:
+                  print(f"[DRY RUN] Would update labels on #{issue_num}: {new_labels}")
+                  return True
+
+              url = f"https://api.github.com/repos/{REPO}/issues/{issue_num}/labels"
+              response = requests.put(url, headers=github_headers, json={"labels": new_labels})
+
+              return response.status_code == 200
+
+          def should_sync(notion_item, github_issue):
+              """Determine if we should sync based on conflict resolution"""
+              notion_time = notion_item.get("last_edited", "")
+              github_time = github_issue.get("updated_at", "")
+
+              if CONFLICT_RESOLUTION == "github_wins":
+                  # Only sync if Notion is newer
+                  return notion_time > github_time
+              elif CONFLICT_RESOLUTION == "notion_wins":
+                  # Always sync from Notion
+                  return True
+              elif CONFLICT_RESOLUTION == "newest_wins":
+                  return notion_time > github_time
+              return False
+
+          # Main sync logic
+          print("Fetching Notion items...")
+          notion_items = get_notion_items()
+          print(f"Found {len(notion_items)} Notion items with GitHub links")
+
+          for item in notion_items:
+              issue_num = item.get("github_issue")
+
+              try:
+                  github_issue = get_github_issue(issue_num)
+                  if not github_issue:
+                      print(f"GitHub issue #{issue_num} not found")
+                      stats["skipped"] += 1
+                      continue
+
+                  # Check for conflicts
+                  if not should_sync(item, github_issue):
+                      if CONFLICT_RESOLUTION == "github_wins":
+                          conflict_log.append({
+                              "issue": issue_num,
+                              "reason": "GitHub is newer",
+                              "notion_time": item.get("last_edited"),
+                              "github_time": github_issue.get("updated_at")
+                          })
+                          stats["conflicts"] += 1
+                      stats["skipped"] += 1
+                      continue
+
+                  # Update GitHub labels
+                  if update_github_labels(
+                      issue_num,
+                      item.get("status"),
+                      item.get("priority"),
+                      github_issue.get("labels", [])
+                  ):
+                      stats["updated"] += 1
+                      print(f"Updated: #{issue_num}")
+                  else:
+                      stats["errors"] += 1
+
+              except Exception as e:
+                  print(f"Error processing #{issue_num}: {e}")
+                  stats["errors"] += 1
+
+          # Log conflicts
+          if conflict_log:
+              print("\nConflict Log:")
+              for c in conflict_log:
+                  print(f"  Issue #{c['issue']}: {c['reason']}")
+
+          # Write outputs
+          output_file = os.environ.get('GITHUB_OUTPUT', '')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write(f"updated={stats['updated']}\n")
+                  f.write(f"conflicts={stats['conflicts']}\n")
+                  f.write(f"skipped={stats['skipped']}\n")
+                  f.write(f"errors={stats['errors']}\n")
+
+          print(f"\nSync complete:")
+          print(f"  Updated: {stats['updated']}")
+          print(f"  Conflicts: {stats['conflicts']}")
+          print(f"  Skipped: {stats['skipped']}")
+          print(f"  Errors: {stats['errors']}")
+          PYTHON_SCRIPT
+
+  # Generate comprehensive report
+  sync-report:
+    runs-on: ubuntu-latest
+    needs: [validate-credentials, sync-github-to-notion, sync-notion-to-github]
+    if: always()
+    steps:
+      - name: Generate Sync Report
+        env:
+          GH_TO_NOTION_CREATED: ${{ needs.sync-github-to-notion.outputs.items_created }}
+          GH_TO_NOTION_UPDATED: ${{ needs.sync-github-to-notion.outputs.items_updated }}
+          GH_TO_NOTION_SKIPPED: ${{ needs.sync-github-to-notion.outputs.items_skipped }}
+          GH_TO_NOTION_ERRORS: ${{ needs.sync-github-to-notion.outputs.errors }}
+          NOTION_TO_GH_UPDATED: ${{ needs.sync-notion-to-github.outputs.items_updated }}
+          NOTION_TO_GH_CONFLICTS: ${{ needs.sync-notion-to-github.outputs.conflicts_logged }}
+        run: |
+          # Calculate totals
+          GH_CREATED="${GH_TO_NOTION_CREATED:-0}"
+          GH_UPDATED="${GH_TO_NOTION_UPDATED:-0}"
+          GH_SKIPPED="${GH_TO_NOTION_SKIPPED:-0}"
+          GH_ERRORS="${GH_TO_NOTION_ERRORS:-0}"
+          NOTION_UPDATED="${NOTION_TO_GH_UPDATED:-0}"
+          NOTION_CONFLICTS="${NOTION_TO_GH_CONFLICTS:-0}"
+
+          GH_TOTAL=$((GH_CREATED + GH_UPDATED))
+          TOTAL_SYNCED=$((GH_TOTAL + NOTION_UPDATED))
+          TOTAL_ERRORS=$((GH_ERRORS))
+
+          # Determine overall status
+          if [[ "$TOTAL_ERRORS" -gt 0 ]]; then
+            STATUS="PARTIAL"
+          elif [[ "$NOTION_CONFLICTS" -gt 0 ]]; then
+            STATUS="COMPLETED WITH CONFLICTS"
+          else
+            STATUS="SUCCESS"
+          fi
+
+          # Generate report
+          echo "## Notion-GitHub Sync Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: $STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "**Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "**Direction**: ${{ github.event.inputs.direction || 'bidirectional' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Conflict Resolution**: ${{ github.event.inputs.conflict_resolution || 'github_wins' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### GitHub to Notion" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Created | $GH_CREATED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Updated | $GH_UPDATED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Skipped | $GH_SKIPPED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Errors | $GH_ERRORS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Notion to GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Updated | $NOTION_UPDATED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Conflicts | $NOTION_CONFLICTS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Items Synced**: $TOTAL_SYNCED" >> $GITHUB_STEP_SUMMARY
+          echo "- **Conflicts Detected**: $NOTION_CONFLICTS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Errors**: $TOTAL_ERRORS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$NOTION_CONFLICTS" -gt 0 ]]; then
+            echo "### Conflict Resolution" >> $GITHUB_STEP_SUMMARY
+            echo "Conflicts were resolved using **${{ github.event.inputs.conflict_resolution || 'github_wins' }}** strategy." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Synced by Notion-GitHub Sync Workflow*" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Detailed Report File
+        run: |
+          cat > notion-github-sync-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run_id": "${{ github.run_id }}",
+            "direction": "${{ github.event.inputs.direction || 'bidirectional' }}",
+            "conflict_resolution": "${{ github.event.inputs.conflict_resolution || 'github_wins' }}",
+            "dry_run": ${{ github.event.inputs.dry_run || false }},
+            "github_to_notion": {
+              "created": ${{ needs.sync-github-to-notion.outputs.items_created || 0 }},
+              "updated": ${{ needs.sync-github-to-notion.outputs.items_updated || 0 }},
+              "skipped": ${{ needs.sync-github-to-notion.outputs.items_skipped || 0 }},
+              "errors": ${{ needs.sync-github-to-notion.outputs.errors || 0 }}
+            },
+            "notion_to_github": {
+              "updated": ${{ needs.sync-notion-to-github.outputs.items_updated || 0 }},
+              "conflicts": ${{ needs.sync-notion-to-github.outputs.conflicts_logged || 0 }}
+            },
+            "repository": "${{ github.repository }}"
+          }
+          EOF
+
+      - name: Upload Sync Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: notion-github-sync-report-${{ github.run_number }}
+          path: notion-github-sync-report.json
+          retention-days: ${{ env.SYNC_LOG_RETENTION_DAYS }}

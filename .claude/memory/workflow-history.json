@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "workflows": [
+    {
+      "workflow_id": "wf_1769459118_eb132f20",
+      "workflow_type": "feature",
+      "task_description": "Test workflow implementation",
+      "status": "created",
+      "started_at": "2026-01-26T20:25:19Z",
+      "completed_at": "2026-01-26T20:26:17Z",
+      "phases": {
+        "intake": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "design": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "build": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "review": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "integrate": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "deploy": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "learn": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        },
+        "sync": {
+          "status": "pending",
+          "started_at": null,
+          "completed_at": null
+        }
+      },
+      "metrics": {
+        "tokens_used": 0,
+        "agents_invoked": 0,
+        "time_started": "2026-01-26T20:25:19Z"
+      }
+    }
+  ]
+}

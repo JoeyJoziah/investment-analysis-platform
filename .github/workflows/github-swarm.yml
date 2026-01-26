@@ -511,3 +511,288 @@ jobs:
               body: body,
               labels: ['documentation', 'P3-low']
             });
+
+  # Board Sync after Issue Triage
+  board-sync-after-triage:
+    name: Sync Board After Triage
+    needs: issue-triage
+    if: always() && needs.issue-triage.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      repository-projects: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync to GitHub Projects Board
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          set -euo pipefail
+
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+
+          # Find project
+          PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+            jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+          if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "null" ]]; then
+            echo "Project not found, creating..."
+            PROJECT_ID=$(gh project create --owner "$REPO_OWNER" \
+              --title "Investment Analysis Platform" \
+              --format json 2>/dev/null | jq -r '.id' || echo "")
+          fi
+
+          if [[ -n "$PROJECT_ID" && "$PROJECT_ID" != "null" ]]; then
+            echo "Adding issue #$ISSUE_NUMBER to project..."
+            gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$ISSUE_URL" 2>/dev/null || true
+            echo "Issue added to project board"
+          else
+            echo "::warning::Could not find or create project board"
+          fi
+
+      - name: Sync to Notion (if configured)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: |
+          if [[ -z "$NOTION_TOKEN" ]]; then
+            echo "Notion token not configured, skipping Notion sync"
+            exit 0
+          fi
+
+          # Read database ID from config
+          DATABASE_ID=""
+          if [[ -f ".github/board-sync.yml" ]]; then
+            DATABASE_ID=$(grep "database_id:" .github/board-sync.yml | awk '{print $2}' | tr -d '"' || echo "")
+          fi
+
+          if [[ -z "$DATABASE_ID" ]]; then
+            echo "Notion database ID not configured, skipping"
+            exit 0
+          fi
+
+          # Create Notion page for the issue
+          python << 'EOF'
+          import os
+          import requests
+
+          NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+          DATABASE_ID = os.environ.get('DATABASE_ID', '')
+          ISSUE_NUM = os.environ.get('ISSUE_NUMBER', '')
+          ISSUE_TITLE = os.environ.get('ISSUE_TITLE', 'Untitled')
+          ISSUE_URL = os.environ.get('ISSUE_URL', '')
+
+          headers = {
+              "Authorization": f"Bearer {NOTION_TOKEN}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # Check if already exists
+          query_url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+          query = {"filter": {"property": "GitHub Issue", "number": {"equals": int(ISSUE_NUM)}}}
+
+          response = requests.post(query_url, headers=headers, json=query)
+          if response.status_code == 200 and response.json().get('results'):
+              print(f"Issue #{ISSUE_NUM} already exists in Notion")
+              exit(0)
+
+          # Create new page
+          payload = {
+              "parent": {"database_id": DATABASE_ID},
+              "properties": {
+                  "Name": {"title": [{"text": {"content": ISSUE_TITLE[:2000]}}]},
+                  "Status": {"select": {"name": "To Do"}},
+                  "Priority": {"select": {"name": "Medium"}},
+                  "GitHub Issue": {"number": int(ISSUE_NUM)},
+                  "GitHub URL": {"url": ISSUE_URL}
+              }
+          }
+
+          create_url = "https://api.notion.com/v1/pages"
+          response = requests.post(create_url, headers=headers, json=payload)
+
+          if response.status_code == 200:
+              print(f"Created Notion page for issue #{ISSUE_NUM}")
+          else:
+              print(f"Failed to create Notion page: {response.status_code}")
+          EOF
+
+  # Board Sync after PR Processing
+  board-sync-after-pr:
+    name: Sync Board After PR
+    needs: [pr-review]
+    if: always() && (needs.pr-review.result == 'success' || needs.pr-review.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+      repository-projects: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync PR to GitHub Projects Board
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_STATE: ${{ github.event.pull_request.state }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+        run: |
+          set -euo pipefail
+
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+
+          # Find project
+          PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+            jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+          if [[ -n "$PROJECT_ID" && "$PROJECT_ID" != "null" ]]; then
+            echo "Adding PR #$PR_NUMBER to project..."
+            gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$PR_URL" 2>/dev/null || true
+
+            # Update linked issues if PR was merged
+            if [[ "$PR_MERGED" == "true" ]]; then
+              echo "PR was merged, updating linked issues..."
+
+              # Get PR body to find linked issues
+              PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || echo "")
+
+              # Extract issue references
+              ISSUE_REFS=$(echo "$PR_BODY" | grep -oE "(close[sd]?|fix(es|ed)?|resolve[sd]?)\s*#[0-9]+" -i | grep -oE "#[0-9]+" || echo "")
+
+              for ref in $ISSUE_REFS; do
+                ISSUE_NUM=${ref#\#}
+                echo "Marking issue #$ISSUE_NUM as done..."
+                gh issue edit "$ISSUE_NUM" --add-label "done" 2>/dev/null || true
+              done
+            fi
+          fi
+
+      - name: Update Notion on PR Merge
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ -z "$NOTION_TOKEN" ]]; then
+            echo "Notion token not configured, skipping"
+            exit 0
+          fi
+
+          DATABASE_ID=""
+          if [[ -f ".github/board-sync.yml" ]]; then
+            DATABASE_ID=$(grep "database_id:" .github/board-sync.yml | awk '{print $2}' | tr -d '"' || echo "")
+          fi
+
+          if [[ -z "$DATABASE_ID" ]]; then
+            exit 0
+          fi
+
+          # Get linked issues from PR
+          PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body' 2>/dev/null || echo "")
+          ISSUE_REFS=$(echo "$PR_BODY" | grep -oE "(close[sd]?|fix(es|ed)?|resolve[sd]?)\s*#[0-9]+" -i | grep -oE "#[0-9]+" || echo "")
+
+          for ref in $ISSUE_REFS; do
+            ISSUE_NUM=${ref#\#}
+
+            python << EOF
+          import os
+          import requests
+
+          NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+          DATABASE_ID = "$DATABASE_ID"
+          ISSUE_NUM = "$ISSUE_NUM"
+
+          headers = {
+              "Authorization": f"Bearer {NOTION_TOKEN}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          # Find the page
+          query_url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+          query = {"filter": {"property": "GitHub Issue", "number": {"equals": int(ISSUE_NUM)}}}
+
+          response = requests.post(query_url, headers=headers, json=query)
+          if response.status_code == 200:
+              results = response.json().get('results', [])
+              if results:
+                  page_id = results[0]['id']
+                  # Update status to Done
+                  update_url = f"https://api.notion.com/v1/pages/{page_id}"
+                  update_payload = {"properties": {"Status": {"select": {"name": "Done"}}}}
+                  requests.patch(update_url, headers=headers, json=update_payload)
+                  print(f"Updated issue #{ISSUE_NUM} to Done in Notion")
+          EOF
+          done
+
+  # Workflow Completion Sync
+  workflow-completion-sync:
+    name: Sync on Workflow Completion
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      repository-projects: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Process Workflow Completion
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Workflow '$WORKFLOW_NAME' completed with: $WORKFLOW_CONCLUSION"
+
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+
+          # Find related PRs
+          PRS=$(gh pr list --json number,headRefOid --jq ".[] | select(.headRefOid == \"$HEAD_SHA\") | .number" 2>/dev/null || echo "")
+
+          if [[ -n "$PRS" ]]; then
+            for PR_NUM in $PRS; do
+              echo "Found related PR: #$PR_NUM"
+
+              if [[ "$WORKFLOW_CONCLUSION" == "success" ]]; then
+                # Add success label
+                gh pr edit "$PR_NUM" --add-label "ci-passed" --remove-label "ci-failed" 2>/dev/null || true
+              elif [[ "$WORKFLOW_CONCLUSION" == "failure" ]]; then
+                # Add failure label
+                gh pr edit "$PR_NUM" --add-label "ci-failed" --remove-label "ci-passed" 2>/dev/null || true
+
+                # Comment on PR about failure
+                gh pr comment "$PR_NUM" --body "## CI Failed
+
+                Workflow **$WORKFLOW_NAME** failed. Please check the [workflow run](https://github.com/$GITHUB_REPOSITORY/actions) for details.
+
+                ---
+                *Posted by GitHub Swarm Workflow Monitor*" 2>/dev/null || true
+              fi
+            done
+          fi
+
+      - name: Trigger Full Board Sync
+        if: github.event.workflow_run.conclusion == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Trigger the auto-sync workflow for comprehensive sync
+          gh workflow run auto-sync.yml --field sync_github=true --field sync_notion=true 2>/dev/null || \
+            echo "Could not trigger auto-sync workflow (may not exist yet)"

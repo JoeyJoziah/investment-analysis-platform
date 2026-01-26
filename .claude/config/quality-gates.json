@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Quality gate definitions and thresholds for workflow phases",
+  "created_at": "2026-01-26",
+
+  "gates": {
+    "pre_commit": {
+      "name": "Pre-Commit Gate",
+      "phase": "build",
+      "trigger": "before_commit",
+      "blocking": true,
+      "checks": [
+        {
+          "name": "lint_format",
+          "description": "Code passes linting and formatting",
+          "command": "npm run lint && npm run format:check",
+          "python_command": "black --check . && isort --check .",
+          "required": true,
+          "timeout_ms": 60000
+        },
+        {
+          "name": "type_check",
+          "description": "TypeScript/Python type checking passes",
+          "command": "npx tsc --noEmit",
+          "python_command": "mypy .",
+          "required": true,
+          "timeout_ms": 120000
+        },
+        {
+          "name": "console_log_check",
+          "description": "No console.log statements in production code",
+          "command": "grep -r 'console.log' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' src/",
+          "expected_exit_code": 1,
+          "required": true,
+          "timeout_ms": 30000
+        },
+        {
+          "name": "secrets_check",
+          "description": "No hardcoded secrets or API keys",
+          "patterns": [
+            "api[_-]?key\\s*=\\s*['\"][^'\"]+['\"]",
+            "secret[_-]?key\\s*=\\s*['\"][^'\"]+['\"]",
+            "password\\s*=\\s*['\"][^'\"]+['\"]",
+            "sk-[a-zA-Z0-9]{20,}"
+          ],
+          "required": true,
+          "timeout_ms": 30000
+        }
+      ]
+    },
+    "pre_push": {
+      "name": "Pre-Push Gate",
+      "phase": "build",
+      "trigger": "before_push",
+      "blocking": true,
+      "checks": [
+        {
+          "name": "unit_tests",
+          "description": "All unit tests pass",
+          "command": "npm test -- --coverage",
+          "python_command": "pytest --cov=backend",
+          "required": true,
+          "timeout_ms": 300000
+        },
+        {
+          "name": "coverage_threshold",
+          "description": "Test coverage meets minimum threshold",
+          "threshold": 80,
+          "metric": "line_coverage",
+          "required": true
+        },
+        {
+          "name": "security_scan",
+          "description": "No critical security vulnerabilities",
+          "command": "npm audit --audit-level=critical",
+          "python_command": "safety check",
+          "required": true,
+          "timeout_ms": 120000,
+          "allowed_exit_codes": [0]
+        },
+        {
+          "name": "dependency_check",
+          "description": "Dependencies are up to date and secure",
+          "command": "npx npm-check-updates --errorLevel 2",
+          "required": false,
+          "timeout_ms": 60000
+        }
+      ]
+    },
+    "pre_merge": {
+      "name": "Pre-Merge Gate",
+      "phase": "review",
+      "trigger": "before_merge",
+      "blocking": true,
+      "checks": [
+        {
+          "name": "code_review_approval",
+          "description": "Code review approved by code-review-swarm",
+          "agent": "code-review-swarm",
+          "required": true,
+          "criteria": {
+            "no_critical_issues": true,
+            "no_high_issues": true
+          }
+        },
+        {
+          "name": "security_review",
+          "description": "Security review approved",
+          "agent": "security-reviewer",
+          "required": true,
+          "criteria": {
+            "owasp_compliant": true,
+            "no_cve_vulnerabilities": true,
+            "secrets_scan_pass": true
+          }
+        },
+        {
+          "name": "architecture_review",
+          "description": "Architecture approved for significant changes",
+          "agent": "architecture-reviewer",
+          "required": "conditional",
+          "condition": "architectural_changes_detected",
+          "criteria": {
+            "adr_documented": true,
+            "patterns_followed": true
+          }
+        },
+        {
+          "name": "integration_tests",
+          "description": "Integration tests pass",
+          "command": "npm run test:integration",
+          "python_command": "pytest -m integration",
+          "required": true,
+          "timeout_ms": 600000
+        }
+      ]
+    },
+    "pre_deploy": {
+      "name": "Pre-Deploy Gate",
+      "phase": "deploy",
+      "trigger": "before_deploy",
+      "blocking": true,
+      "checks": [
+        {
+          "name": "e2e_tests",
+          "description": "End-to-end tests pass",
+          "agent": "e2e-runner",
+          "command": "npx playwright test",
+          "required": true,
+          "timeout_ms": 900000
+        },
+        {
+          "name": "performance_regression",
+          "description": "No performance regression detected",
+          "agent": "performance-optimizer",
+          "required": false,
+          "warn_on_failure": true,
+          "criteria": {
+            "response_time_p95_ms": 500,
+            "memory_increase_max_percent": 10,
+            "cpu_increase_max_percent": 15
+          }
+        },
+        {
+          "name": "staging_validation",
+          "description": "Deployment to staging successful",
+          "command": "./deploy.sh staging",
+          "required": true,
+          "timeout_ms": 600000
+        },
+        {
+          "name": "smoke_tests",
+          "description": "Smoke tests pass on staging",
+          "command": "npm run test:smoke",
+          "required": true,
+          "timeout_ms": 300000
+        }
+      ]
+    }
+  },
+
+  "issue_levels": {
+    "CRITICAL": {
+      "description": "Must be fixed immediately, blocks all progress",
+      "action": "block_immediate",
+      "notification": "urgent",
+      "examples": [
+        "Security vulnerability (CVSS >= 9.0)",
+        "Data loss potential",
+        "Authentication bypass",
+        "SQL injection"
+      ]
+    },
+    "HIGH": {
+      "description": "Must be addressed before merge",
+      "action": "block_until_addressed",
+      "notification": "standard",
+      "examples": [
+        "Security vulnerability (CVSS 7.0-8.9)",
+        "Performance regression > 50%",
+        "Breaking API change",
+        "Memory leak"
+      ]
+    },
+    "MEDIUM": {
+      "description": "Should be addressed, but can proceed with approval",
+      "action": "warn_allow_proceed",
+      "notification": "info",
+      "examples": [
+        "Code style violations",
+        "Minor performance issues",
+        "Missing documentation",
+        "Deprecated API usage"
+      ]
+    },
+    "LOW": {
+      "description": "Suggestions for improvement",
+      "action": "suggest_auto_approve",
+      "notification": "none",
+      "examples": [
+        "Naming conventions",
+        "Code organization suggestions",
+        "Optional optimizations",
+        "Comments and docs improvements"
+      ]
+    }
+  },
+
+  "reviewers": {
+    "security_reviewer": {
+      "agent": "security-reviewer",
+      "focus": [
+        "OWASP Top 10",
+        "CVE vulnerabilities",
+        "Secret detection",
+        "Input validation",
+        "Authentication/Authorization",
+        "Injection vulnerabilities"
+      ],
+      "tools": [
+        "npm audit",
+        "safety check",
+        "bandit",
+        "semgrep"
+      ]
+    },
+    "code_reviewer": {
+      "agent": "code-reviewer",
+      "focus": [
+        "Code quality",
+        "Maintainability",
+        "Readability",
+        "Design patterns",
+        "Error handling",
+        "Test coverage"
+      ],
+      "criteria": {
+        "max_function_length": 50,
+        "max_file_length": 800,
+        "max_cyclomatic_complexity": 10,
+        "max_nesting_depth": 4
+      }
+    },
+    "performance_reviewer": {
+      "agent": "performance-optimizer",
+      "focus": [
+        "Algorithm complexity",
+        "Memory usage",
+        "Database queries",
+        "Caching",
+        "Async patterns"
+      ],
+      "criteria": {
+        "max_time_complexity": "O(n log n)",
+        "no_n_plus_one_queries": true,
+        "caching_on_expensive_ops": true
+      }
+    },
+    "architecture_reviewer": {
+      "agent": "architecture-reviewer",
+      "focus": [
+        "Design patterns",
+        "System design",
+        "Scalability",
+        "Separation of concerns",
+        "Dependencies"
+      ],
+      "triggers": [
+        "new_service",
+        "new_database_table",
+        "api_change",
+        "dependency_addition",
+        "infrastructure_change"
+      ]
+    }
+  },
+
+  "thresholds": {
+    "coverage": {
+      "minimum": 80,
+      "target": 90,
+      "excellent": 95
+    },
+    "complexity": {
+      "cyclomatic_max": 10,
+      "cognitive_max": 15,
+      "maintainability_min": 60
+    },
+    "performance": {
+      "api_response_p95_ms": 500,
+      "api_response_p99_ms": 1000,
+      "memory_limit_mb": 512,
+      "cpu_limit_percent": 80
+    },
+    "security": {
+      "max_critical_vulns": 0,
+      "max_high_vulns": 0,
+      "max_medium_vulns": 5,
+      "dependency_age_days": 365
+    }
+  },
+
+  "automation": {
+    "auto_fix": {
+      "enabled": true,
+      "categories": [
+        "formatting",
+        "linting",
+        "import_ordering"
+      ]
+    },
+    "auto_approve": {
+      "enabled": true,
+      "conditions": [
+        "no_critical_issues",
+        "no_high_issues",
+        "coverage_above_threshold",
+        "all_tests_pass"
+      ]
+    },
+    "escalation": {
+      "critical_issues": {
+        "notify": "immediate",
+        "escalate_to": "user"
+      },
+      "repeated_failures": {
+        "threshold": 3,
+        "action": "notify_and_pause"
+      }
+    }
+  },
+
+  "reporting": {
+    "format": "markdown",
+    "include": [
+      "summary",
+      "issues_by_severity",
+      "coverage_report",
+      "security_findings",
+      "recommendations"
+    ],
+    "output_file": ".claude/memory/quality-report.md"
+  }
+}

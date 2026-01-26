@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Rules for automatic topology selection based on task characteristics",
+  "created_at": "2026-01-26",
+
+  "topologies": {
+    "star": {
+      "name": "Star Topology",
+      "description": "Centralized hub coordinates all agents",
+      "diagram": "Hub in center, agents radiate outward",
+      "characteristics": {
+        "coordination": "centralized",
+        "communication": "hub_spoke",
+        "fault_tolerance": "low",
+        "scalability": "limited",
+        "latency": "low"
+      },
+      "best_for": [
+        "Planning tasks",
+        "Simple coordination",
+        "Single decision maker",
+        "Quick routing decisions"
+      ],
+      "hub_agents": ["team-coordinator", "queen-coordinator", "memory-coordinator"],
+      "max_spoke_agents": 10
+    },
+    "mesh": {
+      "name": "Mesh Topology",
+      "description": "All agents can communicate with each other",
+      "diagram": "Fully connected graph",
+      "characteristics": {
+        "coordination": "distributed",
+        "communication": "peer_to_peer",
+        "fault_tolerance": "high",
+        "scalability": "moderate",
+        "latency": "variable"
+      },
+      "best_for": [
+        "Complex implementations",
+        "Parallel development",
+        "Cross-domain tasks",
+        "Collaborative code writing"
+      ],
+      "max_agents": 6
+    },
+    "hierarchical": {
+      "name": "Hierarchical Topology",
+      "description": "Tree structure with coordinator at top",
+      "diagram": "Pyramid structure",
+      "characteristics": {
+        "coordination": "layered",
+        "communication": "top_down_bottom_up",
+        "fault_tolerance": "moderate",
+        "scalability": "good",
+        "latency": "moderate"
+      },
+      "best_for": [
+        "Code review",
+        "Architecture decisions",
+        "Release management",
+        "Multi-team coordination"
+      ],
+      "coordinators": ["project-quality-swarm", "architecture-reviewer", "release-manager", "github-swarm-coordinator"],
+      "max_levels": 3
+    },
+    "parallel": {
+      "name": "Parallel Topology",
+      "description": "Multiple agents work independently on same task",
+      "diagram": "Horizontal parallel lanes",
+      "characteristics": {
+        "coordination": "minimal",
+        "communication": "aggregated",
+        "fault_tolerance": "high",
+        "scalability": "excellent",
+        "latency": "lowest"
+      },
+      "best_for": [
+        "Code review from multiple perspectives",
+        "Security scanning",
+        "Multi-file analysis",
+        "Independent evaluations"
+      ],
+      "aggregators": ["project-quality-swarm", "team-coordinator"],
+      "max_parallel_agents": 8
+    },
+    "ring": {
+      "name": "Ring Topology",
+      "description": "Agents connected in circular pattern",
+      "diagram": "Circular connection",
+      "characteristics": {
+        "coordination": "sequential",
+        "communication": "next_prev",
+        "fault_tolerance": "low",
+        "scalability": "poor",
+        "latency": "high"
+      },
+      "best_for": [
+        "Pipeline processing",
+        "Sequential transformations",
+        "Consensus building"
+      ],
+      "max_agents": 5
+    },
+    "hive_mind": {
+      "name": "Hive Mind Topology",
+      "description": "Collective intelligence with queen coordinator",
+      "diagram": "Queen at top with collective workers",
+      "characteristics": {
+        "coordination": "collective",
+        "communication": "broadcast_and_consensus",
+        "fault_tolerance": "very_high",
+        "scalability": "excellent",
+        "latency": "moderate"
+      },
+      "best_for": [
+        "Complex problem solving",
+        "Multi-agent consensus",
+        "Large scale analysis",
+        "Investment deal analysis"
+      ],
+      "queen_agents": ["queen-coordinator", "queen-investment-orchestrator", "v3-queen-coordinator"],
+      "consensus_mechanisms": ["raft", "bft", "gossip", "crdt"]
+    }
+  },
+
+  "selection_rules": {
+    "by_phase": {
+      "intake": "star",
+      "design": "hierarchical",
+      "build": "mesh",
+      "review": "parallel",
+      "integrate": "hierarchical",
+      "deploy": "hierarchical",
+      "learn": "star",
+      "sync": "sequential"
+    },
+    "by_task_type": {
+      "planning": "star",
+      "architecture": "hierarchical",
+      "implementation": "mesh",
+      "code_review": "parallel",
+      "security_scan": "parallel",
+      "deployment": "hierarchical",
+      "learning": "star",
+      "documentation": "sequential",
+      "investment_analysis": "hive_mind",
+      "financial_modeling": "hive_mind"
+    },
+    "by_agent_count": {
+      "1-2": "star",
+      "3-4": "mesh",
+      "5-8": "hierarchical",
+      "9+": "hive_mind"
+    },
+    "by_complexity": {
+      "low": "star",
+      "medium": "mesh",
+      "high": "hierarchical",
+      "very_high": "hive_mind"
+    }
+  },
+
+  "auto_selection": {
+    "enabled": true,
+    "algorithm": "weighted_score",
+    "factors": [
+      {
+        "name": "task_complexity",
+        "weight": 0.3,
+        "scoring": {
+          "simple": 1,
+          "moderate": 2,
+          "complex": 3,
+          "very_complex": 4
+        }
+      },
+      {
+        "name": "agent_count",
+        "weight": 0.25,
+        "scoring": {
+          "1-2": 1,
+          "3-4": 2,
+          "5-8": 3,
+          "9+": 4
+        }
+      },
+      {
+        "name": "coordination_needs",
+        "weight": 0.25,
+        "scoring": {
+          "minimal": 1,
+          "moderate": 2,
+          "high": 3,
+          "critical": 4
+        }
+      },
+      {
+        "name": "parallelism_potential",
+        "weight": 0.2,
+        "scoring": {
+          "sequential_only": 1,
+          "some_parallel": 2,
+          "mostly_parallel": 3,
+          "fully_parallel": 4
+        }
+      }
+    ],
+    "threshold_mappings": {
+      "1.0-1.5": "star",
+      "1.5-2.5": "mesh",
+      "2.5-3.5": "hierarchical",
+      "3.5-4.0": "hive_mind"
+    }
+  },
+
+  "swarm_configurations": {
+    "infrastructure-devops-swarm": {
+      "default_topology": "hierarchical",
+      "coordinator": "infrastructure-devops-swarm",
+      "sub_agents": ["security-agent", "infrastructure-agent"]
+    },
+    "financial-analysis-swarm": {
+      "default_topology": "hive_mind",
+      "coordinator": "queen-investment-orchestrator",
+      "sub_agents": ["investment-analyst", "deal-underwriter", "financial-modeler", "risk-assessor", "portfolio-manager"]
+    },
+    "backend-api-swarm": {
+      "default_topology": "mesh",
+      "coordinator": "backend-api-swarm",
+      "sub_agents": ["coder", "tester", "security-reviewer"]
+    },
+    "ui-visualization-swarm": {
+      "default_topology": "mesh",
+      "coordinator": "ui-visualization-swarm",
+      "sub_agents": ["coder", "tester"]
+    },
+    "data-ml-pipeline-swarm": {
+      "default_topology": "hierarchical",
+      "coordinator": "data-ml-pipeline-swarm",
+      "sub_agents": ["ml-developer", "data-science-architect"]
+    },
+    "project-quality-swarm": {
+      "default_topology": "parallel",
+      "coordinator": "project-quality-swarm",
+      "sub_agents": ["code-reviewer", "security-reviewer", "code-analyzer", "tdd-guide"]
+    },
+    "security-compliance-swarm": {
+      "default_topology": "hierarchical",
+      "coordinator": "security-compliance-swarm",
+      "sub_agents": ["security-reviewer", "v3-security-architect"]
+    },
+    "github-swarm-coordinator": {
+      "default_topology": "hierarchical",
+      "coordinator": "github-swarm-coordinator",
+      "sub_agents": ["issue-triager", "pr-reviewer", "documentation-agent", "test-agent"]
+    },
+    "code-review-swarm": {
+      "default_topology": "parallel",
+      "coordinator": "project-quality-swarm",
+      "sub_agents": ["security-reviewer", "code-reviewer", "code-analyzer", "performance-optimizer"]
+    }
+  },
+
+  "consensus_protocols": {
+    "raft": {
+      "description": "Leader election with log replication",
+      "use_when": "Strong consistency required",
+      "agents": ["raft-manager"]
+    },
+    "bft": {
+      "description": "Byzantine fault tolerant consensus",
+      "use_when": "Untrusted or potentially malicious agents",
+      "agents": ["byzantine-coordinator"]
+    },
+    "gossip": {
+      "description": "Epidemic protocol for eventual consistency",
+      "use_when": "High scalability, eventual consistency acceptable",
+      "agents": ["gossip-coordinator"]
+    },
+    "crdt": {
+      "description": "Conflict-free replicated data types",
+      "use_when": "Concurrent modifications to shared state",
+      "agents": ["crdt-synchronizer"]
+    }
+  },
+
+  "optimization": {
+    "dynamic_topology_switching": {
+      "enabled": true,
+      "evaluation_interval_ms": 60000,
+      "switch_threshold": 0.3
+    },
+    "load_balancing": {
+      "enabled": true,
+      "strategy": "least_loaded",
+      "max_agent_load": 3
+    },
+    "performance_targets": {
+      "token_reduction": 0.323,
+      "speedup_min": 2.8,
+      "speedup_max": 4.4
+    }
+  }
+}

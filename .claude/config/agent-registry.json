@@ -108,6 +108,42 @@
         "model": "opus",
         "description": "GitHub automation swarm coordination"
       }
+    },
+
+    "workflow_commands": {
+      "/workflow": {
+        "agent": "team-coordinator",
+        "model": "opus",
+        "description": "Execute interactive development workflow",
+        "config_file": ".claude/config/workflow-engine.json"
+      },
+      "/workflow-status": {
+        "agent": null,
+        "script": ".claude/helpers/workflow-state.sh get",
+        "description": "Display current workflow status"
+      },
+      "/workflow-phase": {
+        "agent": null,
+        "script": ".claude/helpers/workflow-state.sh phase",
+        "description": "Manage workflow phases"
+      },
+      "/auto-topology": {
+        "agent": "topology-optimizer",
+        "model": "sonnet",
+        "description": "Automatically select optimal topology",
+        "script": ".claude/helpers/topology-selector.sh"
+      },
+      "/quality-gate": {
+        "agent": null,
+        "script": ".claude/helpers/quality-gate-check.sh",
+        "description": "Run quality gate checks"
+      },
+      "/learn": {
+        "agent": "memory-coordinator",
+        "model": "sonnet",
+        "description": "Extract patterns and learn from session",
+        "script": "node .claude/helpers/learning-integration.mjs run"
+      }
     }
   },
 

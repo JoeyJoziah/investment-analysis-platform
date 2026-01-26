@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Ultimate Interactive Development Workflow Engine configuration",
+  "created_at": "2026-01-26",
+
+  "engine": {
+    "name": "InteractiveWorkflowEngine",
+    "enabled": true,
+    "max_concurrent_agents": 5,
+    "default_timeout_ms": 600000,
+    "auto_recovery": true,
+    "state_persistence": true
+  },
+
+  "phases": {
+    "intake": {
+      "order": 1,
+      "name": "INTAKE",
+      "description": "Capture requirements, analyze context, create implementation plan",
+      "checkpoint_required": true,
+      "auto_approve": false,
+      "commands": ["/plan", "/repo-analyze", "/analyze-codebase", "/sparc-spec-pseudocode"],
+      "agents": ["planner", "team-coordinator", "specification", "researcher"],
+      "skills": ["strategic-compact", "session-logs"],
+      "topology": "star",
+      "coordinator": "team-coordinator",
+      "outputs": ["implementation_plan", "context_analysis", "risk_assessment"],
+      "success_criteria": {
+        "plan_approved": true,
+        "requirements_captured": true
+      }
+    },
+    "design": {
+      "order": 2,
+      "name": "DESIGN",
+      "description": "Architecture decisions, topology selection, optimization strategy",
+      "checkpoint_required": "conditional",
+      "checkpoint_condition": "architectural_changes",
+      "auto_approve": false,
+      "commands": ["/architect", "/repo-architect", "/sparc-architect", "/auto-topology", "/topology-optimize"],
+      "agents": ["architect", "architecture-reviewer", "system-architect", "topology-optimizer"],
+      "skills": ["backend-patterns", "frontend-patterns", "v3-ddd-architecture"],
+      "topology": "hierarchical",
+      "coordinator": "architecture-reviewer",
+      "outputs": ["architecture_decision_record", "topology_selection", "design_document"],
+      "success_criteria": {
+        "adr_created": true,
+        "topology_selected": true
+      }
+    },
+    "build": {
+      "order": 3,
+      "name": "BUILD",
+      "description": "Implement code with test-driven development",
+      "checkpoint_required": false,
+      "auto_approve": true,
+      "commands": ["/tdd", "/sparc-tdd", "/code", "/sparc-code", "/build-fix", "/batch-executor", "/parallel-execute"],
+      "agents": ["tdd-guide", "coder", "build-error-resolver", "backend-api-swarm", "ui-visualization-swarm", "data-ml-pipeline-swarm", "financial-analysis-swarm"],
+      "skills": ["tdd-workflow", "coding-standards", "coding-agent"],
+      "topology": "mesh",
+      "coordinator": "coder",
+      "auto_actions": {
+        "build_error": {
+          "agent": "build-error-resolver",
+          "max_retries": 3,
+          "retry_delay_ms": 5000
+        }
+      },
+      "file_routing": {
+        "backend/**/*.py": "backend-api-swarm",
+        "frontend/**/*.tsx": "ui-visualization-swarm",
+        "frontend/**/*.ts": "ui-visualization-swarm",
+        "backend/ml/**/*.py": "data-ml-pipeline-swarm",
+        "**/financial/**": "financial-analysis-swarm",
+        "infrastructure/**": "infrastructure-devops-swarm",
+        "data_pipelines/**": "data-ml-pipeline-swarm"
+      },
+      "outputs": ["implementation", "test_results", "coverage_report"],
+      "success_criteria": {
+        "tests_pass": true,
+        "coverage_threshold": 80,
+        "build_success": true
+      }
+    },
+    "review": {
+      "order": 4,
+      "name": "REVIEW",
+      "description": "Multi-agent code review, security scan, quality gates",
+      "checkpoint_required": true,
+      "checkpoint_condition": "critical_or_high_issues",
+      "auto_approve": false,
+      "commands": ["/code-review", "/code-review-swarm", "/verify", "/security-review", "/sparc-security-review", "/test-coverage"],
+      "agents": ["code-review-swarm", "security-reviewer", "code-reviewer", "code-analyzer", "code-review-expert", "project-quality-swarm"],
+      "skills": ["verification-quality", "sec-compliance"],
+      "topology": "parallel",
+      "coordinator": "project-quality-swarm",
+      "parallel_reviewers": ["security-reviewer", "code-reviewer", "code-analyzer", "performance-optimizer"],
+      "issue_thresholds": {
+        "CRITICAL": "block_immediate",
+        "HIGH": "block_until_addressed",
+        "MEDIUM": "warn_allow_proceed",
+        "LOW": "suggest_auto_approve"
+      },
+      "outputs": ["review_report", "security_scan", "quality_metrics"],
+      "success_criteria": {
+        "no_critical_issues": true,
+        "no_high_issues": true,
+        "security_approved": true
+      }
+    },
+    "integrate": {
+      "order": 5,
+      "name": "INTEGRATE",
+      "description": "Create PR, run CI, coordinate merge",
+      "checkpoint_required": true,
+      "auto_approve": false,
+      "commands": ["/github-swarm", "/pr-manager", "/pr-enhance", "/swarm-pr", "/multi-repo-swarm", "/project-board-sync"],
+      "agents": ["github-swarm-coordinator", "pr-manager", "issue-triager", "sync-coordinator", "multi-repo-swarm"],
+      "skills": ["github", "github-code-review", "github-project-management"],
+      "topology": "hierarchical",
+      "coordinator": "github-swarm-coordinator",
+      "outputs": ["pull_request", "ci_results", "project_board_update"],
+      "success_criteria": {
+        "pr_created": true,
+        "ci_passing": true,
+        "approvals_received": true
+      }
+    },
+    "deploy": {
+      "order": 6,
+      "name": "DEPLOY",
+      "description": "Release management, deployment, monitoring",
+      "checkpoint_required": true,
+      "auto_approve": false,
+      "commands": ["/release-swarm", "/release-manager", "/workflow-automation", "/sparc-devops", "/sparc-post-deployment-monitoring-mode"],
+      "agents": ["release-swarm", "release-manager", "infrastructure-devops-swarm", "workflow-automation"],
+      "skills": ["github-release-management", "github-workflow-automation"],
+      "topology": "hierarchical",
+      "coordinator": "release-manager",
+      "outputs": ["changelog", "release_notes", "deployment_status", "health_checks"],
+      "success_criteria": {
+        "deployment_success": true,
+        "health_checks_pass": true,
+        "monitoring_active": true
+      }
+    },
+    "learn": {
+      "order": 7,
+      "name": "LEARN",
+      "description": "Extract patterns, build knowledge, optimize",
+      "checkpoint_required": false,
+      "auto_approve": true,
+      "trigger": "automatic",
+      "commands": ["/learn", "/continuous-learning", "/strategic-compact", "/memory-persist"],
+      "agents": ["sona-learning-optimizer", "v3-memory-specialist", "memory-coordinator"],
+      "skills": ["continuous-learning", "agentdb-learning", "reasoningbank-intelligence", "agentdb-memory-patterns"],
+      "topology": "star",
+      "coordinator": "memory-coordinator",
+      "pattern_types": ["error_resolution", "user_corrections", "workarounds", "debugging_techniques", "project_specific", "architectural_decisions"],
+      "promotion_criteria": {
+        "quality_threshold": 0.6,
+        "min_usage_count": 3
+      },
+      "outputs": ["learned_patterns", "skill_files", "hnsw_index_update"],
+      "success_criteria": {
+        "patterns_evaluated": true,
+        "memory_persisted": true
+      }
+    },
+    "sync": {
+      "order": 8,
+      "name": "SYNC",
+      "description": "Documentation, external sync, cleanup",
+      "checkpoint_required": false,
+      "auto_approve": true,
+      "trigger": "automatic",
+      "commands": ["/update-docs", "/sparc-docs-writer", "/notion"],
+      "agents": ["doc-updater", "documentation-agent"],
+      "skills": ["notion", "summarize", "github-project-management"],
+      "topology": "sequential",
+      "coordinator": "doc-updater",
+      "mandatory_actions": [
+        "update_todo_md",
+        "update_implementation_status",
+        "notion_sync_push",
+        "commit_status_updates"
+      ],
+      "outputs": ["documentation_update", "notion_sync", "session_cleanup"],
+      "success_criteria": {
+        "docs_updated": true,
+        "notion_synced": true,
+        "changes_committed": true
+      }
+    }
+  },
+
+  "workflow_types": {
+    "feature": {
+      "description": "Full 8-phase workflow for new features",
+      "phases": ["intake", "design", "build", "review", "integrate", "deploy", "learn", "sync"],
+      "template": ".claude/workflows/feature.yaml"
+    },
+    "bugfix": {
+      "description": "Streamlined workflow for bug fixes",
+      "phases": ["intake", "build", "review", "integrate"],
+      "template": ".claude/workflows/bugfix.yaml"
+    },
+    "refactor": {
+      "description": "Workflow for code refactoring",
+      "phases": ["intake", "design", "build", "review"],
+      "template": ".claude/workflows/refactor.yaml"
+    },
+    "hotfix": {
+      "description": "Emergency hotfix workflow",
+      "phases": ["build", "review", "deploy"],
+      "template": ".claude/workflows/hotfix.yaml",
+      "expedited": true
+    },
+    "release": {
+      "description": "Release workflow",
+      "phases": ["integrate", "deploy", "sync"],
+      "template": ".claude/workflows/release.yaml"
+    }
+  },
+
+  "orchestration": {
+    "parallel_execution": {
+      "enabled": true,
+      "max_concurrent": 5,
+      "strategies": {
+        "independent_tasks": "parallel",
+        "dependent_tasks": "sequential",
+        "review_tasks": "parallel"
+      }
+    },
+    "state_management": {
+      "persistence": "file",
+      "state_file": ".claude/memory/workflow-state.json",
+      "backup_enabled": true,
+      "checkpoint_on_phase_complete": true
+    },
+    "error_handling": {
+      "max_retries": 3,
+      "backoff_strategy": "exponential",
+      "fallback_agent": "team-coordinator",
+      "notify_on_failure": true
+    }
+  },
+
+  "checkpoints": {
+    "user_approval_phases": ["intake", "review", "integrate", "deploy"],
+    "conditional_approval": {
+      "design": "on_architectural_changes",
+      "review": "on_critical_or_high_issues"
+    },
+    "auto_approved_phases": ["build", "learn", "sync"],
+    "checkpoint_timeout_ms": 86400000,
+    "reminder_interval_ms": 3600000
+  },
+
+  "memory_integration": {
+    "namespaces": {
+      "workflow_state": "Active workflow execution state",
+      "phase_outputs": "Outputs from each phase",
+      "agent_communications": "Inter-agent messages",
+      "patterns_learned": "Extracted patterns",
+      "decisions_made": "Architectural and design decisions"
+    },
+    "persistence_strategy": {
+      "on_phase_complete": true,
+      "on_checkpoint": true,
+      "on_session_end": true,
+      "periodic_interval_ms": 300000
+    }
+  },
+
+  "notifications": {
+    "checkpoint_required": {
+      "method": "console",
+      "message_template": "[WORKFLOW] Checkpoint required: {phase_name} - Awaiting approval"
+    },
+    "phase_complete": {
+      "method": "console",
+      "message_template": "[WORKFLOW] Phase complete: {phase_name}"
+    },
+    "workflow_complete": {
+      "method": "console",
+      "message_template": "[WORKFLOW] Workflow '{workflow_type}' completed successfully"
+    },
+    "error": {
+      "method": "console",
+      "message_template": "[WORKFLOW ERROR] {error_message}"
+    }
+  },
+
+  "metrics": {
+    "track": true,
+    "metrics_file": ".claude/memory/workflow-metrics.json",
+    "tracked_metrics": [
+      "phase_duration",
+      "agent_invocations",
+      "tokens_used",
+      "patterns_learned",
+      "issues_found",
+      "issues_resolved"
+    ]
+  }
+}

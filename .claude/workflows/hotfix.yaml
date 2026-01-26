@@ -1,0 +1,135 @@
+# Hotfix Workflow Template
+# Emergency workflow: build → review → deploy (expedited)
+
+name: hotfix
+version: "1.0.0"
+description: Emergency hotfix workflow for critical issues
+expedited: true
+
+phases:
+  - id: build
+    name: BUILD
+    description: Implement critical fix immediately
+    order: 1
+    checkpoint:
+      required: false
+      auto_approve: true
+    topology: star
+    coordinator: build-error-resolver
+    agents:
+      - coder
+      - build-error-resolver
+      - tdd-guide
+    commands:
+      - /code
+      - /build-fix
+      - /tdd
+    skills:
+      - coding-standards
+    priority: critical
+    time_constraints:
+      max_duration_minutes: 30
+    outputs:
+      - hotfix_implementation
+      - critical_tests
+    success_criteria:
+      fix_implemented: true
+      critical_tests_pass: true
+      build_success: true
+
+  - id: review
+    name: REVIEW
+    description: Expedited security and correctness review
+    order: 2
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "HOTFIX ready for expedited review - CRITICAL"
+    topology: parallel
+    coordinator: security-reviewer
+    agents:
+      - security-reviewer
+      - code-reviewer
+    commands:
+      - /security-review
+      - /code-review
+    skills:
+      - verification-quality
+      - sec-compliance
+    expedited: true
+    review_focus:
+      - security_implications
+      - fix_correctness
+      - no_new_vulnerabilities
+    outputs:
+      - security_clearance
+      - fix_validation
+    success_criteria:
+      security_approved: true
+      fix_validated: true
+
+  - id: deploy
+    name: DEPLOY
+    description: Emergency deployment to production
+    order: 3
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "HOTFIX ready for PRODUCTION deployment - Requires explicit approval"
+    topology: hierarchical
+    coordinator: release-manager
+    agents:
+      - release-manager
+      - infrastructure-devops-swarm
+    commands:
+      - /release-manager
+      - /sparc-devops
+    skills:
+      - github-release-management
+    deployment_strategy: direct_to_production
+    rollback_plan:
+      enabled: true
+      automatic: true
+      trigger: health_check_failure
+    monitoring:
+      enhanced: true
+      duration_minutes: 60
+    outputs:
+      - deployment_status
+      - rollback_plan
+      - monitoring_alerts
+    success_criteria:
+      deployment_success: true
+      health_checks_pass: true
+      no_regression: true
+
+quality_gates:
+  pre_deploy:
+    checks:
+      - security_clearance
+      - fix_validation
+      - critical_tests_pass
+    expedited: true
+
+notifications:
+  checkpoint_required:
+    method: console
+    priority: critical
+    message: "[HOTFIX CRITICAL] Checkpoint: {phase_name} - IMMEDIATE APPROVAL REQUIRED"
+  phase_complete:
+    method: console
+    priority: high
+    message: "[HOTFIX] Phase complete: {phase_name}"
+  workflow_complete:
+    method: console
+    priority: high
+    message: "[HOTFIX] Emergency hotfix deployed successfully"
+
+post_deployment:
+  actions:
+    - create_postmortem_ticket
+    - schedule_proper_fix
+    - notify_stakeholders
+  monitoring:
+    duration_hours: 24
+    alert_threshold: any_error

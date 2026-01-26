@@ -50,6 +50,36 @@
       "description": "Cross-agent communication and findings",
       "agents": ["*"],
       "items": []
+    },
+    "workflow-state": {
+      "description": "Active workflow execution state",
+      "agents": ["team-coordinator", "planner", "coder", "reviewer"],
+      "retention": "session",
+      "items": []
+    },
+    "phase-outputs": {
+      "description": "Outputs from each workflow phase",
+      "agents": ["*"],
+      "retention": "7_days",
+      "items": []
+    },
+    "patterns-learned": {
+      "description": "Extracted patterns from sessions",
+      "agents": ["memory-coordinator", "sona-learning-optimizer", "v3-memory-specialist"],
+      "retention": "permanent",
+      "items": []
+    },
+    "quality-reports": {
+      "description": "Quality gate reports and metrics",
+      "agents": ["project-quality-swarm", "code-review-swarm", "security-reviewer"],
+      "retention": "30_days",
+      "items": []
+    },
+    "skills-learned": {
+      "description": "Auto-generated skill files from patterns",
+      "agents": ["memory-coordinator"],
+      "retention": "permanent",
+      "items": []
     }
   },
 
@@ -62,8 +92,27 @@
     "protocol": {
       "sessionStart": "Load shared context and recent patterns",
       "duringExecution": "Store findings to coordination namespace",
-      "sessionEnd": "Consolidate learnings to patterns namespace"
+      "sessionEnd": "Consolidate learnings to patterns namespace",
+      "workflowPhaseStart": "Initialize phase context and spawn agents",
+      "workflowPhaseComplete": "Persist outputs and run quality gates",
+      "workflowCheckpoint": "Save state and await user approval"
     },
     "lastSync": null
+  },
+
+  "workflowIntegration": {
+    "enabled": true,
+    "configFile": ".claude/config/workflow-engine.json",
+    "stateFile": ".claude/memory/workflow-state.json",
+    "metricsFile": ".claude/memory/workflow-metrics.json",
+    "historyFile": ".claude/memory/workflow-history.json",
+    "topologies": {
+      "star": "Centralized coordination",
+      "mesh": "Peer-to-peer communication",
+      "hierarchical": "Layered coordination",
+      "parallel": "Independent execution",
+      "hive_mind": "Collective intelligence"
+    },
+    "phases": ["intake", "design", "build", "review", "integrate", "deploy", "learn", "sync"]
   }
 }

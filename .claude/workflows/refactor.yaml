@@ -1,0 +1,182 @@
+# Refactor Workflow Template
+# Workflow for code refactoring: intake → design → build → review
+
+name: refactor
+version: "1.0.0"
+description: Workflow for code refactoring and improvement
+
+phases:
+  - id: intake
+    name: INTAKE
+    description: Analyze current code, identify refactoring scope
+    order: 1
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Refactoring scope defined - ready for review"
+    topology: star
+    coordinator: team-coordinator
+    agents:
+      - planner
+      - team-coordinator
+      - code-analyzer
+    commands:
+      - /plan
+      - /repo-analyze
+      - /analyze-codebase
+    skills:
+      - strategic-compact
+    analysis_focus:
+      - code_complexity
+      - technical_debt
+      - coupling_analysis
+      - dead_code
+    outputs:
+      - refactoring_scope
+      - impact_analysis
+      - risk_assessment
+    success_criteria:
+      scope_defined: true
+      risks_identified: true
+
+  - id: design
+    name: DESIGN
+    description: Design refactoring approach and target architecture
+    order: 2
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Refactoring design ready for review"
+    topology: hierarchical
+    coordinator: architecture-reviewer
+    agents:
+      - architect
+      - architecture-reviewer
+      - godmode-refactorer
+    commands:
+      - /architect
+      - /sparc-architect
+    skills:
+      - backend-patterns
+      - frontend-patterns
+    design_considerations:
+      - backwards_compatibility
+      - incremental_migration
+      - rollback_strategy
+    outputs:
+      - target_architecture
+      - migration_plan
+      - adr_document
+    success_criteria:
+      design_approved: true
+      migration_plan_clear: true
+
+  - id: build
+    name: BUILD
+    description: Execute refactoring with continuous verification
+    order: 3
+    checkpoint:
+      required: false
+      auto_approve: true
+    topology: mesh
+    coordinator: godmode-refactorer
+    agents:
+      - godmode-refactorer
+      - coder
+      - tdd-guide
+      - refactor-cleaner
+      - build-error-resolver
+    commands:
+      - /refactor-clean
+      - /tdd
+      - /code
+      - /build-fix
+    skills:
+      - coding-standards
+      - tdd-workflow
+    refactoring_principles:
+      - preserve_behavior
+      - incremental_changes
+      - continuous_testing
+      - clean_commits
+    auto_actions:
+      build_error:
+        agent: build-error-resolver
+        max_retries: 3
+      test_failure:
+        agent: tdd-guide
+        action: investigate_and_fix
+    outputs:
+      - refactored_code
+      - test_results
+      - coverage_report
+    success_criteria:
+      all_tests_pass: true
+      coverage_maintained: true
+      no_behavior_change: true
+
+  - id: review
+    name: REVIEW
+    description: Comprehensive review of refactoring changes
+    order: 4
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Refactoring review complete - awaiting approval"
+    topology: parallel
+    coordinator: project-quality-swarm
+    agents:
+      - code-review-swarm
+      - code-analyzer
+      - architecture-reviewer
+      - performance-optimizer
+    commands:
+      - /code-review-swarm
+      - /verify
+    skills:
+      - verification-quality
+    parallel_reviewers:
+      - code-reviewer
+      - architecture-reviewer
+      - performance-optimizer
+    review_focus:
+      - code_quality_improvement
+      - performance_impact
+      - architectural_alignment
+      - test_adequacy
+    outputs:
+      - review_report
+      - quality_metrics_comparison
+      - performance_comparison
+    success_criteria:
+      quality_improved: true
+      no_performance_regression: true
+      architecture_approved: true
+
+quality_gates:
+  pre_commit:
+    checks:
+      - lint_format
+      - type_check
+  pre_push:
+    checks:
+      - all_tests_pass
+      - coverage_maintained
+      - no_behavior_change
+
+metrics:
+  track: true
+  metrics:
+    - complexity_reduction
+    - coverage_change
+    - performance_impact
+    - lines_changed
+    - files_affected
+
+notifications:
+  phase_complete:
+    method: console
+    message: "[REFACTOR] Phase complete: {phase_name}"
+  workflow_complete:
+    method: console
+    message: "[REFACTOR] Refactoring workflow completed"

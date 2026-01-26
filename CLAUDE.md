@@ -203,6 +203,48 @@ Use these simplified commands to work with the platform:
 
 # Stop all services
 ./stop.sh
+
+# Project management sync
+./board-sync.sh sync      # Sync to GitHub Projects
+./notion-sync.sh push     # Sync to Notion
+```
+
+## Project Board Synchronization
+
+The platform supports dual project management integration:
+
+### GitHub Projects Board
+```bash
+# Initialize project board (first time)
+./board-sync.sh init
+
+# Full sync: TODO.md → Issues → Board
+./board-sync.sh sync
+
+# Generate status report
+./board-sync.sh report
+
+# Sync only TODO.md to issues
+./board-sync.sh sync-todo
+
+# List board items
+./board-sync.sh list
+```
+
+**Setup Requirements**:
+1. GitHub CLI authenticated: `gh auth login`
+2. Project scope enabled: `gh auth refresh -s project`
+
+**Automated Sync** (via GitHub Actions):
+- Issues/PRs automatically added to board
+- Daily scheduled sync at 6 AM UTC
+- Manual trigger available in Actions tab
+
+### Notion Integration
+```bash
+./notion-sync.sh push    # Push to Notion
+./notion-sync.sh pull    # Pull from Notion
+./notion-sync.sh status  # Check sync status
 ```
 
 ## Technology Stack

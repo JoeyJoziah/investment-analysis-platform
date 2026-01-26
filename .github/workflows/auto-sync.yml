@@ -1,0 +1,516 @@
+# Auto-Sync Workflow
+# Investment Analysis Platform
+#
+# Triggers board synchronization on key events:
+# - Push to main/develop
+# - Pull request closed/merged
+# - Workflow completion
+#
+# Syncs GitHub Projects board and Notion database
+
+name: Auto Sync Boards
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    types: [closed]
+  workflow_run:
+    workflows:
+      - "CI Pipeline"
+      - "Security Scanning"
+      - "Production Deployment"
+      - "GitHub Swarm Automation"
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      sync_github:
+        description: 'Sync GitHub Projects board'
+        required: false
+        default: true
+        type: boolean
+      sync_notion:
+        description: 'Sync Notion database'
+        required: false
+        default: true
+        type: boolean
+      dry_run:
+        description: 'Perform dry run without making changes'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: auto-sync-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SYNC_CONFIG_FILE: .github/board-sync.yml
+
+jobs:
+  # Determine what triggered the sync
+  trigger-analysis:
+    runs-on: ubuntu-latest
+    outputs:
+      should_sync: ${{ steps.analyze.outputs.should_sync }}
+      sync_reason: ${{ steps.analyze.outputs.reason }}
+      priority: ${{ steps.analyze.outputs.priority }}
+    steps:
+      - name: Analyze Trigger
+        id: analyze
+        run: |
+          SHOULD_SYNC="true"
+          REASON=""
+          PRIORITY="normal"
+
+          case "${{ github.event_name }}" in
+            push)
+              REASON="Push to ${{ github.ref_name }}"
+              if [[ "${{ github.ref_name }}" == "main" ]]; then
+                PRIORITY="high"
+              fi
+              ;;
+            pull_request)
+              if [[ "${{ github.event.pull_request.merged }}" == "true" ]]; then
+                REASON="PR #${{ github.event.pull_request.number }} merged"
+                PRIORITY="high"
+              else
+                REASON="PR #${{ github.event.pull_request.number }} closed"
+              fi
+              ;;
+            workflow_run)
+              REASON="Workflow '${{ github.event.workflow_run.name }}' completed"
+              if [[ "${{ github.event.workflow_run.conclusion }}" == "failure" ]]; then
+                PRIORITY="high"
+              fi
+              ;;
+            workflow_dispatch)
+              REASON="Manual trigger"
+              ;;
+            *)
+              REASON="Unknown trigger"
+              SHOULD_SYNC="false"
+              ;;
+          esac
+
+          echo "should_sync=$SHOULD_SYNC" >> $GITHUB_OUTPUT
+          echo "reason=$REASON" >> $GITHUB_OUTPUT
+          echo "priority=$PRIORITY" >> $GITHUB_OUTPUT
+
+          echo "Sync triggered: $SHOULD_SYNC"
+          echo "Reason: $REASON"
+          echo "Priority: $PRIORITY"
+
+  # Sync GitHub Projects board
+  sync-github-projects:
+    runs-on: ubuntu-latest
+    needs: trigger-analysis
+    if: needs.trigger-analysis.outputs.should_sync == 'true'
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      repository-projects: write
+    outputs:
+      items_synced: ${{ steps.sync.outputs.items_processed }}
+      project_id: ${{ steps.sync.outputs.project_id }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync GitHub Projects
+        id: sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+
+          echo "Syncing GitHub Projects for $GITHUB_REPOSITORY..."
+
+          # Find project
+          PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+            jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+          if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "null" ]]; then
+            echo "Creating new project..."
+            if [[ "$DRY_RUN" != "true" ]]; then
+              PROJECT_ID=$(gh project create --owner "$REPO_OWNER" \
+                --title "Investment Analysis Platform" \
+                --format json 2>/dev/null | jq -r '.id' || echo "")
+
+              # Create custom fields
+              gh project field-create "$PROJECT_ID" --owner "$REPO_OWNER" \
+                --name "Priority" --data-type "SINGLE_SELECT" \
+                --single-select-options "Critical,High,Medium,Low" 2>/dev/null || true
+
+              gh project field-create "$PROJECT_ID" --owner "$REPO_OWNER" \
+                --name "Agent Type" --data-type "SINGLE_SELECT" \
+                --single-select-options "infrastructure-devops-swarm,data-ml-pipeline-swarm,financial-analysis-swarm,backend-api-swarm,ui-visualization-swarm,project-quality-swarm,security-compliance-swarm" 2>/dev/null || true
+
+              gh project field-create "$PROJECT_ID" --owner "$REPO_OWNER" \
+                --name "Sprint" --data-type "ITERATION" 2>/dev/null || true
+            else
+              echo "[DRY RUN] Would create project"
+              PROJECT_ID="dry-run"
+            fi
+          fi
+
+          echo "Project ID: $PROJECT_ID"
+          echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
+
+          # Fetch all open issues and PRs
+          ITEMS_PROCESSED=0
+
+          # Process issues
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --json number,title,url,labels --limit 200 | \
+            jq -c '.[]' | while read -r item; do
+            ITEM_URL=$(echo "$item" | jq -r '.url')
+            ITEM_TITLE=$(echo "$item" | jq -r '.title')
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "[DRY RUN] Would add: $ITEM_TITLE"
+            elif [[ "$PROJECT_ID" != "dry-run" && -n "$PROJECT_ID" ]]; then
+              if gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$ITEM_URL" 2>/dev/null; then
+                echo "Added: $ITEM_TITLE"
+                ITEMS_PROCESSED=$((ITEMS_PROCESSED + 1))
+              fi
+            fi
+          done
+
+          # Process PRs
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,title,url,labels --limit 100 | \
+            jq -c '.[]' | while read -r item; do
+            ITEM_URL=$(echo "$item" | jq -r '.url')
+            ITEM_TITLE=$(echo "$item" | jq -r '.title')
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "[DRY RUN] Would add PR: $ITEM_TITLE"
+            elif [[ "$PROJECT_ID" != "dry-run" && -n "$PROJECT_ID" ]]; then
+              if gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$ITEM_URL" 2>/dev/null; then
+                echo "Added PR: $ITEM_TITLE"
+                ITEMS_PROCESSED=$((ITEMS_PROCESSED + 1))
+              fi
+            fi
+          done
+
+          # Get counts
+          ISSUE_COUNT=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          PR_COUNT=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          TOTAL_COUNT=$((ISSUE_COUNT + PR_COUNT))
+
+          echo "items_processed=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+          echo "Processed $TOTAL_COUNT items ($ISSUE_COUNT issues, $PR_COUNT PRs)"
+
+      - name: Update Issue Status on Board
+        if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # When PR is merged, update any linked issues on the board
+          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          # Extract issue references (Closes #123, Fixes #456, etc.)
+          ISSUE_REFS=$(echo "$PR_BODY" | grep -oE "(close[sd]?|fix(es|ed)?|resolve[sd]?)\s*#[0-9]+" -i | grep -oE "#[0-9]+" || echo "")
+
+          if [[ -n "$ISSUE_REFS" ]]; then
+            echo "Found linked issues: $ISSUE_REFS"
+
+            for ref in $ISSUE_REFS; do
+              ISSUE_NUM=${ref#\#}
+              echo "Marking issue #$ISSUE_NUM as done..."
+
+              # Add 'done' label
+              gh issue edit "$ISSUE_NUM" --repo "$GITHUB_REPOSITORY" --add-label "done" 2>/dev/null || true
+            done
+          fi
+
+  # Sync Notion database
+  sync-notion:
+    runs-on: ubuntu-latest
+    needs: [trigger-analysis, sync-github-projects]
+    if: |
+      needs.trigger-analysis.outputs.should_sync == 'true' &&
+      (github.event.inputs.sync_notion != 'false')
+    permissions:
+      contents: read
+    outputs:
+      items_synced: ${{ steps.notion-sync.outputs.items_synced }}
+      conflicts: ${{ steps.notion-sync.outputs.conflicts }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests pyyaml
+
+      - name: Sync to Notion
+        id: notion-sync
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          # Read config for database ID
+          if [[ -f "$SYNC_CONFIG_FILE" ]]; then
+            DATABASE_ID=$(grep "database_id:" "$SYNC_CONFIG_FILE" | awk '{print $2}' | tr -d '"' || echo "")
+          else
+            DATABASE_ID=""
+          fi
+
+          if [[ -z "$NOTION_TOKEN" ]]; then
+            echo "::notice::Notion token not configured, skipping Notion sync"
+            echo "items_synced=0" >> $GITHUB_OUTPUT
+            echo "conflicts=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ -z "$DATABASE_ID" ]]; then
+            echo "::notice::Notion database ID not configured, skipping Notion sync"
+            echo "items_synced=0" >> $GITHUB_OUTPUT
+            echo "conflicts=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          python << 'EOF'
+          import os
+          import json
+          import requests
+          from datetime import datetime
+
+          NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+          DATABASE_ID = os.environ.get('DATABASE_ID', '2f3b9fc9-1d9d-8026-9719-f82b0e311f50')
+          GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+          REPO = os.environ.get('GITHUB_REPOSITORY', '')
+          DRY_RUN = os.environ.get('DRY_RUN', 'false') == 'true'
+
+          notion_headers = {
+              "Authorization": f"Bearer {NOTION_TOKEN}",
+              "Content-Type": "application/json",
+              "Notion-Version": "2022-06-28"
+          }
+
+          github_headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json"
+          }
+
+          items_synced = 0
+          conflicts = 0
+
+          def get_github_issues():
+              url = f"https://api.github.com/repos/{REPO}/issues"
+              params = {"state": "open", "per_page": 100}
+              try:
+                  response = requests.get(url, headers=github_headers, params=params)
+                  if response.status_code == 200:
+                      return [i for i in response.json() if 'pull_request' not in i]
+                  return []
+              except Exception as e:
+                  print(f"Error: {e}")
+                  return []
+
+          def get_notion_items():
+              url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+              try:
+                  response = requests.post(url, headers=notion_headers, json={})
+                  if response.status_code == 200:
+                      return response.json().get('results', [])
+                  print(f"Notion query failed: {response.status_code}")
+                  return []
+              except Exception as e:
+                  print(f"Error: {e}")
+                  return []
+
+          def create_notion_page(issue):
+              url = "https://api.notion.com/v1/pages"
+
+              status = "To Do"
+              priority = "Medium"
+
+              for label in issue.get('labels', []):
+                  name = label.get('name', '').lower()
+                  if 'in progress' in name or 'in_progress' in name:
+                      status = "In Progress"
+                  elif 'review' in name:
+                      status = "In Review"
+                  elif 'done' in name:
+                      status = "Done"
+                  elif 'blocked' in name:
+                      status = "Blocked"
+                  elif 'critical' in name or 'p0' in name:
+                      priority = "Critical"
+                  elif 'high' in name or 'p1' in name:
+                      priority = "High"
+                  elif 'low' in name or 'p3' in name:
+                      priority = "Low"
+
+              payload = {
+                  "parent": {"database_id": DATABASE_ID},
+                  "properties": {
+                      "Name": {"title": [{"text": {"content": issue.get('title', '')[:2000]}}]},
+                      "Status": {"select": {"name": status}},
+                      "Priority": {"select": {"name": priority}},
+                      "GitHub Issue": {"number": issue.get('number', 0)},
+                      "GitHub URL": {"url": issue.get('html_url', '')}
+                  }
+              }
+
+              if DRY_RUN:
+                  print(f"[DRY RUN] Would create: {issue.get('title', '')}")
+                  return True
+
+              try:
+                  response = requests.post(url, headers=notion_headers, json=payload)
+                  return response.status_code == 200
+              except:
+                  return False
+
+          # Main sync logic
+          github_issues = get_github_issues()
+          notion_items = get_notion_items()
+
+          # Build map of existing items
+          existing = {}
+          for item in notion_items:
+              props = item.get('properties', {})
+              gh_num = props.get('GitHub Issue', {}).get('number')
+              if gh_num:
+                  existing[gh_num] = item
+
+          # Sync new issues
+          for issue in github_issues:
+              num = issue.get('number')
+              if num not in existing:
+                  if create_notion_page(issue):
+                      items_synced += 1
+                      print(f"Synced: #{num} - {issue.get('title', '')[:50]}")
+
+          # Write outputs
+          output_file = os.environ.get('GITHUB_OUTPUT', '')
+          if output_file:
+              with open(output_file, 'a') as f:
+                  f.write(f"items_synced={items_synced}\n")
+                  f.write(f"conflicts={conflicts}\n")
+
+          print(f"\nSync complete: {items_synced} items, {conflicts} conflicts")
+          EOF
+
+          echo "Notion sync complete"
+
+  # Generate sync report
+  generate-report:
+    runs-on: ubuntu-latest
+    needs: [trigger-analysis, sync-github-projects, sync-notion]
+    if: always() && needs.trigger-analysis.outputs.should_sync == 'true'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Generate Sync Report
+        env:
+          TRIGGER_REASON: ${{ needs.trigger-analysis.outputs.sync_reason }}
+          PRIORITY: ${{ needs.trigger-analysis.outputs.priority }}
+          GITHUB_ITEMS: ${{ needs.sync-github-projects.outputs.items_synced }}
+          NOTION_ITEMS: ${{ needs.sync-notion.outputs.items_synced }}
+          CONFLICTS: ${{ needs.sync-notion.outputs.conflicts }}
+        run: |
+          GITHUB_ITEMS="${GITHUB_ITEMS:-0}"
+          NOTION_ITEMS="${NOTION_ITEMS:-0}"
+          CONFLICTS="${CONFLICTS:-0}"
+          TOTAL=$((GITHUB_ITEMS + NOTION_ITEMS))
+
+          # Determine overall status
+          GH_STATUS="${{ needs.sync-github-projects.result }}"
+          NOTION_STATUS="${{ needs.sync-notion.result }}"
+
+          if [[ "$GH_STATUS" == "success" && ("$NOTION_STATUS" == "success" || "$NOTION_STATUS" == "skipped") ]]; then
+            OVERALL_STATUS="SUCCESS"
+          elif [[ "$GH_STATUS" == "failure" || "$NOTION_STATUS" == "failure" ]]; then
+            OVERALL_STATUS="FAILED"
+          else
+            OVERALL_STATUS="PARTIAL"
+          fi
+
+          # Generate summary
+          echo "## Board Sync Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Trigger" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reason**: $TRIGGER_REASON" >> $GITHUB_STEP_SUMMARY
+          echo "- **Priority**: $PRIORITY" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Target | Status | Items |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Projects | $GH_STATUS | $GITHUB_ITEMS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Notion Database | $NOTION_STATUS | $NOTION_ITEMS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Overall Status**: $OVERALL_STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Items Synced**: $TOTAL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Conflicts**: $CONFLICTS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$OVERALL_STATUS" == "FAILED" ]]; then
+            echo "::error::Board sync failed - check individual job logs"
+          fi
+
+      - name: Create JSON Report
+        run: |
+          cat > sync-report.json << EOF
+          {
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "trigger": "${{ needs.trigger-analysis.outputs.sync_reason }}",
+            "priority": "${{ needs.trigger-analysis.outputs.priority }}",
+            "github": {
+              "status": "${{ needs.sync-github-projects.result }}",
+              "items": ${{ needs.sync-github-projects.outputs.items_synced || 0 }}
+            },
+            "notion": {
+              "status": "${{ needs.sync-notion.result }}",
+              "items": ${{ needs.sync-notion.outputs.items_synced || 0 }},
+              "conflicts": ${{ needs.sync-notion.outputs.conflicts || 0 }}
+            },
+            "repository": "${{ github.repository }}",
+            "run_id": "${{ github.run_id }}"
+          }
+          EOF
+
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report-${{ github.run_number }}
+          path: sync-report.json
+          retention-days: 30
+
+  # Handle failures
+  notify-failure:
+    runs-on: ubuntu-latest
+    needs: [sync-github-projects, sync-notion]
+    if: failure()
+    steps:
+      - name: Notify Sync Failure
+        run: |
+          echo "::error::Board synchronization failed"
+          echo ""
+          echo "## Sync Failure Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "One or more sync operations failed. Please check:" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub token permissions (need 'project' scope)" >> $GITHUB_STEP_SUMMARY
+          echo "- Notion token validity" >> $GITHUB_STEP_SUMMARY
+          echo "- Network connectivity" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Run ID: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY

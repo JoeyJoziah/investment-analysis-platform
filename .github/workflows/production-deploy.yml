@@ -659,14 +659,153 @@ jobs:
         status: failure
         text: |
           🚨 **EMERGENCY PRODUCTION ROLLBACK COMPLETED**
-          
+
           Failed Version: v${{ needs.validate-release.outputs.version }}
           Repository: ${{ github.repository }}
-          
+
           Previous version has been restored. Immediate investigation required.
-          
+
           Rollback Details:
           - Backend: ${{ env.CURRENT_BACKEND_IMAGE }}
           - Frontend: ${{ env.CURRENT_FRONTEND_IMAGE }}
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Sync boards after successful deployment
+  post-deploy-sync:
+    runs-on: ubuntu-latest
+    needs: [deploy-production, post-deployment-monitoring]
+    if: always() && needs.deploy-production.result == 'success'
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      repository-projects: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Mark deployment issues as done
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ needs.validate-release.outputs.version }}
+      run: |
+        echo "Marking deployment-related issues as done..."
+
+        # Find issues related to this release
+        ISSUES=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+          --search "v$VERSION OR release" --json number,title --limit 20 2>/dev/null || echo "[]")
+
+        echo "$ISSUES" | jq -c '.[]' | while read -r issue; do
+          NUM=$(echo "$issue" | jq -r '.number')
+          TITLE=$(echo "$issue" | jq -r '.title')
+
+          # Add deployed label
+          gh issue edit "$NUM" --add-label "deployed" 2>/dev/null || true
+          echo "Marked issue #$NUM as deployed: $TITLE"
+        done
+
+    - name: Sync GitHub Projects Board
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+
+        PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+          jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+        if [[ -n "$PROJECT_ID" && "$PROJECT_ID" != "null" ]]; then
+          echo "Syncing deployed items to board..."
+
+          # Ensure all deployed issues are on the board
+          gh issue list --repo "$GITHUB_REPOSITORY" --label "deployed" --json url --limit 50 | \
+            jq -r '.[].url' | while read -r url; do
+            gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$url" 2>/dev/null || true
+          done
+        fi
+
+    - name: Sync to Notion
+      env:
+        NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: ${{ needs.validate-release.outputs.version }}
+      run: |
+        if [[ -z "$NOTION_TOKEN" ]]; then
+          echo "Notion token not configured, skipping"
+          exit 0
+        fi
+
+        DATABASE_ID=""
+        if [[ -f ".github/board-sync.yml" ]]; then
+          DATABASE_ID=$(grep "database_id:" .github/board-sync.yml | awk '{print $2}' | tr -d '"' || echo "")
+        fi
+
+        if [[ -z "$DATABASE_ID" ]]; then
+          exit 0
+        fi
+
+        python << 'EOF'
+        import os
+        import requests
+
+        NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+        DATABASE_ID = os.environ.get('DATABASE_ID', '')
+        VERSION = os.environ.get('VERSION', '')
+        GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+        REPO = os.environ.get('GITHUB_REPOSITORY', '')
+
+        notion_headers = {
+            "Authorization": f"Bearer {NOTION_TOKEN}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28"
+        }
+
+        github_headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        # Get deployed issues from GitHub
+        url = f"https://api.github.com/repos/{REPO}/issues"
+        params = {"labels": "deployed", "state": "all", "per_page": 50}
+        response = requests.get(url, headers=github_headers, params=params)
+
+        if response.status_code != 200:
+            print("Could not fetch deployed issues")
+            exit(0)
+
+        issues = response.json()
+
+        # Update each in Notion
+        for issue in issues:
+            if 'pull_request' in issue:
+                continue
+
+            issue_num = issue.get('number')
+
+            # Find in Notion
+            query_url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+            query = {"filter": {"property": "GitHub Issue", "number": {"equals": issue_num}}}
+
+            notion_resp = requests.post(query_url, headers=notion_headers, json=query)
+            if notion_resp.status_code == 200:
+                results = notion_resp.json().get('results', [])
+                if results:
+                    page_id = results[0]['id']
+                    update_url = f"https://api.notion.com/v1/pages/{page_id}"
+                    update_payload = {"properties": {"Status": {"select": {"name": "Done"}}}}
+                    requests.patch(update_url, headers=notion_headers, json=update_payload)
+                    print(f"Updated issue #{issue_num} to Done in Notion")
+
+        print(f"Post-deployment Notion sync complete for v{VERSION}")
+        EOF
+
+    - name: Update Deployment Summary
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Board Sync" >> $GITHUB_STEP_SUMMARY
+        echo "Project boards synchronized after successful deployment." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- GitHub Projects: Synced" >> $GITHUB_STEP_SUMMARY
+        echo "- Notion Database: Synced (if configured)" >> $GITHUB_STEP_SUMMARY

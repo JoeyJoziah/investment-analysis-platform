@@ -89,6 +89,16 @@
         "description": "Log PR URL and provide review command after PR creation"
       },
       {
+        "matcher": "tool == \"Edit\" || tool == \"Write\"",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/board-sync/post-edit-sync.sh"
+          }
+        ],
+        "description": "Queue board sync after file edits (non-blocking)"
+      },
+      {
         "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.(ts|tsx|js|jsx)$\"",
         "hooks": [
           {
@@ -147,10 +157,98 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash .claude/hooks/board-sync/session-end-sync.sh"
+          }
+        ],
+        "description": "Sync project boards (GitHub Projects and Notion) on session end"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
             "command": "bash .claude/skills/continuous-learning/evaluate-session.sh"
           }
         ],
         "description": "Evaluate session for extractable patterns"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/helpers/learning-integration.mjs run"
+          }
+        ],
+        "description": "Run learning pipeline to extract patterns"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/helpers/workflow-state.sh get status | grep -q 'in_progress' && bash .claude/helpers/workflow-state.sh set status paused || true"
+          }
+        ],
+        "description": "Pause any active workflow on session end"
+      }
+    ],
+    "WorkflowPhaseStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/helpers/workflow-state.sh phase start $WORKFLOW_PHASE"
+          }
+        ],
+        "description": "Track workflow phase start"
+      }
+    ],
+    "WorkflowPhaseComplete": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/helpers/workflow-state.sh phase complete $WORKFLOW_PHASE"
+          }
+        ],
+        "description": "Track workflow phase completion"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/helpers/quality-gate-check.sh $QUALITY_GATE --report 2>/dev/null || true"
+          }
+        ],
+        "description": "Run quality gate check after phase completion"
+      }
+    ],
+    "WorkflowCheckpoint": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/helpers/workflow-state.sh checkpoint create $WORKFLOW_PHASE"
+          }
+        ],
+        "description": "Create workflow checkpoint for approval"
+      }
+    ],
+    "TaskComplete": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/board-sync/post-task-sync.sh"
+          }
+        ],
+        "description": "Sync project boards after task completion"
       }
     ]
   }

@@ -1,0 +1,196 @@
+# Release Workflow Template
+# Release management: integrate → deploy → sync
+
+name: release
+version: "1.0.0"
+description: Release management workflow
+
+phases:
+  - id: integrate
+    name: INTEGRATE
+    description: Prepare release branch and run final checks
+    order: 1
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Release candidate ready for final approval"
+    topology: hierarchical
+    coordinator: github-swarm-coordinator
+    agents:
+      - github-swarm-coordinator
+      - pr-manager
+      - release-manager
+    commands:
+      - /github-swarm
+      - /pr-manager
+      - /release-manager
+    skills:
+      - github
+      - github-release-management
+    release_preparation:
+      - version_bump
+      - changelog_generation
+      - release_notes
+      - dependency_audit
+    branch_strategy:
+      source: develop
+      target: main
+      release_branch: "release/{version}"
+    outputs:
+      - release_branch
+      - changelog
+      - release_notes
+      - final_test_results
+    success_criteria:
+      all_tests_pass: true
+      changelog_generated: true
+      release_notes_complete: true
+
+  - id: deploy
+    name: DEPLOY
+    description: Deploy release to production
+    order: 2
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Release ready for production deployment"
+    topology: hierarchical
+    coordinator: release-manager
+    agents:
+      - release-manager
+      - infrastructure-devops-swarm
+      - release-swarm
+    commands:
+      - /release-swarm
+      - /sparc-devops
+      - /workflow-automation
+    skills:
+      - github-release-management
+      - github-workflow-automation
+    deployment:
+      strategy: blue_green
+      environments:
+        - staging
+        - production
+      smoke_tests: true
+      health_checks: true
+    rollback:
+      enabled: true
+      automatic: false
+      manual_trigger: true
+    outputs:
+      - deployment_status
+      - smoke_test_results
+      - health_check_results
+      - rollback_instructions
+    success_criteria:
+      staging_deployed: true
+      production_deployed: true
+      all_health_checks_pass: true
+
+  - id: sync
+    name: SYNC
+    description: Finalize release, update documentation, notify
+    order: 3
+    checkpoint:
+      required: false
+      auto_approve: true
+    trigger: automatic
+    topology: sequential
+    coordinator: doc-updater
+    agents:
+      - doc-updater
+      - documentation-agent
+      - release-manager
+    commands:
+      - /update-docs
+      - /notion
+    skills:
+      - notion
+      - github-project-management
+    finalization:
+      - merge_to_main
+      - create_git_tag
+      - github_release
+      - close_milestone
+    documentation:
+      - update_readme
+      - update_changelog
+      - update_api_docs
+    notifications:
+      - stakeholders
+      - users
+      - monitoring_team
+    mandatory_actions:
+      - action: create_git_tag
+        command: "git tag -a v{version} -m 'Release {version}'"
+      - action: github_release
+        command: "gh release create v{version} --title 'Release {version}' --notes-file RELEASE_NOTES.md"
+      - action: notion_sync
+        command: "./notion-sync.sh push"
+        critical: true
+      - action: close_milestone
+        command: "gh api repos/{owner}/{repo}/milestones/{milestone_number} -X PATCH -f state=closed"
+    outputs:
+      - git_tag
+      - github_release
+      - documentation_update
+      - notifications_sent
+    success_criteria:
+      tag_created: true
+      release_published: true
+      docs_updated: true
+      stakeholders_notified: true
+
+quality_gates:
+  pre_release:
+    checks:
+      - all_tests_pass
+      - security_audit_pass
+      - performance_benchmarks
+      - documentation_complete
+  post_deploy:
+    checks:
+      - smoke_tests
+      - health_checks
+      - monitoring_active
+
+versioning:
+  strategy: semver
+  components:
+    major: breaking_changes
+    minor: new_features
+    patch: bug_fixes
+
+release_checklist:
+  pre_release:
+    - [ ] All PRs merged
+    - [ ] Version bumped
+    - [ ] Changelog updated
+    - [ ] Release notes written
+    - [ ] Final tests pass
+  post_release:
+    - [ ] Git tag created
+    - [ ] GitHub release published
+    - [ ] Documentation updated
+    - [ ] Monitoring verified
+    - [ ] Stakeholders notified
+
+metrics:
+  track: true
+  metrics:
+    - release_duration
+    - deployment_success_rate
+    - rollback_count
+    - time_to_first_issue
+
+notifications:
+  checkpoint_required:
+    method: console
+    message: "[RELEASE] Checkpoint: {phase_name} - Awaiting approval"
+  phase_complete:
+    method: console
+    message: "[RELEASE] Phase complete: {phase_name}"
+  workflow_complete:
+    method: console
+    message: "[RELEASE] Version {version} released successfully"

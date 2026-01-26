@@ -1,0 +1,272 @@
+# GitHub Projects Board Sync Configuration
+# Investment Analysis Platform - Board Synchronization
+# Version: 1.0.0
+
+version: 1
+
+project:
+  name: "Investment Analysis Platform"
+  description: "AI-powered investment analysis and recommendation platform"
+  visibility: "private"
+
+# Map task/issue status to board columns
+mapping:
+  status:
+    backlog: "Backlog"
+    todo: "To Do"
+    pending: "To Do"
+    assigned: "Ready"
+    in_progress: "In Progress"
+    review: "In Review"
+    testing: "Testing"
+    completed: "Done"
+    done: "Done"
+    blocked: "Blocked"
+
+  # Map agent types to labels
+  agents:
+    infrastructure-devops-swarm: "🔧 Infrastructure"
+    data-ml-pipeline-swarm: "📊 Data/ML"
+    financial-analysis-swarm: "💰 Financial"
+    backend-api-swarm: "⚙️ Backend"
+    ui-visualization-swarm: "🎨 Frontend"
+    project-quality-swarm: "✅ Quality"
+    security-compliance-swarm: "🔒 Security"
+    godmode-refactorer: "♻️ Refactor"
+    investment-analyst: "📈 Analysis"
+    deal-underwriter: "📋 Underwriting"
+    financial-modeler: "🧮 Modeling"
+    risk-assessor: "⚠️ Risk"
+    portfolio-manager: "💼 Portfolio"
+
+  # Priority mapping
+  priority:
+    critical: "🔴 Critical"
+    high: "🟡 High"
+    medium: "🟢 Medium"
+    low: "⚪ Low"
+
+  # Category labels
+  categories:
+    backend: "backend"
+    frontend: "frontend"
+    infrastructure: "infrastructure"
+    ml-pipeline: "ml-pipeline"
+    security: "security"
+    documentation: "documentation"
+    testing: "testing"
+    compliance: "compliance"
+
+# Custom project fields
+fields:
+  - name: "Agent Type"
+    type: single_select
+    options:
+      - "infrastructure-devops-swarm"
+      - "data-ml-pipeline-swarm"
+      - "financial-analysis-swarm"
+      - "backend-api-swarm"
+      - "ui-visualization-swarm"
+      - "project-quality-swarm"
+      - "security-compliance-swarm"
+
+  - name: "Priority"
+    type: single_select
+    options:
+      - "🔴 Critical"
+      - "🟡 High"
+      - "🟢 Medium"
+      - "⚪ Low"
+
+  - name: "Complexity"
+    type: single_select
+    options:
+      - "XS (< 1 hour)"
+      - "S (1-4 hours)"
+      - "M (1-2 days)"
+      - "L (3-5 days)"
+      - "XL (1+ week)"
+
+  - name: "Sprint"
+    type: iteration
+    duration: 14
+
+  - name: "Estimated Cost"
+    type: number
+    description: "Estimated monthly cost impact ($)"
+
+  - name: "API Calls/Day"
+    type: number
+    description: "Estimated API calls per day"
+
+# Board views configuration
+views:
+  - name: "Sprint Board"
+    type: board
+    group_by: status
+    filters:
+      - "is:open"
+      - "sprint:@current"
+    sort: "priority:desc"
+    columns:
+      - "To Do"
+      - "In Progress"
+      - "In Review"
+      - "Testing"
+      - "Done"
+
+  - name: "Backlog"
+    type: table
+    filters:
+      - "status:backlog,todo"
+    sort: "priority:desc,created:desc"
+    columns:
+      - title
+      - priority
+      - agent_type
+      - complexity
+      - labels
+
+  - name: "Agent Workload"
+    type: table
+    group_by: agent_type
+    columns:
+      - title
+      - status
+      - priority
+      - assignees
+    sort: "status:asc"
+
+  - name: "Cost Tracker"
+    type: table
+    filters:
+      - "label:infrastructure,ml-pipeline"
+    columns:
+      - title
+      - estimated_cost
+      - api_calls_day
+      - status
+    sort: "estimated_cost:desc"
+
+  - name: "Roadmap"
+    type: roadmap
+    date_field: "target_date"
+    group_by: milestone
+
+  - name: "Blocked Items"
+    type: table
+    filters:
+      - "status:blocked"
+    columns:
+      - title
+      - blockers
+      - assignees
+      - created
+
+# Automation rules
+automation:
+  # Auto-move cards based on PR status
+  pull_request:
+    opened:
+      move_to: "In Review"
+      add_label: "has-pr"
+    merged:
+      move_to: "Done"
+      remove_label: "has-pr"
+    closed:
+      move_to: "To Do"
+      add_label: "needs-rework"
+
+  # Auto-assign based on labels
+  issue:
+    labeled:
+      backend:
+        assign_field: "Agent Type"
+        value: "backend-api-swarm"
+      frontend:
+        assign_field: "Agent Type"
+        value: "ui-visualization-swarm"
+      infrastructure:
+        assign_field: "Agent Type"
+        value: "infrastructure-devops-swarm"
+      ml-pipeline:
+        assign_field: "Agent Type"
+        value: "data-ml-pipeline-swarm"
+      security:
+        assign_field: "Agent Type"
+        value: "security-compliance-swarm"
+
+  # Auto-move based on checks
+  checks:
+    all_passed:
+      from: "In Review"
+      to: "Testing"
+    failed:
+      add_label: "ci-failed"
+
+  # Stale item handling
+  stale:
+    days_inactive: 14
+    add_label: "stale"
+    notify: true
+
+# Sync with Notion (bidirectional)
+notion_sync:
+  enabled: true
+  database_id: "2f3b9fc9-1d9d-8026-9719-f82b0e311f50"
+  sync_frequency: "on_change"
+  field_mapping:
+    title: "Name"
+    status: "Status"
+    priority: "Priority"
+    category: "Category"
+    milestone: "Milestone"
+    notes: "Notes"
+  conflict_resolution: "github_wins"
+
+# Metrics and reporting
+metrics:
+  track:
+    - cycle_time
+    - lead_time
+    - throughput
+    - wip_count
+    - blocked_time
+    - first_response_time
+
+  reports:
+    - name: "Sprint Summary"
+      frequency: "bi-weekly"
+      include:
+        - velocity
+        - burndown
+        - completed_items
+        - blockers
+
+    - name: "Cost Report"
+      frequency: "weekly"
+      include:
+        - api_usage
+        - infrastructure_costs
+        - budget_remaining
+
+# Integration with existing workflows
+integrations:
+  github_actions:
+    - workflow: "ci.yml"
+      on_success: "move_to:Testing"
+      on_failure: "add_label:ci-failed"
+
+    - workflow: "security-scan.yml"
+      on_failure: "add_label:security-issue,priority:critical"
+
+    - workflow: "production-deploy.yml"
+      on_success: "move_to:Done,add_label:deployed"
+
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    notifications:
+      - blocked_items
+      - sprint_completion
+      - deployment_success

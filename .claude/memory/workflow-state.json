@@ -1,0 +1,13 @@
+{
+  "workflow_id": null,
+  "workflow_type": null,
+  "task_description": null,
+  "current_phase": null,
+  "phase_index": 0,
+  "status": "idle",
+  "started_at": null,
+  "phases": {},
+  "outputs": {},
+  "metrics": {},
+  "checkpoints": []
+}

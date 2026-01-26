@@ -453,10 +453,73 @@ jobs:
         echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|-----|--------|"," >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
         echo "| Backend Tests | ${{ needs.backend-test.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Backend Quality | ${{ needs.backend-quality.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Frontend Tests | ${{ needs.frontend-test.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Frontend Quality | ${{ needs.frontend-quality.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Docker Build | ${{ needs.docker-build.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Integration Tests | ${{ needs.integration-test.result }} |" >> $GITHUB_STEP_SUMMARY
+
+  # Sync boards after CI completion
+  sync-boards:
+    runs-on: ${{ env.SMALL_RUNNER }}
+    timeout-minutes: 5
+    needs: [backend-test, backend-quality, frontend-test, frontend-quality, docker-build, integration-test]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      repository-projects: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Sync GitHub Projects Board
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+
+        # Find project
+        PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+          jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+        if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "null" ]]; then
+          echo "Project not found, skipping board sync"
+          exit 0
+        fi
+
+        echo "Syncing open issues to project board..."
+
+        # Add all open issues
+        gh issue list --repo "$GITHUB_REPOSITORY" --state open --json url --limit 50 | \
+          jq -r '.[].url' | while read -r url; do
+          gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$url" 2>/dev/null || true
+        done
+
+        # Add all open PRs
+        gh pr list --repo "$GITHUB_REPOSITORY" --state open --json url --limit 20 | \
+          jq -r '.[].url' | while read -r url; do
+          gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$url" 2>/dev/null || true
+        done
+
+        echo "Board sync complete"
+
+    - name: Trigger Notion Sync
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Trigger the dedicated Notion-GitHub sync workflow
+        gh workflow run notion-github-sync.yml \
+          --field direction=github_to_notion \
+          --field conflict_resolution=github_wins 2>/dev/null || \
+          echo "Could not trigger Notion sync (workflow may not exist)"
+
+    - name: Update Summary
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Board Sync" >> $GITHUB_STEP_SUMMARY
+        echo "Project boards synchronized after CI completion." >> $GITHUB_STEP_SUMMARY

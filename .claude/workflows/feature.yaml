@@ -1,0 +1,370 @@
+# Feature Development Workflow Template
+# Full 8-phase workflow for new feature implementation
+
+name: feature
+version: "1.0.0"
+description: Complete feature development workflow with all quality gates
+
+phases:
+  - id: intake
+    name: INTAKE
+    description: Capture requirements, analyze context, create implementation plan
+    order: 1
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Implementation plan ready for review"
+    topology: star
+    coordinator: team-coordinator
+    agents:
+      - planner
+      - team-coordinator
+      - specification
+      - researcher
+    commands:
+      - /plan
+      - /repo-analyze
+      - /analyze-codebase
+      - /sparc-spec-pseudocode
+    skills:
+      - strategic-compact
+      - session-logs
+    outputs:
+      - implementation_plan
+      - context_analysis
+      - risk_assessment
+    success_criteria:
+      plan_approved: true
+      requirements_captured: true
+
+  - id: design
+    name: DESIGN
+    description: Architecture decisions, topology selection, optimization strategy
+    order: 2
+    checkpoint:
+      required: conditional
+      condition: architectural_changes
+      auto_approve: false
+      message: "Architecture Decision Record ready for review"
+    topology: hierarchical
+    coordinator: architecture-reviewer
+    agents:
+      - architect
+      - architecture-reviewer
+      - system-architect
+      - topology-optimizer
+    commands:
+      - /architect
+      - /repo-architect
+      - /sparc-architect
+      - /auto-topology
+      - /topology-optimize
+    skills:
+      - backend-patterns
+      - frontend-patterns
+      - v3-ddd-architecture
+    outputs:
+      - architecture_decision_record
+      - topology_selection
+      - design_document
+    success_criteria:
+      adr_created: true
+      topology_selected: true
+
+  - id: build
+    name: BUILD
+    description: Implement code with test-driven development
+    order: 3
+    checkpoint:
+      required: false
+      auto_approve: true
+    topology: mesh
+    coordinator: coder
+    agents:
+      - tdd-guide
+      - coder
+      - build-error-resolver
+      - backend-api-swarm
+      - ui-visualization-swarm
+      - data-ml-pipeline-swarm
+      - financial-analysis-swarm
+    commands:
+      - /tdd
+      - /sparc-tdd
+      - /code
+      - /sparc-code
+      - /build-fix
+      - /batch-executor
+      - /parallel-execute
+    skills:
+      - tdd-workflow
+      - coding-standards
+      - coding-agent
+    auto_actions:
+      build_error:
+        agent: build-error-resolver
+        max_retries: 3
+        retry_delay_ms: 5000
+    file_routing:
+      "backend/**/*.py": backend-api-swarm
+      "frontend/**/*.tsx": ui-visualization-swarm
+      "frontend/**/*.ts": ui-visualization-swarm
+      "backend/ml/**/*.py": data-ml-pipeline-swarm
+      "**/financial/**": financial-analysis-swarm
+      "infrastructure/**": infrastructure-devops-swarm
+      "data_pipelines/**": data-ml-pipeline-swarm
+    outputs:
+      - implementation
+      - test_results
+      - coverage_report
+    success_criteria:
+      tests_pass: true
+      coverage_threshold: 80
+      build_success: true
+
+  - id: review
+    name: REVIEW
+    description: Multi-agent code review, security scan, quality gates
+    order: 4
+    checkpoint:
+      required: true
+      condition: critical_or_high_issues
+      auto_approve: false
+      message: "Code review complete - awaiting approval"
+    topology: parallel
+    coordinator: project-quality-swarm
+    agents:
+      - code-review-swarm
+      - security-reviewer
+      - code-reviewer
+      - code-analyzer
+      - code-review-expert
+      - project-quality-swarm
+      - performance-optimizer
+    commands:
+      - /code-review
+      - /code-review-swarm
+      - /verify
+      - /security-review
+      - /sparc-security-review
+      - /test-coverage
+    skills:
+      - verification-quality
+      - sec-compliance
+    parallel_reviewers:
+      - security-reviewer
+      - code-reviewer
+      - code-analyzer
+      - performance-optimizer
+    issue_thresholds:
+      CRITICAL: block_immediate
+      HIGH: block_until_addressed
+      MEDIUM: warn_allow_proceed
+      LOW: suggest_auto_approve
+    outputs:
+      - review_report
+      - security_scan
+      - quality_metrics
+    success_criteria:
+      no_critical_issues: true
+      no_high_issues: true
+      security_approved: true
+
+  - id: integrate
+    name: INTEGRATE
+    description: Create PR, run CI, coordinate merge
+    order: 5
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Ready to create PR and integrate"
+    topology: hierarchical
+    coordinator: github-swarm-coordinator
+    agents:
+      - github-swarm-coordinator
+      - pr-manager
+      - issue-triager
+      - sync-coordinator
+      - multi-repo-swarm
+    commands:
+      - /github-swarm
+      - /pr-manager
+      - /pr-enhance
+      - /swarm-pr
+      - /multi-repo-swarm
+      - /project-board-sync
+    skills:
+      - github
+      - github-code-review
+      - github-project-management
+    outputs:
+      - pull_request
+      - ci_results
+      - project_board_update
+    success_criteria:
+      pr_created: true
+      ci_passing: true
+      approvals_received: true
+
+  - id: deploy
+    name: DEPLOY
+    description: Release management, deployment, monitoring
+    order: 6
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Ready to deploy - awaiting approval"
+    topology: hierarchical
+    coordinator: release-manager
+    agents:
+      - release-swarm
+      - release-manager
+      - infrastructure-devops-swarm
+      - workflow-automation
+    commands:
+      - /release-swarm
+      - /release-manager
+      - /workflow-automation
+      - /sparc-devops
+      - /sparc-post-deployment-monitoring-mode
+    skills:
+      - github-release-management
+      - github-workflow-automation
+    outputs:
+      - changelog
+      - release_notes
+      - deployment_status
+      - health_checks
+    success_criteria:
+      deployment_success: true
+      health_checks_pass: true
+      monitoring_active: true
+
+  - id: learn
+    name: LEARN
+    description: Extract patterns, build knowledge, optimize
+    order: 7
+    checkpoint:
+      required: false
+      auto_approve: true
+    trigger: automatic
+    topology: star
+    coordinator: memory-coordinator
+    agents:
+      - sona-learning-optimizer
+      - v3-memory-specialist
+      - memory-coordinator
+    commands:
+      - /learn
+      - /continuous-learning
+      - /strategic-compact
+      - /memory-persist
+    skills:
+      - continuous-learning
+      - agentdb-learning
+      - reasoningbank-intelligence
+      - agentdb-memory-patterns
+    pattern_types:
+      - error_resolution
+      - user_corrections
+      - workarounds
+      - debugging_techniques
+      - project_specific
+      - architectural_decisions
+    promotion_criteria:
+      quality_threshold: 0.6
+      min_usage_count: 3
+    outputs:
+      - learned_patterns
+      - skill_files
+      - hnsw_index_update
+    success_criteria:
+      patterns_evaluated: true
+      memory_persisted: true
+
+  - id: sync
+    name: SYNC
+    description: Documentation, external sync, cleanup
+    order: 8
+    checkpoint:
+      required: false
+      auto_approve: true
+    trigger: automatic
+    topology: sequential
+    coordinator: doc-updater
+    agents:
+      - doc-updater
+      - documentation-agent
+    commands:
+      - /update-docs
+      - /sparc-docs-writer
+      - /notion
+    skills:
+      - notion
+      - summarize
+      - github-project-management
+    mandatory_actions:
+      - action: update_todo_md
+        description: Update TODO.md with completed items
+      - action: update_implementation_status
+        description: Update IMPLEMENTATION_STATUS.md
+      - action: notion_sync_push
+        description: Run ./notion-sync.sh push
+        command: ./notion-sync.sh push
+        critical: true
+      - action: commit_status_updates
+        description: Commit status updates to git
+    outputs:
+      - documentation_update
+      - notion_sync
+      - session_cleanup
+    success_criteria:
+      docs_updated: true
+      notion_synced: true
+      changes_committed: true
+
+quality_gates:
+  pre_commit:
+    checks:
+      - lint_format
+      - type_check
+      - console_log_check
+      - secrets_check
+  pre_push:
+    checks:
+      - unit_tests
+      - coverage_threshold
+      - security_scan
+  pre_merge:
+    checks:
+      - code_review_approval
+      - security_review
+      - architecture_review
+      - integration_tests
+  pre_deploy:
+    checks:
+      - e2e_tests
+      - performance_regression
+      - staging_validation
+      - smoke_tests
+
+metrics:
+  track: true
+  metrics:
+    - phase_duration
+    - agent_invocations
+    - tokens_used
+    - patterns_learned
+    - issues_found
+    - issues_resolved
+
+notifications:
+  checkpoint_required:
+    method: console
+    message: "[WORKFLOW] Checkpoint required: {phase_name} - Awaiting approval"
+  phase_complete:
+    method: console
+    message: "[WORKFLOW] Phase complete: {phase_name}"
+  workflow_complete:
+    method: console
+    message: "[WORKFLOW] Feature workflow completed successfully"

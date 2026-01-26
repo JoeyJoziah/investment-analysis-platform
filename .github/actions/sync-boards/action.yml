@@ -1,0 +1,507 @@
+# GitHub Actions Composite Action for Board Synchronization
+# Investment Analysis Platform
+# Reusable action for syncing GitHub Projects and Notion boards
+
+name: 'Sync Project Boards'
+description: 'Sync GitHub Projects board and optionally Notion database'
+author: 'Investment Analysis Platform'
+
+inputs:
+  sync_github:
+    description: 'Sync GitHub Projects board'
+    required: false
+    default: 'true'
+  sync_notion:
+    description: 'Sync Notion database'
+    required: false
+    default: 'true'
+  direction:
+    description: 'Sync direction: github_to_notion, notion_to_github, bidirectional'
+    required: false
+    default: 'bidirectional'
+  github_token:
+    description: 'GitHub token with project permissions'
+    required: true
+  notion_token:
+    description: 'Notion integration token'
+    required: false
+    default: ''
+  notion_database_id:
+    description: 'Notion database ID to sync with'
+    required: false
+    default: ''
+  dry_run:
+    description: 'Perform dry run without making changes'
+    required: false
+    default: 'false'
+  conflict_resolution:
+    description: 'Conflict resolution strategy: github_wins, notion_wins, newest_wins'
+    required: false
+    default: 'github_wins'
+
+outputs:
+  sync_status:
+    description: 'Overall sync status: success, partial, failed'
+    value: ${{ steps.sync-summary.outputs.status }}
+  items_synced:
+    description: 'Number of items synced'
+    value: ${{ steps.sync-summary.outputs.items_synced }}
+  github_items:
+    description: 'Number of GitHub items processed'
+    value: ${{ steps.github-sync.outputs.items_processed }}
+  notion_items:
+    description: 'Number of Notion items processed'
+    value: ${{ steps.notion-sync.outputs.items_processed }}
+  conflicts_resolved:
+    description: 'Number of conflicts resolved'
+    value: ${{ steps.sync-summary.outputs.conflicts }}
+  sync_report:
+    description: 'Path to detailed sync report'
+    value: ${{ steps.sync-summary.outputs.report_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pip install pyyaml requests
+
+    - name: Sync GitHub Projects Board
+      id: github-sync
+      if: inputs.sync_github == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -euo pipefail
+
+        echo "Starting GitHub Projects sync..."
+
+        # Get repository info
+        REPO_OWNER="${GITHUB_REPOSITORY_OWNER:-}"
+        REPO_NAME="${GITHUB_REPOSITORY#*/}"
+
+        if [[ -z "$REPO_OWNER" ]]; then
+          echo "::error::Could not determine repository owner"
+          echo "items_processed=0" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        # Find or create project
+        echo "Looking for project board..."
+        PROJECT_ID=$(gh project list --owner "$REPO_OWNER" --format json 2>/dev/null | \
+          jq -r '.projects[] | select(.title | contains("Investment Analysis")) | .id' | head -1 || echo "")
+
+        if [[ -z "$PROJECT_ID" || "$PROJECT_ID" == "null" ]]; then
+          echo "Project not found, creating..."
+          if [[ "$DRY_RUN" != "true" ]]; then
+            PROJECT_ID=$(gh project create --owner "$REPO_OWNER" \
+              --title "Investment Analysis Platform" \
+              --format json 2>/dev/null | jq -r '.id' || echo "")
+          else
+            echo "[DRY RUN] Would create project 'Investment Analysis Platform'"
+            PROJECT_ID="dry-run-project"
+          fi
+        fi
+
+        echo "Project ID: $PROJECT_ID"
+
+        # Get all open issues
+        echo "Fetching open issues..."
+        ISSUES=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --json number,title,url,labels,state --limit 200 2>/dev/null || echo "[]")
+        ISSUE_COUNT=$(echo "$ISSUES" | jq 'length')
+        echo "Found $ISSUE_COUNT open issues"
+
+        # Get all open PRs
+        echo "Fetching open pull requests..."
+        PRS=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json number,title,url,labels,state --limit 100 2>/dev/null || echo "[]")
+        PR_COUNT=$(echo "$PRS" | jq 'length')
+        echo "Found $PR_COUNT open pull requests"
+
+        ITEMS_ADDED=0
+
+        if [[ "$PROJECT_ID" != "dry-run-project" && -n "$PROJECT_ID" ]]; then
+          # Add issues to project
+          echo "$ISSUES" | jq -c '.[]' | while read -r issue; do
+            ISSUE_URL=$(echo "$issue" | jq -r '.url')
+            ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "[DRY RUN] Would add issue: $ISSUE_TITLE"
+            else
+              if gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$ISSUE_URL" 2>/dev/null; then
+                echo "Added issue: $ISSUE_TITLE"
+                ITEMS_ADDED=$((ITEMS_ADDED + 1))
+              fi
+            fi
+          done
+
+          # Add PRs to project
+          echo "$PRS" | jq -c '.[]' | while read -r pr; do
+            PR_URL=$(echo "$pr" | jq -r '.url')
+            PR_TITLE=$(echo "$pr" | jq -r '.title')
+
+            if [[ "$DRY_RUN" == "true" ]]; then
+              echo "[DRY RUN] Would add PR: $PR_TITLE"
+            else
+              if gh project item-add "$PROJECT_ID" --owner "$REPO_OWNER" --url "$PR_URL" 2>/dev/null; then
+                echo "Added PR: $PR_TITLE"
+                ITEMS_ADDED=$((ITEMS_ADDED + 1))
+              fi
+            fi
+          done
+        fi
+
+        TOTAL_ITEMS=$((ISSUE_COUNT + PR_COUNT))
+        echo "items_processed=$TOTAL_ITEMS" >> $GITHUB_OUTPUT
+        echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
+
+        echo "GitHub sync complete. Processed $TOTAL_ITEMS items."
+
+    - name: Sync Notion Database
+      id: notion-sync
+      if: inputs.sync_notion == 'true' && inputs.notion_token != ''
+      shell: bash
+      env:
+        NOTION_TOKEN: ${{ inputs.notion_token }}
+        NOTION_DATABASE_ID: ${{ inputs.notion_database_id }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        DIRECTION: ${{ inputs.direction }}
+        CONFLICT_RESOLUTION: ${{ inputs.conflict_resolution }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -euo pipefail
+
+        echo "Starting Notion sync..."
+
+        if [[ -z "$NOTION_TOKEN" ]]; then
+          echo "::warning::Notion token not provided, skipping Notion sync"
+          echo "items_processed=0" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        if [[ -z "$NOTION_DATABASE_ID" ]]; then
+          # Try to get from config file
+          if [[ -f ".github/board-sync.yml" ]]; then
+            NOTION_DATABASE_ID=$(grep "database_id:" .github/board-sync.yml | awk '{print $2}' | tr -d '"' || echo "")
+          fi
+        fi
+
+        if [[ -z "$NOTION_DATABASE_ID" ]]; then
+          echo "::warning::Notion database ID not provided, skipping Notion sync"
+          echo "items_processed=0" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        python << 'PYTHON_SCRIPT'
+        import os
+        import json
+        import requests
+        from datetime import datetime
+
+        NOTION_TOKEN = os.environ.get('NOTION_TOKEN', '')
+        DATABASE_ID = os.environ.get('NOTION_DATABASE_ID', '')
+        DIRECTION = os.environ.get('DIRECTION', 'bidirectional')
+        CONFLICT_RESOLUTION = os.environ.get('CONFLICT_RESOLUTION', 'github_wins')
+        DRY_RUN = os.environ.get('DRY_RUN', 'false') == 'true'
+        GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+        REPO = os.environ.get('GITHUB_REPOSITORY', '')
+
+        notion_headers = {
+            "Authorization": f"Bearer {NOTION_TOKEN}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28"
+        }
+
+        github_headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+
+        items_processed = 0
+        conflicts_found = 0
+
+        # Status mapping
+        STATUS_MAP = {
+            'Backlog': 'backlog',
+            'To Do': 'todo',
+            'In Progress': 'in_progress',
+            'In Review': 'review',
+            'Testing': 'testing',
+            'Done': 'done',
+            'Blocked': 'blocked'
+        }
+
+        REVERSE_STATUS_MAP = {v: k for k, v in STATUS_MAP.items()}
+
+        def get_notion_items():
+            """Fetch items from Notion database"""
+            url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+
+            try:
+                response = requests.post(url, headers=notion_headers, json={})
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get('results', [])
+                else:
+                    print(f"Notion API error: {response.status_code}")
+                    return []
+            except Exception as e:
+                print(f"Error fetching Notion items: {e}")
+                return []
+
+        def get_github_issues():
+            """Fetch issues from GitHub"""
+            url = f"https://api.github.com/repos/{REPO}/issues"
+            params = {"state": "all", "per_page": 100}
+
+            try:
+                response = requests.get(url, headers=github_headers, params=params)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    print(f"GitHub API error: {response.status_code}")
+                    return []
+            except Exception as e:
+                print(f"Error fetching GitHub issues: {e}")
+                return []
+
+        def create_notion_page(issue):
+            """Create a Notion page from GitHub issue"""
+            url = "https://api.notion.com/v1/pages"
+
+            # Map status from labels
+            status = "To Do"
+            priority = "Medium"
+
+            for label in issue.get('labels', []):
+                label_name = label.get('name', '').lower()
+                if 'in progress' in label_name:
+                    status = "In Progress"
+                elif 'review' in label_name:
+                    status = "In Review"
+                elif 'done' in label_name or 'closed' in label_name:
+                    status = "Done"
+                elif 'blocked' in label_name:
+                    status = "Blocked"
+                elif 'critical' in label_name or 'p0' in label_name:
+                    priority = "Critical"
+                elif 'high' in label_name or 'p1' in label_name:
+                    priority = "High"
+                elif 'low' in label_name or 'p3' in label_name:
+                    priority = "Low"
+
+            if issue.get('state') == 'closed':
+                status = "Done"
+
+            payload = {
+                "parent": {"database_id": DATABASE_ID},
+                "properties": {
+                    "Name": {
+                        "title": [{"text": {"content": issue.get('title', 'Untitled')[:2000]}}]
+                    },
+                    "Status": {
+                        "select": {"name": status}
+                    },
+                    "Priority": {
+                        "select": {"name": priority}
+                    },
+                    "GitHub Issue": {
+                        "number": issue.get('number', 0)
+                    },
+                    "GitHub URL": {
+                        "url": issue.get('html_url', '')
+                    }
+                }
+            }
+
+            if DRY_RUN:
+                print(f"[DRY RUN] Would create Notion page: {issue.get('title', 'Untitled')}")
+                return True
+
+            try:
+                response = requests.post(url, headers=notion_headers, json=payload)
+                return response.status_code == 200
+            except Exception as e:
+                print(f"Error creating Notion page: {e}")
+                return False
+
+        def sync_github_to_notion():
+            """Sync GitHub issues to Notion"""
+            global items_processed
+
+            print("Syncing GitHub to Notion...")
+            github_issues = get_github_issues()
+            notion_items = get_notion_items()
+
+            # Build map of existing Notion items by GitHub issue number
+            existing_issues = {}
+            for item in notion_items:
+                props = item.get('properties', {})
+                gh_issue = props.get('GitHub Issue', {})
+                if gh_issue.get('number'):
+                    existing_issues[gh_issue['number']] = item
+
+            for issue in github_issues:
+                if 'pull_request' in issue:
+                    continue  # Skip PRs in issues endpoint
+
+                issue_num = issue.get('number')
+                if issue_num not in existing_issues:
+                    if create_notion_page(issue):
+                        items_processed += 1
+                        print(f"Created Notion page for issue #{issue_num}")
+
+            print(f"GitHub to Notion sync complete. {items_processed} items processed.")
+
+        def sync_notion_to_github():
+            """Sync Notion updates back to GitHub"""
+            global items_processed, conflicts_found
+
+            print("Syncing Notion to GitHub...")
+            notion_items = get_notion_items()
+
+            for item in notion_items:
+                props = item.get('properties', {})
+                gh_issue_prop = props.get('GitHub Issue', {})
+                issue_num = gh_issue_prop.get('number')
+
+                if not issue_num:
+                    continue
+
+                # Get status from Notion
+                status_prop = props.get('Status', {})
+                status_select = status_prop.get('select', {})
+                notion_status = status_select.get('name', 'To Do')
+
+                # Map to GitHub label
+                github_status = STATUS_MAP.get(notion_status, 'todo')
+
+                # Check if we need to update GitHub
+                url = f"https://api.github.com/repos/{REPO}/issues/{issue_num}"
+
+                if DRY_RUN:
+                    print(f"[DRY RUN] Would update GitHub issue #{issue_num} to status: {github_status}")
+                    items_processed += 1
+                    continue
+
+                try:
+                    response = requests.get(url, headers=github_headers)
+                    if response.status_code == 200:
+                        gh_issue = response.json()
+
+                        # Check for conflicts based on last modified
+                        notion_modified = item.get('last_edited_time', '')
+                        gh_modified = gh_issue.get('updated_at', '')
+
+                        if notion_modified and gh_modified:
+                            if notion_modified < gh_modified and CONFLICT_RESOLUTION == 'github_wins':
+                                conflicts_found += 1
+                                print(f"Conflict on issue #{issue_num}: GitHub wins")
+                                continue
+
+                        # Update status via labels if needed
+                        items_processed += 1
+                except Exception as e:
+                    print(f"Error syncing issue #{issue_num}: {e}")
+
+            print(f"Notion to GitHub sync complete. {items_processed} items processed.")
+
+        # Execute sync based on direction
+        if DIRECTION in ['github_to_notion', 'bidirectional']:
+            sync_github_to_notion()
+
+        if DIRECTION in ['notion_to_github', 'bidirectional']:
+            sync_notion_to_github()
+
+        # Write outputs
+        with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+            f.write(f"items_processed={items_processed}\n")
+            f.write(f"conflicts={conflicts_found}\n")
+
+        print(f"\nNotion sync complete. Total items: {items_processed}, Conflicts: {conflicts_found}")
+        PYTHON_SCRIPT
+
+        echo "Notion sync step complete"
+
+    - name: Generate Sync Summary
+      id: sync-summary
+      shell: bash
+      env:
+        GITHUB_ITEMS: ${{ steps.github-sync.outputs.items_processed }}
+        NOTION_ITEMS: ${{ steps.notion-sync.outputs.items_processed }}
+        NOTION_CONFLICTS: ${{ steps.notion-sync.outputs.conflicts }}
+      run: |
+        set -euo pipefail
+
+        GITHUB_ITEMS="${GITHUB_ITEMS:-0}"
+        NOTION_ITEMS="${NOTION_ITEMS:-0}"
+        CONFLICTS="${NOTION_CONFLICTS:-0}"
+
+        TOTAL_ITEMS=$((GITHUB_ITEMS + NOTION_ITEMS))
+
+        # Determine status
+        if [[ "$TOTAL_ITEMS" -gt 0 ]]; then
+          if [[ "$CONFLICTS" -gt 0 ]]; then
+            STATUS="partial"
+          else
+            STATUS="success"
+          fi
+        else
+          STATUS="success"  # No items to sync is still success
+        fi
+
+        # Generate report
+        REPORT_FILE="sync-report-$(date +%Y%m%d-%H%M%S).json"
+        cat > "$REPORT_FILE" << EOF
+        {
+          "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "status": "$STATUS",
+          "github": {
+            "items_processed": $GITHUB_ITEMS
+          },
+          "notion": {
+            "items_processed": $NOTION_ITEMS,
+            "conflicts": $CONFLICTS
+          },
+          "total_items": $TOTAL_ITEMS,
+          "repository": "$GITHUB_REPOSITORY"
+        }
+        EOF
+
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "items_synced=$TOTAL_ITEMS" >> $GITHUB_OUTPUT
+        echo "conflicts=$CONFLICTS" >> $GITHUB_OUTPUT
+        echo "report_path=$REPORT_FILE" >> $GITHUB_OUTPUT
+
+        # Output summary
+        echo "## Board Sync Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | $STATUS |" >> $GITHUB_STEP_SUMMARY
+        echo "| GitHub Items | $GITHUB_ITEMS |" >> $GITHUB_STEP_SUMMARY
+        echo "| Notion Items | $NOTION_ITEMS |" >> $GITHUB_STEP_SUMMARY
+        echo "| Conflicts Resolved | $CONFLICTS |" >> $GITHUB_STEP_SUMMARY
+        echo "| Total Synced | $TOTAL_ITEMS |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "*Sync completed at $(date -u)*" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload Sync Report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: sync-report
+        path: sync-report-*.json
+        retention-days: 30
+
+branding:
+  icon: 'refresh-cw'
+  color: 'blue'

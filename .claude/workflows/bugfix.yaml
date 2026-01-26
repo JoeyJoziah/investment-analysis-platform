@@ -1,0 +1,166 @@
+# Bugfix Workflow Template
+# Streamlined workflow for bug fixes: intake → build → review → integrate
+
+name: bugfix
+version: "1.0.0"
+description: Streamlined workflow for bug fixes
+
+phases:
+  - id: intake
+    name: INTAKE
+    description: Analyze bug, understand context, plan fix
+    order: 1
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Bug analysis complete - fix plan ready for review"
+    topology: star
+    coordinator: team-coordinator
+    agents:
+      - planner
+      - team-coordinator
+      - researcher
+    commands:
+      - /plan
+      - /repo-analyze
+    skills:
+      - session-logs
+    outputs:
+      - bug_analysis
+      - fix_plan
+      - root_cause
+    success_criteria:
+      root_cause_identified: true
+      fix_plan_approved: true
+
+  - id: build
+    name: BUILD
+    description: Implement bug fix with TDD
+    order: 2
+    checkpoint:
+      required: false
+      auto_approve: true
+    topology: mesh
+    coordinator: coder
+    agents:
+      - tdd-guide
+      - coder
+      - build-error-resolver
+    commands:
+      - /tdd
+      - /code
+      - /build-fix
+    skills:
+      - tdd-workflow
+      - coding-standards
+    auto_actions:
+      build_error:
+        agent: build-error-resolver
+        max_retries: 3
+        retry_delay_ms: 5000
+    outputs:
+      - fix_implementation
+      - regression_tests
+      - test_results
+    success_criteria:
+      tests_pass: true
+      regression_tests_added: true
+      build_success: true
+
+  - id: review
+    name: REVIEW
+    description: Code review focusing on bug fix correctness
+    order: 3
+    checkpoint:
+      required: true
+      condition: critical_or_high_issues
+      auto_approve: false
+      message: "Bug fix review complete - awaiting approval"
+    topology: parallel
+    coordinator: project-quality-swarm
+    agents:
+      - code-review-swarm
+      - security-reviewer
+      - code-reviewer
+    commands:
+      - /code-review
+      - /verify
+    skills:
+      - verification-quality
+    parallel_reviewers:
+      - code-reviewer
+      - security-reviewer
+    focus_areas:
+      - regression_risk
+      - side_effects
+      - test_coverage
+    outputs:
+      - review_report
+      - regression_analysis
+    success_criteria:
+      no_regression_risk: true
+      tests_adequate: true
+
+  - id: integrate
+    name: INTEGRATE
+    description: Create PR and merge bug fix
+    order: 4
+    checkpoint:
+      required: true
+      auto_approve: false
+      message: "Ready to create PR for bug fix"
+    topology: hierarchical
+    coordinator: github-swarm-coordinator
+    agents:
+      - github-swarm-coordinator
+      - pr-manager
+    commands:
+      - /github-swarm
+      - /pr-manager
+    skills:
+      - github
+    pr_template: |
+      ## Bug Fix
+
+      **Issue**: {issue_reference}
+      **Root Cause**: {root_cause}
+
+      ## Changes
+      {changes_summary}
+
+      ## Testing
+      - [ ] Regression tests added
+      - [ ] Existing tests pass
+      - [ ] Manual verification complete
+    outputs:
+      - pull_request
+      - ci_results
+    success_criteria:
+      pr_created: true
+      ci_passing: true
+
+quality_gates:
+  pre_commit:
+    checks:
+      - lint_format
+      - type_check
+  pre_push:
+    checks:
+      - unit_tests
+      - regression_tests
+      - coverage_maintained
+
+metrics:
+  track: true
+  metrics:
+    - time_to_fix
+    - regression_tests_added
+    - review_iterations
+
+notifications:
+  phase_complete:
+    method: console
+    message: "[BUGFIX] Phase complete: {phase_name}"
+  workflow_complete:
+    method: console
+    message: "[BUGFIX] Bug fix workflow completed"
