@@ -439,5 +439,49 @@ class StockRepository(AsyncCRUDRepository[Stock]):
         )
 
 
+    async def get_top_stocks(
+        self,
+        limit: int = 100,
+        by_market_cap: bool = True,
+        *,
+        session: Optional[AsyncSession] = None
+    ) -> List[Stock]:
+        """
+        Get top stocks ordered by market cap or other criteria.
+
+        Args:
+            limit: Maximum number of stocks to return
+            by_market_cap: Whether to order by market cap (default True)
+            session: Optional existing session
+
+        Returns:
+            List of top stocks
+        """
+        async def _get_top_stocks(session: AsyncSession) -> List[Stock]:
+            query = select(Stock).where(
+                and_(
+                    Stock.is_active == True,
+                    Stock.is_tradable == True,
+                    Stock.market_cap.is_not(None)
+                )
+            )
+
+            if by_market_cap:
+                query = query.order_by(Stock.market_cap.desc())
+            else:
+                query = query.order_by(Stock.symbol.asc())
+
+            query = query.limit(limit)
+
+            result = await session.execute(query)
+            return result.scalars().all()
+
+        if session:
+            return await _get_top_stocks(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_top_stocks(session)
+
+
 # Create repository instance
 stock_repository = StockRepository()

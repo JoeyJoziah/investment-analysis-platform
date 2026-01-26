@@ -307,38 +307,98 @@ async def generate_ml_powered_recommendations(
     limit: int = 10,
     db_session: AsyncSession = None
 ) -> List["RecommendationDetail"]:
-    """Generate ML-powered recommendations with real market data"""
+    """
+    Generate ML-powered recommendations with real market data.
+
+    OPTIMIZED: Uses batch queries to eliminate N+1 query pattern.
+    Previously: 201+ queries (1 for stocks + 2 per stock for prices/ML)
+    Now: 2-3 queries total (1 for stocks + 1 bulk price history)
+    """
     try:
         logger.info(f"Generating ML recommendations for user {user_id}, portfolio {portfolio_id}")
-        
-        # Get market data for top stocks
+
+        # Query 1: Get market data for top stocks
         top_stocks = await stock_repository.get_top_stocks(
             limit=100,
             by_market_cap=True,
             session=db_session
         )
-        
-        recommendations = []
-        
-        for stock in top_stocks[:limit]:
+
+        if not top_stocks:
+            logger.warning("No stocks found for recommendations")
+            return [generate_recommendation() for _ in range(min(limit, 5))]
+
+        # OPTIMIZATION: Batch fetch all price histories in a single query
+        # This eliminates the N+1 pattern (was: 1 query per stock in loop)
+        symbols_to_fetch = [stock.symbol for stock in top_stocks[:limit * 2]]  # Fetch extra for filtering
+
+        # Query 2: Single bulk query for all price histories
+        all_price_histories = await price_repository.get_bulk_price_history(
+            symbols=symbols_to_fetch,
+            start_date=datetime.now().date() - timedelta(days=90),
+            end_date=datetime.now().date(),
+            limit_per_symbol=60,
+            session=db_session
+        )
+
+        logger.debug(f"Bulk fetched price histories for {len(all_price_histories)} symbols")
+
+        # Build stock lookup for similar stocks calculation
+        stock_by_sector: Dict[str, List[str]] = {}
+        for stock in top_stocks:
+            if stock.sector:
+                if stock.sector not in stock_by_sector:
+                    stock_by_sector[stock.sector] = []
+                stock_by_sector[stock.sector].append(stock.symbol)
+
+        # OPTIMIZATION: Prepare batch ML predictions if available
+        ml_predictions_batch: Dict[str, Dict[str, Any]] = {}
+        if model_manager and recommendation_engine:
             try:
-                # Get price history for ML analysis
-                price_history = await price_repository.get_price_history(
-                    symbol=stock.symbol,
-                    start_date=datetime.now().date() - timedelta(days=90),
-                    end_date=datetime.now().date(),
-                    limit=60,
-                    session=db_session
-                )
-                
+                # Prepare all price data for batch ML prediction
+                batch_price_data = {}
+                for symbol, price_history in all_price_histories.items():
+                    if price_history and len(price_history) >= 30:
+                        batch_price_data[symbol] = [
+                            {
+                                'open': float(p.open),
+                                'high': float(p.high),
+                                'low': float(p.low),
+                                'close': float(p.close),
+                                'volume': p.volume,
+                                'date': p.date
+                            }
+                            for p in price_history
+                        ]
+
+                # Try batch prediction if available, otherwise will fall back to individual
+                if hasattr(recommendation_engine, 'analyze_stocks_batch'):
+                    ml_predictions_batch = await recommendation_engine.analyze_stocks_batch(
+                        price_data_batch=batch_price_data,
+                        user_risk_tolerance=risk_level.value if risk_level else 'moderate'
+                    )
+            except Exception as e:
+                logger.warning(f"Batch ML prediction not available, will use individual: {e}")
+
+        recommendations = []
+
+        # Process stocks using pre-fetched data (no additional queries in loop)
+        for stock in top_stocks:
+            if len(recommendations) >= limit:
+                break
+
+            try:
+                # Use pre-fetched price history (no query needed)
+                price_history = all_price_histories.get(stock.symbol, [])
+
                 if not price_history or len(price_history) < 30:
                     continue
-                
-                # Prepare data for ML model
+
+                # Prepare data for ML model (using cached data)
                 price_data = [
                     {
                         'open': float(p.open),
-                        'high': float(p.high), 
+                        'high': float(p.high),
                         'low': float(p.low),
                         'close': float(p.close),
                         'volume': p.volume,
@@ -346,55 +406,59 @@ async def generate_ml_powered_recommendations(
                     }
                     for p in price_history
                 ]
-                
+
                 current_price = float(price_history[-1].close)
-                
-                # Get ML prediction if available
+
+                # Get ML prediction (from batch or individual)
                 ml_prediction = None
                 recommendation_type = RecommendationType.HOLD
                 confidence_score = 0.6
-                
-                if model_manager and recommendation_engine:
+
+                if stock.symbol in ml_predictions_batch:
+                    # Use batch prediction result
+                    analysis = ml_predictions_batch[stock.symbol]
+                    ml_prediction = analysis.get('prediction')
+                    confidence_score = analysis.get('confidence', 0.6)
+                elif model_manager and recommendation_engine:
+                    # Fallback to individual prediction
                     try:
                         analysis = await recommendation_engine.analyze_stock(
                             symbol=stock.symbol,
                             price_data=price_data,
                             user_risk_tolerance=risk_level.value if risk_level else 'moderate'
                         )
-                        
                         ml_prediction = analysis.get('prediction')
                         confidence_score = analysis.get('confidence', 0.6)
-                        
-                        # Map ML prediction to recommendation type
-                        if ml_prediction:
-                            pred_value = ml_prediction.get('direction', 0)
-                            if pred_value > 0.7:
-                                recommendation_type = RecommendationType.STRONG_BUY
-                            elif pred_value > 0.3:
-                                recommendation_type = RecommendationType.BUY
-                            elif pred_value < -0.7:
-                                recommendation_type = RecommendationType.STRONG_SELL
-                            elif pred_value < -0.3:
-                                recommendation_type = RecommendationType.SELL
-                                
                     except Exception as e:
                         logger.error(f"Error in ML prediction for {stock.symbol}: {e}")
-                
+
+                # Map ML prediction to recommendation type
+                if ml_prediction:
+                    pred_value = ml_prediction.get('direction', 0)
+                    if pred_value > 0.7:
+                        recommendation_type = RecommendationType.STRONG_BUY
+                    elif pred_value > 0.3:
+                        recommendation_type = RecommendationType.BUY
+                    elif pred_value < -0.7:
+                        recommendation_type = RecommendationType.STRONG_SELL
+                    elif pred_value < -0.3:
+                        recommendation_type = RecommendationType.SELL
+
                 # Calculate target price
                 target_price = current_price * (1 + (confidence_score * 0.2 - 0.1))
                 expected_return = (target_price - current_price) / current_price
-                
+
                 # Determine category based on stock characteristics
                 category = RecommendationCategory.GROWTH
                 if stock.sector == "Technology":
                     category = RecommendationCategory.GROWTH
                 elif stock.market_cap and stock.market_cap > 100000000000:
                     category = RecommendationCategory.VALUE
-                    
+
                 # Filter by requested categories
                 if categories and category not in categories:
                     continue
-                
+
                 # Generate SEC disclosure for this recommendation
                 sec_disclosure = generate_sec_disclosure(
                     algorithm_type="ML-powered quantitative analysis",
@@ -405,6 +469,11 @@ async def generate_ml_powered_recommendations(
                     ],
                     confidence_score=confidence_score
                 )
+
+                # Get similar stocks from pre-computed sector lookup
+                similar_stocks = []
+                if stock.sector and stock.sector in stock_by_sector:
+                    similar_stocks = [s for s in stock_by_sector[stock.sector] if s != stock.symbol][:3]
 
                 # Create recommendation with SEC disclosure
                 recommendation = RecommendationDetail(
@@ -450,20 +519,21 @@ async def generate_ml_powered_recommendations(
                     market_cap=stock.market_cap or 0,
                     volume=price_history[-1].volume if price_history else 0,
                     analyst_consensus=None,  # Would integrate with analyst data
-                    similar_stocks=[s.symbol for s in top_stocks if s.sector == stock.sector and s.symbol != stock.symbol][:3],
+                    similar_stocks=similar_stocks,
                     sec_disclosure=sec_disclosure
                 )
-                
+
                 recommendations.append(recommendation)
-                
+
             except Exception as e:
                 logger.error(f"Error generating recommendation for {stock.symbol}: {e}")
                 continue
-        
+
         # Sort by confidence score
         recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
+        logger.info(f"Generated {len(recommendations)} ML recommendations using optimized batch queries")
         return recommendations[:limit]
-        
+
     except Exception as e:
         logger.error(f"Error generating ML recommendations: {e}")
         # Fallback to mock data

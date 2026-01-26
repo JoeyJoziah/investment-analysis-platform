@@ -408,5 +408,136 @@ class PriceHistoryRepository(AsyncCRUDRepository[PriceHistory]):
                 return await _get_missing_dates(session)
 
 
+    async def get_bulk_price_history(
+        self,
+        symbols: List[str],
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        *,
+        limit_per_symbol: int = 60,
+        session: Optional[AsyncSession] = None
+    ) -> Dict[str, List[PriceHistory]]:
+        """
+        Batch fetch price history for multiple symbols in a single query.
+        Eliminates N+1 query pattern by fetching all data at once.
+
+        Args:
+            symbols: List of stock symbols
+            start_date: Start date (inclusive)
+            end_date: End date (inclusive)
+            limit_per_symbol: Maximum records per symbol
+            session: Optional existing session
+
+        Returns:
+            Dictionary mapping symbol to list of price history records
+        """
+        if not symbols:
+            return {}
+
+        async def _get_bulk_history(session: AsyncSession) -> Dict[str, List[PriceHistory]]:
+            # Normalize symbols to uppercase
+            normalized_symbols = [s.upper() for s in symbols]
+
+            # Use a window function to limit records per stock efficiently
+            # This fetches all data in a single query with row numbering
+            from sqlalchemy import case
+
+            # Build base query joining PriceHistory with Stock
+            base_query = (
+                select(
+                    PriceHistory,
+                    Stock.symbol,
+                    func.row_number().over(
+                        partition_by=PriceHistory.stock_id,
+                        order_by=PriceHistory.date.desc()
+                    ).label('row_num')
+                )
+                .join(Stock, PriceHistory.stock_id == Stock.id)
+                .where(Stock.symbol.in_(normalized_symbols))
+            )
+
+            # Apply date filters
+            if start_date:
+                base_query = base_query.where(PriceHistory.date >= start_date)
+            if end_date:
+                base_query = base_query.where(PriceHistory.date <= end_date)
+
+            # Subquery to apply row limit per symbol
+            subquery = base_query.subquery()
+
+            # Final query filtering by row_num
+            final_query = (
+                select(subquery)
+                .where(subquery.c.row_num <= limit_per_symbol)
+                .order_by(subquery.c.symbol, subquery.c.date.desc())
+            )
+
+            result = await session.execute(final_query)
+            rows = result.all()
+
+            # Group results by symbol
+            price_histories: Dict[str, List[PriceHistory]] = {s: [] for s in normalized_symbols}
+
+            for row in rows:
+                symbol = row.symbol
+                # Reconstruct PriceHistory object from row data
+                price_record = PriceHistory(
+                    id=row.id,
+                    stock_id=row.stock_id,
+                    date=row.date,
+                    open=row.open,
+                    high=row.high,
+                    low=row.low,
+                    close=row.close,
+                    adjusted_close=row.adjusted_close if hasattr(row, 'adjusted_close') else None,
+                    volume=row.volume,
+                    intraday_volatility=row.intraday_volatility if hasattr(row, 'intraday_volatility') else None,
+                    typical_price=row.typical_price if hasattr(row, 'typical_price') else None,
+                    vwap=row.vwap if hasattr(row, 'vwap') else None,
+                )
+                if symbol in price_histories:
+                    price_histories[symbol].append(price_record)
+
+            # Reverse lists to get chronological order (oldest first)
+            for symbol in price_histories:
+                price_histories[symbol] = list(reversed(price_histories[symbol]))
+
+            logger.debug(f"Bulk fetched price history for {len(symbols)} symbols in single query")
+            return price_histories
+
+        if session:
+            return await _get_bulk_history(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_bulk_history(session)
+
+    async def get_latest_prices_bulk(
+        self,
+        symbols: List[str],
+        session: Optional[AsyncSession] = None
+    ) -> Dict[str, Optional[PriceHistory]]:
+        """
+        Get the latest price record for multiple stocks in a single query.
+
+        Args:
+            symbols: List of stock symbols
+            session: Optional existing session
+
+        Returns:
+            Dictionary mapping symbol to latest price record (or None)
+        """
+        bulk_history = await self.get_bulk_price_history(
+            symbols=symbols,
+            limit_per_symbol=1,
+            session=session
+        )
+
+        # Extract just the latest price (last item in reversed list)
+        return {
+            symbol: prices[-1] if prices else None
+            for symbol, prices in bulk_history.items()
+        }
+
+
 # Create repository instance
 price_repository = PriceHistoryRepository()

@@ -6,6 +6,13 @@ This directory contains comprehensive integration tests for the Investment Analy
 
 ### Test Categories
 
+0. **N+1 Query Fix Tests** (`test_n1_query_fix.py`) - NEW
+   - Batch query method validation
+   - Query count reduction verification
+   - Performance benchmarking
+   - Integration with recommendations engine
+   - Edge case handling
+
 1. **API Integration Tests** (`test_api_integration.py`)
    - Comprehensive API endpoint testing
    - Authentication and authorization
@@ -107,6 +114,16 @@ python run_integration_tests.py --suite regression
 Complete integration testing:
 ```bash
 python run_integration_tests.py --suite full
+```
+
+#### N+1 Query Fix Tests
+Tests for CRITICAL-3 optimization:
+```bash
+# Run unit tests
+pytest backend/tests/test_n1_query_fix.py -v
+
+# Run performance benchmark
+python -m backend.tests.benchmark_n1_query_fix
 ```
 
 #### Security Tests
@@ -224,6 +241,7 @@ Tests are organized using pytest markers:
 - `@pytest.mark.performance` - Performance tests
 - `@pytest.mark.slow` - Slow-running tests
 - `@pytest.mark.external_api` - Tests requiring external APIs
+- `@pytest.mark.n1_query_fix` - N+1 query pattern fix tests
 
 ### Performance Thresholds
 
