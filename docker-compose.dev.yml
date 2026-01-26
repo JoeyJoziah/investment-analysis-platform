@@ -50,18 +50,11 @@ services:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./scripts/init_database.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
-  # Override Redis for development
+  # Override Redis for development - increased memory for better cache performance
   redis:
     ports:
       - "6379:6379"  # Expose for local tools
-    command: redis-server --appendonly yes --loglevel debug --requirepass ${REDIS_PASSWORD:-dev_password}
-
-  # Override Elasticsearch for development
-  elasticsearch:
-    ports:
-      - "9200:9200"  # Expose for local tools
-    environment:
-      - xpack.security.enabled=false  # Disable security for dev
+    command: redis-server --appendonly yes --loglevel debug --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-dev_password}
 
   # Development-specific services
   flower:

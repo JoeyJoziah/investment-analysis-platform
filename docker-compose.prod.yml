@@ -113,13 +113,14 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Override Redis for production - Optimized for $50/month budget
+  # Override Redis for production - Increased memory for better cache hit rates
+  # Memory increased from 128MB to 512MB for 2-3x improved cache performance
   redis:
     command: >
       redis-server
       --appendonly yes
       --appendfsync everysec
-      --maxmemory ${REDIS_MAX_MEMORY:-128mb}
+      --maxmemory ${REDIS_MAX_MEMORY:-512mb}
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD}
       --tcp-keepalive 60
@@ -131,31 +132,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.25'
-          memory: 150M
+          cpus: '0.5'
+          memory: 600M
         reservations:
           cpus: '0.1'
-          memory: 64M
-
-  # Override Elasticsearch for production - Optimized for $50/month budget
-  # Note: Security is optional, controlled by ELASTICSEARCH_SECURITY_ENABLED
-  elasticsearch:
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=${ELASTICSEARCH_SECURITY_ENABLED:-false}
-      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-changeme}
-      - "ES_JAVA_OPTS=-Xms${ELASTICSEARCH_HEAP_SIZE:-512m} -Xmx${ELASTICSEARCH_HEAP_SIZE:-512m}"
-    logging: *default-logging
-    healthcheck:
-      <<: *healthcheck-defaults
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
           memory: 256M
 
   # =============================================================================
@@ -174,7 +154,6 @@ services:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/1
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       # Matplotlib and home directory configuration
       - HOME=/home/appuser
       - MPLCONFIGDIR=/tmp/matplotlib

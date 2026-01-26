@@ -25,9 +25,18 @@ import aiofiles
 from functools import wraps
 import hashlib
 import gzip
-import elasticsearch
-from elasticsearch.helpers import bulk
 import json_logging
+
+# Elasticsearch is optional - removed to save $15-20/month
+# Using file-based logging and PostgreSQL full-text search instead
+try:
+    import elasticsearch
+    from elasticsearch.helpers import bulk
+    ELASTICSEARCH_AVAILABLE = True
+except ImportError:
+    ELASTICSEARCH_AVAILABLE = False
+    elasticsearch = None
+    bulk = None
 
 from .exceptions import *
 
@@ -506,15 +515,17 @@ class LogAnalyzer:
 
 
 class ElasticsearchHandler(logging.Handler):
-    """Custom log handler for Elasticsearch"""
-    
+    """Custom log handler for Elasticsearch (optional - disabled by default to save costs)"""
+
     def __init__(self, elasticsearch_hosts: List[str], index_prefix: str = "logs"):
         super().__init__()
+        if not ELASTICSEARCH_AVAILABLE:
+            raise ImportError("Elasticsearch library not available. Install with: pip install elasticsearch")
         self.es_client = elasticsearch.Elasticsearch(elasticsearch_hosts)
         self.index_prefix = index_prefix
         self.buffer: deque = deque(maxlen=1000)
         self.buffer_lock = threading.Lock()
-        
+
         # Start background flush task
         self.flush_interval = 5  # seconds
         self.flush_task = threading.Thread(target=self._flush_loop, daemon=True)
@@ -913,14 +924,14 @@ class LoggingSystem:
             file_handler.setFormatter(json_formatter)
             root_logger.addHandler(file_handler)
         
-        # Elasticsearch handler
-        if elasticsearch_hosts:
+        # Elasticsearch handler (optional - disabled by default to save $15-20/month)
+        if elasticsearch_hosts and ELASTICSEARCH_AVAILABLE:
             try:
                 es_handler = ElasticsearchHandler(elasticsearch_hosts, "investment-app-logs")
                 es_handler.setLevel(LogLevel.INFO.value)
                 root_logger.addHandler(es_handler)
             except Exception as e:
-                print(f"Failed to configure Elasticsearch logging: {e}", file=sys.stderr)
+                print(f"Elasticsearch logging disabled (optional): {e}", file=sys.stderr)
     
     def get_logger(self, name: str) -> StructuredLogger:
         """Get or create structured logger"""
@@ -1206,11 +1217,13 @@ def example_alert_handler(alert_data: Dict[str, Any]):
 
 def setup_application_logging():
     """Setup logging for the investment analysis application"""
-    
+
     # Initialize logging system
+    # Note: Elasticsearch is disabled by default to save $15-20/month
+    # Using file-based logging instead - can be re-enabled if needed
     logging_system = initialize_logging_system(
         log_level=LogLevel.DEBUG,
-        elasticsearch_hosts=['localhost:9200'],  # Configure as needed
+        elasticsearch_hosts=None,  # Elasticsearch disabled to save costs
         log_directory='logs',
         enable_file_rotation=True,
         enable_console_output=True

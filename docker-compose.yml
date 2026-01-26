@@ -389,26 +389,6 @@ services:
           memory: 64M
     restart: unless-stopped
 
-  # Elasticsearch Exporter
-  elasticsearch-exporter:
-    image: prometheuscommunity/elasticsearch-exporter:v1.6.0
-    container_name: investment_elasticsearch_exporter
-    command:
-      - '--es.uri=http://elasticsearch:9200'
-      - '--es.all'
-      - '--es.indices'
-      - '--es.shards'
-    ports:
-      - "9114:9114"
-    depends_on:
-      - elasticsearch
-    deploy:
-      resources:
-        limits:
-          cpus: '0.1'
-          memory: 64M
-    restart: unless-stopped
-
   # Nginx Exporter
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:0.11.0
@@ -475,7 +455,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  elasticsearch_data:
   prometheus_data:
   grafana_data:
   alertmanager_data:

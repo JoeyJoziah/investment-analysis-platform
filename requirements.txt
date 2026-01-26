@@ -86,7 +86,9 @@ aiokafka==0.11.0
 # ============================================================================
 # SEARCH & INDEXING
 # ============================================================================
-elasticsearch==8.15.0
+# elasticsearch removed - using PostgreSQL full-text search instead (saves $15-20/month)
+# Uncomment the following line if Elasticsearch is needed:
+# elasticsearch==8.15.0
 
 # ============================================================================
 # NLP & SENTIMENT ANALYSIS

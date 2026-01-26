@@ -235,10 +235,17 @@ def cache_with_ttl(ttl: int = 300, prefix: str = None, skip_args: int = 0):
 
     def _serialize_arg(arg: Any) -> str:
         """Serialize an argument for cache key generation."""
+        from datetime import date, datetime
+        from enum import Enum
+
         if arg is None:
             return "None"
         if isinstance(arg, (str, int, float, bool)):
             return str(arg)
+        if isinstance(arg, (datetime, date)):
+            return arg.isoformat()
+        if isinstance(arg, Enum):
+            return str(arg.value)
         if isinstance(arg, (list, tuple)):
             return f"[{','.join(_serialize_arg(a) for a in arg)}]"
         if isinstance(arg, dict):
@@ -277,6 +284,36 @@ def cache_with_ttl(ttl: int = 300, prefix: str = None, skip_args: int = 0):
             return f"{func_name}:{key_hash}"
 
         return key_string.replace(" ", "_")
+
+    def _convert_to_serializable(obj: Any) -> Any:
+        """Convert an object to a JSON-serializable format."""
+        from datetime import date, datetime
+        from enum import Enum
+        from decimal import Decimal
+
+        if obj is None or isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        if isinstance(obj, Enum):
+            return obj.value
+        if hasattr(obj, 'model_dump'):  # Pydantic v2
+            return obj.model_dump(mode='json')
+        if hasattr(obj, 'dict'):  # Pydantic v1
+            return obj.dict()
+        if isinstance(obj, (list, tuple)):
+            return [_convert_to_serializable(item) for item in obj]
+        if isinstance(obj, dict):
+            return {k: _convert_to_serializable(v) for k, v in obj.items()}
+        # Fallback: try to convert to string
+        return str(obj)
+
+    def _serialize_result(result: Any) -> str:
+        """Serialize a result for storage in Redis cache."""
+        serializable = _convert_to_serializable(result)
+        return json.dumps(serializable)
 
     def decorator(func):
         # Determine the cache key prefix

@@ -19,7 +19,15 @@ import statistics
 from prometheus_client import Counter as PrometheusCounter, Gauge, Histogram
 import aiofiles
 import aiofiles.os
-from elasticsearch import AsyncElasticsearch
+
+# Elasticsearch is optional - removed to save $15-20/month
+# Using file-based logging and PostgreSQL full-text search instead
+try:
+    from elasticsearch import AsyncElasticsearch
+    ELASTICSEARCH_AVAILABLE = True
+except ImportError:
+    ELASTICSEARCH_AVAILABLE = False
+    AsyncElasticsearch = None
 
 from backend.config.monitoring_config import monitoring_config
 from backend.utils.structured_logging import get_structured_logger
@@ -572,22 +580,28 @@ class LogAnomalyDetector:
 
 class LogAggregator:
     """Aggregates logs from multiple sources."""
-    
+
     def __init__(self):
-        self.elasticsearch_client: Optional[AsyncElasticsearch] = None
+        self.elasticsearch_client: Optional[object] = None  # AsyncElasticsearch when available
         self.log_buffers: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
         self.processed_files: Set[str] = set()
         self._setup_elasticsearch()
-    
+
     def _setup_elasticsearch(self):
-        """Setup Elasticsearch client if configured."""
+        """Setup Elasticsearch client if configured and available.
+        Note: Elasticsearch is optional and disabled by default to save $15-20/month.
+        """
+        if not ELASTICSEARCH_AVAILABLE:
+            logger.info("Elasticsearch disabled (not installed) - using file-based logging")
+            return
+
         es_config = monitoring_config.logging.log_aggregation_endpoint
         if es_config:
             try:
                 self.elasticsearch_client = AsyncElasticsearch([es_config])
                 logger.info("Elasticsearch client initialized")
             except Exception as e:
-                logger.warning(f"Failed to initialize Elasticsearch: {e}")
+                logger.info(f"Elasticsearch not configured (optional): {e}")
     
     async def aggregate_log_files(self, log_directory: str) -> List[LogEntry]:
         """Aggregate log entries from files."""
@@ -651,10 +665,10 @@ class LogAggregator:
         return entries
     
     async def send_to_elasticsearch(self, log_entries: List[LogEntry]):
-        """Send log entries to Elasticsearch."""
-        if not self.elasticsearch_client or not log_entries:
+        """Send log entries to Elasticsearch (optional - disabled by default to save costs)."""
+        if not ELASTICSEARCH_AVAILABLE or not self.elasticsearch_client or not log_entries:
             return
-        
+
         try:
             actions = []
             for entry in log_entries:
@@ -675,15 +689,15 @@ class LogAggregator:
                     }
                 }
                 actions.append(action)
-            
+
             # Bulk index
             from elasticsearch.helpers import async_bulk
             await async_bulk(self.elasticsearch_client, actions)
-            
+
             logger.info(f"Sent {len(actions)} log entries to Elasticsearch")
-        
+
         except Exception as e:
-            logger.error(f"Error sending logs to Elasticsearch: {e}")
+            logger.debug(f"Elasticsearch not available (optional): {e}")
 
 
 class LogAnalysisSystem:

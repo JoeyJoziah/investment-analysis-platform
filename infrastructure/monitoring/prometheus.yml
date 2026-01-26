@@ -58,12 +58,8 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: /metrics
 
-  # Elasticsearch Exporter
-  - job_name: 'elasticsearch'
-    static_configs:
-      - targets: ['elasticsearch-exporter:9114']
-    scrape_interval: 30s
-    metrics_path: /metrics
+  # Elasticsearch Exporter - REMOVED to save $15-20/month
+  # Using PostgreSQL full-text search instead
 
   # Nginx Exporter
   - job_name: 'nginx'

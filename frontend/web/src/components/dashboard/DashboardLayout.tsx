@@ -208,7 +208,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WebSocketIndicator connected={isConnected} />
+          <WebSocketIndicator />
 
           {!isConnected && (
             <Tooltip title="Connection lost. Reconnecting...">

@@ -7,6 +7,8 @@ from enum import Enum
 import asyncio
 import random
 import logging
+import statistics
+import math
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import enhanced dependencies
@@ -682,18 +684,14 @@ async def analyze_stock(
                 )
     
         # ML Predictions with real models
+        # NOTE: Reuses price_history from parallel fetch above - no additional DB call needed
         if request.include_ml_predictions and model_manager:
             logger.info(f"Generating ML predictions for {symbol}")
-            
+
             try:
-                # Get recent price data for ML prediction
-                recent_prices = await price_repository.get_price_history(
-                    symbol=symbol,
-                    start_date=datetime.now().date() - timedelta(days=60),
-                    end_date=datetime.now().date(),
-                    session=db
-                )
-                
+                # Use price_history already fetched in parallel (for last 60 days, take most recent)
+                recent_prices = price_history[-60:] if price_history and len(price_history) >= 60 else price_history
+
                 if recent_prices and len(recent_prices) >= 30:
                     # Prepare data for ML model
                     price_data = [
@@ -707,25 +705,33 @@ async def analyze_stock(
                         }
                         for p in recent_prices
                     ]
-                    
-                    # Get predictions from ML models
-                    predictions = await model_manager.get_price_predictions(symbol, price_data)
-                    
-                    ml_predictions = MLPredictions(
-                        price_prediction_1d=predictions.get('1d', None),
-                        price_prediction_7d=predictions.get('7d', None),
-                        price_prediction_30d=predictions.get('30d', None),
-                        confidence_score=predictions.get('confidence', 0.7),
-                        predicted_volatility=predictions.get('volatility', None),
-                        risk_score=predictions.get('risk_score', 50.0),
-                        pattern_recognition=predictions.get('patterns', []),
-                        anomaly_detection=predictions.get('anomaly', False),
-                        trend_prediction=predictions.get('trend', 'neutral')
+
+                    # Get predictions from ML models with timeout
+                    predictions = await safe_async_call(
+                        model_manager.get_price_predictions(symbol, price_data),
+                        timeout=DEFAULT_API_TIMEOUT,
+                        error_msg=f"ML predictions for {symbol}",
+                        default={}
                     )
+
+                    if predictions:
+                        ml_predictions = MLPredictions(
+                            price_prediction_1d=predictions.get('1d', None),
+                            price_prediction_7d=predictions.get('7d', None),
+                            price_prediction_30d=predictions.get('30d', None),
+                            confidence_score=predictions.get('confidence', 0.7),
+                            predicted_volatility=predictions.get('volatility', None),
+                            risk_score=predictions.get('risk_score', 50.0),
+                            pattern_recognition=predictions.get('patterns', []),
+                            anomaly_detection=predictions.get('anomaly', False),
+                            trend_prediction=predictions.get('trend', 'neutral')
+                        )
+                    else:
+                        ml_predictions = None
                 else:
                     logger.warning(f"Insufficient price data for ML predictions for {symbol}")
                     ml_predictions = None
-                    
+
             except Exception as e:
                 logger.error(f"Error generating ML predictions for {symbol}: {e}")
                 # Fallback to mock predictions
@@ -743,17 +749,13 @@ async def analyze_stock(
     
         # Risk Metrics calculation
         logger.info(f"Calculating risk metrics for {symbol}")
-        
+
         # Calculate real risk metrics if we have price data
         risk_metrics = None
         if price_history and len(price_history) >= 30:
             prices = [float(p.close) for p in price_history]
             returns = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
-            
-            # Calculate basic risk metrics
-            import statistics
-            import math
-            
+
             volatility = statistics.stdev(returns) if len(returns) > 1 else 0.0
             mean_return = statistics.mean(returns) if returns else 0.0
             
