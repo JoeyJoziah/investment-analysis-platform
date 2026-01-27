@@ -1,0 +1,882 @@
+[
+  {
+    "file_path": "backend/ml/backtesting.py",
+    "file_name": "backtesting.py",
+    "model_type": "unknown",
+    "size_bytes": 39574,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-23T11:42:16.863134"
+  },
+  {
+    "file_path": "backend/ml/dataset_hub.py",
+    "file_name": "dataset_hub.py",
+    "model_type": "unknown",
+    "size_bytes": 18935,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:23:55.534804"
+  },
+  {
+    "file_path": "backend/ml/model_monitoring.py",
+    "file_name": "model_monitoring.py",
+    "model_type": "unknown",
+    "size_bytes": 48512,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-23T11:42:16.864094"
+  },
+  {
+    "file_path": "backend/ml/minimal_training.py",
+    "file_name": "minimal_training.py",
+    "model_type": "unknown",
+    "size_bytes": 1605,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T18:45:39.548532"
+  },
+  {
+    "file_path": "backend/ml/feature_store.py",
+    "file_name": "feature_store.py",
+    "model_type": "unknown",
+    "size_bytes": 46946,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-25T18:53:28.142574"
+  },
+  {
+    "file_path": "backend/ml/simple_training_pipeline.py",
+    "file_name": "simple_training_pipeline.py",
+    "model_type": "unknown",
+    "size_bytes": 8599,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-25T18:45:24.276520"
+  },
+  {
+    "file_path": "backend/ml/online_learning.py",
+    "file_name": "online_learning.py",
+    "model_type": "unknown",
+    "size_bytes": 42394,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-25T18:53:27.642162"
+  },
+  {
+    "file_path": "backend/ml/training_pipeline.py",
+    "file_name": "training_pipeline.py",
+    "model_type": "unknown",
+    "size_bytes": 13169,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.865875"
+  },
+  {
+    "file_path": "backend/ml/__init__.py",
+    "file_name": "__init__.py",
+    "model_type": "unknown",
+    "size_bytes": 3663,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T19:14:54.225421"
+  },
+  {
+    "file_path": "backend/ml/ml_tables.py",
+    "file_name": "ml_tables.py",
+    "model_type": "unknown",
+    "size_bytes": 18554,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-23T11:42:16.863850"
+  },
+  {
+    "file_path": "backend/ml/model_manager.py",
+    "file_name": "model_manager.py",
+    "model_type": "unknown",
+    "size_bytes": 27687,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-26T14:02:54.071313"
+  },
+  {
+    "file_path": "backend/ml/pipeline_optimization.py",
+    "file_name": "pipeline_optimization.py",
+    "model_type": "unknown",
+    "size_bytes": 45796,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-25T18:53:29.089839"
+  },
+  {
+    "file_path": "backend/ml/ml_monitoring_server.py",
+    "file_name": "ml_monitoring_server.py",
+    "model_type": "unknown",
+    "size_bytes": 11796,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.863750"
+  },
+  {
+    "file_path": "backend/ml/cost_monitoring.py",
+    "file_name": "cost_monitoring.py",
+    "model_type": "unknown",
+    "size_bytes": 30996,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-23T11:42:16.863266"
+  },
+  {
+    "file_path": "backend/ml/hf_hub_client.py",
+    "file_name": "hf_hub_client.py",
+    "model_type": "unknown",
+    "size_bytes": 19432,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:23:33.218533"
+  },
+  {
+    "file_path": "backend/ml/gpu_utils.py",
+    "file_name": "gpu_utils.py",
+    "model_type": "unknown",
+    "size_bytes": 13727,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-26T19:20:21.180407"
+  },
+  {
+    "file_path": "backend/ml/model_versioning.py",
+    "file_name": "model_versioning.py",
+    "model_type": "unknown",
+    "size_bytes": 35281,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-26T14:04:00.515096"
+  },
+  {
+    "file_path": "backend/ml/ml_api_server.py",
+    "file_name": "ml_api_server.py",
+    "model_type": "unknown",
+    "size_bytes": 7743,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-25T18:44:27.388993"
+  },
+  {
+    "file_path": "backend/ml/pipeline/task_bridge.py",
+    "file_name": "task_bridge.py",
+    "model_type": "unknown",
+    "size_bytes": 14597,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-26T20:31:13.119376"
+  },
+  {
+    "file_path": "backend/ml/pipeline/deployment.py",
+    "file_name": "deployment.py",
+    "model_type": "unknown",
+    "size_bytes": 31962,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-23T11:42:16.864964"
+  },
+  {
+    "file_path": "backend/ml/pipeline/registry.py",
+    "file_name": "registry.py",
+    "model_type": "unknown",
+    "size_bytes": 23640,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-25T18:54:52.017700"
+  },
+  {
+    "file_path": "backend/ml/pipeline/monitoring.py",
+    "file_name": "monitoring.py",
+    "model_type": "unknown",
+    "size_bytes": 26897,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-23T11:42:16.865242"
+  },
+  {
+    "file_path": "backend/ml/pipeline/__init__.py",
+    "file_name": "__init__.py",
+    "model_type": "unknown",
+    "size_bytes": 1216,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.864749"
+  },
+  {
+    "file_path": "backend/ml/pipeline/memory_sync.py",
+    "file_name": "memory_sync.py",
+    "model_type": "unknown",
+    "size_bytes": 15371,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-26T20:30:02.746734"
+  },
+  {
+    "file_path": "backend/ml/pipeline/orchestrator.py",
+    "file_name": "orchestrator.py",
+    "model_type": "unknown",
+    "size_bytes": 32622,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-26T20:32:38.901757"
+  },
+  {
+    "file_path": "backend/ml/pipeline/implementations.py",
+    "file_name": "implementations.py",
+    "model_type": "unknown",
+    "size_bytes": 26102,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:09:32.045810"
+  },
+  {
+    "file_path": "backend/ml/pipeline/base.py",
+    "file_name": "base.py",
+    "model_type": "unknown",
+    "size_bytes": 12664,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.864852"
+  },
+  {
+    "file_path": "backend/ml/training/__init__.py",
+    "file_name": "__init__.py",
+    "model_type": "unknown",
+    "size_bytes": 869,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T00:12:35.640281"
+  },
+  {
+    "file_path": "backend/ml/training/run_full_training.py",
+    "file_name": "run_full_training.py",
+    "model_type": "unknown",
+    "size_bytes": 9761,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-24T20:18:48.826749"
+  },
+  {
+    "file_path": "backend/ml/training/train_prophet.py",
+    "file_name": "train_prophet.py",
+    "model_type": "unknown",
+    "size_bytes": 16926,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:19:29.948017"
+  },
+  {
+    "file_path": "backend/ml/training/evaluate_models.py",
+    "file_name": "evaluate_models.py",
+    "model_type": "unknown",
+    "size_bytes": 12745,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-24T20:18:47.741690"
+  },
+  {
+    "file_path": "backend/ml/training/train_lstm.py",
+    "file_name": "train_lstm.py",
+    "model_type": "unknown",
+    "size_bytes": 24828,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:11:51.121258"
+  },
+  {
+    "file_path": "backend/ml/training/train_xgboost.py",
+    "file_name": "train_xgboost.py",
+    "model_type": "unknown",
+    "size_bytes": 20197,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:07:57.082026"
+  },
+  {
+    "file_path": "backend/ml/data_prep/__init__.py",
+    "file_name": "__init__.py",
+    "model_type": "unknown",
+    "size_bytes": 265,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T00:12:42.358109"
+  },
+  {
+    "file_path": "backend/ml/data_prep/generate_training_data.py",
+    "file_name": "generate_training_data.py",
+    "model_type": "unknown",
+    "size_bytes": 19315,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:20:43.983957"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_monitoring.cpython-312 2.pyc",
+    "file_name": "model_monitoring.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 52268,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-24T21:56:26"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/gpu_utils.cpython-312.pyc",
+    "file_name": "gpu_utils.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 15752,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:21:06.290774"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/backtesting.cpython-312.pyc",
+    "file_name": "backtesting.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 47553,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-25T13:52:34.122638"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/__init__.cpython-312 2.pyc",
+    "file_name": "__init__.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 2158,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-24T21:56:09"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/hf_hub_client.cpython-312.pyc",
+    "file_name": "hf_hub_client.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 23894,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:24:37.382653"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_versioning.cpython-312.pyc",
+    "file_name": "model_versioning.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 40346,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-26T14:04:36.643017"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_versioning.cpython-312 2.pyc",
+    "file_name": "model_versioning.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 37331,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-24T21:56:09"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/pipeline_optimization.cpython-312.pyc",
+    "file_name": "pipeline_optimization.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 52695,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-25T19:07:56.360168"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_manager.cpython-312.pyc",
+    "file_name": "model_manager.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 32895,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-26T14:04:24.154191"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/cost_monitoring.cpython-312 2.pyc",
+    "file_name": "cost_monitoring.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 32054,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-24T21:59:16"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_manager.cpython-312 2.pyc",
+    "file_name": "model_manager.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 28414,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-25T00:17:27"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/backtesting.cpython-312 2.pyc",
+    "file_name": "backtesting.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 47553,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-24T21:56:09"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/feature_store.cpython-312 2.pyc",
+    "file_name": "feature_store.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 55892,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-24T21:56:24"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/pipeline_optimization.cpython-312 2.pyc",
+    "file_name": "pipeline_optimization.cpython-312 2.pyc",
+    "model_type": "unknown",
+    "size_bytes": 49707,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-24T21:56:26"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/feature_store.cpython-312.pyc",
+    "file_name": "feature_store.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 56796,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-25T19:07:53.055987"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/model_monitoring.cpython-312.pyc",
+    "file_name": "model_monitoring.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 52268,
+    "size_mb": 0.05,
+    "modified_timestamp": "2026-01-25T13:52:45.206976"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/cost_monitoring.cpython-312.pyc",
+    "file_name": "cost_monitoring.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 32054,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-25T13:52:46.925550"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/__init__.cpython-312.pyc",
+    "file_name": "__init__.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 2388,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T19:15:15.310493"
+  },
+  {
+    "file_path": "backend/ml/__pycache__/dataset_hub.cpython-312.pyc",
+    "file_name": "dataset_hub.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 24791,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:24:38.193100"
+  },
+  {
+    "file_path": "backend/ml/pipeline/__pycache__/orchestrator.cpython-312.pyc",
+    "file_name": "orchestrator.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 41004,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-26T20:34:10.521722"
+  },
+  {
+    "file_path": "backend/ml/pipeline/__pycache__/base.cpython-312.pyc",
+    "file_name": "base.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 18132,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:18:40.582527"
+  },
+  {
+    "file_path": "backend/ml/pipeline/__pycache__/__init__.cpython-312.pyc",
+    "file_name": "__init__.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 1094,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T19:18:40.553453"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/train_xgboost.cpython-312.pyc",
+    "file_name": "train_xgboost.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 25507,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T19:16:52.774659"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/evaluate_models.cpython-312.pyc",
+    "file_name": "evaluate_models.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 17313,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-25T13:52:48.201176"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/train_lstm.cpython-312.pyc",
+    "file_name": "train_lstm.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 31110,
+    "size_mb": 0.03,
+    "modified_timestamp": "2026-01-26T19:16:52.751245"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/train_prophet.cpython-312.pyc",
+    "file_name": "train_prophet.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 20976,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:24:40.816651"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/run_full_training.cpython-312.pyc",
+    "file_name": "run_full_training.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 13489,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-25T13:52:48.215591"
+  },
+  {
+    "file_path": "backend/ml/training/__pycache__/__init__.cpython-312.pyc",
+    "file_name": "__init__.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 882,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T13:52:46.932287"
+  },
+  {
+    "file_path": "backend/ml/models/ensemble/voting_classifier.py",
+    "file_name": "voting_classifier.py",
+    "model_type": "unknown",
+    "size_bytes": 8108,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.864461"
+  },
+  {
+    "file_path": "backend/ml/data_prep/__pycache__/generate_training_data.cpython-312.pyc",
+    "file_name": "generate_training_data.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 25641,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-26T14:24:40.835537"
+  },
+  {
+    "file_path": "backend/ml/data_prep/__pycache__/__init__.cpython-312.pyc",
+    "file_name": "__init__.cpython-312.pyc",
+    "model_type": "unknown",
+    "size_bytes": 459,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:24:40.824070"
+  },
+  {
+    "file_path": "ml_models/lstm_weights.pth",
+    "file_name": "lstm_weights.pth",
+    "model_type": "pytorch",
+    "size_bytes": 5152773,
+    "size_mb": 4.91,
+    "modified_timestamp": "2026-01-25T19:30:34.083051"
+  },
+  {
+    "file_path": "ml_models/lstm_scaler.pkl",
+    "file_name": "lstm_scaler.pkl",
+    "model_type": "pickle",
+    "size_bytes": 1927,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T19:30:34.114186"
+  },
+  {
+    "file_path": "ml_models/xgboost_scaler.pkl",
+    "file_name": "xgboost_scaler.pkl",
+    "model_type": "pickle",
+    "size_bytes": 1927,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:55:48.241066"
+  },
+  {
+    "file_path": "ml_models/evaluation_report.json",
+    "file_name": "evaluation_report.json",
+    "model_type": "config",
+    "size_bytes": 1143,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-24T23:05:23.405357"
+  },
+  {
+    "file_path": "ml_models/lstm_training_results.json",
+    "file_name": "lstm_training_results.json",
+    "model_type": "config",
+    "size_bytes": 1440,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-24T21:55:15.824339"
+  },
+  {
+    "file_path": "ml_models/xgboost_feature_importance.json",
+    "file_name": "xgboost_feature_importance.json",
+    "model_type": "config",
+    "size_bytes": 1070,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:55:48.256378"
+  },
+  {
+    "file_path": "ml_models/xgboost_config.json",
+    "file_name": "xgboost_config.json",
+    "model_type": "config",
+    "size_bytes": 1338,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:55:48.246543"
+  },
+  {
+    "file_path": "ml_models/xgboost_training_results.json",
+    "file_name": "xgboost_training_results.json",
+    "model_type": "config",
+    "size_bytes": 1999,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:55:48.255541"
+  },
+  {
+    "file_path": "ml_models/lstm_config.json",
+    "file_name": "lstm_config.json",
+    "model_type": "config",
+    "size_bytes": 1051,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T19:30:34.119548"
+  },
+  {
+    "file_path": "ml_models/xgboost_model.pkl",
+    "file_name": "xgboost_model.pkl",
+    "model_type": "pickle",
+    "size_bytes": 690022,
+    "size_mb": 0.66,
+    "modified_timestamp": "2026-01-25T02:55:48.227224"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/token",
+    "file_name": "token",
+    "model_type": "unknown",
+    "size_bytes": 37,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:49.251528"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/stored_tokens",
+    "file_name": "stored_tokens",
+    "model_type": "unknown",
+    "size_bytes": 81,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:49.251162"
+  },
+  {
+    "file_path": "ml_models/prophet/AMZN_model.pkl",
+    "file_name": "AMZN_model.pkl",
+    "model_type": "pickle",
+    "size_bytes": 58270,
+    "size_mb": 0.06,
+    "modified_timestamp": "2026-01-24T21:19:33.800062"
+  },
+  {
+    "file_path": "ml_models/prophet/trained_stocks.json",
+    "file_name": "trained_stocks.json",
+    "model_type": "config",
+    "size_bytes": 2,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:46:34.235312"
+  },
+  {
+    "file_path": "ml_models/prophet/prophet_training_results.json",
+    "file_name": "prophet_training_results.json",
+    "model_type": "config",
+    "size_bytes": 518,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-25T02:48:33.251832"
+  },
+  {
+    "file_path": "ml_models/prophet/ADBE_model.pkl",
+    "file_name": "ADBE_model.pkl",
+    "model_type": "pickle",
+    "size_bytes": 58270,
+    "size_mb": 0.06,
+    "modified_timestamp": "2026-01-24T21:19:33.648376"
+  },
+  {
+    "file_path": "ml_models/prophet/AAPL_model.pkl",
+    "file_name": "AAPL_model.pkl",
+    "model_type": "pickle",
+    "size_bytes": 58270,
+    "size_mb": 0.06,
+    "modified_timestamp": "2026-01-24T21:19:33.529508"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/logs/xet_20260126T140106169-0500_80499.log",
+    "file_name": "xet_20260126T140106169-0500_80499.log",
+    "model_type": "unknown",
+    "size_bytes": 62557,
+    "size_mb": 0.06,
+    "modified_timestamp": "2026-01-26T14:01:15.928653"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/logs/xet_20260126T135623060-0500_77515.log",
+    "file_name": "xet_20260126T135623060-0500_77515.log",
+    "model_type": "unknown",
+    "size_bytes": 79676,
+    "size_mb": 0.08,
+    "modified_timestamp": "2026-01-26T13:56:30.812695"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/logs/xet_20260127T004524164-0500_35050.log",
+    "file_name": "xet_20260127T004524164-0500_35050.log",
+    "model_type": "unknown",
+    "size_bytes": 46004,
+    "size_mb": 0.04,
+    "modified_timestamp": "2026-01-27T00:45:26.361091"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/cd46268a99ec6ea6fbe79a3236ed070abe95f9559913b90efa067c7c5f7005cb.mdb",
+    "file_name": "cd46268a99ec6ea6fbe79a3236ed070abe95f9559913b90efa067c7c5f7005cb.mdb",
+    "model_type": "unknown",
+    "size_bytes": 1260,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T13:56:27.857922"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/c379b4e39ae27de4fbc6af1e5d54ff72ffb3939317c3eef694681b5c6be4e690.mdb",
+    "file_name": "c379b4e39ae27de4fbc6af1e5d54ff72ffb3939317c3eef694681b5c6be4e690.mdb",
+    "model_type": "unknown",
+    "size_bytes": 2016,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:01:13.840884"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/e45cc7193c6e0bdcf4563eae586d551c29516274b62188c5c5019e2bc6e416f5.mdb",
+    "file_name": "e45cc7193c6e0bdcf4563eae586d551c29516274b62188c5c5019e2bc6e416f5.mdb",
+    "model_type": "unknown",
+    "size_bytes": 10400,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-26T14:01:11.559013"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/a91b3fdf6b0761cf0abece48c274630e5a6ef39d0297f7d763632f3afc0c19cc.mdb",
+    "file_name": "a91b3fdf6b0761cf0abece48c274630e5a6ef39d0297f7d763632f3afc0c19cc.mdb",
+    "model_type": "unknown",
+    "size_bytes": 992,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:25.024428"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/805daf58e0cb9a0ddb16cb68ddf433fbc1e75e3467e2e523ce8fa20ba36f52c6.mdb",
+    "file_name": "805daf58e0cb9a0ddb16cb68ddf433fbc1e75e3467e2e523ce8fa20ba36f52c6.mdb",
+    "model_type": "unknown",
+    "size_bytes": 5292,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-26T13:56:25.358580"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/e72f5a0da747c104cc1626541108b58f6cd8798908588b5aefd8f9584ac60ac9.mdb",
+    "file_name": "e72f5a0da747c104cc1626541108b58f6cd8798908588b5aefd8f9584ac60ac9.mdb",
+    "model_type": "unknown",
+    "size_bytes": 2400,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:01:15.936258"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/2090305afc4d3061407d601484c9d7ea47ac617efbdd41290305f1e0f6cc88a9.mdb",
+    "file_name": "2090305afc4d3061407d601484c9d7ea47ac617efbdd41290305f1e0f6cc88a9.mdb",
+    "model_type": "unknown",
+    "size_bytes": 672,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:26.361363"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/xet/https___cas_serv-tGqkUaZf_CBPHQ6h/shard-cache/4f42f68f003be9cfb766ec2b0bb612b28f0a9aa89ac9f985195abd1f1471b1bc.mdb",
+    "file_name": "4f42f68f003be9cfb766ec2b0bb612b28f0a9aa89ac9f985195abd1f1471b1bc.mdb",
+    "model_type": "unknown",
+    "size_bytes": 1208,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T13:56:30.812936"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/datasets--financeindustryknowledgeskills--investment-ml-datasets/blobs/075f2284dae6e1f9b80c9ef0bf7315dd5420d983",
+    "file_name": "075f2284dae6e1f9b80c9ef0bf7315dd5420d983",
+    "model_type": "unknown",
+    "size_bytes": 1134,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:01:16.822598"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/datasets--financeindustryknowledgeskills--investment-ml-datasets/snapshots/0e9be328371401b45c14b780eed949ca57ca4210/README.md",
+    "file_name": "README.md",
+    "model_type": "unknown",
+    "size_bytes": 1134,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:01:16.822598"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/datasets--financeindustryknowledgeskills--investment-analysis-platform/blobs/de763fda0026ce129cbdfd78bc098e425ffc6e5a",
+    "file_name": "de763fda0026ce129cbdfd78bc098e425ffc6e5a",
+    "model_type": "unknown",
+    "size_bytes": 559,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:26.565587"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/datasets--financeindustryknowledgeskills--investment-analysis-platform/snapshots/86d326dde494b1935613400bb43baab467e74878/README.md",
+    "file_name": "README.md",
+    "model_type": "unknown",
+    "size_bytes": 559,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:26.565587"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/.locks/datasets--financeindustryknowledgeskills--investment-ml-datasets/075f2284dae6e1f9b80c9ef0bf7315dd5420d983.lock",
+    "file_name": "075f2284dae6e1f9b80c9ef0bf7315dd5420d983.lock",
+    "model_type": "unknown",
+    "size_bytes": 0,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-26T14:01:16.620938"
+  },
+  {
+    "file_path": "ml_models/.hf_cache/hub/.locks/datasets--financeindustryknowledgeskills--investment-analysis-platform/de763fda0026ce129cbdfd78bc098e425ffc6e5a.lock",
+    "file_name": "de763fda0026ce129cbdfd78bc098e425ffc6e5a.lock",
+    "model_type": "unknown",
+    "size_bytes": 0,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-27T00:45:26.533493"
+  },
+  {
+    "file_path": "tools/utilities/models/config.json",
+    "file_name": "config.json",
+    "model_type": "config",
+    "size_bytes": 142,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.980117"
+  },
+  {
+    "file_path": "tools/utilities/models/model_config.json",
+    "file_name": "model_config.json",
+    "model_type": "config",
+    "size_bytes": 578,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.980224"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/transformer_model.npz",
+    "file_name": "transformer_model.npz",
+    "model_type": "numpy",
+    "size_bytes": 15888,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-23T11:42:16.981280"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/metadata.json",
+    "file_name": "metadata.json",
+    "model_type": "config",
+    "size_bytes": 1717,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.980662"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/lightgbm_model.npz",
+    "file_name": "lightgbm_model.npz",
+    "model_type": "numpy",
+    "size_bytes": 13576,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.980420"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/prophet_model.npz",
+    "file_name": "prophet_model.npz",
+    "model_type": "numpy",
+    "size_bytes": 3756,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.980882"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/model_loader.py",
+    "file_name": "model_loader.py",
+    "model_type": "unknown",
+    "size_bytes": 1967,
+    "size_mb": 0.0,
+    "modified_timestamp": "2026-01-23T11:42:16.980784"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/lstm_model.npz",
+    "file_name": "lstm_model.npz",
+    "model_type": "numpy",
+    "size_bytes": 15860,
+    "size_mb": 0.02,
+    "modified_timestamp": "2026-01-23T11:42:16.980573"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/random_forest.npz",
+    "file_name": "random_forest.npz",
+    "model_type": "numpy",
+    "size_bytes": 13330,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.981138"
+  },
+  {
+    "file_path": "tools/utilities/models/trained/xgboost_model.npz",
+    "file_name": "xgboost_model.npz",
+    "model_type": "numpy",
+    "size_bytes": 13572,
+    "size_mb": 0.01,
+    "modified_timestamp": "2026-01-23T11:42:16.981414"
+  }
+]

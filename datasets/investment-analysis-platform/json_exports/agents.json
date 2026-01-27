@@ -1,0 +1,2663 @@
+[
+  {
+    "agent_file": "swarm-issue.md",
+    "agent_name": "swarm-issue",
+    "category": "root",
+    "title": "Swarm Issue - Issue-Based Swarm Coordination",
+    "description": "```",
+    "tools": [
+      "- mcp__github__get_issue"
+    ],
+    "subagent_type": "swarm-issue",
+    "line_count": 573
+  },
+  {
+    "agent_file": "agent.md",
+    "agent_name": "agent",
+    "category": "root",
+    "title": "agent",
+    "description": null,
+    "tools": [],
+    "subagent_type": "agent",
+    "line_count": 816
+  },
+  {
+    "agent_file": "authentication.md",
+    "agent_name": "authentication",
+    "category": "root",
+    "title": "authentication",
+    "description": null,
+    "tools": [],
+    "subagent_type": "authentication",
+    "line_count": 69
+  },
+  {
+    "agent_file": "specification.md",
+    "agent_name": "specification",
+    "category": "root",
+    "title": "SPARC Specification Agent",
+    "description": "6. **Get Feedback**: Validate with stakeholders early",
+    "tools": [],
+    "subagent_type": "specification",
+    "line_count": 276
+  },
+  {
+    "agent_file": "code-reviewer.md",
+    "agent_name": "code-reviewer",
+    "category": "root",
+    "title": "code-reviewer",
+    "description": null,
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "code-reviewer",
+    "line_count": 104
+  },
+  {
+    "agent_file": "reviewer.md",
+    "agent_name": "reviewer",
+    "category": "root",
+    "title": "Code Review Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "reviewer",
+    "line_count": 326
+  },
+  {
+    "agent_file": "app-store.md",
+    "agent_name": "app-store",
+    "category": "root",
+    "title": "app-store",
+    "description": null,
+    "tools": [],
+    "subagent_type": "app-store",
+    "line_count": 88
+  },
+  {
+    "agent_file": "crdt-synchronizer.md",
+    "agent_name": "crdt-synchronizer",
+    "category": "root",
+    "title": "CRDT Synchronizer",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "crdt-synchronizer",
+    "line_count": 997
+  },
+  {
+    "agent_file": "raft-manager.md",
+    "agent_name": "raft-manager",
+    "category": "root",
+    "title": "Raft Consensus Manager",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "raft-manager",
+    "line_count": 63
+  },
+  {
+    "agent_file": "financial-modeler.md",
+    "agent_name": "financial-modeler",
+    "category": "root",
+    "title": "Example consolidation workflow",
+    "description": "```",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "financial-modeler",
+    "line_count": 290
+  },
+  {
+    "agent_file": "load-balancer.md",
+    "agent_name": "load-balancer",
+    "category": "root",
+    "title": "Load Balancing Coordinator Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "load-balancer",
+    "line_count": 431
+  },
+  {
+    "agent_file": "test-agent.md",
+    "agent_name": "test-agent",
+    "category": "root",
+    "title": "Test Agent",
+    "description": "- Test suggestion adoption rate",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "test-agent",
+    "line_count": 148
+  },
+  {
+    "agent_file": "ui-visualization-swarm.md",
+    "agent_name": "ui-visualization-swarm",
+    "category": "root",
+    "title": "UI & Visualization Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "ui-visualization-swarm",
+    "line_count": 703
+  },
+  {
+    "agent_file": "v3-integration-architect.md",
+    "agent_name": "v3-integration-architect",
+    "category": "root",
+    "title": "V3 Integration Architect",
+    "description": "## Risk Mitigation",
+    "tools": [],
+    "subagent_type": "v3-integration-architect",
+    "line_count": 346
+  },
+  {
+    "agent_file": "migration-plan.md",
+    "agent_name": "migration-plan",
+    "category": "root",
+    "title": "Claude Flow Commands to Agent System Migration Plan",
+    "description": "- Performance improvements",
+    "tools": [
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:"
+    ],
+    "subagent_type": "migration-plan",
+    "line_count": 746
+  },
+  {
+    "agent_file": "security-reviewer.md",
+    "agent_name": "security-reviewer",
+    "category": "root",
+    "title": "Security Reviewer",
+    "description": "---",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "security-reviewer",
+    "line_count": 545
+  },
+  {
+    "agent_file": "architecture.md",
+    "agent_name": "architecture",
+    "category": "root",
+    "title": "SPARC Architecture Agent",
+    "description": "6. **Documentation**: Keep architecture docs up-to-date",
+    "tools": [],
+    "subagent_type": "architecture",
+    "line_count": 472
+  },
+  {
+    "agent_file": "swarm-pr.md",
+    "agent_name": "swarm-pr",
+    "category": "root",
+    "title": "Swarm PR - Managing Swarms through Pull Requests",
+    "description": "```",
+    "tools": [
+      "- mcp__github__get_pull_request"
+    ],
+    "subagent_type": "swarm-pr",
+    "line_count": 428
+  },
+  {
+    "agent_file": "sandbox.md",
+    "agent_name": "sandbox",
+    "category": "root",
+    "title": "sandbox",
+    "description": null,
+    "tools": [],
+    "subagent_type": "sandbox",
+    "line_count": 76
+  },
+  {
+    "agent_file": "memory-coordinator.md",
+    "agent_name": "memory-coordinator",
+    "category": "root",
+    "title": "Memory Coordination Specialist Agent",
+    "description": "- Lazy loading",
+    "tools": [],
+    "subagent_type": "memory-coordinator",
+    "line_count": 187
+  },
+  {
+    "agent_file": "implementer-sparc-coder.md",
+    "agent_name": "implementer-sparc-coder",
+    "category": "root",
+    "title": "SPARC Implementation Specialist Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "implementer-sparc-coder",
+    "line_count": 259
+  },
+  {
+    "agent_file": "hierarchical-coordinator.md",
+    "agent_name": "hierarchical-coordinator",
+    "category": "root",
+    "title": "Hierarchical Swarm Coordinator",
+    "description": "4. **Continuous Improvement**: Regular retrospectives and process refinement",
+    "tools": [],
+    "subagent_type": "hierarchical-coordinator",
+    "line_count": 327
+  },
+  {
+    "agent_file": "architect.md",
+    "agent_name": "architect",
+    "category": "root",
+    "title": "ADR-001: Use Redis for Semantic Search Vector Storage",
+    "description": "- **10M users**: Event-driven architecture, distributed caching, multi-region",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "architect",
+    "line_count": 211
+  },
+  {
+    "agent_file": "MIGRATION_SUMMARY.md",
+    "agent_name": "MIGRATION_SUMMARY",
+    "category": "root",
+    "title": "Claude Flow Commands to Agent System Migration Summary",
+    "description": "- Community support: GitHub discussions",
+    "tools": [
+      "allowed:"
+    ],
+    "subagent_type": "MIGRATION_SUMMARY",
+    "line_count": 222
+  },
+  {
+    "agent_file": "refactor-cleaner.md",
+    "agent_name": "refactor-cleaner",
+    "category": "root",
+    "title": "Refactor & Dead Code Cleaner",
+    "description": "---",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "refactor-cleaner",
+    "line_count": 306
+  },
+  {
+    "agent_file": "orchestrator-task.md",
+    "agent_name": "orchestrator-task",
+    "category": "root",
+    "title": "Task Orchestrator Agent",
+    "description": "- Recursive decomposition for large projects",
+    "tools": [],
+    "subagent_type": "orchestrator-task",
+    "line_count": 139
+  },
+  {
+    "agent_file": "neural-network.md",
+    "agent_name": "neural-network",
+    "category": "root",
+    "title": "neural-network",
+    "description": null,
+    "tools": [],
+    "subagent_type": "neural-network",
+    "line_count": 88
+  },
+  {
+    "agent_file": "ui_design.md",
+    "agent_name": "ui_design",
+    "category": "root",
+    "title": "UI/UX & Design Commands",
+    "description": "Generate UI components from specifications",
+    "tools": [],
+    "subagent_type": "ui_design",
+    "line_count": 48
+  },
+  {
+    "agent_file": "release-manager.md",
+    "agent_name": "release-manager",
+    "category": "root",
+    "title": "GitHub Release Manager",
+    "description": "- Rollback frequency",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "release-manager",
+    "line_count": 367
+  },
+  {
+    "agent_file": "infrastructure-agent.md",
+    "agent_name": "infrastructure-agent",
+    "category": "root",
+    "title": "Infrastructure Agent",
+    "description": "- Mean time to recovery (MTTR)",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "infrastructure-agent",
+    "line_count": 185
+  },
+  {
+    "agent_file": "performance-benchmarker.md",
+    "agent_name": "performance-benchmarker",
+    "category": "root",
+    "title": "Performance Benchmarker",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "performance-benchmarker",
+    "line_count": 851
+  },
+  {
+    "agent_file": "resource-allocator.md",
+    "agent_name": "resource-allocator",
+    "category": "root",
+    "title": "Resource Allocator Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "resource-allocator",
+    "line_count": 674
+  },
+  {
+    "agent_file": "challenges.md",
+    "agent_name": "challenges",
+    "category": "root",
+    "title": "challenges",
+    "description": null,
+    "tools": [],
+    "subagent_type": "challenges",
+    "line_count": 81
+  },
+  {
+    "agent_file": "tdd-london-swarm.md",
+    "agent_name": "tdd-london-swarm",
+    "category": "root",
+    "title": "TDD London School Swarm Agent",
+    "description": "- Provide feedback for continuous improvement",
+    "tools": [],
+    "subagent_type": "tdd-london-swarm",
+    "line_count": 244
+  },
+  {
+    "agent_file": "sona-learning-optimizer.md",
+    "agent_name": "sona-learning-optimizer",
+    "category": "root",
+    "title": "SONA Learning Optimizer",
+    "description": "## References",
+    "tools": [],
+    "subagent_type": "sona-learning-optimizer",
+    "line_count": 74
+  },
+  {
+    "agent_file": "queen-investment-orchestrator.md",
+    "agent_name": "queen-investment-orchestrator",
+    "category": "root",
+    "title": "Queen Investment Orchestrator",
+    "description": "```",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash",
+      "Task"
+    ],
+    "subagent_type": "queen-investment-orchestrator",
+    "line_count": 195
+  },
+  {
+    "agent_file": "release-swarm.md",
+    "agent_name": "release-swarm",
+    "category": "root",
+    "title": "Release Swarm - Intelligent Release Automation",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "release-swarm",
+    "line_count": 583
+  },
+  {
+    "agent_file": "doc-updater.md",
+    "agent_name": "doc-updater",
+    "category": "root",
+    "title": "Documentation & Codemap Specialist",
+    "description": "---",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "doc-updater",
+    "line_count": 452
+  },
+  {
+    "agent_file": "benchmark-suite.md",
+    "agent_name": "benchmark-suite",
+    "category": "root",
+    "title": "Benchmark Suite Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "benchmark-suite",
+    "line_count": 665
+  },
+  {
+    "agent_file": "scout-explorer.md",
+    "agent_name": "scout-explorer",
+    "category": "root",
+    "title": "scout-explorer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "scout-explorer",
+    "line_count": 242
+  },
+  {
+    "agent_file": "investment-analyst.md",
+    "agent_name": "investment-analyst",
+    "category": "root",
+    "title": "Investment Memorandum: [Deal Name]",
+    "description": "- **Equity**: 25%+ IRR, 2.0x+ multiple",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "investment-analyst",
+    "line_count": 163
+  },
+  {
+    "agent_file": "project-quality-swarm.md",
+    "agent_name": "project-quality-swarm",
+    "category": "root",
+    "title": "Project & Quality Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "project-quality-swarm",
+    "line_count": 690
+  },
+  {
+    "agent_file": "sync-coordinator.md",
+    "agent_name": "sync-coordinator",
+    "category": "root",
+    "title": "GitHub Sync Coordinator",
+    "description": "- Documentation sync conflicts with intelligent merging",
+    "tools": [
+      "- mcp__github__push_files"
+    ],
+    "subagent_type": "sync-coordinator",
+    "line_count": 452
+  },
+  {
+    "agent_file": "goal-planner.md",
+    "agent_name": "goal-planner",
+    "category": "root",
+    "title": "goal-planner",
+    "description": null,
+    "tools": [],
+    "subagent_type": "goal-planner",
+    "line_count": 73
+  },
+  {
+    "agent_file": "workflow.md",
+    "agent_name": "workflow",
+    "category": "root",
+    "title": "workflow",
+    "description": null,
+    "tools": [],
+    "subagent_type": "workflow",
+    "line_count": 84
+  },
+  {
+    "agent_file": "backend-api-swarm.md",
+    "agent_name": "backend-api-swarm",
+    "category": "root",
+    "title": "Backend & API Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "backend-api-swarm",
+    "line_count": 379
+  },
+  {
+    "agent_file": "collective-intelligence-coordinator.md",
+    "agent_name": "collective-intelligence-coordinator",
+    "category": "root",
+    "title": "collective-intelligence-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "collective-intelligence-coordinator",
+    "line_count": 130
+  },
+  {
+    "agent_file": "performance-analyzer.md",
+    "agent_name": "performance-analyzer",
+    "category": "root",
+    "title": "Performance Bottleneck Analyzer Agent",
+    "description": "- Adaptive execution strategies",
+    "tools": [],
+    "subagent_type": "performance-analyzer",
+    "line_count": 199
+  },
+  {
+    "agent_file": "topology-optimizer.md",
+    "agent_name": "topology-optimizer",
+    "category": "root",
+    "title": "Topology Optimizer Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "topology-optimizer",
+    "line_count": 808
+  },
+  {
+    "agent_file": "researcher.md",
+    "agent_name": "researcher",
+    "category": "root",
+    "title": "Research and Analysis Agent",
+    "description": "6. **Share Early**: Update memory frequently for real-time coordination",
+    "tools": [],
+    "subagent_type": "researcher",
+    "line_count": 190
+  },
+  {
+    "agent_file": "test-long-runner.md",
+    "agent_name": "test-long-runner",
+    "category": "root",
+    "title": "Test Long-Running Agent",
+    "description": "- Thorough security audits and vulnerability assessments",
+    "tools": [],
+    "subagent_type": "test-long-runner",
+    "line_count": 44
+  },
+  {
+    "agent_file": "gossip-coordinator.md",
+    "agent_name": "gossip-coordinator",
+    "category": "root",
+    "title": "Gossip Protocol Coordinator",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "gossip-coordinator",
+    "line_count": 63
+  },
+  {
+    "agent_file": "pr-manager.md",
+    "agent_name": "pr-manager",
+    "category": "root",
+    "title": "GitHub PR Manager",
+    "description": "- Review bottlenecks with load balancing",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "pr-manager",
+    "line_count": 191
+  },
+  {
+    "agent_file": "risk-assessor.md",
+    "agent_name": "risk-assessor",
+    "category": "root",
+    "title": "Risk Assessor Agent",
+    "description": "- Potential position unwind",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "risk-assessor",
+    "line_count": 246
+  },
+  {
+    "agent_file": "architecture-reviewer.md",
+    "agent_name": "architecture-reviewer",
+    "category": "root",
+    "title": "1. Review existing architecture decisions in GitHub issues",
+    "description": "# Use Notion API to create properly structured ADR",
+    "tools": [],
+    "subagent_type": "architecture-reviewer",
+    "line_count": 105
+  },
+  {
+    "agent_file": "consensus-coordinator.md",
+    "agent_name": "consensus-coordinator",
+    "category": "root",
+    "title": "consensus-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "consensus-coordinator",
+    "line_count": 338
+  },
+  {
+    "agent_file": "README.md",
+    "agent_name": "README",
+    "category": "root",
+    "title": "Claude Code Agents Directory Structure",
+    "description": "## Tool Restrictions",
+    "tools": [],
+    "subagent_type": "README",
+    "line_count": 89
+  },
+  {
+    "agent_file": "e2e-runner.md",
+    "agent_name": "e2e-runner",
+    "category": "root",
+    "title": "E2E Test Runner",
+    "description": "---",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "e2e-runner",
+    "line_count": 708
+  },
+  {
+    "agent_file": "infrastructure-devops-swarm.md",
+    "agent_name": "infrastructure-devops-swarm",
+    "category": "root",
+    "title": "Infrastructure & DevOps Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "infrastructure-devops-swarm",
+    "line_count": 582
+  },
+  {
+    "agent_file": "payments.md",
+    "agent_name": "payments",
+    "category": "root",
+    "title": "payments",
+    "description": null,
+    "tools": [],
+    "subagent_type": "payments",
+    "line_count": 83
+  },
+  {
+    "agent_file": "github-swarm-coordinator.md",
+    "agent_name": "github-swarm-coordinator",
+    "category": "root",
+    "title": "GitHub Swarm Coordinator",
+    "description": "- Documentation coverage",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "github-swarm-coordinator",
+    "line_count": 156
+  },
+  {
+    "agent_file": "deal-underwriter.md",
+    "agent_name": "deal-underwriter",
+    "category": "root",
+    "title": "deal-underwriter",
+    "description": null,
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "deal-underwriter",
+    "line_count": 198
+  },
+  {
+    "agent_file": "github-pr-manager.md",
+    "agent_name": "github-pr-manager",
+    "category": "root",
+    "title": "Pull Request Manager Agent",
+    "description": "4. **Branch Protection**: Handle required reviews and status checks",
+    "tools": [],
+    "subagent_type": "github-pr-manager",
+    "line_count": 177
+  },
+  {
+    "agent_file": "sparc-coordinator.md",
+    "agent_name": "sparc-coordinator",
+    "category": "root",
+    "title": "SPARC Methodology Orchestrator Agent",
+    "description": "- Documentation coverage",
+    "tools": [],
+    "subagent_type": "sparc-coordinator",
+    "line_count": 183
+  },
+  {
+    "agent_file": "automation-smart-agent.md",
+    "agent_name": "automation-smart-agent",
+    "category": "root",
+    "title": "Smart Agent Coordinator",
+    "description": "- Evolve with project needs",
+    "tools": [],
+    "subagent_type": "automation-smart-agent",
+    "line_count": 205
+  },
+  {
+    "agent_file": "multi-repo-swarm.md",
+    "agent_name": "multi-repo-swarm",
+    "category": "root",
+    "title": "Multi-Repo Swarm - Cross-Repository Swarm Orchestration",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "multi-repo-swarm",
+    "line_count": 553
+  },
+  {
+    "agent_file": "coordinator-swarm-init.md",
+    "agent_name": "coordinator-swarm-init",
+    "category": "root",
+    "title": "Swarm Initializer Agent",
+    "description": "- Skip initialization for multi-agent tasks",
+    "tools": [],
+    "subagent_type": "coordinator-swarm-init",
+    "line_count": 105
+  },
+  {
+    "agent_file": "v3-queen-coordinator.md",
+    "agent_name": "v3-queen-coordinator",
+    "category": "root",
+    "title": "V3 Queen Coordinator",
+    "description": "## Success Metrics",
+    "tools": [],
+    "subagent_type": "v3-queen-coordinator",
+    "line_count": 98
+  },
+  {
+    "agent_file": "dev-backend-api.md",
+    "agent_name": "dev-backend-api",
+    "category": "root",
+    "title": "Backend API Developer v2.0.0-alpha",
+    "description": "- **NEW**: Store API patterns with success metrics",
+    "tools": [
+      "- Read",
+      "- WebSearch  # Focus on code",
+      "not web searches"
+    ],
+    "subagent_type": "dev-backend-api",
+    "line_count": 345
+  },
+  {
+    "agent_file": "swarm.md",
+    "agent_name": "swarm",
+    "category": "root",
+    "title": "swarm",
+    "description": null,
+    "tools": [],
+    "subagent_type": "swarm",
+    "line_count": 76
+  },
+  {
+    "agent_file": "code-review-expert.md",
+    "agent_name": "code-review-expert",
+    "category": "root",
+    "title": "1. Get PR information",
+    "description": ")\"",
+    "tools": [],
+    "subagent_type": "code-review-expert",
+    "line_count": 132
+  },
+  {
+    "agent_file": "workflow-automation.md",
+    "agent_name": "workflow-automation",
+    "category": "root",
+    "title": "Workflow Automation - GitHub Actions Integration",
+    "description": "```",
+    "tools": [
+      "- mcp__github__create_workflow"
+    ],
+    "subagent_type": "workflow-automation",
+    "line_count": 635
+  },
+  {
+    "agent_file": "matrix-optimizer.md",
+    "agent_name": "matrix-optimizer",
+    "category": "root",
+    "title": "matrix-optimizer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "matrix-optimizer",
+    "line_count": 185
+  },
+  {
+    "agent_file": "worker-specialist.md",
+    "agent_name": "worker-specialist",
+    "category": "root",
+    "title": "worker-specialist",
+    "description": null,
+    "tools": [],
+    "subagent_type": "worker-specialist",
+    "line_count": 217
+  },
+  {
+    "agent_file": "v3-performance-engineer.md",
+    "agent_name": "v3-performance-engineer",
+    "category": "root",
+    "title": "V3 Performance Engineer",
+    "description": "---",
+    "tools": [],
+    "subagent_type": "v3-performance-engineer",
+    "line_count": 397
+  },
+  {
+    "agent_file": "ml-developer.md",
+    "agent_name": "ml-developer",
+    "category": "root",
+    "title": "ML Developer Agent",
+    "description": "6. **Cost Awareness**: Optimize training for budget constraints",
+    "tools": [
+      "[Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob",
+      "NotebookEdit]"
+    ],
+    "subagent_type": "ml-developer",
+    "line_count": 231
+  },
+  {
+    "agent_file": "code-review-swarm.md",
+    "agent_name": "code-review-swarm",
+    "category": "root",
+    "title": "Code Review Swarm - Automated Code Review with AI Agents",
+    "description": "```",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "Bash",
+      "Read",
+      "Write",
+      "TodoWrite"
+    ],
+    "subagent_type": "code-review-swarm",
+    "line_count": 538
+  },
+  {
+    "agent_file": "pseudocode.md",
+    "agent_name": "pseudocode",
+    "category": "root",
+    "title": "SPARC Pseudocode Agent",
+    "description": "5. **Optimization Notes**: Potential performance improvements",
+    "tools": [],
+    "subagent_type": "pseudocode",
+    "line_count": 318
+  },
+  {
+    "agent_file": "documentation-agent.md",
+    "agent_name": "documentation-agent",
+    "category": "root",
+    "title": "Documentation Agent",
+    "description": "- Broken link count",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "documentation-agent",
+    "line_count": 157
+  },
+  {
+    "agent_file": "production-validator.md",
+    "agent_name": "production-validator",
+    "category": "root",
+    "title": "Production Validation Agent",
+    "description": "- Test authorization with real user roles and permissions",
+    "tools": [],
+    "subagent_type": "production-validator",
+    "line_count": 395
+  },
+  {
+    "agent_file": "tdd-guide.md",
+    "agent_name": "tdd-guide",
+    "category": "root",
+    "title": "Test should fail - we haven't implemented yet",
+    "description": "```",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep"
+    ],
+    "subagent_type": "tdd-guide",
+    "line_count": 280
+  },
+  {
+    "agent_file": "trading-predictor.md",
+    "agent_name": "trading-predictor",
+    "category": "root",
+    "title": "trading-predictor",
+    "description": null,
+    "tools": [],
+    "subagent_type": "trading-predictor",
+    "line_count": 246
+  },
+  {
+    "agent_file": "issue-triager.md",
+    "agent_name": "issue-triager",
+    "category": "root",
+    "title": "Issue Triager Agent",
+    "description": "- Priority accuracy",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "issue-triager",
+    "line_count": 117
+  },
+  {
+    "agent_file": "tester.md",
+    "agent_name": "tester",
+    "category": "root",
+    "title": "Testing and Quality Assurance Agent",
+    "description": "8. **Report Results**: Always share test results via memory",
+    "tools": [],
+    "subagent_type": "tester",
+    "line_count": 319
+  },
+  {
+    "agent_file": "github-modes.md",
+    "agent_name": "github-modes",
+    "category": "root",
+    "title": "GitHub Integration Modes",
+    "description": "mcp__claude-flow__agent_spawn { type: \"tester\", name: \"QA Agent\" }",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "Bash",
+      "TodoWrite",
+      "Read",
+      "Write"
+    ],
+    "subagent_type": "github-modes",
+    "line_count": 173
+  },
+  {
+    "agent_file": "performance-optimizer.md",
+    "agent_name": "performance-optimizer",
+    "category": "root",
+    "title": "performance-optimizer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "performance-optimizer",
+    "line_count": 368
+  },
+  {
+    "agent_file": "swarm-memory-manager.md",
+    "agent_name": "swarm-memory-manager",
+    "category": "root",
+    "title": "swarm-memory-manager",
+    "description": null,
+    "tools": [],
+    "subagent_type": "swarm-memory-manager",
+    "line_count": 193
+  },
+  {
+    "agent_file": "system-architect.md",
+    "agent_name": "system-architect",
+    "category": "root",
+    "title": "System Architect",
+    "description": "6. **Cost Awareness**: Align architecture with budget constraints",
+    "tools": [
+      "[Read",
+      "Write",
+      "Grep",
+      "Glob",
+      "WebSearch]"
+    ],
+    "subagent_type": "system-architect",
+    "line_count": 168
+  },
+  {
+    "agent_file": "planner.md",
+    "agent_name": "planner",
+    "category": "root",
+    "title": "Strategic Planning Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "planner",
+    "line_count": 168
+  },
+  {
+    "agent_file": "mesh-coordinator.md",
+    "agent_name": "mesh-coordinator",
+    "category": "root",
+    "title": "Mesh Network Swarm Coordinator",
+    "description": "4. **Backup Strategies**: Replicate critical state/data",
+    "tools": [],
+    "subagent_type": "mesh-coordinator",
+    "line_count": 392
+  },
+  {
+    "agent_file": "refinement.md",
+    "agent_name": "refinement",
+    "category": "root",
+    "title": "SPARC Refinement Agent",
+    "description": "6. **Documentation**: Keep docs in sync with code",
+    "tools": [],
+    "subagent_type": "refinement",
+    "line_count": 525
+  },
+  {
+    "agent_file": "queen-coordinator.md",
+    "agent_name": "queen-coordinator",
+    "category": "root",
+    "title": "queen-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "queen-coordinator",
+    "line_count": 203
+  },
+  {
+    "agent_file": "data-science-architect.md",
+    "agent_name": "data-science-architect",
+    "category": "root",
+    "title": "data-science-architect",
+    "description": null,
+    "tools": [],
+    "subagent_type": "data-science-architect",
+    "line_count": 91
+  },
+  {
+    "agent_file": "agentic-payments.md",
+    "agent_name": "agentic-payments",
+    "category": "root",
+    "title": "agentic-payments",
+    "description": null,
+    "tools": [],
+    "subagent_type": "agentic-payments",
+    "line_count": 126
+  },
+  {
+    "agent_file": "team-coordinator.md",
+    "agent_name": "team-coordinator",
+    "category": "root",
+    "title": "Team Coordinator",
+    "description": "Given the platform's focus, prioritize teams in this order when uncertain:",
+    "tools": [],
+    "subagent_type": "team-coordinator",
+    "line_count": 327
+  },
+  {
+    "agent_file": "security-manager.md",
+    "agent_name": "security-manager",
+    "category": "root",
+    "title": "Consensus Security Manager",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "security-manager",
+    "line_count": 622
+  },
+  {
+    "agent_file": "project-board-sync.md",
+    "agent_name": "project-board-sync",
+    "category": "root",
+    "title": "Project Board Sync - GitHub Projects Integration",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "project-board-sync",
+    "line_count": 509
+  },
+  {
+    "agent_file": "user-tools.md",
+    "agent_name": "user-tools",
+    "category": "root",
+    "title": "user-tools",
+    "description": null,
+    "tools": [
+      "true"
+    ],
+    "subagent_type": "user-tools",
+    "line_count": 96
+  },
+  {
+    "agent_file": "issue-tracker.md",
+    "agent_name": "issue-tracker",
+    "category": "root",
+    "title": "GitHub Issue Tracker",
+    "description": "- Cross-repository coordination efficiency",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "mcp__claude-flow__memory_usage",
+      "Bash",
+      "TodoWrite",
+      "Read",
+      "Write"
+    ],
+    "subagent_type": "issue-tracker",
+    "line_count": 319
+  },
+  {
+    "agent_file": "coder.md",
+    "agent_name": "coder",
+    "category": "root",
+    "title": "Code Implementation Agent",
+    "description": "- Share all implementation decisions via MCP memory tools",
+    "tools": [],
+    "subagent_type": "coder",
+    "line_count": 266
+  },
+  {
+    "agent_file": "portfolio-manager.md",
+    "agent_name": "portfolio-manager",
+    "category": "root",
+    "title": "Portfolio Manager Agent",
+    "description": "- Investment-grade commercial paper",
+    "tools": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash"
+    ],
+    "subagent_type": "portfolio-manager",
+    "line_count": 292
+  },
+  {
+    "agent_file": "analyze-code-quality.md",
+    "agent_name": "analyze-code-quality",
+    "category": "root",
+    "title": "Code Quality Analyzer",
+    "description": "- [Opportunity]: [Benefit]",
+    "tools": [
+      "- Read",
+      "- Write  # Read-only analysis"
+    ],
+    "subagent_type": "analyze-code-quality",
+    "line_count": 179
+  },
+  {
+    "agent_file": "base-template-generator.md",
+    "agent_name": "base-template-generator",
+    "category": "root",
+    "title": "base-template-generator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "base-template-generator",
+    "line_count": 42
+  },
+  {
+    "agent_file": "quorum-manager.md",
+    "agent_name": "quorum-manager",
+    "category": "root",
+    "title": "Quorum Manager",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "quorum-manager",
+    "line_count": 823
+  },
+  {
+    "agent_file": "data-ml-pipeline-swarm.md",
+    "agent_name": "data-ml-pipeline-swarm",
+    "category": "root",
+    "title": "Data & ML Pipeline Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "data-ml-pipeline-swarm",
+    "line_count": 322
+  },
+  {
+    "agent_file": "build-error-resolver.md",
+    "agent_name": "build-error-resolver",
+    "category": "root",
+    "title": "Build Error Resolver",
+    "description": "---",
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Bash",
+      "Grep",
+      "Glob"
+    ],
+    "subagent_type": "build-error-resolver",
+    "line_count": 532
+  },
+  {
+    "agent_file": "safla-neural.md",
+    "agent_name": "safla-neural",
+    "category": "root",
+    "title": "safla-neural",
+    "description": null,
+    "tools": [],
+    "subagent_type": "safla-neural",
+    "line_count": 74
+  },
+  {
+    "agent_file": "adaptive-coordinator.md",
+    "agent_name": "adaptive-coordinator",
+    "category": "root",
+    "title": "Adaptive Swarm Coordinator",
+    "description": "4. **Historical Analysis**: Learn from past adaptations and outcomes",
+    "tools": [],
+    "subagent_type": "adaptive-coordinator",
+    "line_count": 396
+  },
+  {
+    "agent_file": "pr-reviewer.md",
+    "agent_name": "pr-reviewer",
+    "category": "root",
+    "title": "PR Reviewer Agent",
+    "description": "- Developer satisfaction",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "pr-reviewer",
+    "line_count": 137
+  },
+  {
+    "agent_file": "pagerank-analyzer.md",
+    "agent_name": "pagerank-analyzer",
+    "category": "root",
+    "title": "pagerank-analyzer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "pagerank-analyzer",
+    "line_count": 299
+  },
+  {
+    "agent_file": "financial-analysis-swarm.md",
+    "agent_name": "financial-analysis-swarm",
+    "category": "root",
+    "title": "Financial Analysis Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "financial-analysis-swarm",
+    "line_count": 233
+  },
+  {
+    "agent_file": "repo-architect.md",
+    "agent_name": "repo-architect",
+    "category": "root",
+    "title": "GitHub Repository Architect",
+    "description": "- `/sparc optimizer` - For performance optimization",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "repo-architect",
+    "line_count": 398
+  },
+  {
+    "agent_file": "code-goal-planner.md",
+    "agent_name": "code-goal-planner",
+    "category": "root",
+    "title": "Execute SPARC phases for goal achievement",
+    "description": "- Share successful SPARC patterns across projects",
+    "tools": [
+      "[profiler",
+      "APM",
+      "database_explain]"
+    ],
+    "subagent_type": "code-goal-planner",
+    "line_count": 446
+  },
+  {
+    "agent_file": "code-analyzer.md",
+    "agent_name": "code-analyzer",
+    "category": "root",
+    "title": "Code Analyzer Agent",
+    "description": "5. Maintain quality standards",
+    "tools": [],
+    "subagent_type": "code-analyzer",
+    "line_count": 210
+  },
+  {
+    "agent_file": "v3-security-architect.md",
+    "agent_name": "v3-security-architect",
+    "category": "root",
+    "title": "V3 Security Architect",
+    "description": "## Success Metrics",
+    "tools": [],
+    "subagent_type": "v3-security-architect",
+    "line_count": 174
+  },
+  {
+    "agent_file": "godmode-refactorer.md",
+    "agent_name": "godmode-refactorer",
+    "category": "root",
+    "title": "1. Create dedicated refactoring branch",
+    "description": "command:\"codex --full-auto 'Refactor module B following SOLID principles'\"",
+    "tools": [],
+    "subagent_type": "godmode-refactorer",
+    "line_count": 246
+  },
+  {
+    "agent_file": "security-agent.md",
+    "agent_name": "security-agent",
+    "category": "root",
+    "title": "Security Agent",
+    "description": "- Secret exposure incidents (target: 0)",
+    "tools": [
+      "[Read",
+      "Grep",
+      "Glob",
+      "Bash]"
+    ],
+    "subagent_type": "security-agent",
+    "line_count": 170
+  },
+  {
+    "agent_file": "performance-monitor.md",
+    "agent_name": "performance-monitor",
+    "category": "root",
+    "title": "Performance Monitor Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "performance-monitor",
+    "line_count": 672
+  },
+  {
+    "agent_file": "security-compliance-swarm.md",
+    "agent_name": "security-compliance-swarm",
+    "category": "root",
+    "title": "Security & Compliance Swarm",
+    "description": "## Integration Points",
+    "tools": [],
+    "subagent_type": "security-compliance-swarm",
+    "line_count": 505
+  },
+  {
+    "agent_file": "v3-memory-specialist.md",
+    "agent_name": "v3-memory-specialist",
+    "category": "root",
+    "title": "V3 Memory Specialist",
+    "description": "- Domain boundary definitions for memory access",
+    "tools": [],
+    "subagent_type": "v3-memory-specialist",
+    "line_count": 318
+  },
+  {
+    "agent_file": "byzantine-coordinator.md",
+    "agent_name": "byzantine-coordinator",
+    "category": "root",
+    "title": "Byzantine Consensus Coordinator",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "byzantine-coordinator",
+    "line_count": 63
+  },
+  {
+    "agent_file": "consensus/crdt-synchronizer.md",
+    "agent_name": "crdt-synchronizer",
+    "category": "consensus",
+    "title": "CRDT Synchronizer",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "crdt-synchronizer",
+    "line_count": 997
+  },
+  {
+    "agent_file": "consensus/raft-manager.md",
+    "agent_name": "raft-manager",
+    "category": "consensus",
+    "title": "Raft Consensus Manager",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "raft-manager",
+    "line_count": 63
+  },
+  {
+    "agent_file": "consensus/performance-benchmarker.md",
+    "agent_name": "performance-benchmarker",
+    "category": "consensus",
+    "title": "Performance Benchmarker",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "performance-benchmarker",
+    "line_count": 851
+  },
+  {
+    "agent_file": "consensus/gossip-coordinator.md",
+    "agent_name": "gossip-coordinator",
+    "category": "consensus",
+    "title": "Gossip Protocol Coordinator",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "gossip-coordinator",
+    "line_count": 63
+  },
+  {
+    "agent_file": "consensus/README.md",
+    "agent_name": "README",
+    "category": "consensus",
+    "title": "Distributed Consensus Builder Agents",
+    "description": "## Integration Examples",
+    "tools": [],
+    "subagent_type": "README",
+    "line_count": 253
+  },
+  {
+    "agent_file": "consensus/security-manager.md",
+    "agent_name": "security-manager",
+    "category": "consensus",
+    "title": "Consensus Security Manager",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "security-manager",
+    "line_count": 622
+  },
+  {
+    "agent_file": "consensus/quorum-manager.md",
+    "agent_name": "quorum-manager",
+    "category": "consensus",
+    "title": "Quorum Manager",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "quorum-manager",
+    "line_count": 823
+  },
+  {
+    "agent_file": "consensus/byzantine-coordinator.md",
+    "agent_name": "byzantine-coordinator",
+    "category": "consensus",
+    "title": "Byzantine Consensus Coordinator",
+    "description": "## Collaboration",
+    "tools": [],
+    "subagent_type": "byzantine-coordinator",
+    "line_count": 63
+  },
+  {
+    "agent_file": "swarm/hierarchical-coordinator.md",
+    "agent_name": "hierarchical-coordinator",
+    "category": "swarm",
+    "title": "Hierarchical Swarm Coordinator",
+    "description": "4. **Continuous Improvement**: Regular retrospectives and process refinement",
+    "tools": [],
+    "subagent_type": "hierarchical-coordinator",
+    "line_count": 327
+  },
+  {
+    "agent_file": "swarm/README.md",
+    "agent_name": "README",
+    "category": "swarm",
+    "title": "Swarm Coordination Agents",
+    "description": "- **Configuration**: Managed through claude-flow configuration system",
+    "tools": [
+      "### Core Coordination Tools"
+    ],
+    "subagent_type": "README",
+    "line_count": 190
+  },
+  {
+    "agent_file": "swarm/mesh-coordinator.md",
+    "agent_name": "mesh-coordinator",
+    "category": "swarm",
+    "title": "Mesh Network Swarm Coordinator",
+    "description": "4. **Backup Strategies**: Replicate critical state/data",
+    "tools": [],
+    "subagent_type": "mesh-coordinator",
+    "line_count": 392
+  },
+  {
+    "agent_file": "swarm/adaptive-coordinator.md",
+    "agent_name": "adaptive-coordinator",
+    "category": "swarm",
+    "title": "Adaptive Swarm Coordinator",
+    "description": "4. **Historical Analysis**: Learn from past adaptations and outcomes",
+    "tools": [],
+    "subagent_type": "adaptive-coordinator",
+    "line_count": 396
+  },
+  {
+    "agent_file": "payments/agentic-payments.md",
+    "agent_name": "agentic-payments",
+    "category": "payments",
+    "title": "agentic-payments",
+    "description": null,
+    "tools": [],
+    "subagent_type": "agentic-payments",
+    "line_count": 126
+  },
+  {
+    "agent_file": "unit/tdd-london-swarm.md",
+    "agent_name": "tdd-london-swarm",
+    "category": "unit",
+    "title": "TDD London School Swarm Agent",
+    "description": "- Provide feedback for continuous improvement",
+    "tools": [],
+    "subagent_type": "tdd-london-swarm",
+    "line_count": 244
+  },
+  {
+    "agent_file": "sublinear/consensus-coordinator.md",
+    "agent_name": "consensus-coordinator",
+    "category": "sublinear",
+    "title": "consensus-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "consensus-coordinator",
+    "line_count": 338
+  },
+  {
+    "agent_file": "sublinear/matrix-optimizer.md",
+    "agent_name": "matrix-optimizer",
+    "category": "sublinear",
+    "title": "matrix-optimizer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "matrix-optimizer",
+    "line_count": 185
+  },
+  {
+    "agent_file": "sublinear/trading-predictor.md",
+    "agent_name": "trading-predictor",
+    "category": "sublinear",
+    "title": "trading-predictor",
+    "description": null,
+    "tools": [],
+    "subagent_type": "trading-predictor",
+    "line_count": 246
+  },
+  {
+    "agent_file": "sublinear/performance-optimizer.md",
+    "agent_name": "performance-optimizer",
+    "category": "sublinear",
+    "title": "performance-optimizer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "performance-optimizer",
+    "line_count": 368
+  },
+  {
+    "agent_file": "sublinear/pagerank-analyzer.md",
+    "agent_name": "pagerank-analyzer",
+    "category": "sublinear",
+    "title": "pagerank-analyzer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "pagerank-analyzer",
+    "line_count": 299
+  },
+  {
+    "agent_file": "core/reviewer.md",
+    "agent_name": "reviewer",
+    "category": "core",
+    "title": "Code Review Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "reviewer",
+    "line_count": 326
+  },
+  {
+    "agent_file": "core/researcher.md",
+    "agent_name": "researcher",
+    "category": "core",
+    "title": "Research and Analysis Agent",
+    "description": "6. **Share Early**: Update memory frequently for real-time coordination",
+    "tools": [],
+    "subagent_type": "researcher",
+    "line_count": 190
+  },
+  {
+    "agent_file": "core/tester.md",
+    "agent_name": "tester",
+    "category": "core",
+    "title": "Testing and Quality Assurance Agent",
+    "description": "8. **Report Results**: Always share test results via memory",
+    "tools": [],
+    "subagent_type": "tester",
+    "line_count": 319
+  },
+  {
+    "agent_file": "core/planner.md",
+    "agent_name": "planner",
+    "category": "core",
+    "title": "Strategic Planning Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "planner",
+    "line_count": 168
+  },
+  {
+    "agent_file": "core/coder.md",
+    "agent_name": "coder",
+    "category": "core",
+    "title": "Code Implementation Agent",
+    "description": "- Share all implementation decisions via MCP memory tools",
+    "tools": [],
+    "subagent_type": "coder",
+    "line_count": 266
+  },
+  {
+    "agent_file": "analysis/analyze-code-quality.md",
+    "agent_name": "analyze-code-quality",
+    "category": "analysis",
+    "title": "Code Quality Analyzer",
+    "description": "- [Opportunity]: [Benefit]",
+    "tools": [
+      "- Read",
+      "- Write  # Read-only analysis"
+    ],
+    "subagent_type": "analyze-code-quality",
+    "line_count": 179
+  },
+  {
+    "agent_file": "analysis/code-analyzer.md",
+    "agent_name": "code-analyzer",
+    "category": "analysis",
+    "title": "Code Analyzer Agent",
+    "description": "5. Maintain quality standards",
+    "tools": [],
+    "subagent_type": "code-analyzer",
+    "line_count": 210
+  },
+  {
+    "agent_file": "development/dev-backend-api.md",
+    "agent_name": "dev-backend-api",
+    "category": "development",
+    "title": "Backend API Developer v2.0.0-alpha",
+    "description": "- **NEW**: Store API patterns with success metrics",
+    "tools": [
+      "- Read",
+      "- WebSearch  # Focus on code",
+      "not web searches"
+    ],
+    "subagent_type": "dev-backend-api",
+    "line_count": 345
+  },
+  {
+    "agent_file": "optimization/load-balancer.md",
+    "agent_name": "load-balancer",
+    "category": "optimization",
+    "title": "Load Balancing Coordinator Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "load-balancer",
+    "line_count": 431
+  },
+  {
+    "agent_file": "optimization/resource-allocator.md",
+    "agent_name": "resource-allocator",
+    "category": "optimization",
+    "title": "Resource Allocator Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "resource-allocator",
+    "line_count": 674
+  },
+  {
+    "agent_file": "optimization/benchmark-suite.md",
+    "agent_name": "benchmark-suite",
+    "category": "optimization",
+    "title": "Benchmark Suite Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "benchmark-suite",
+    "line_count": 665
+  },
+  {
+    "agent_file": "optimization/topology-optimizer.md",
+    "agent_name": "topology-optimizer",
+    "category": "optimization",
+    "title": "Topology Optimizer Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "topology-optimizer",
+    "line_count": 808
+  },
+  {
+    "agent_file": "optimization/README.md",
+    "agent_name": "README",
+    "category": "optimization",
+    "title": "Performance Optimization Agents",
+    "description": "---",
+    "tools": [],
+    "subagent_type": "README",
+    "line_count": 250
+  },
+  {
+    "agent_file": "optimization/performance-monitor.md",
+    "agent_name": "performance-monitor",
+    "category": "optimization",
+    "title": "Performance Monitor Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "performance-monitor",
+    "line_count": 672
+  },
+  {
+    "agent_file": "code-review/analyze-code-quality.md",
+    "agent_name": "analyze-code-quality",
+    "category": "code-review",
+    "title": "Code Quality Analyzer",
+    "description": "- [Opportunity]: [Benefit]",
+    "tools": [
+      "- Read",
+      "- Write  # Read-only analysis"
+    ],
+    "subagent_type": "analyze-code-quality",
+    "line_count": 179
+  },
+  {
+    "agent_file": "backend/dev-backend-api.md",
+    "agent_name": "dev-backend-api",
+    "category": "backend",
+    "title": "Backend API Developer",
+    "description": "- Document all API changes",
+    "tools": [
+      "- Read",
+      "- WebSearch  # Focus on code",
+      "not web searches"
+    ],
+    "subagent_type": "dev-backend-api",
+    "line_count": 142
+  },
+  {
+    "agent_file": "sona/sona-learning-optimizer.md",
+    "agent_name": "sona-learning-optimizer",
+    "category": "sona",
+    "title": "SONA Learning Optimizer",
+    "description": "## References",
+    "tools": [],
+    "subagent_type": "sona-learning-optimizer",
+    "line_count": 74
+  },
+  {
+    "agent_file": "testing/tdd-london-swarm.md",
+    "agent_name": "tdd-london-swarm",
+    "category": "testing",
+    "title": "TDD London School Swarm Agent",
+    "description": "- Provide feedback for continuous improvement",
+    "tools": [],
+    "subagent_type": "tdd-london-swarm",
+    "line_count": 244
+  },
+  {
+    "agent_file": "testing/production-validator.md",
+    "agent_name": "production-validator",
+    "category": "testing",
+    "title": "Production Validation Agent",
+    "description": "- Test authorization with real user roles and permissions",
+    "tools": [],
+    "subagent_type": "production-validator",
+    "line_count": 395
+  },
+  {
+    "agent_file": "flow-nexus/authentication.md",
+    "agent_name": "authentication",
+    "category": "flow-nexus",
+    "title": "authentication",
+    "description": null,
+    "tools": [],
+    "subagent_type": "authentication",
+    "line_count": 69
+  },
+  {
+    "agent_file": "flow-nexus/app-store.md",
+    "agent_name": "app-store",
+    "category": "flow-nexus",
+    "title": "app-store",
+    "description": null,
+    "tools": [],
+    "subagent_type": "app-store",
+    "line_count": 88
+  },
+  {
+    "agent_file": "flow-nexus/sandbox.md",
+    "agent_name": "sandbox",
+    "category": "flow-nexus",
+    "title": "sandbox",
+    "description": null,
+    "tools": [],
+    "subagent_type": "sandbox",
+    "line_count": 76
+  },
+  {
+    "agent_file": "flow-nexus/neural-network.md",
+    "agent_name": "neural-network",
+    "category": "flow-nexus",
+    "title": "neural-network",
+    "description": null,
+    "tools": [],
+    "subagent_type": "neural-network",
+    "line_count": 88
+  },
+  {
+    "agent_file": "flow-nexus/challenges.md",
+    "agent_name": "challenges",
+    "category": "flow-nexus",
+    "title": "challenges",
+    "description": null,
+    "tools": [],
+    "subagent_type": "challenges",
+    "line_count": 81
+  },
+  {
+    "agent_file": "flow-nexus/workflow.md",
+    "agent_name": "workflow",
+    "category": "flow-nexus",
+    "title": "workflow",
+    "description": null,
+    "tools": [],
+    "subagent_type": "workflow",
+    "line_count": 84
+  },
+  {
+    "agent_file": "flow-nexus/payments.md",
+    "agent_name": "payments",
+    "category": "flow-nexus",
+    "title": "payments",
+    "description": null,
+    "tools": [],
+    "subagent_type": "payments",
+    "line_count": 83
+  },
+  {
+    "agent_file": "flow-nexus/swarm.md",
+    "agent_name": "swarm",
+    "category": "flow-nexus",
+    "title": "swarm",
+    "description": null,
+    "tools": [],
+    "subagent_type": "swarm",
+    "line_count": 76
+  },
+  {
+    "agent_file": "flow-nexus/user-tools.md",
+    "agent_name": "user-tools",
+    "category": "flow-nexus",
+    "title": "user-tools",
+    "description": null,
+    "tools": [
+      "true"
+    ],
+    "subagent_type": "user-tools",
+    "line_count": 96
+  },
+  {
+    "agent_file": "github/swarm-issue.md",
+    "agent_name": "swarm-issue",
+    "category": "github",
+    "title": "Swarm Issue - Issue-Based Swarm Coordination",
+    "description": "```",
+    "tools": [
+      "- mcp__github__get_issue"
+    ],
+    "subagent_type": "swarm-issue",
+    "line_count": 573
+  },
+  {
+    "agent_file": "github/swarm-pr.md",
+    "agent_name": "swarm-pr",
+    "category": "github",
+    "title": "Swarm PR - Managing Swarms through Pull Requests",
+    "description": "```",
+    "tools": [
+      "- mcp__github__get_pull_request"
+    ],
+    "subagent_type": "swarm-pr",
+    "line_count": 428
+  },
+  {
+    "agent_file": "github/release-manager.md",
+    "agent_name": "release-manager",
+    "category": "github",
+    "title": "GitHub Release Manager",
+    "description": "- Rollback frequency",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "release-manager",
+    "line_count": 367
+  },
+  {
+    "agent_file": "github/release-swarm.md",
+    "agent_name": "release-swarm",
+    "category": "github",
+    "title": "Release Swarm - Intelligent Release Automation",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "release-swarm",
+    "line_count": 583
+  },
+  {
+    "agent_file": "github/sync-coordinator.md",
+    "agent_name": "sync-coordinator",
+    "category": "github",
+    "title": "GitHub Sync Coordinator",
+    "description": "- Documentation sync conflicts with intelligent merging",
+    "tools": [
+      "- mcp__github__push_files"
+    ],
+    "subagent_type": "sync-coordinator",
+    "line_count": 452
+  },
+  {
+    "agent_file": "github/pr-manager.md",
+    "agent_name": "pr-manager",
+    "category": "github",
+    "title": "GitHub PR Manager",
+    "description": "- Review bottlenecks with load balancing",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "pr-manager",
+    "line_count": 191
+  },
+  {
+    "agent_file": "github/multi-repo-swarm.md",
+    "agent_name": "multi-repo-swarm",
+    "category": "github",
+    "title": "Multi-Repo Swarm - Cross-Repository Swarm Orchestration",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "multi-repo-swarm",
+    "line_count": 553
+  },
+  {
+    "agent_file": "github/workflow-automation.md",
+    "agent_name": "workflow-automation",
+    "category": "github",
+    "title": "Workflow Automation - GitHub Actions Integration",
+    "description": "```",
+    "tools": [
+      "- mcp__github__create_workflow"
+    ],
+    "subagent_type": "workflow-automation",
+    "line_count": 635
+  },
+  {
+    "agent_file": "github/code-review-swarm.md",
+    "agent_name": "code-review-swarm",
+    "category": "github",
+    "title": "Code Review Swarm - Automated Code Review with AI Agents",
+    "description": "```",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "Bash",
+      "Read",
+      "Write",
+      "TodoWrite"
+    ],
+    "subagent_type": "code-review-swarm",
+    "line_count": 538
+  },
+  {
+    "agent_file": "github/github-modes.md",
+    "agent_name": "github-modes",
+    "category": "github",
+    "title": "GitHub Integration Modes",
+    "description": "mcp__claude-flow__agent_spawn { type: \"tester\", name: \"QA Agent\" }",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "Bash",
+      "TodoWrite",
+      "Read",
+      "Write"
+    ],
+    "subagent_type": "github-modes",
+    "line_count": 173
+  },
+  {
+    "agent_file": "github/project-board-sync.md",
+    "agent_name": "project-board-sync",
+    "category": "github",
+    "title": "Project Board Sync - GitHub Projects Integration",
+    "description": "```",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "project-board-sync",
+    "line_count": 509
+  },
+  {
+    "agent_file": "github/issue-tracker.md",
+    "agent_name": "issue-tracker",
+    "category": "github",
+    "title": "GitHub Issue Tracker",
+    "description": "- Cross-repository coordination efficiency",
+    "tools": [
+      "mcp__claude-flow__swarm_init",
+      "mcp__claude-flow__agent_spawn",
+      "mcp__claude-flow__task_orchestrate",
+      "mcp__claude-flow__memory_usage",
+      "Bash",
+      "TodoWrite",
+      "Read",
+      "Write"
+    ],
+    "subagent_type": "issue-tracker",
+    "line_count": 319
+  },
+  {
+    "agent_file": "github/repo-architect.md",
+    "agent_name": "repo-architect",
+    "category": "github",
+    "title": "GitHub Repository Architect",
+    "description": "- `/sparc optimizer` - For performance optimization",
+    "tools": [
+      "- Bash"
+    ],
+    "subagent_type": "repo-architect",
+    "line_count": 398
+  },
+  {
+    "agent_file": "v3/v3-integration-architect.md",
+    "agent_name": "v3-integration-architect",
+    "category": "v3",
+    "title": "V3 Integration Architect",
+    "description": "## Risk Mitigation",
+    "tools": [],
+    "subagent_type": "v3-integration-architect",
+    "line_count": 346
+  },
+  {
+    "agent_file": "v3/v3-queen-coordinator.md",
+    "agent_name": "v3-queen-coordinator",
+    "category": "v3",
+    "title": "V3 Queen Coordinator",
+    "description": "## Success Metrics",
+    "tools": [],
+    "subagent_type": "v3-queen-coordinator",
+    "line_count": 98
+  },
+  {
+    "agent_file": "v3/v3-performance-engineer.md",
+    "agent_name": "v3-performance-engineer",
+    "category": "v3",
+    "title": "V3 Performance Engineer",
+    "description": "---",
+    "tools": [],
+    "subagent_type": "v3-performance-engineer",
+    "line_count": 397
+  },
+  {
+    "agent_file": "v3/v3-security-architect.md",
+    "agent_name": "v3-security-architect",
+    "category": "v3",
+    "title": "V3 Security Architect",
+    "description": "## Success Metrics",
+    "tools": [],
+    "subagent_type": "v3-security-architect",
+    "line_count": 174
+  },
+  {
+    "agent_file": "v3/v3-memory-specialist.md",
+    "agent_name": "v3-memory-specialist",
+    "category": "v3",
+    "title": "V3 Memory Specialist",
+    "description": "- Domain boundary definitions for memory access",
+    "tools": [],
+    "subagent_type": "v3-memory-specialist",
+    "line_count": 318
+  },
+  {
+    "agent_file": "ml/data-ml-model.md",
+    "agent_name": "data-ml-model",
+    "category": "ml",
+    "title": "Machine Learning Model Developer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- Task  # Focus on implementation"
+    ],
+    "subagent_type": "data-ml-model",
+    "line_count": 193
+  },
+  {
+    "agent_file": "mobile/spec-mobile-react-native.md",
+    "agent_name": "spec-mobile-react-native",
+    "category": "mobile",
+    "title": "React Native Mobile Developer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- WebSearch"
+    ],
+    "subagent_type": "spec-mobile-react-native",
+    "line_count": 225
+  },
+  {
+    "agent_file": "hive-mind/scout-explorer.md",
+    "agent_name": "scout-explorer",
+    "category": "hive-mind",
+    "title": "scout-explorer",
+    "description": null,
+    "tools": [],
+    "subagent_type": "scout-explorer",
+    "line_count": 242
+  },
+  {
+    "agent_file": "hive-mind/collective-intelligence-coordinator.md",
+    "agent_name": "collective-intelligence-coordinator",
+    "category": "hive-mind",
+    "title": "collective-intelligence-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "collective-intelligence-coordinator",
+    "line_count": 130
+  },
+  {
+    "agent_file": "hive-mind/worker-specialist.md",
+    "agent_name": "worker-specialist",
+    "category": "hive-mind",
+    "title": "worker-specialist",
+    "description": null,
+    "tools": [],
+    "subagent_type": "worker-specialist",
+    "line_count": 217
+  },
+  {
+    "agent_file": "hive-mind/swarm-memory-manager.md",
+    "agent_name": "swarm-memory-manager",
+    "category": "hive-mind",
+    "title": "swarm-memory-manager",
+    "description": null,
+    "tools": [],
+    "subagent_type": "swarm-memory-manager",
+    "line_count": 193
+  },
+  {
+    "agent_file": "hive-mind/queen-coordinator.md",
+    "agent_name": "queen-coordinator",
+    "category": "hive-mind",
+    "title": "queen-coordinator",
+    "description": null,
+    "tools": [],
+    "subagent_type": "queen-coordinator",
+    "line_count": 203
+  },
+  {
+    "agent_file": "templates/migration-plan.md",
+    "agent_name": "migration-plan",
+    "category": "templates",
+    "title": "Claude Flow Commands to Agent System Migration Plan",
+    "description": "- Performance improvements",
+    "tools": [
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:",
+      "allowed:"
+    ],
+    "subagent_type": "migration-plan",
+    "line_count": 746
+  },
+  {
+    "agent_file": "templates/memory-coordinator.md",
+    "agent_name": "memory-coordinator",
+    "category": "templates",
+    "title": "Memory Coordination Specialist Agent",
+    "description": "- Lazy loading",
+    "tools": [],
+    "subagent_type": "memory-coordinator",
+    "line_count": 187
+  },
+  {
+    "agent_file": "templates/implementer-sparc-coder.md",
+    "agent_name": "implementer-sparc-coder",
+    "category": "templates",
+    "title": "SPARC Implementation Specialist Agent",
+    "description": "```",
+    "tools": [],
+    "subagent_type": "implementer-sparc-coder",
+    "line_count": 259
+  },
+  {
+    "agent_file": "templates/orchestrator-task.md",
+    "agent_name": "orchestrator-task",
+    "category": "templates",
+    "title": "Task Orchestrator Agent",
+    "description": "- Recursive decomposition for large projects",
+    "tools": [],
+    "subagent_type": "orchestrator-task",
+    "line_count": 139
+  },
+  {
+    "agent_file": "templates/performance-analyzer.md",
+    "agent_name": "performance-analyzer",
+    "category": "templates",
+    "title": "Performance Bottleneck Analyzer Agent",
+    "description": "- Adaptive execution strategies",
+    "tools": [],
+    "subagent_type": "performance-analyzer",
+    "line_count": 199
+  },
+  {
+    "agent_file": "templates/github-pr-manager.md",
+    "agent_name": "github-pr-manager",
+    "category": "templates",
+    "title": "Pull Request Manager Agent",
+    "description": "4. **Branch Protection**: Handle required reviews and status checks",
+    "tools": [],
+    "subagent_type": "github-pr-manager",
+    "line_count": 177
+  },
+  {
+    "agent_file": "templates/sparc-coordinator.md",
+    "agent_name": "sparc-coordinator",
+    "category": "templates",
+    "title": "SPARC Methodology Orchestrator Agent",
+    "description": "- Documentation coverage",
+    "tools": [],
+    "subagent_type": "sparc-coordinator",
+    "line_count": 183
+  },
+  {
+    "agent_file": "templates/automation-smart-agent.md",
+    "agent_name": "automation-smart-agent",
+    "category": "templates",
+    "title": "Smart Agent Coordinator",
+    "description": "- Evolve with project needs",
+    "tools": [],
+    "subagent_type": "automation-smart-agent",
+    "line_count": 205
+  },
+  {
+    "agent_file": "templates/coordinator-swarm-init.md",
+    "agent_name": "coordinator-swarm-init",
+    "category": "templates",
+    "title": "Swarm Initializer Agent",
+    "description": "- Skip initialization for multi-agent tasks",
+    "tools": [],
+    "subagent_type": "coordinator-swarm-init",
+    "line_count": 105
+  },
+  {
+    "agent_file": "system-design/arch-system-design.md",
+    "agent_name": "arch-system-design",
+    "category": "system-design",
+    "title": "System Architecture Designer",
+    "description": "5. Technology evaluation matrix",
+    "tools": [
+      "- Read",
+      "- Edit  # Should not modify existing code"
+    ],
+    "subagent_type": "arch-system-design",
+    "line_count": 155
+  },
+  {
+    "agent_file": "ci-cd/ops-cicd-github.md",
+    "agent_name": "ops-cicd-github",
+    "category": "ci-cd",
+    "title": "GitHub CI/CD Pipeline Engineer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- WebSearch"
+    ],
+    "subagent_type": "ops-cicd-github",
+    "line_count": 164
+  },
+  {
+    "agent_file": "api-docs/docs-api-openapi.md",
+    "agent_name": "docs-api-openapi",
+    "category": "api-docs",
+    "title": "OpenAPI Documentation Specialist",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- Bash  # No need for execution"
+    ],
+    "subagent_type": "docs-api-openapi",
+    "line_count": 174
+  },
+  {
+    "agent_file": "custom/test-long-runner.md",
+    "agent_name": "test-long-runner",
+    "category": "custom",
+    "title": "Test Long-Running Agent",
+    "description": "- Thorough security audits and vulnerability assessments",
+    "tools": [],
+    "subagent_type": "test-long-runner",
+    "line_count": 44
+  },
+  {
+    "agent_file": "sparc/specification.md",
+    "agent_name": "specification",
+    "category": "sparc",
+    "title": "SPARC Specification Agent",
+    "description": "6. **Get Feedback**: Validate with stakeholders early",
+    "tools": [],
+    "subagent_type": "specification",
+    "line_count": 276
+  },
+  {
+    "agent_file": "sparc/architecture.md",
+    "agent_name": "architecture",
+    "category": "sparc",
+    "title": "SPARC Architecture Agent",
+    "description": "6. **Documentation**: Keep architecture docs up-to-date",
+    "tools": [],
+    "subagent_type": "architecture",
+    "line_count": 472
+  },
+  {
+    "agent_file": "sparc/pseudocode.md",
+    "agent_name": "pseudocode",
+    "category": "sparc",
+    "title": "SPARC Pseudocode Agent",
+    "description": "5. **Optimization Notes**: Potential performance improvements",
+    "tools": [],
+    "subagent_type": "pseudocode",
+    "line_count": 318
+  },
+  {
+    "agent_file": "sparc/refinement.md",
+    "agent_name": "refinement",
+    "category": "sparc",
+    "title": "SPARC Refinement Agent",
+    "description": "6. **Documentation**: Keep docs in sync with code",
+    "tools": [],
+    "subagent_type": "refinement",
+    "line_count": 525
+  },
+  {
+    "agent_file": "github-swarm/test-agent.md",
+    "agent_name": "test-agent",
+    "category": "github-swarm",
+    "title": "Test Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "test-agent",
+    "line_count": 450
+  },
+  {
+    "agent_file": "github-swarm/HEALTH_ASSESSMENT.md",
+    "agent_name": "HEALTH_ASSESSMENT",
+    "category": "github-swarm",
+    "title": "Repository Health Assessment",
+    "description": "---",
+    "tools": [],
+    "subagent_type": "HEALTH_ASSESSMENT",
+    "line_count": 248
+  },
+  {
+    "agent_file": "github-swarm/infrastructure-agent.md",
+    "agent_name": "infrastructure-agent",
+    "category": "github-swarm",
+    "title": "Infrastructure Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "infrastructure-agent",
+    "line_count": 456
+  },
+  {
+    "agent_file": "github-swarm/README.md",
+    "agent_name": "README",
+    "category": "github-swarm",
+    "title": "GitHub Swarm for Investment Analysis Platform",
+    "description": "## Related Documentation",
+    "tools": [],
+    "subagent_type": "README",
+    "line_count": 150
+  },
+  {
+    "agent_file": "github-swarm/github-swarm-coordinator.md",
+    "agent_name": "github-swarm-coordinator",
+    "category": "github-swarm",
+    "title": "GitHub Swarm Coordinator",
+    "description": "## Available Commands",
+    "tools": [],
+    "subagent_type": "github-swarm-coordinator",
+    "line_count": 428
+  },
+  {
+    "agent_file": "github-swarm/documentation-agent.md",
+    "agent_name": "documentation-agent",
+    "category": "github-swarm",
+    "title": "Documentation Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "documentation-agent",
+    "line_count": 341
+  },
+  {
+    "agent_file": "github-swarm/issue-triager.md",
+    "agent_name": "issue-triager",
+    "category": "github-swarm",
+    "title": "Issue Triager Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "issue-triager",
+    "line_count": 257
+  },
+  {
+    "agent_file": "github-swarm/pr-reviewer.md",
+    "agent_name": "pr-reviewer",
+    "category": "github-swarm",
+    "title": "PR Reviewer Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "pr-reviewer",
+    "line_count": 336
+  },
+  {
+    "agent_file": "github-swarm/security-agent.md",
+    "agent_name": "security-agent",
+    "category": "github-swarm",
+    "title": "Security Agent",
+    "description": "## Metrics Tracked",
+    "tools": [],
+    "subagent_type": "security-agent",
+    "line_count": 422
+  },
+  {
+    "agent_file": "validation/production-validator.md",
+    "agent_name": "production-validator",
+    "category": "validation",
+    "title": "Production Validation Agent",
+    "description": "- Test authorization with real user roles and permissions",
+    "tools": [],
+    "subagent_type": "production-validator",
+    "line_count": 395
+  },
+  {
+    "agent_file": "goal/agent.md",
+    "agent_name": "agent",
+    "category": "goal",
+    "title": "agent",
+    "description": null,
+    "tools": [],
+    "subagent_type": "agent",
+    "line_count": 816
+  },
+  {
+    "agent_file": "goal/goal-planner.md",
+    "agent_name": "goal-planner",
+    "category": "goal",
+    "title": "goal-planner",
+    "description": null,
+    "tools": [
+      "[grep",
+      "ast_parser",
+      "complexity_analyzer]",
+      "[profiler",
+      "optimizer",
+      "benchmark_suite]"
+    ],
+    "subagent_type": "goal-planner",
+    "line_count": 168
+  },
+  {
+    "agent_file": "goal/code-goal-planner.md",
+    "agent_name": "code-goal-planner",
+    "category": "goal",
+    "title": "Execute SPARC phases for goal achievement",
+    "description": "- Share successful SPARC patterns across projects",
+    "tools": [
+      "[profiler",
+      "APM",
+      "database_explain]"
+    ],
+    "subagent_type": "code-goal-planner",
+    "line_count": 446
+  },
+  {
+    "agent_file": "documentation/api-docs/docs-api-openapi.md",
+    "agent_name": "docs-api-openapi",
+    "category": "documentation/api-docs",
+    "title": "OpenAPI Documentation Specialist",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- Bash  # No need for execution"
+    ],
+    "subagent_type": "docs-api-openapi",
+    "line_count": 174
+  },
+  {
+    "agent_file": "devops/ci-cd/ops-cicd-github.md",
+    "agent_name": "ops-cicd-github",
+    "category": "devops/ci-cd",
+    "title": "GitHub CI/CD Pipeline Engineer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- WebSearch"
+    ],
+    "subagent_type": "ops-cicd-github",
+    "line_count": 164
+  },
+  {
+    "agent_file": "analysis/code-review/analyze-code-quality.md",
+    "agent_name": "analyze-code-quality",
+    "category": "analysis/code-review",
+    "title": "Code Quality Analyzer",
+    "description": "- [Opportunity]: [Benefit]",
+    "tools": [
+      "- Read",
+      "- Write  # Read-only analysis"
+    ],
+    "subagent_type": "analyze-code-quality",
+    "line_count": 179
+  },
+  {
+    "agent_file": "development/backend/dev-backend-api.md",
+    "agent_name": "dev-backend-api",
+    "category": "development/backend",
+    "title": "Backend API Developer",
+    "description": "- Document all API changes",
+    "tools": [
+      "- Read",
+      "- WebSearch  # Focus on code",
+      "not web searches"
+    ],
+    "subagent_type": "dev-backend-api",
+    "line_count": 142
+  },
+  {
+    "agent_file": "specialized/mobile/spec-mobile-react-native.md",
+    "agent_name": "spec-mobile-react-native",
+    "category": "specialized/mobile",
+    "title": "React Native Mobile Developer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- WebSearch"
+    ],
+    "subagent_type": "spec-mobile-react-native",
+    "line_count": 225
+  },
+  {
+    "agent_file": "testing/unit/tdd-london-swarm.md",
+    "agent_name": "tdd-london-swarm",
+    "category": "testing/unit",
+    "title": "TDD London School Swarm Agent",
+    "description": "- Provide feedback for continuous improvement",
+    "tools": [],
+    "subagent_type": "tdd-london-swarm",
+    "line_count": 244
+  },
+  {
+    "agent_file": "testing/validation/production-validator.md",
+    "agent_name": "production-validator",
+    "category": "testing/validation",
+    "title": "Production Validation Agent",
+    "description": "- Test authorization with real user roles and permissions",
+    "tools": [],
+    "subagent_type": "production-validator",
+    "line_count": 395
+  },
+  {
+    "agent_file": "architecture/system-design/arch-system-design.md",
+    "agent_name": "arch-system-design",
+    "category": "architecture/system-design",
+    "title": "System Architecture Designer",
+    "description": "5. Technology evaluation matrix",
+    "tools": [
+      "- Read",
+      "- Edit  # Should not modify existing code"
+    ],
+    "subagent_type": "arch-system-design",
+    "line_count": 155
+  },
+  {
+    "agent_file": "data/ml/data-ml-model.md",
+    "agent_name": "data-ml-model",
+    "category": "data/ml",
+    "title": "Machine Learning Model Developer",
+    "description": "```",
+    "tools": [
+      "- Read",
+      "- Task  # Focus on implementation"
+    ],
+    "subagent_type": "data-ml-model",
+    "line_count": 193
+  }
+]

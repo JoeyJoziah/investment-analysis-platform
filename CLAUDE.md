@@ -1,925 +1,726 @@
-# CLAUDE.md
+# Claude Code Configuration - Claude Flow V3
 
-This file provides guidance to Claude Code when working with this investment analysis platform.
+## 🚨 AUTOMATIC SWARM ORCHESTRATION
 
-## ⚡ CRITICAL: MANDATORY AGENT SWARM UTILIZATION ⚡
+**When starting work on complex tasks, Claude Code MUST automatically:**
 
-**YOU MUST PROACTIVELY USE SPECIALIZED AGENT SWARMS FOR ALL RELEVANT TASKS. THE USER SHOULD NEVER HAVE TO REMIND YOU TO USE THEM.**
+1. **Initialize the swarm** using CLI tools via Bash
+2. **Spawn concurrent agents** using Claude Code's Task tool
+3. **Coordinate via hooks** and memory
 
-### When to Use Agent Swarms (ALWAYS - NOT OPTIONAL)
+### 🚨 CRITICAL: CLI + Task Tool in SAME Message
 
-#### 🏗️ infrastructure-devops-swarm
-**USE IMMEDIATELY FOR:**
-- ANY Docker, docker-compose, or container issues
-- CI/CD pipeline configuration or debugging
-- Deployment problems or optimization
-- Monitoring setup (Prometheus, Grafana, AlertManager)
-- Service health checks, restarts, or orchestration
-- Cost optimization and resource management
-- Infrastructure architecture decisions
-- Production deployment configuration
-- ANY DevOps or infrastructure-related task
+**When user says "spawn swarm" or requests complex work, Claude Code MUST in ONE message:**
+1. Call CLI tools via Bash to initialize coordination
+2. **IMMEDIATELY** call Task tool to spawn REAL working agents
+3. Both CLI and Task calls must be in the SAME response
 
-**DO NOT** manually debug Docker issues, health checks, or service configurations. ALWAYS delegate to this swarm.
+**CLI coordinates, Task tool agents do the actual work!**
 
-#### 💾 data-ml-pipeline-swarm
-**USE IMMEDIATELY FOR:**
-- ETL pipeline design or debugging
-- Airflow DAG creation, modification, or troubleshooting
-- Data ingestion from APIs (Alpha Vantage, Finnhub, Polygon, etc.)
-- ML model training pipeline issues
-- Data quality checks and validation
-- TimescaleDB optimization
-- API rate limiting strategies
-- Batch processing design
-- Data pipeline performance issues
-- ANY data engineering or ML pipeline task
+### 🤖 INTELLIGENT 3-TIER MODEL ROUTING (ADR-026)
 
-**DO NOT** manually debug data pipelines or API integrations. ALWAYS delegate to this swarm.
+**The routing system has 3 tiers for optimal cost/performance:**
 
-#### 📊 financial-analysis-swarm
-**USE IMMEDIATELY FOR:**
-- Stock analysis algorithms
-- Financial calculations (ratios, metrics, indicators)
-- ML-based prediction models
-- Fundamental/technical analysis implementation
-- Portfolio optimization algorithms
-- Risk assessment (VaR, Sharpe, Sortino)
-- Trading signal generation
-- FinBERT or sentiment analysis for finance
-- SEC compliance for recommendations
-- ANY financial analysis, modeling, or investment logic
+| Tier | Handler | Latency | Cost | Use Cases |
+|------|---------|---------|------|-----------|
+| **1** | Agent Booster | <1ms | $0 | Simple transforms (var→const, add-types, remove-console) |
+| **2** | Haiku | ~500ms | $0.0002 | Simple tasks, bug fixes, low complexity |
+| **3** | Sonnet/Opus | 2-5s | $0.003-$0.015 | Architecture, security, complex reasoning |
 
-**DO NOT** manually implement financial algorithms. ALWAYS delegate to this swarm.
-
-#### 🔧 backend-api-swarm
-**USE IMMEDIATELY FOR:**
-- FastAPI endpoint creation or modification
-- REST API design and implementation
-- WebSocket implementation
-- Database operations and queries
-- Authentication/authorization logic
-- Repository pattern implementation
-- Async service implementation
-- API performance optimization
-- ANY backend API or service development
-
-**DO NOT** manually write API endpoints or services. ALWAYS delegate to this swarm.
-
-#### 🎨 ui-visualization-swarm
-**USE IMMEDIATELY FOR:**
-- React component development
-- Dashboard design and implementation
-- Financial charts and visualizations
-- Real-time UI updates
-- Frontend state management
-- User experience optimization
-- Responsive design implementation
-- ANY frontend or visualization work
-
-**DO NOT** manually write React components or dashboards. ALWAYS delegate to this swarm.
-
-#### ✅ project-quality-swarm
-**USE IMMEDIATELY FOR:**
-- Code review of ANY substantial changes
-- Test automation and coverage
-- Architecture decision validation
-- Documentation updates
-- Code quality improvements
-- Refactoring evaluation
-- ANY quality assurance task
-
-**DO NOT** skip code reviews or quality checks. ALWAYS delegate to this swarm after implementation.
-
-#### 🔍 Explore Agent
-**USE IMMEDIATELY FOR:**
-- Understanding codebase structure
-- Finding files, classes, or functions
-- Answering "how does X work?" questions
-- Locating error handlers or specific implementations
-- ANY exploratory or investigative task
-
-**DO NOT** manually grep/glob for complex searches. ALWAYS use Explore agent.
-
-#### 🏛️ architecture-reviewer
-**USE IMMEDIATELY FOR:**
-- System design decisions
-- Technology stack evaluation
-- Scalability strategy review
-- Database schema review
-- Microservices vs monolithic decisions
-- ANY architectural decision or review
-
-**DO NOT** make architectural decisions alone. ALWAYS get architecture-reviewer validation.
-
-#### 🛡️ security-compliance-swarm
-**USE IMMEDIATELY FOR:**
-- SEC regulatory compliance features
-- GDPR data protection implementation
-- Security audits and vulnerability assessment
-- Authentication hardening
-- Compliance documentation
-- Audit logging implementation
-- ANY security or compliance task
-
-**DO NOT** implement security features without this swarm's expertise.
-
-#### 💎 godmode-refactorer
-**USE IMMEDIATELY FOR:**
-- ANY refactoring task (simple to complex)
-- Code restructuring
-- Architectural overhauls
-- Multi-file refactoring
-- Legacy code modernization
-- ANY code quality improvement task
-
-**DO NOT** manually refactor code. ALWAYS use this swarm.
-
-### Swarm Utilization Rules
-
-1. **PROACTIVE, NOT REACTIVE**: Launch swarms IMMEDIATELY when tasks match their domain. Don't wait for user prompts.
-
-2. **PARALLEL EXECUTION**: Launch multiple swarms concurrently when possible using a single message with multiple Task tool calls.
-
-3. **COMPREHENSIVE DELEGATION**: Give swarms complete context and full autonomy to solve problems.
-
-4. **TRUST SWARM OUTPUT**: Swarm results represent expert-level work. Trust their recommendations and implementations.
-
-5. **NEVER WORK ALONE**: If a task matches a swarm's domain, you MUST use that swarm. Working solo on specialized tasks is PROHIBITED.
-
-### Violation Prevention
-
-❌ **WRONG**: "Let me debug this Docker health check issue..."
-✅ **CORRECT**: Immediately launch infrastructure-devops-swarm
-
-❌ **WRONG**: "Let me write this FastAPI endpoint..."
-✅ **CORRECT**: Immediately launch backend-api-swarm
-
-❌ **WRONG**: "Let me create this React component..."
-✅ **CORRECT**: Immediately launch ui-visualization-swarm
-
-❌ **WRONG**: "Let me implement this financial calculation..."
-✅ **CORRECT**: Immediately launch financial-analysis-swarm
-
-**IF THE USER EVER HAS TO REMIND YOU TO USE A SWARM, YOU HAVE FAILED.**
-
-## Project Overview
-
-This is an investment analysis and recommendation application designed to analyze 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges. The system operates autonomously, generating daily recommendations without user input.
-
-Key requirements:
-- Target operational cost: under $50/month
-- Must use free/open-source tools and APIs with generous free tiers
-- Fully automated daily analysis without manual intervention
-- Compliance with 2025 SEC and GDPR regulations
-
-## Development Guidelines
-
-When working with this codebase, please follow these principles:
-- Maintain the cost-optimization focus (under $50/month)
-- Preserve existing API credentials in .env file
-- Use the simplified deployment scripts (start.sh, stop.sh, setup.sh)
-- Follow the clean architecture patterns established
-
-## Quick Start Commands
-
-Use these simplified commands to work with the platform:
-
+**Before spawning agents, get routing recommendation:**
 ```bash
-# Initial setup
-./setup.sh
-
-# Start development environment
-./start.sh dev
-
-# Start production environment
-./start.sh prod
-
-# Run tests
-./start.sh test
-
-# View logs
-./logs.sh
-
-# Stop all services
-./stop.sh
-
-# Project management sync
-./board-sync.sh sync      # Sync to GitHub Projects
-./notion-sync.sh push     # Sync to Notion
+npx @claude-flow/cli@latest hooks pre-task --description "[task description]"
 ```
 
-## Project Board Synchronization
+**When you see these recommendations:**
 
-The platform supports dual project management integration:
+1. `[AGENT_BOOSTER_AVAILABLE]` → Skip LLM entirely, use Edit tool directly
+   - Intent types: `var-to-const`, `add-types`, `add-error-handling`, `async-await`, `add-logging`, `remove-console`
 
-### GitHub Projects Board
-```bash
-# Initialize project board (first time)
-./board-sync.sh init
-
-# Full sync: TODO.md → Issues → Board
-./board-sync.sh sync
-
-# Generate status report
-./board-sync.sh report
-
-# Sync only TODO.md to issues
-./board-sync.sh sync-todo
-
-# List board items
-./board-sync.sh list
+2. `[TASK_MODEL_RECOMMENDATION] Use model="X"` → Use that model in Task tool:
+```javascript
+Task({
+  prompt: "...",
+  subagent_type: "coder",
+  model: "haiku"  // ← USE THE RECOMMENDED MODEL (haiku/sonnet/opus)
+})
 ```
 
-**Setup Requirements**:
-1. GitHub CLI authenticated: `gh auth login`
-2. Project scope enabled: `gh auth refresh -s project`
-
-**Automated Sync** (via GitHub Actions):
-- Issues/PRs automatically added to board
-- Daily scheduled sync at 6 AM UTC
-- Manual trigger available in Actions tab
-
-### Notion Integration
-```bash
-./notion-sync.sh push    # Push to Notion
-./notion-sync.sh pull    # Pull from Notion
-./notion-sync.sh status  # Check sync status
-```
-
-## Technology Stack
-
-### Backend
-- **Framework**: FastAPI (Python)
-- **ML/AI**: PyTorch, scikit-learn, Prophet, Hugging Face Transformers (FinBERT)
-- **Data Processing**: Apache Airflow, Kafka, Pandas, NumPy/SciPy
-- **Database**: PostgreSQL with TimescaleDB for time-series data
-- **Caching**: Redis for API response caching
-
-### Frontend
-- **Web**: React.js with Material-UI
-- **Visualization**: Plotly Dash, React-based charting libraries
-
-### Infrastructure
-- **Containerization**: Docker and docker-compose
-- **Monitoring**: Prometheus/Grafana stack
-- **Data Pipeline**: Apache Airflow
-
-## Project Structure
-
-```
-├── backend/              # Backend API and business logic
-├── frontend/web/         # React web application
-├── data_pipelines/       # Airflow DAGs for data processing
-├── infrastructure/       # Docker configurations and deployment
-├── config/              # Configuration files
-├── scripts/             # Utility scripts
-├── docs/                # Documentation
-└── tools/               # Development tools and utilities
-```
-
-## Key Development Commands
-
-### Docker Operations
-```bash
-# Start development environment
-./start.sh dev
-
-# Start production environment
-./start.sh prod
-
-# View service logs
-./logs.sh [service-name]
-
-# Stop all services
-./stop.sh
-```
-
-### Backend Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run backend directly (for development)
-cd backend
-uvicorn backend.api.main:app --reload
-
-# Run tests
-pytest backend/tests/
-
-# Format code
-black backend/
-isort backend/
-```
-
-### Frontend Development
-```bash
-# Install dependencies
-cd frontend/web
-npm install
-
-# Start development server
-npm start
-
-# Run tests
-npm test
-
-# Build for production
-npm run build
-```
-
-## Configuration Management
-
-### Environment Variables
-Key environment variables are stored in `.env` file:
-- `ALPHA_VANTAGE_API_KEY` - Alpha Vantage API key (25 calls/day limit)
-- `FINNHUB_API_KEY` - Finnhub API key (60 calls/minute)
-- `POLYGON_API_KEY` - Polygon.io API key (5 calls/minute free tier)
-- `NEWS_API_KEY` - NewsAPI key for sentiment analysis
-- Database and security credentials
-
-### Docker Compose Configurations
-- `docker-compose.yml` - Base configuration
-- `docker-compose.dev.yml` - Development overrides
-- `docker-compose.prod.yml` - Production overrides
-- `docker-compose.test.yml` - Testing configuration
-
-## Cost Optimization Strategy
-
-The platform is designed to operate under $50/month through:
-- **Smart API Usage**: Batch requests, intelligent caching, rate limiting
-- **Efficient Processing**: Optimized queries, parallel processing, data compression
-- **Resource Management**: Auto-scaling, resource limits, spot instances
-- **Open Source Stack**: PostgreSQL, Redis, Elasticsearch, Grafana
-
-## API Endpoints
-
-### Core Endpoints
-- `GET /api/health` - Health check
-- `GET /api/recommendations` - Daily stock recommendations
-- `GET /api/analysis/{ticker}` - Comprehensive stock analysis
-- `GET /api/portfolio` - Portfolio management
-- `WS /api/ws` - Real-time updates
-
-### Development URLs
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
-- Grafana: http://localhost:3001
-- PgAdmin: http://localhost:5050 (dev only)
-
-## Testing Strategy
-
-```bash
-# Run all tests
-./start.sh test
-
-# Run backend tests only
-pytest backend/tests/ --cov=backend
-
-# Run frontend tests only
-cd frontend/web && npm test
-
-# Run specific test categories
-pytest backend/tests/ -m "unit"        # Unit tests
-pytest backend/tests/ -m "integration" # Integration tests
-pytest backend/tests/ -m "financial"   # Financial model tests
-```
-
-## Deployment
-
-### Development Deployment
-```bash
-./setup.sh      # Initial setup
-./start.sh dev  # Start development stack
-```
-
-### Production Deployment
-```bash
-./setup.sh         # Initial setup
-./start.sh prod    # Start production stack
-```
-
-### Environment-Specific Features
-
-**Development**:
-- Hot reloading for backend and frontend
-- Debug tools (PgAdmin, Redis Commander, Flower)
-- Detailed logging
-- Source code mounting
-
-**Production**:
-- Optimized builds
-- Security headers
-- Resource limits
-- Backup services
-- Monitoring alerts
-
-## Security Considerations
-
-- OAuth2 authentication for user endpoints
-- API keys stored in environment variables
-- Rate limiting per user/IP
-- Data anonymization for GDPR compliance
-- Audit logging for SEC requirements
-- SSL/TLS encryption in production
-
-## Performance Optimization
-
-### Database Optimization
-- TimescaleDB for time-series data
-- Proper indexing strategies
-- Connection pooling
-- Query optimization
-
-### Caching Strategy
-- Redis for API responses
-- Multi-layer caching (L1: Memory, L2: Redis, L3: Database)
-- Smart cache invalidation
-
-### API Optimization
-- Batch processing
-- Asynchronous operations
-- Rate limiting and throttling
-- Connection pooling
-
-This documentation reflects the current simplified architecture after refactoring to remove complexity while maintaining functionality.
-
-## Multi-Swarm Coordination Strategy
-
-### For Complex Cross-Domain Tasks
-
-When tasks span multiple domains, coordinate swarms efficiently:
-
-1. **Sequential Coordination**:
-   ```
-   infrastructure-devops-swarm → fixes Docker issues
-   ↓
-   backend-api-swarm → implements API changes
-   ↓
-   project-quality-swarm → reviews and tests
-   ```
-
-2. **Parallel Coordination**:
-   ```
-   Launch simultaneously in one message:
-   - backend-api-swarm (API endpoint)
-   - ui-visualization-swarm (React component)
-   - data-ml-pipeline-swarm (data processing)
-
-   Then launch:
-   - project-quality-swarm (reviews all)
-   ```
-
-3. **Expert Consultation**:
-   ```
-   architecture-reviewer → validates design
-   ↓
-   Specialized swarms → implement
-   ↓
-   security-compliance-swarm → validates security
-   ↓
-   project-quality-swarm → final review
-   ```
-
-### Examples of Optimal Swarm Utilization
-
-**Example 1: "Add a new stock recommendation endpoint"**
-```
-1. Launch architecture-reviewer to validate approach
-2. Launch backend-api-swarm to implement endpoint
-3. Launch financial-analysis-swarm for recommendation logic
-4. Launch project-quality-swarm for testing
-5. Launch infrastructure-devops-swarm for deployment config
-```
-
-**Example 2: "Debug Celery worker issues"**
-```
-1. IMMEDIATELY launch infrastructure-devops-swarm
-   (DO NOT debug manually - this is their specialty)
-```
-
-**Example 3: "Create portfolio dashboard"**
-```
-1. Launch ui-visualization-swarm for React components
-2. Launch backend-api-swarm for API endpoints (parallel)
-3. Launch financial-analysis-swarm for calculations (parallel)
-4. Launch project-quality-swarm for review
-```
-
-**Example 4: "Optimize data pipeline performance"**
-```
-1. Launch data-ml-pipeline-swarm to analyze and optimize
-2. Launch infrastructure-devops-swarm for infrastructure tuning
-3. Launch project-quality-swarm for validation
-```
-
-### Success Metrics
-
-✅ **You're doing it RIGHT when:**
-- Swarms are launched within first 1-2 messages
-- Multiple swarms work in parallel on complex tasks
-- You provide comprehensive context to each swarm
-- User never has to ask "why didn't you use X swarm?"
-
-❌ **You're doing it WRONG when:**
-- You attempt specialized work yourself
-- User has to prompt swarm usage
-- Only using one swarm when multiple are relevant
-- Not giving swarms complete autonomy
-
-## ⚠️ MANDATORY: Session Completion Protocol ⚠️
-
-**CRITICAL**: You MUST execute these steps at the END of EVERY Claude session. This is NOT optional.
-
-### Step 1: Sync to Notion (REQUIRED)
-```bash
-./notion-sync.sh push
-```
-**This command MUST be run before ending ANY session.** It syncs project status to the Notion Product Development Tracker.
-
-### Step 2: Update Tracking Documents
-1. **Update `TODO.md`** with completed items:
-   - Mark finished tasks with ~~strikethrough~~ and ✅ COMPLETE
-   - Update the "Already Complete" section
-   - Update status percentages in header
-
-2. **Update `IMPLEMENTATION_STATUS.md`** if major milestones reached
-
-### Step 3: Commit and Push
-```bash
-git add -A && git commit -m "chore: Update project status" && git push
-```
-
-### Verification
-Before ending the session, confirm:
-- [ ] `./notion-sync.sh push` executed successfully
-- [ ] TODO.md updated with session changes
-- [ ] Changes committed and pushed
-
-**IF YOU FORGET TO RUN NOTION SYNC, THE USER'S PROJECT BOARD WILL BE OUT OF DATE.**
-
-This ensures context persists across sessions, prevents duplicate work, and keeps the Notion board synchronized.
-
-## Available Skills
-
-Skills are modular capabilities that extend agent functionality. Skills are located in `.claude/skills/` and provide specialized knowledge and workflows.
-
-### Project-Specific Skills (Investment Platform)
-
-| Skill | Purpose | Use When |
-|-------|---------|----------|
-| **sec-compliance** | SEC 2025 compliance validation | Generating/reviewing recommendations, audit trails |
-| **cost-monitor** | $50/month budget tracking | Reviewing costs, optimizing resources |
-| **api-rate-limiter** | Manage API quotas | Data ingestion, rate limit issues |
-| **stock-analysis** | Comprehensive stock analysis | Running analysis pipelines |
-
-### General Skills (from clawdbot)
-
-| Skill | Purpose | Use When |
-|-------|---------|----------|
-| **github** | GitHub CLI operations | PRs, CI/CD, issues, code management |
-| **tmux** | Terminal session management | Background processes, parallel tasks |
-| **1password** | Secure credential management | API keys, secrets, credential audits |
-| **slack** | Team communication | Notifications, alerts, status updates |
-| **trello** | Project management | Task tracking, board management |
-| **notion** | Documentation | ADRs, design docs, knowledge bases |
-| **summarize** | Content summarization | News analysis, document processing |
-| **coding-agent** | AI coding assistants | Parallel coding, automated reviews |
-| **session-logs** | Session history | Debugging, audit trails, context |
-| **model-usage** | Cost tracking | API/model usage monitoring |
-| **skill-creator** | Create new skills | Building custom skills |
-
-### Skill Distribution by Agent
-
-Each agent has access to relevant skills:
-
-```
-infrastructure-devops-swarm
-├── github (CI/CD, deployments)
-├── tmux (monitoring, background processes)
-├── 1password (secrets management)
-├── slack (deployment notifications)
-├── model-usage (cost tracking)
-└── cost-monitor (budget monitoring)
-
-financial-analysis-swarm
-├── summarize (financial news analysis)
-├── github (model versioning)
-├── notion (methodology documentation)
-├── sec-compliance (regulatory compliance)
-└── stock-analysis (analysis workflows)
-
-backend-api-swarm
-├── github (code management)
-├── tmux (development/testing)
-├── 1password (credential management)
-└── api-rate-limiter (API quotas)
-
-data-ml-pipeline-swarm
-├── github (pipeline versioning)
-├── tmux (DAG monitoring)
-├── summarize (text processing)
-├── model-usage (ML costs)
-├── api-rate-limiter (data ingestion)
-└── cost-monitor (budget tracking)
-
-ui-visualization-swarm
-├── github (component workflow)
-└── notion (design documentation)
-
-security-compliance-swarm
-├── 1password (credential audits)
-├── github (security reviews)
-├── session-logs (audit trails)
-└── sec-compliance (regulatory checks)
-
-project-quality-swarm
-├── github (PR reviews, CI)
-├── coding-agent (automated testing)
-└── session-logs (debugging history)
-
-team-coordinator
-├── github (project overview)
-├── slack (team communication)
-├── trello (project management)
-├── notion (documentation)
-├── model-usage (cost monitoring)
-└── All other skills as needed
-```
-
-### Using Skills
-
-Skills are automatically available to agents based on their configuration. Key patterns:
-
-**1. GitHub Operations (all agents)**
-```bash
-gh pr create --title "Feature" --body "Description"
-gh pr checks <PR_NUMBER>
-gh issue list --label "bug"
-```
-
-**2. Background Process Management (tmux)**
-```bash
-SOCKET="${TMPDIR:-/tmp}/session.sock"
-tmux -S "$SOCKET" new-session -d -s mywork
-tmux -S "$SOCKET" send-keys "command" Enter
-```
-
-**3. Secure Credential Access (1password)**
-```bash
-# Sign in first, then:
-op read "op://Vault/Item/field"
-```
-
-**4. Cost Monitoring**
-```bash
-python scripts/model_usage.py --mode all
-# Monitor API usage and stay under $50/month
-```
-
-**5. Compliance Validation (sec-compliance)**
-```python
-from backend.services.compliance import SECComplianceValidator
-validator.validate_recommendation(recommendation)
-```
-
-### Creating Custom Skills
-
-Use the `skill-creator` skill to build new project-specific skills:
-
-1. Define the skill's purpose and triggers
-2. Create `SKILL.md` with frontmatter and instructions
-3. Add scripts/references/assets as needed
-4. Place in `.claude/skills/<skill-name>/`
-
-See `.claude/skills/skill-creator/SKILL.md` for detailed guidance.
+**Benefits:** 75% cost reduction, 352x faster for Tier 1 tasks
 
 ---
 
-## Complete Claude Code Ecosystem Integration
+### 🛡️ Anti-Drift Config (PREFERRED)
 
-This project integrates **two major Claude Code repositories** for enterprise-grade multi-agent orchestration:
-
-1. **everything-claude-code** from [github.com/affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code)
-2. **claude-flow** from [github.com/ruvnet/claude-flow](https://github.com/ruvnet/claude-flow)
-
-### Integration Summary
-
-| Category | Everything Claude Code | Claude Flow | Custom | Total |
-|----------|------------------------|-------------|--------|-------|
-| Agents | 9 | 100+ (in 25 dirs) | 6 | 128 |
-| Skills | 11 | 37 | 3 | 71 |
-| Commands | 15 | 23+ (in 19 dirs) | 4 | 164 |
-| Helpers | 4 | 31 | - | 35 |
-| Rules | 8 | - | - | 8 |
-
-### Claude Flow Advanced Capabilities
-
-The claude-flow integration adds:
-
-#### Multi-Agent Orchestration
-- **Queen Orchestrator**: Master agent coordinating all investment workflows
-- **Swarm Topologies**: Mesh (collaborative), Hierarchical (orchestrated), Ring, Star
-- **Consensus Mechanisms**: Raft, BFT, Gossip, CRDT for agent coordination
-
-#### Agent Categories from Claude Flow
-| Category | Purpose |
-|----------|---------|
-| `consensus/` | BFT, Raft, Gossip consensus agents |
-| `hive-mind/` | Collective intelligence coordination |
-| `flow-nexus/` | Flow orchestration and management |
-| `swarm/` | Multi-agent swarm coordination |
-| `sona/` | Self-optimizing neural architecture |
-| `sparc/` | SPARC methodology agents |
-| `github/` | GitHub integration agents |
-| `optimization/` | Performance optimization agents |
-| `reasoning/` | Advanced reasoning agents |
-
-#### Advanced Skills from Claude Flow
-- `agentdb-*`: Advanced memory, learning, vector search
-- `flow-nexus-*`: Neural, platform, swarm orchestration
-- `github-*`: Code review, multi-repo, release management
-- `hive-mind-advanced`: Collective intelligence
-- `sparc-methodology`: SPARC development methodology
-- `swarm-*`: Advanced swarm coordination
-- `v3-*`: V3 implementation skills
-
-#### Helper Scripts
-- `learning-service.mjs`: Continuous learning loop
-- `swarm-hooks.sh`: Swarm coordination hooks
-- `worker-manager.sh`: Background worker management
-- `metrics-db.mjs`: Performance metrics tracking
-- `checkpoint-manager.sh`: State persistence
-
-#### V3 Implementation
-Located in `.claude/v3/`:
-- `@claude-flow/`: Core TypeScript implementation
-- `mcp/`: MCP server (connection pool, session manager, tool registry)
-- `src/`: Coordination, memory, task execution modules
-- `swarm.config.ts`: Swarm configuration
-
-### Custom Investment Analysis Commands
-
-| Command | Description | Agent |
-|---------|-------------|-------|
-| `/underwrite` | Comprehensive deal underwriting | deal-underwriter |
-| `/model` | Build DCF, LBO, financial models | financial-modeler |
-| `/analyze-structure` | Review security packages & liens | - |
-| `/scenario` | Scenario and sensitivity analysis | - |
-
-### Custom Investment Analysis Agents
-
-#### `queen-investment-orchestrator` (.claude/agents/queen-investment-orchestrator.md)
-**Master orchestrator** for coordinating all investment analysis workflows.
-- Routes tasks to optimal specialized agents
-- Coordinates multi-phase deal analysis
-- Manages context across agent handoffs
-- Supports mesh, hierarchical, star topologies
-- Performance targets: 32.3% token reduction, 2.8-4.4x speedup
-
-#### `investment-analyst` (.claude/agents/investment-analyst.md)
-Senior investment analyst for deal analysis, due diligence, and investment memos.
-- Market analysis and industry research
-- Risk-return evaluation
-- Investment memo generation
-- Cannabis and real estate specialization
-
-#### `deal-underwriter` (.claude/agents/deal-underwriter.md)
-Credit underwriter for loans and secured lending transactions.
-- Credit analysis and scoring
-- Collateral evaluation
-- UCC lien analysis
-- Covenant structuring
-- Intercreditor review
-
-#### `financial-modeler` (.claude/agents/financial-modeler.md)
-Expert financial modeler for quantitative analysis.
-- DCF valuations
-- LBO modeling
-- Scenario and sensitivity analysis
-- Returns calculations (IRR, MOIC)
-- Data consolidation automation
-
-#### `risk-assessor` (.claude/agents/risk-assessor.md)
-Portfolio and deal risk assessment specialist.
-- Value at Risk (VaR) calculations
-- Stress testing and scenario analysis
-- Credit risk analysis (PD, LGD, EAD)
-- Regulatory compliance (SEC, Basel III/IV)
-- Concentration risk monitoring
-
-#### `portfolio-manager` (.claude/agents/portfolio-manager.md)
-Portfolio construction and management specialist.
-- Asset allocation (strategic and tactical)
-- Portfolio optimization (Mean-Variance, Risk Parity, Black-Litterman)
-- Performance attribution analysis
-- Rebalancing strategies
-- Risk budgeting
-
-### Custom Investment Skills
-
-#### `financial-modeling` (.claude/skills/financial-modeling/)
-- DCF valuation methodology
-- LBO model framework
-- Scenario analysis patterns
-- Sensitivity table generation
-- Cash flow modeling
-
-#### `deal-structuring` (.claude/skills/deal-structuring/)
-- Security package design
-- UCC lien perfection
-- Intercreditor agreements
-- Covenant structures
-- Collateral analysis
-
-#### `underwriting-analysis` (.claude/skills/underwriting-analysis/)
-- Credit scoring methodology
-- Financial statement spreading
-- Risk assessment framework
-- Due diligence checklists
-
-### Imported Development Commands
-
-| Command | Description |
-|---------|-------------|
-| `/plan` | Create implementation plan before coding |
-| `/tdd` | Test-driven development workflow |
-| `/code-review` | Quality and security review |
-| `/build-fix` | Fix build and compilation errors |
-| `/e2e` | End-to-end test generation |
-| `/refactor-clean` | Remove dead code |
-| `/update-docs` | Sync documentation |
-| `/verify` | Run verification loop |
-| `/learn` | Extract patterns mid-session |
-| `/checkpoint` | Save verification state |
-
-### Investment Analysis Workflow
-
-```
-1. Receive new deal for analysis
-   → /underwrite to perform credit analysis
-
-2. Build financial projections
-   → /model DCF to create valuation
-
-3. Review security package
-   → /analyze-structure for lien priority
-
-4. Stress test assumptions
-   → /scenario for sensitivity analysis
-
-5. Generate investment memo
-   → Use investment-analyst agent
-```
-
-### Integration Manifest
-
-Full component registry: `.claude/integration-manifest.json`
-
-### Orchestration Patterns
-
-Use the Queen Investment Orchestrator for complex workflows:
-
-```
-PATTERN 1: New Deal Analysis
-├─ PARALLEL: investment-analyst + deal-underwriter + financial-modeler
-├─ SEQUENTIAL: credit scoring → projections → collateral valuation
-├─ INTEGRATION: scenario analysis → security package → risk assessment
-└─ DELIVERY: investment memo
-
-PATTERN 2: Portfolio Risk Assessment
-├─ financial-analysis-swarm: Calculate VaR, Sharpe, Sortino
-├─ financial-modeler: Stress test scenarios
-├─ risk-assessor: Generate risk report
-└─ Validate SEC compliance
-
-PATTERN 3: Due Diligence Deep Dive
-├─ deal-underwriter: UCC search, lien analysis
-├─ investment-analyst: Business & market due diligence
-├─ financial-modeler: Validate projections
-└─ deal-underwriter: Structure security package
-```
-
-### Updating from Upstream
-
-**Sync with everything-claude-code:**
+**Use this to prevent agent drift:**
 ```bash
-git clone --depth 1 https://github.com/affaan-m/everything-claude-code.git /tmp/ecc
-cp /tmp/ecc/agents/*.md .claude/agents/
-cp -r /tmp/ecc/skills/* .claude/skills/
-cp /tmp/ecc/commands/*.md .claude/commands/
-rm -rf /tmp/ecc
+# Small teams (6-8 agents) - use hierarchical for tight control
+npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized
+
+# Large teams (10-15 agents) - use hierarchical-mesh for V3 queen + peer communication
+npx @claude-flow/cli@latest swarm init --topology hierarchical-mesh --max-agents 15 --strategy specialized
 ```
 
-**Sync with claude-flow:**
+**Valid Topologies:**
+- `hierarchical` - Queen controls workers directly (anti-drift for small teams)
+- `hierarchical-mesh` - V3 queen + peer communication (recommended for 10+ agents)
+- `mesh` - Fully connected peer network
+- `ring` - Circular communication pattern
+- `star` - Central coordinator with spokes
+- `hybrid` - Dynamic topology switching
+
+**Anti-Drift Guidelines:**
+- **hierarchical**: Coordinator catches divergence
+- **max-agents 6-8**: Smaller team = less drift
+- **specialized**: Clear roles, no overlap
+- **consensus**: raft (leader maintains state)
+
+---
+
+### 🔄 Auto-Start Swarm Protocol (Background Execution)
+
+When the user requests a complex task, **spawn agents in background and WAIT for completion:**
+
+```javascript
+// STEP 1: Initialize swarm coordination (anti-drift config)
+Bash("npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized")
+
+// STEP 2: Spawn ALL agents IN BACKGROUND in a SINGLE message
+// Use run_in_background: true so agents work concurrently
+Task({
+  prompt: "Research requirements, analyze codebase patterns, store findings in memory",
+  subagent_type: "researcher",
+  description: "Research phase",
+  run_in_background: true  // ← CRITICAL: Run in background
+})
+Task({
+  prompt: "Design architecture based on research. Document decisions.",
+  subagent_type: "system-architect",
+  description: "Architecture phase",
+  run_in_background: true
+})
+Task({
+  prompt: "Implement the solution following the design. Write clean code.",
+  subagent_type: "coder",
+  description: "Implementation phase",
+  run_in_background: true
+})
+Task({
+  prompt: "Write comprehensive tests for the implementation.",
+  subagent_type: "tester",
+  description: "Testing phase",
+  run_in_background: true
+})
+Task({
+  prompt: "Review code quality, security, and best practices.",
+  subagent_type: "reviewer",
+  description: "Review phase",
+  run_in_background: true
+})
+
+// STEP 3: WAIT - Tell user agents are working, then STOP
+// Say: "I've spawned 5 agents to work on this in parallel. They'll report back when done."
+// DO NOT check status repeatedly. Just wait for user or agent responses.
+```
+
+### ⏸️ CRITICAL: Spawn and Wait Pattern
+
+**After spawning background agents:**
+
+1. **TELL USER** - "I've spawned X agents working in parallel on: [list tasks]"
+2. **STOP** - Do not continue with more tool calls
+3. **WAIT** - Let the background agents complete their work
+4. **RESPOND** - When agents return results, review and synthesize
+
+**Example response after spawning:**
+```
+I've launched 5 concurrent agents to work on this:
+- 🔍 Researcher: Analyzing requirements and codebase
+- 🏗️ Architect: Designing the implementation approach
+- 💻 Coder: Implementing the solution
+- 🧪 Tester: Writing tests
+- 👀 Reviewer: Code review and security check
+
+They're working in parallel. I'll synthesize their results when they complete.
+```
+
+### 🚫 DO NOT:
+- Continuously check swarm status
+- Poll TaskOutput repeatedly
+- Add more tool calls after spawning
+- Ask "should I check on the agents?"
+
+### ✅ DO:
+- Spawn all agents in ONE message
+- Tell user what's happening
+- Wait for agent results to arrive
+- Synthesize results when they return
+
+## 🧠 AUTO-LEARNING PROTOCOL
+
+### Before Starting Any Task
 ```bash
-git clone --depth 1 https://github.com/ruvnet/claude-flow.git /tmp/cf
-cp -r /tmp/cf/.claude/agents/* .claude/agents/
-cp -r /tmp/cf/.claude/skills/* .claude/skills/
-cp -r /tmp/cf/.claude/commands/* .claude/commands/
-cp -r /tmp/cf/.claude/helpers/* .claude/helpers/
-rm -rf /tmp/cf
+# 1. Search memory for relevant patterns from past successes
+Bash("npx @claude-flow/cli@latest memory search --query '[task keywords]' --namespace patterns")
+
+# 2. Check if similar task was done before
+Bash("npx @claude-flow/cli@latest memory search --query '[task type]' --namespace tasks")
+
+# 3. Load learned optimizations
+Bash("npx @claude-flow/cli@latest hooks route --task '[task description]'")
 ```
 
-Custom investment-specific components will not be overwritten as they have unique names.
+### After Completing Any Task Successfully
+```bash
+# 1. Store successful pattern for future reference
+Bash("npx @claude-flow/cli@latest memory store --namespace patterns --key '[pattern-name]' --value '[what worked]'")
+
+# 2. Train neural patterns on the successful approach
+Bash("npx @claude-flow/cli@latest hooks post-edit --file '[main-file]' --train-neural true")
+
+# 3. Record task completion with metrics
+Bash("npx @claude-flow/cli@latest hooks post-task --task-id '[id]' --success true --store-results true")
+
+# 4. Trigger optimization worker if performance-related
+Bash("npx @claude-flow/cli@latest hooks worker dispatch --trigger optimize")
+```
+
+### Continuous Improvement Triggers
+
+| Trigger | Worker | When to Use |
+|---------|--------|-------------|
+| After major refactor | `optimize` | Performance optimization |
+| After adding features | `testgaps` | Find missing test coverage |
+| After security changes | `audit` | Security analysis |
+| After API changes | `document` | Update documentation |
+| Every 5+ file changes | `map` | Update codebase map |
+| Complex debugging | `deepdive` | Deep code analysis |
+
+### Memory-Enhanced Development
+
+**ALWAYS check memory before:**
+- Starting a new feature (search for similar implementations)
+- Debugging an issue (search for past solutions)
+- Refactoring code (search for learned patterns)
+- Performance work (search for optimization strategies)
+
+**ALWAYS store in memory after:**
+- Solving a tricky bug (store the solution pattern)
+- Completing a feature (store the approach)
+- Finding a performance fix (store the optimization)
+- Discovering a security issue (store the vulnerability pattern)
+
+### 📋 Agent Routing (Anti-Drift)
+
+| Code | Task | Agents |
+|------|------|--------|
+| 1 | Bug Fix | coordinator, researcher, coder, tester |
+| 3 | Feature | coordinator, architect, coder, tester, reviewer |
+| 5 | Refactor | coordinator, architect, coder, reviewer |
+| 7 | Performance | coordinator, perf-engineer, coder |
+| 9 | Security | coordinator, security-architect, auditor |
+| 11 | Docs | researcher, api-docs |
+
+**Codes 1-9: hierarchical/specialized (anti-drift). Code 11: mesh/balanced**
+
+### 🎯 Task Complexity Detection
+
+**AUTO-INVOKE SWARM when task involves:**
+- Multiple files (3+)
+- New feature implementation
+- Refactoring across modules
+- API changes with tests
+- Security-related changes
+- Performance optimization
+- Database schema changes
+
+**SKIP SWARM for:**
+- Single file edits
+- Simple bug fixes (1-2 lines)
+- Documentation updates
+- Configuration changes
+- Quick questions/exploration
+
+## 🚨 CRITICAL: CONCURRENT EXECUTION & FILE MANAGEMENT
+
+**ABSOLUTE RULES**:
+1. ALL operations MUST be concurrent/parallel in a single message
+2. **NEVER save working files, text/mds and tests to the root folder**
+3. ALWAYS organize files in appropriate subdirectories
+4. **USE CLAUDE CODE'S TASK TOOL** for spawning agents concurrently, not just MCP
+
+### ⚡ GOLDEN RULE: "1 MESSAGE = ALL RELATED OPERATIONS"
+
+**MANDATORY PATTERNS:**
+- **TodoWrite**: ALWAYS batch ALL todos in ONE call (5-10+ todos minimum)
+- **Task tool (Claude Code)**: ALWAYS spawn ALL agents in ONE message with full instructions
+- **File operations**: ALWAYS batch ALL reads/writes/edits in ONE message
+- **Bash commands**: ALWAYS batch ALL terminal operations in ONE message
+- **Memory operations**: ALWAYS batch ALL memory store/retrieve in ONE message
+
+### 📁 File Organization Rules
+
+**NEVER save to root folder. Use these directories:**
+- `/src` - Source code files
+- `/tests` - Test files
+- `/docs` - Documentation and markdown files
+- `/config` - Configuration files
+- `/scripts` - Utility scripts
+- `/examples` - Example code
+
+## Project Config (Anti-Drift Defaults)
+
+- **Topology**: hierarchical (prevents drift)
+- **Max Agents**: 8 (smaller = less drift)
+- **Strategy**: specialized (clear roles)
+- **Consensus**: raft
+- **Memory**: hybrid
+- **HNSW**: Enabled
+- **Neural**: Enabled
+
+## 🚀 V3 CLI Commands (26 Commands, 140+ Subcommands)
+
+### Core Commands
+
+| Command | Subcommands | Description |
+|---------|-------------|-------------|
+| `init` | 4 | Project initialization with wizard, presets, skills, hooks |
+| `agent` | 8 | Agent lifecycle (spawn, list, status, stop, metrics, pool, health, logs) |
+| `swarm` | 6 | Multi-agent swarm coordination and orchestration |
+| `memory` | 11 | AgentDB memory with vector search (150x-12,500x faster) |
+| `mcp` | 9 | MCP server management and tool execution |
+| `task` | 6 | Task creation, assignment, and lifecycle |
+| `session` | 7 | Session state management and persistence |
+| `config` | 7 | Configuration management and provider setup |
+| `status` | 3 | System status monitoring with watch mode |
+| `workflow` | 6 | Workflow execution and template management |
+| `hooks` | 17 | Self-learning hooks + 12 background workers |
+| `hive-mind` | 6 | Queen-led Byzantine fault-tolerant consensus |
+
+### Advanced Commands
+
+| Command | Subcommands | Description |
+|---------|-------------|-------------|
+| `daemon` | 5 | Background worker daemon (start, stop, status, trigger, enable) |
+| `neural` | 5 | Neural pattern training (train, status, patterns, predict, optimize) |
+| `security` | 6 | Security scanning (scan, audit, cve, threats, validate, report) |
+| `performance` | 5 | Performance profiling (benchmark, profile, metrics, optimize, report) |
+| `providers` | 5 | AI providers (list, add, remove, test, configure) |
+| `plugins` | 5 | Plugin management (list, install, uninstall, enable, disable) |
+| `deployment` | 5 | Deployment management (deploy, rollback, status, environments, release) |
+| `embeddings` | 4 | Vector embeddings (embed, batch, search, init) - 75x faster with agentic-flow |
+| `claims` | 4 | Claims-based authorization (check, grant, revoke, list) |
+| `migrate` | 5 | V2 to V3 migration with rollback support |
+| `doctor` | 1 | System diagnostics with health checks |
+| `completions` | 4 | Shell completions (bash, zsh, fish, powershell) |
+
+### Quick CLI Examples
+
+```bash
+# Initialize project
+npx @claude-flow/cli@latest init --wizard
+
+# Start daemon with background workers
+npx @claude-flow/cli@latest daemon start
+
+# Spawn an agent
+npx @claude-flow/cli@latest agent spawn -t coder --name my-coder
+
+# Initialize swarm
+npx @claude-flow/cli@latest swarm init --v3-mode
+
+# Search memory (HNSW-indexed)
+npx @claude-flow/cli@latest memory search --query "authentication patterns"
+
+# System diagnostics
+npx @claude-flow/cli@latest doctor --fix
+
+# Security scan
+npx @claude-flow/cli@latest security scan --depth full
+
+# Performance benchmark
+npx @claude-flow/cli@latest performance benchmark --suite all
+```
+
+## 🚀 Available Agents (60+ Types)
+
+### Core Development
+`coder`, `reviewer`, `tester`, `planner`, `researcher`
+
+### V3 Specialized Agents
+`security-architect`, `security-auditor`, `memory-specialist`, `performance-engineer`
+
+### 🔐 @claude-flow/security
+CVE remediation, input validation, path security:
+- `InputValidator` - Zod validation
+- `PathValidator` - Traversal prevention
+- `SafeExecutor` - Injection protection
+
+### Swarm Coordination
+`hierarchical-coordinator`, `mesh-coordinator`, `adaptive-coordinator`, `collective-intelligence-coordinator`, `swarm-memory-manager`
+
+### Consensus & Distributed
+`byzantine-coordinator`, `raft-manager`, `gossip-coordinator`, `consensus-builder`, `crdt-synchronizer`, `quorum-manager`, `security-manager`
+
+### Performance & Optimization
+`perf-analyzer`, `performance-benchmarker`, `task-orchestrator`, `memory-coordinator`, `smart-agent`
+
+### GitHub & Repository
+`github-modes`, `pr-manager`, `code-review-swarm`, `issue-tracker`, `release-manager`, `workflow-automation`, `project-board-sync`, `repo-architect`, `multi-repo-swarm`
+
+### SPARC Methodology
+`sparc-coord`, `sparc-coder`, `specification`, `pseudocode`, `architecture`, `refinement`
+
+### Specialized Development
+`backend-dev`, `mobile-dev`, `ml-developer`, `cicd-engineer`, `api-docs`, `system-architect`, `code-analyzer`, `base-template-generator`
+
+### Testing & Validation
+`tdd-london-swarm`, `production-validator`
+
+## 🪝 V3 Hooks System (27 Hooks + 12 Workers)
+
+### All Available Hooks
+
+| Hook | Description | Key Options |
+|------|-------------|-------------|
+| `pre-edit` | Get context before editing files | `--file`, `--operation` |
+| `post-edit` | Record editing outcome for learning | `--file`, `--success`, `--train-neural` |
+| `pre-command` | Assess risk before commands | `--command`, `--validate-safety` |
+| `post-command` | Record command execution outcome | `--command`, `--track-metrics` |
+| `pre-task` | Record task start, get agent suggestions | `--description`, `--coordinate-swarm` |
+| `post-task` | Record task completion for learning | `--task-id`, `--success`, `--store-results` |
+| `session-start` | Start/restore session (v2 compat) | `--session-id`, `--auto-configure` |
+| `session-end` | End session and persist state | `--generate-summary`, `--export-metrics` |
+| `session-restore` | Restore a previous session | `--session-id`, `--latest` |
+| `route` | Route task to optimal agent | `--task`, `--context`, `--top-k` |
+| `route-task` | (v2 compat) Alias for route | `--task`, `--auto-swarm` |
+| `explain` | Explain routing decision | `--topic`, `--detailed` |
+| `pretrain` | Bootstrap intelligence from repo | `--model-type`, `--epochs` |
+| `build-agents` | Generate optimized agent configs | `--agent-types`, `--focus` |
+| `metrics` | View learning metrics dashboard | `--v3-dashboard`, `--format` |
+| `transfer` | Transfer patterns via IPFS registry | `store`, `from-project` |
+| `list` | List all registered hooks | `--format` |
+| `intelligence` | RuVector intelligence system | `trajectory-*`, `pattern-*`, `stats` |
+| `worker` | Background worker management | `list`, `dispatch`, `status`, `detect` |
+| `progress` | Check V3 implementation progress | `--detailed`, `--format` |
+| `statusline` | Generate dynamic statusline | `--json`, `--compact`, `--no-color` |
+| `coverage-route` | Route based on test coverage gaps | `--task`, `--path` |
+| `coverage-suggest` | Suggest coverage improvements | `--path` |
+| `coverage-gaps` | List coverage gaps with priorities | `--format`, `--limit` |
+| `pre-bash` | (v2 compat) Alias for pre-command | Same as pre-command |
+| `post-bash` | (v2 compat) Alias for post-command | Same as post-command |
+
+### 12 Background Workers
+
+| Worker | Priority | Description |
+|--------|----------|-------------|
+| `ultralearn` | normal | Deep knowledge acquisition |
+| `optimize` | high | Performance optimization |
+| `consolidate` | low | Memory consolidation |
+| `predict` | normal | Predictive preloading |
+| `audit` | critical | Security analysis |
+| `map` | normal | Codebase mapping |
+| `preload` | low | Resource preloading |
+| `deepdive` | normal | Deep code analysis |
+| `document` | normal | Auto-documentation |
+| `refactor` | normal | Refactoring suggestions |
+| `benchmark` | normal | Performance benchmarking |
+| `testgaps` | normal | Test coverage analysis |
+
+### Essential Hook Commands
+
+```bash
+# Core hooks
+npx @claude-flow/cli@latest hooks pre-task --description "[task]"
+npx @claude-flow/cli@latest hooks post-task --task-id "[id]" --success true
+npx @claude-flow/cli@latest hooks post-edit --file "[file]" --train-neural true
+
+# Session management
+npx @claude-flow/cli@latest hooks session-start --session-id "[id]"
+npx @claude-flow/cli@latest hooks session-end --export-metrics true
+npx @claude-flow/cli@latest hooks session-restore --session-id "[id]"
+
+# Intelligence routing
+npx @claude-flow/cli@latest hooks route --task "[task]"
+npx @claude-flow/cli@latest hooks explain --topic "[topic]"
+
+# Neural learning
+npx @claude-flow/cli@latest hooks pretrain --model-type moe --epochs 10
+npx @claude-flow/cli@latest hooks build-agents --agent-types coder,tester
+
+# Background workers
+npx @claude-flow/cli@latest hooks worker list
+npx @claude-flow/cli@latest hooks worker dispatch --trigger audit
+npx @claude-flow/cli@latest hooks worker status
+
+# Coverage-aware routing
+npx @claude-flow/cli@latest hooks coverage-gaps --format table
+npx @claude-flow/cli@latest hooks coverage-route --task "[task]"
+
+# Statusline (for Claude Code integration)
+npx @claude-flow/cli@latest hooks statusline
+npx @claude-flow/cli@latest hooks statusline --json
+```
+
+## 🔄 Migration (V2 to V3)
+
+```bash
+# Check migration status
+npx @claude-flow/cli@latest migrate status
+
+# Run migration with backup
+npx @claude-flow/cli@latest migrate run --backup
+
+# Rollback if needed
+npx @claude-flow/cli@latest migrate rollback
+
+# Validate migration
+npx @claude-flow/cli@latest migrate validate
+```
+
+## 🧠 Intelligence System (RuVector)
+
+V3 includes the RuVector Intelligence System:
+- **SONA**: Self-Optimizing Neural Architecture (<0.05ms adaptation)
+- **MoE**: Mixture of Experts for specialized routing
+- **HNSW**: 150x-12,500x faster pattern search
+- **EWC++**: Elastic Weight Consolidation (prevents forgetting)
+- **Flash Attention**: 2.49x-7.47x speedup
+
+The 4-step intelligence pipeline:
+1. **RETRIEVE** - Fetch relevant patterns via HNSW
+2. **JUDGE** - Evaluate with verdicts (success/failure)
+3. **DISTILL** - Extract key learnings via LoRA
+4. **CONSOLIDATE** - Prevent catastrophic forgetting via EWC++
+
+## 📦 Embeddings Package (v3.0.0-alpha.12)
+
+Features:
+- **sql.js**: Cross-platform SQLite persistent cache (WASM, no native compilation)
+- **Document chunking**: Configurable overlap and size
+- **Normalization**: L2, L1, min-max, z-score
+- **Hyperbolic embeddings**: Poincaré ball model for hierarchical data
+- **75x faster**: With agentic-flow ONNX integration
+- **Neural substrate**: Integration with RuVector
+
+## 🐝 Hive-Mind Consensus
+
+### Topologies
+- `hierarchical` - Queen controls workers directly
+- `mesh` - Fully connected peer network
+- `hierarchical-mesh` - Hybrid (recommended)
+- `adaptive` - Dynamic based on load
+
+### Consensus Strategies
+- `byzantine` - BFT (tolerates f < n/3 faulty)
+- `raft` - Leader-based (tolerates f < n/2)
+- `gossip` - Epidemic for eventual consistency
+- `crdt` - Conflict-free replicated data types
+- `quorum` - Configurable quorum-based
+
+## V3 Performance Targets
+
+| Metric | Target |
+|--------|--------|
+| Flash Attention | 2.49x-7.47x speedup |
+| HNSW Search | 150x-12,500x faster |
+| Memory Reduction | 50-75% with quantization |
+| MCP Response | <100ms |
+| CLI Startup | <500ms |
+| SONA Adaptation | <0.05ms |
+
+## 📊 Performance Optimization Protocol
+
+### Automatic Performance Tracking
+```bash
+# After any significant operation, track metrics
+Bash("npx @claude-flow/cli@latest hooks post-command --command '[operation]' --track-metrics true")
+
+# Periodically run benchmarks (every major feature)
+Bash("npx @claude-flow/cli@latest performance benchmark --suite all")
+
+# Analyze bottlenecks when performance degrades
+Bash("npx @claude-flow/cli@latest performance profile --target '[component]'")
+```
+
+### Session Persistence (Cross-Conversation Learning)
+```bash
+# At session start - restore previous context
+Bash("npx @claude-flow/cli@latest session restore --latest")
+
+# At session end - persist learned patterns
+Bash("npx @claude-flow/cli@latest hooks session-end --generate-summary true --persist-state true --export-metrics true")
+```
+
+### Neural Pattern Training
+```bash
+# Train on successful code patterns
+Bash("npx @claude-flow/cli@latest neural train --pattern-type coordination --epochs 10")
+
+# Predict optimal approach for new tasks
+Bash("npx @claude-flow/cli@latest neural predict --input '[task description]'")
+
+# View learned patterns
+Bash("npx @claude-flow/cli@latest neural patterns --list")
+```
+
+## 🔧 Environment Variables
+
+```bash
+# Configuration
+CLAUDE_FLOW_CONFIG=./claude-flow.config.json
+CLAUDE_FLOW_LOG_LEVEL=info
+
+# Provider API Keys
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+
+# MCP Server
+CLAUDE_FLOW_MCP_PORT=3000
+CLAUDE_FLOW_MCP_HOST=localhost
+CLAUDE_FLOW_MCP_TRANSPORT=stdio
+
+# Memory
+CLAUDE_FLOW_MEMORY_BACKEND=hybrid
+CLAUDE_FLOW_MEMORY_PATH=./data/memory
+```
+
+## 🔍 Doctor Health Checks
+
+Run `npx @claude-flow/cli@latest doctor` to check:
+- Node.js version (20+)
+- npm version (9+)
+- Git installation
+- Config file validity
+- Daemon status
+- Memory database
+- API keys
+- MCP servers
+- Disk space
+- TypeScript installation
+
+## 🚀 Quick Setup
+
+```bash
+# Add MCP servers (auto-detects MCP mode when stdin is piped)
+claude mcp add claude-flow -- npx -y @claude-flow/cli@latest
+claude mcp add ruv-swarm -- npx -y ruv-swarm mcp start  # Optional
+claude mcp add flow-nexus -- npx -y flow-nexus@latest mcp start  # Optional
+
+# Start daemon
+npx @claude-flow/cli@latest daemon start
+
+# Run doctor
+npx @claude-flow/cli@latest doctor --fix
+```
+
+## 🎯 Claude Code vs CLI Tools
+
+### Claude Code Handles ALL EXECUTION:
+- **Task tool**: Spawn and run agents concurrently
+- File operations (Read, Write, Edit, MultiEdit, Glob, Grep)
+- Code generation and programming
+- Bash commands and system operations
+- TodoWrite and task management
+- Git operations
+
+### CLI Tools Handle Coordination (via Bash):
+- **Swarm init**: `npx @claude-flow/cli@latest swarm init --topology <type>`
+- **Swarm status**: `npx @claude-flow/cli@latest swarm status`
+- **Agent spawn**: `npx @claude-flow/cli@latest agent spawn -t <type> --name <name>`
+- **Memory store**: `npx @claude-flow/cli@latest memory store --key "mykey" --value "myvalue" --namespace patterns`
+- **Memory search**: `npx @claude-flow/cli@latest memory search --query "search terms"`
+- **Memory list**: `npx @claude-flow/cli@latest memory list --namespace patterns`
+- **Memory retrieve**: `npx @claude-flow/cli@latest memory retrieve --key "mykey" --namespace patterns`
+- **Hooks**: `npx @claude-flow/cli@latest hooks <hook-name> [options]`
+
+## 📝 Memory Commands Reference (IMPORTANT)
+
+### Store Data (ALL options shown)
+```bash
+# REQUIRED: --key and --value
+# OPTIONAL: --namespace (default: "default"), --ttl, --tags
+npx @claude-flow/cli@latest memory store --key "pattern-auth" --value "JWT with refresh tokens" --namespace patterns
+npx @claude-flow/cli@latest memory store --key "bug-fix-123" --value "Fixed null check" --namespace solutions --tags "bugfix,auth"
+```
+
+### Search Data (semantic vector search)
+```bash
+# REQUIRED: --query (full flag, not -q)
+# OPTIONAL: --namespace, --limit, --threshold
+npx @claude-flow/cli@latest memory search --query "authentication patterns"
+npx @claude-flow/cli@latest memory search --query "error handling" --namespace patterns --limit 5
+```
+
+### List Entries
+```bash
+# OPTIONAL: --namespace, --limit
+npx @claude-flow/cli@latest memory list
+npx @claude-flow/cli@latest memory list --namespace patterns --limit 10
+```
+
+### Retrieve Specific Entry
+```bash
+# REQUIRED: --key
+# OPTIONAL: --namespace (default: "default")
+npx @claude-flow/cli@latest memory retrieve --key "pattern-auth"
+npx @claude-flow/cli@latest memory retrieve --key "pattern-auth" --namespace patterns
+```
+
+### Initialize Memory Database
+```bash
+npx @claude-flow/cli@latest memory init --force --verbose
+```
+
+**KEY**: CLI coordinates the strategy via Bash, Claude Code's Task tool executes with real agents.
+
+## 📚 Full Capabilities Reference
+
+For a comprehensive overview of all Claude Flow V3 features, agents, commands, and integrations, see:
+
+**`.claude-flow/CAPABILITIES.md`** - Complete reference generated during init
+
+This includes:
+- All 60+ agent types with routing recommendations
+- All 26 CLI commands with 140+ subcommands
+- All 27 hooks + 12 background workers
+- RuVector intelligence system details
+- Hive-Mind consensus mechanisms
+- Integration ecosystem (agentic-flow, agentdb, ruv-swarm, flow-nexus, agentic-jujutsu)
+- Performance targets and status
+
+## Support
+
+- Documentation: https://github.com/ruvnet/claude-flow
+- Issues: https://github.com/ruvnet/claude-flow/issues
+
+---
+
+Remember: **Claude Flow CLI coordinates, Claude Code Task tool creates!**
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+Never save working files, text/mds and tests to the root folder.
+
+## 🚨 SWARM EXECUTION RULES (CRITICAL)
+1. **SPAWN IN BACKGROUND**: Use `run_in_background: true` for all agent Task calls
+2. **SPAWN ALL AT ONCE**: Put ALL agent Task calls in ONE message for parallel execution
+3. **TELL USER**: After spawning, list what each agent is doing (use emojis for clarity)
+4. **STOP AND WAIT**: After spawning, STOP - do NOT add more tool calls or check status
+5. **NO POLLING**: Never poll TaskOutput or check swarm status - trust agents to return
+6. **SYNTHESIZE**: When agent results arrive, review ALL results before proceeding
+7. **NO CONFIRMATION**: Don't ask "should I check?" - just wait for results
+
+Example spawn message:
+```
+"I've launched 4 agents in background:
+- 🔍 Researcher: [task]
+- 💻 Coder: [task]
+- 🧪 Tester: [task]
+- 👀 Reviewer: [task]
+Working in parallel - I'll synthesize when they complete."
+```

@@ -1,0 +1,754 @@
+[
+  {
+    "router_file": "auth.py",
+    "method": "POST",
+    "path": "/register",
+    "function_name": "register",
+    "response_model": "Token",
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "auth.py",
+    "method": "POST",
+    "path": "/token",
+    "function_name": "login",
+    "response_model": "Token",
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "auth.py",
+    "method": "POST",
+    "path": "/login",
+    "function_name": "login_alt",
+    "response_model": null,
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "auth.py",
+    "method": "GET",
+    "path": "/me",
+    "function_name": "read_users_me",
+    "response_model": null,
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "auth.py",
+    "method": "POST",
+    "path": "/logout",
+    "function_name": "logout",
+    "response_model": null,
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "auth.py",
+    "method": "POST",
+    "path": "/refresh",
+    "function_name": "refresh_token",
+    "response_model": null,
+    "prefix": "/api/auth"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "\", response_model=List[StockResponse])\n@api_cache(data_type=",
+    "function_name": "get_stocks",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/search",
+    "function_name": "search_stocks",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/sectors",
+    "function_name": "get_sectors",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/sectors/summary",
+    "function_name": "get_sector_summary",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/top-performers",
+    "function_name": "get_top_performers",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/{symbol}",
+    "function_name": "get_stock_detail",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/{symbol}/quote",
+    "function_name": "get_stock_history",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "GET",
+    "path": "/{symbol}/statistics",
+    "function_name": "get_stock_statistics",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "POST",
+    "path": "/{symbol}/watchlist",
+    "function_name": "add_to_watchlist",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "stocks.py",
+    "method": "DELETE",
+    "path": "/{symbol}/watchlist",
+    "function_name": "remove_from_watchlist",
+    "response_model": null,
+    "prefix": "/api/stocks"
+  },
+  {
+    "router_file": "analysis.py",
+    "method": "POST",
+    "path": "/analyze",
+    "function_name": "batch_analysis",
+    "response_model": null,
+    "prefix": "/api/analysis"
+  },
+  {
+    "router_file": "analysis.py",
+    "method": "POST",
+    "path": "/compare",
+    "function_name": "compare_stocks",
+    "response_model": null,
+    "prefix": "/api/analysis"
+  },
+  {
+    "router_file": "analysis.py",
+    "method": "GET",
+    "path": "/indicators/{symbol}",
+    "function_name": "get_technical_indicators",
+    "response_model": null,
+    "prefix": "/api/analysis"
+  },
+  {
+    "router_file": "analysis.py",
+    "method": "GET",
+    "path": "/sentiment/{symbol}",
+    "function_name": "get_sentiment_analysis",
+    "response_model": null,
+    "prefix": "/api/analysis"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/metrics",
+    "function_name": "get_cache_metrics",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/cost-analysis",
+    "function_name": "get_cost_analysis",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/performance-report",
+    "function_name": "get_performance_report",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/api-usage",
+    "function_name": "get_api_usage",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "POST",
+    "path": "/invalidate",
+    "function_name": "invalidate_cache",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "POST",
+    "path": "/warm",
+    "function_name": "warm_cache",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/health",
+    "function_name": "get_cache_health",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "cache_management.py",
+    "method": "GET",
+    "path": "/statistics",
+    "function_name": "get_cache_statistics",
+    "response_model": null,
+    "prefix": "/api/cache_management"
+  },
+  {
+    "router_file": "health.py",
+    "method": "GET",
+    "path": "\")\nasync def health_check() -> Dict:\n    ",
+    "function_name": "readiness_check",
+    "response_model": null,
+    "prefix": "/api/health"
+  },
+  {
+    "router_file": "health.py",
+    "method": "GET",
+    "path": "/metrics",
+    "function_name": "get_metrics",
+    "response_model": null,
+    "prefix": "/api/health"
+  },
+  {
+    "router_file": "health.py",
+    "method": "GET",
+    "path": "/liveness",
+    "function_name": "liveness_check",
+    "response_model": null,
+    "prefix": "/api/health"
+  },
+  {
+    "router_file": "health.py",
+    "method": "GET",
+    "path": "/startup",
+    "function_name": "startup_check",
+    "response_model": null,
+    "prefix": "/api/health"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "GET",
+    "path": "\", response_model=List[Stock])\nasync def get_stocks(\n    sector: Optional[str] = None,\n    min_market_cap: Optional[float] = None,\n    max_market_cap: Optional[float] = None,\n    limit: int = Query(100, le=500),\n    offset: int = 0,\n    sort_by: str = Query(",
+    "function_name": "get_sectors",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "GET",
+    "path": "/search",
+    "function_name": "search_stocks",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "GET",
+    "path": "/{symbol}",
+    "function_name": "get_stock_detail",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "GET",
+    "path": "/{symbol}/quote",
+    "function_name": "get_stock_quote",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "GET",
+    "path": "/{symbol}/history",
+    "function_name": "get_stock_history",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "POST",
+    "path": "/{symbol}/watchlist",
+    "function_name": "add_to_watchlist",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "stocks_legacy.py",
+    "method": "DELETE",
+    "path": "/{symbol}/watchlist",
+    "function_name": "remove_from_watchlist",
+    "response_model": null,
+    "prefix": "/api/stocks_legacy"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "GET",
+    "path": "/health",
+    "function_name": "health_check",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "GET",
+    "path": "/metrics/cost",
+    "function_name": "get_cost_metrics",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "GET",
+    "path": "/grafana/dashboards",
+    "function_name": "get_dashboard_links",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "POST",
+    "path": "/grafana/annotation",
+    "function_name": "create_annotation",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "POST",
+    "path": "/alerts/test",
+    "function_name": "test_alert_system",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "monitoring.py",
+    "method": "GET",
+    "path": "/metrics/api-usage",
+    "function_name": "get_api_usage_metrics",
+    "response_model": null,
+    "prefix": "/api/monitoring"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/daily",
+    "function_name": "get_recommendations",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/{recommendation_id}",
+    "function_name": "get_recommendation_detail",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "POST",
+    "path": "/filter",
+    "function_name": "filter_recommendations",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/portfolio/{portfolio_id}",
+    "function_name": "get_portfolio_recommendations",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/performance/track",
+    "function_name": "track_recommendation_performance",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "POST",
+    "path": "/alerts/settings",
+    "function_name": "update_alert_settings",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/alerts/history",
+    "function_name": "get_alert_history",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "POST",
+    "path": "/backtest",
+    "function_name": "backtest_strategy",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "recommendations.py",
+    "method": "GET",
+    "path": "/trending",
+    "function_name": "get_trending_recommendations",
+    "response_model": null,
+    "prefix": "/api/recommendations"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "POST",
+    "path": "/analyze",
+    "function_name": "batch_analyze_stocks",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "GET",
+    "path": "/budget-status",
+    "function_name": "get_budget_status",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "GET",
+    "path": "/capabilities",
+    "function_name": "get_agent_capabilities",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "GET",
+    "path": "/status",
+    "function_name": "get_engine_status",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "POST",
+    "path": "/test-connectivity",
+    "function_name": "test_agent_connectivity",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "POST",
+    "path": "/set-analysis-mode",
+    "function_name": "set_analysis_mode",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "agents.py",
+    "method": "GET",
+    "path": "/selection-stats",
+    "function_name": "get_agent_selection_stats",
+    "response_model": null,
+    "prefix": "/api/agents"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/health",
+    "function_name": "get_system_health",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/users",
+    "function_name": "list_users",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/users/{user_id}",
+    "function_name": "get_user_details",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "PATCH",
+    "path": "/users/{user_id}",
+    "function_name": "update_user",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "DELETE",
+    "path": "/users/{user_id}",
+    "function_name": "delete_user",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/analytics/api-usage",
+    "function_name": "get_api_usage_stats",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/metrics",
+    "function_name": "get_system_metrics",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/jobs",
+    "function_name": "list_background_jobs",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/jobs/{job_id}/cancel",
+    "function_name": "cancel_job",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/jobs/{job_id}/retry",
+    "function_name": "retry_job",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/config",
+    "function_name": "get_configuration",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "PATCH",
+    "path": "/config",
+    "function_name": "update_configuration",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/audit-logs",
+    "function_name": "get_audit_logs",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/announcements",
+    "function_name": "create_announcement",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "GET",
+    "path": "/announcements",
+    "function_name": "list_announcements",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/export",
+    "function_name": "export_data",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/command",
+    "function_name": "execute_system_command",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/maintenance/enable",
+    "function_name": "enable_maintenance_mode",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "admin.py",
+    "method": "POST",
+    "path": "/maintenance/disable",
+    "function_name": "disable_maintenance_mode",
+    "response_model": null,
+    "prefix": "/api/admin"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "GET",
+    "path": "/summary",
+    "function_name": "calculate_portfolio_risk_score",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "GET",
+    "path": "/{portfolio_id}",
+    "function_name": "calculate_real_performance_metrics",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "POST",
+    "path": "/{portfolio_id}/positions",
+    "function_name": "add_position",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "DELETE",
+    "path": "/{portfolio_id}/positions/{symbol}",
+    "function_name": "remove_position",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "GET",
+    "path": "/{portfolio_id}/transactions",
+    "function_name": "get_transactions",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "GET",
+    "path": "/{portfolio_id}/performance",
+    "function_name": "get_portfolio_performance",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "POST",
+    "path": "/{portfolio_id}/analyze",
+    "function_name": "analyze_portfolio",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "POST",
+    "path": "/{portfolio_id}/rebalance",
+    "function_name": "rebalance_portfolio",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "GET",
+    "path": "/{portfolio_id}/watchlist",
+    "function_name": "get_watchlist",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "POST",
+    "path": "/{portfolio_id}/watchlist",
+    "function_name": "add_to_watchlist",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "portfolio.py",
+    "method": "PUT",
+    "path": "/{portfolio_id}/settings",
+    "function_name": "update_portfolio_settings",
+    "response_model": null,
+    "prefix": "/api/portfolio"
+  },
+  {
+    "router_file": "websocket.py",
+    "method": "POST",
+    "path": "/trigger/alert",
+    "function_name": "trigger_alert",
+    "response_model": null,
+    "prefix": "/api/websocket"
+  },
+  {
+    "router_file": "websocket.py",
+    "method": "POST",
+    "path": "/trigger/news",
+    "function_name": "trigger_news_broadcast",
+    "response_model": null,
+    "prefix": "/api/websocket"
+  },
+  {
+    "router_file": "websocket.py",
+    "method": "GET",
+    "path": "/connections",
+    "function_name": "get_active_connections",
+    "response_model": null,
+    "prefix": "/api/websocket"
+  }
+]

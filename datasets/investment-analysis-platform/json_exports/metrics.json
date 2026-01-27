@@ -1,0 +1,14 @@
+{
+  "total_files": 1254,
+  "total_lines": 206017,
+  "python_files": 443,
+  "typescript_files": 811,
+  "test_files": 52,
+  "agent_files": 232,
+  "docker_services": 12,
+  "api_routers": 18,
+  "database_tables": 22,
+  "ml_models": 7,
+  "project_completion": 89,
+  "collected_at": "2026-01-27T05:46:03.558826+00:00"
+}

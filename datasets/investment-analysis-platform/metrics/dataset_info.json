@@ -1,0 +1,56 @@
+{
+  "citation": "",
+  "description": "",
+  "features": {
+    "total_files": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "total_lines": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "python_files": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "typescript_files": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "test_files": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "agent_files": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "docker_services": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "api_routers": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "database_tables": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "ml_models": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "project_completion": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "collected_at": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": ""
+}

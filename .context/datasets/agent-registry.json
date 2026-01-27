@@ -1,0 +1,802 @@
+{
+  "metadata": {
+    "version": "3.0.0",
+    "generated": "2026-01-26",
+    "source": ".claude/agents/",
+    "total_agents": 95,
+    "categories": 12
+  },
+  "categories": {
+    "core_development": {
+      "description": "Primary development agents for code implementation",
+      "agents": ["coder", "researcher", "tester", "planner", "reviewer"]
+    },
+    "swarm_coordination": {
+      "description": "Agents for multi-agent swarm orchestration",
+      "agents": ["hierarchical-coordinator", "mesh-coordinator", "adaptive-coordinator", "queen-coordinator", "v3-queen-coordinator", "collective-intelligence-coordinator", "swarm-memory-manager"]
+    },
+    "consensus_distributed": {
+      "description": "Distributed consensus and fault-tolerant coordination",
+      "agents": ["byzantine-coordinator", "raft-manager", "gossip-coordinator", "consensus-coordinator", "crdt-synchronizer", "quorum-manager", "security-manager"]
+    },
+    "github_repository": {
+      "description": "GitHub integration and repository management",
+      "agents": ["github-modes", "pr-manager", "code-review-swarm", "issue-tracker", "release-manager", "workflow-automation", "project-board-sync", "repo-architect", "multi-repo-swarm", "sync-coordinator", "release-swarm", "swarm-pr", "swarm-issue"]
+    },
+    "sparc_methodology": {
+      "description": "SPARC methodology implementation agents",
+      "agents": ["sparc-coordinator", "specification", "pseudocode", "architecture", "refinement", "implementer-sparc-coder"]
+    },
+    "specialized_development": {
+      "description": "Domain-specific development agents",
+      "agents": ["backend-dev", "mobile-dev", "ml-developer", "cicd-engineer", "api-docs", "system-architect", "code-analyzer", "base-template-generator", "typescript-specialist", "python-specialist", "database-specialist"]
+    },
+    "testing_validation": {
+      "description": "Testing and quality assurance agents",
+      "agents": ["tdd-guide", "e2e-runner", "tdd-london-swarm", "production-validator", "test-architect", "security-reviewer"]
+    },
+    "hive_mind": {
+      "description": "Hive mind collective intelligence agents",
+      "agents": ["queen-coordinator", "collective-intelligence-coordinator", "worker-specialist", "scout-explorer", "swarm-memory-manager"]
+    },
+    "performance_optimization": {
+      "description": "Performance and optimization agents",
+      "agents": ["perf-analyzer", "performance-benchmarker", "performance-optimizer", "performance-monitor", "topology-optimizer", "load-balancer", "resource-allocator", "benchmark-suite", "matrix-optimizer"]
+    },
+    "v3_specialized": {
+      "description": "V3 architecture specialized agents",
+      "agents": ["v3-queen-coordinator", "v3-integration-architect", "v3-memory-specialist", "v3-performance-engineer", "v3-security-architect"]
+    },
+    "financial_domain": {
+      "description": "Investment and financial analysis agents",
+      "agents": ["investment-analyst", "deal-underwriter", "financial-modeler", "portfolio-manager", "risk-assessor", "trading-predictor"]
+    },
+    "infrastructure": {
+      "description": "Infrastructure and DevOps agents",
+      "agents": ["infrastructure-devops-swarm", "infrastructure-agent", "security-compliance-swarm"]
+    }
+  },
+  "agents": {
+    "coder": {
+      "name": "coder",
+      "type": "developer",
+      "color": "#FF6B35",
+      "description": "Implementation specialist for writing clean, efficient code",
+      "priority": "high",
+      "capabilities": ["code_generation", "refactoring", "optimization", "api_design", "error_handling"],
+      "category": "core_development",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "mcp_tools": ["memory_usage", "benchmark_run", "bottleneck_analyze"]
+    },
+    "researcher": {
+      "name": "researcher",
+      "type": "analyst",
+      "color": "#9B59B6",
+      "description": "Deep research and information gathering specialist",
+      "priority": "high",
+      "capabilities": ["code_analysis", "pattern_recognition", "documentation_research", "dependency_tracking", "knowledge_synthesis"],
+      "category": "core_development",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "mcp_tools": ["memory_usage", "memory_search", "github_repo_analyze", "agent_metrics"]
+    },
+    "tester": {
+      "name": "tester",
+      "type": "validator",
+      "color": "#F39C12",
+      "description": "Comprehensive testing and quality assurance specialist",
+      "priority": "high",
+      "capabilities": ["unit_testing", "integration_testing", "e2e_testing", "performance_testing", "security_testing"],
+      "category": "core_development",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "coverage_target": "80%"
+    },
+    "planner": {
+      "name": "planner",
+      "type": "coordinator",
+      "color": "#4ECDC4",
+      "description": "Strategic planning and task orchestration agent",
+      "priority": "high",
+      "capabilities": ["task_decomposition", "dependency_analysis", "resource_allocation", "timeline_estimation", "risk_assessment"],
+      "category": "core_development",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "mcp_tools": ["task_orchestrate", "memory_usage", "task_status"]
+    },
+    "reviewer": {
+      "name": "reviewer",
+      "type": "validator",
+      "color": "#E74C3C",
+      "description": "Code review and quality assurance specialist",
+      "priority": "medium",
+      "capabilities": ["code_review", "security_audit", "performance_analysis", "best_practices", "documentation_review"],
+      "category": "core_development",
+      "model_tier": "sonnet",
+      "memory_integration": true
+    },
+    "hierarchical-coordinator": {
+      "name": "hierarchical-coordinator",
+      "type": "coordinator",
+      "color": "#FF6B35",
+      "description": "Queen-led hierarchical swarm coordination with specialized worker delegation",
+      "priority": "critical",
+      "capabilities": ["swarm_coordination", "task_decomposition", "agent_supervision", "work_delegation", "performance_monitoring", "conflict_resolution"],
+      "category": "swarm_coordination",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "topology": "hierarchical",
+      "max_agents": 10,
+      "worker_types": ["research", "code", "analyst", "test"],
+      "mcp_tools": ["swarm_init", "agent_spawn", "swarm_monitor", "task_orchestrate", "load_balance", "performance_report"]
+    },
+    "mesh-coordinator": {
+      "name": "mesh-coordinator",
+      "type": "coordinator",
+      "color": "#00BCD4",
+      "description": "Peer-to-peer mesh network swarm with distributed decision making and fault tolerance",
+      "priority": "high",
+      "capabilities": ["distributed_coordination", "peer_communication", "fault_tolerance", "consensus_building", "load_balancing", "network_resilience"],
+      "category": "swarm_coordination",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "topology": "mesh",
+      "max_agents": 12,
+      "consensus_protocols": ["pbft", "raft", "gossip"],
+      "fault_tolerance": "33%"
+    },
+    "adaptive-coordinator": {
+      "name": "adaptive-coordinator",
+      "type": "coordinator",
+      "color": "#9C27B0",
+      "description": "Dynamic topology switching coordinator with self-organizing swarm patterns and real-time optimization",
+      "priority": "critical",
+      "capabilities": ["topology_adaptation", "performance_optimization", "real_time_reconfiguration", "pattern_recognition", "predictive_scaling", "intelligent_routing"],
+      "category": "swarm_coordination",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "topology": "adaptive",
+      "max_agents": 15,
+      "ml_integration": true,
+      "mcp_tools": ["swarm_init", "neural_patterns", "neural_train", "performance_report", "bottleneck_analyze", "topology_optimize"]
+    },
+    "queen-coordinator": {
+      "name": "queen-coordinator",
+      "type": "coordinator",
+      "color": "gold",
+      "description": "The sovereign orchestrator of hierarchical hive operations, managing strategic decisions, resource allocation, and maintaining hive coherence",
+      "priority": "critical",
+      "capabilities": ["strategic_command", "resource_allocation", "succession_planning", "hive_coherence"],
+      "category": "hive_mind",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "governance_modes": ["hierarchical", "democratic", "emergency"],
+      "subjects": ["collective-intelligence", "workers", "scouts", "memory-manager"]
+    },
+    "v3-queen-coordinator": {
+      "name": "v3-queen-coordinator",
+      "type": "coordinator",
+      "version": "3.0.0-alpha",
+      "color": "purple",
+      "description": "V3 Queen Coordinator for 15-agent concurrent swarm orchestration, GitHub issue management, and cross-agent coordination",
+      "priority": "critical",
+      "capabilities": ["15_agent_orchestration", "github_integration", "adr_implementation", "performance_targets"],
+      "category": "v3_specialized",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "agent_topology": {
+        "security": [2, 3, 4],
+        "core": [5, 6, 7, 8, 9],
+        "integration": [10, 11, 12],
+        "quality": [13],
+        "performance": [14],
+        "deployment": [15]
+      },
+      "performance_targets": {
+        "flash_attention_speedup": "2.49x-7.47x",
+        "search_improvement": "150x-12500x",
+        "memory_reduction": "50-75%",
+        "code_reduction": "<5000 lines"
+      }
+    },
+    "collective-intelligence-coordinator": {
+      "name": "collective-intelligence-coordinator",
+      "type": "coordinator",
+      "color": "purple",
+      "description": "Orchestrates distributed cognitive processes across the hive mind, ensuring coherent collective decision-making",
+      "priority": "critical",
+      "capabilities": ["memory_synchronization", "consensus_building", "cognitive_load_balancing", "knowledge_integration"],
+      "category": "hive_mind",
+      "model_tier": "opus",
+      "memory_integration": true,
+      "coordination_patterns": ["hierarchical", "mesh", "adaptive"],
+      "memory_sync_interval": "30s"
+    },
+    "worker-specialist": {
+      "name": "worker-specialist",
+      "type": "executor",
+      "color": "green",
+      "description": "Dedicated task execution specialist that carries out assigned work with precision",
+      "priority": "high",
+      "capabilities": ["task_execution", "progress_reporting", "dependency_management", "result_delivery"],
+      "category": "hive_mind",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "work_types": ["code_implementation", "analysis", "testing"],
+      "status_reporting_interval": "30-60s"
+    },
+    "scout-explorer": {
+      "name": "scout-explorer",
+      "type": "reconnaissance",
+      "color": "cyan",
+      "description": "Information reconnaissance specialist that explores unknown territories and gathers intelligence",
+      "priority": "high",
+      "capabilities": ["codebase_exploration", "dependency_analysis", "performance_scouting", "threat_detection", "opportunity_identification"],
+      "category": "hive_mind",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "exploration_patterns": ["breadth_first", "depth_first", "continuous_patrol"]
+    },
+    "swarm-memory-manager": {
+      "name": "swarm-memory-manager",
+      "type": "infrastructure",
+      "color": "blue",
+      "description": "Manages distributed memory across the hive mind, ensuring data consistency and efficient retrieval",
+      "priority": "critical",
+      "capabilities": ["distributed_memory", "cache_optimization", "synchronization", "conflict_resolution"],
+      "category": "hive_mind",
+      "model_tier": "sonnet",
+      "memory_integration": true,
+      "memory_patterns": ["write_ahead_logging", "snapshot_incremental", "sharding", "replication"],
+      "metrics_interval": "60s"
+    },
+    "byzantine-coordinator": {
+      "name": "byzantine-coordinator",
+      "type": "coordinator",
+      "color": "#9C27B0",
+      "description": "Coordinates Byzantine fault-tolerant consensus protocols with malicious actor detection",
+      "priority": "high",
+      "capabilities": ["pbft_consensus", "malicious_detection", "message_authentication", "view_management", "attack_mitigation"],
+      "category": "consensus_distributed",
+      "model_tier": "opus",
+      "fault_tolerance": "f < n/3"
+    },
+    "raft-manager": {
+      "name": "raft-manager",
+      "type": "coordinator",
+      "color": "#2196F3",
+      "description": "Manages Raft consensus algorithm with leader election and log replication",
+      "priority": "high",
+      "capabilities": ["leader_election", "log_replication", "follower_management", "membership_changes", "consistency_verification"],
+      "category": "consensus_distributed",
+      "model_tier": "sonnet",
+      "fault_tolerance": "f < n/2"
+    },
+    "gossip-coordinator": {
+      "name": "gossip-coordinator",
+      "type": "coordinator",
+      "color": "#FF9800",
+      "description": "Coordinates gossip-based consensus protocols for scalable eventually consistent systems",
+      "priority": "medium",
+      "capabilities": ["epidemic_dissemination", "peer_selection", "state_synchronization", "conflict_resolution", "scalability_optimization"],
+      "category": "consensus_distributed",
+      "model_tier": "sonnet",
+      "consistency": "eventual"
+    },
+    "consensus-coordinator": {
+      "name": "consensus-coordinator",
+      "type": "coordinator",
+      "color": "red",
+      "description": "Distributed consensus agent using sublinear solvers for fast agreement protocols",
+      "priority": "high",
+      "capabilities": ["byzantine_fault_tolerance", "voting_mechanisms", "agreement_protocols", "fault_tolerance", "multi_agent_synchronization"],
+      "category": "consensus_distributed",
+      "model_tier": "opus",
+      "mcp_tools": ["sublinear_solve", "pageRank", "analyzeMatrix"]
+    },
+    "crdt-synchronizer": {
+      "name": "crdt-synchronizer",
+      "type": "synchronizer",
+      "description": "Implements Conflict-free Replicated Data Types for eventual consistency",
+      "priority": "high",
+      "capabilities": ["state_based_crdt", "operation_based_crdt", "delta_state_optimization", "causal_consistency"],
+      "category": "consensus_distributed",
+      "crdt_types": ["G_Counter", "PN_Counter", "OR_Set", "LWW_Register", "RGA"]
+    },
+    "quorum-manager": {
+      "name": "quorum-manager",
+      "type": "coordinator",
+      "description": "Dynamic quorum adjustment based on network conditions and fault tolerance",
+      "priority": "high",
+      "capabilities": ["network_based_quorum", "performance_optimized_sizing", "fault_tolerance_analysis", "intelligent_membership", "predictive_adjustments"],
+      "category": "consensus_distributed"
+    },
+    "security-manager": {
+      "name": "security-manager",
+      "type": "security",
+      "description": "Comprehensive security mechanisms for consensus protocols",
+      "priority": "critical",
+      "capabilities": ["threshold_cryptography", "zero_knowledge_proofs", "attack_detection", "secure_key_management", "end_to_end_encryption"],
+      "category": "consensus_distributed",
+      "attack_mitigation": ["byzantine", "sybil", "eclipse", "dos"]
+    },
+    "security-reviewer": {
+      "name": "security-reviewer",
+      "type": "security",
+      "description": "Security vulnerability detection and remediation specialist",
+      "priority": "critical",
+      "model_tier": "opus",
+      "capabilities": ["vulnerability_detection", "secrets_detection", "input_validation", "authentication_authorization", "dependency_security"],
+      "category": "testing_validation",
+      "owasp_coverage": true,
+      "tools": ["npm_audit", "eslint_security", "git_secrets", "trufflehog", "semgrep"]
+    },
+    "tdd-guide": {
+      "name": "tdd-guide",
+      "type": "methodology",
+      "description": "Test-driven development specialist enforcing write-tests-first approach",
+      "priority": "high",
+      "capabilities": ["tdd_workflow", "test_design", "coverage_analysis", "mocking_strategies"],
+      "category": "testing_validation",
+      "workflow": ["red", "green", "refactor"],
+      "coverage_target": "80%"
+    },
+    "e2e-runner": {
+      "name": "e2e-runner",
+      "type": "testing",
+      "description": "End-to-end testing specialist using Playwright",
+      "priority": "high",
+      "capabilities": ["playwright_testing", "user_flow_validation", "cross_browser_testing", "visual_regression"],
+      "category": "testing_validation"
+    },
+    "github-modes": {
+      "name": "github-modes",
+      "type": "integration",
+      "description": "GitHub integration modes for various repository operations",
+      "priority": "medium",
+      "capabilities": ["issue_management", "pr_management", "release_management", "workflow_automation"],
+      "category": "github_repository"
+    },
+    "pr-manager": {
+      "name": "pr-manager",
+      "type": "integration",
+      "description": "Pull request management and automation",
+      "priority": "high",
+      "capabilities": ["pr_creation", "pr_review", "merge_strategies", "conflict_resolution"],
+      "category": "github_repository"
+    },
+    "issue-tracker": {
+      "name": "issue-tracker",
+      "type": "integration",
+      "description": "GitHub issue tracking and management",
+      "priority": "medium",
+      "capabilities": ["issue_creation", "issue_triage", "label_management", "milestone_tracking"],
+      "category": "github_repository"
+    },
+    "release-manager": {
+      "name": "release-manager",
+      "type": "integration",
+      "description": "Release management and automation",
+      "priority": "high",
+      "capabilities": ["version_management", "changelog_generation", "release_notes", "deployment_coordination"],
+      "category": "github_repository"
+    },
+    "sparc-coordinator": {
+      "name": "sparc-coordinator",
+      "type": "methodology",
+      "description": "SPARC methodology coordination agent",
+      "priority": "high",
+      "capabilities": ["specification_phase", "pseudocode_phase", "architecture_phase", "refinement_phase", "completion_phase"],
+      "category": "sparc_methodology",
+      "phases": ["S", "P", "A", "R", "C"]
+    },
+    "specification": {
+      "name": "specification",
+      "type": "methodology",
+      "description": "SPARC Specification phase agent",
+      "priority": "high",
+      "capabilities": ["requirements_analysis", "constraint_definition", "success_criteria"],
+      "category": "sparc_methodology",
+      "phase": "S"
+    },
+    "pseudocode": {
+      "name": "pseudocode",
+      "type": "methodology",
+      "description": "SPARC Pseudocode phase agent",
+      "priority": "high",
+      "capabilities": ["algorithm_design", "logic_structuring", "flow_documentation"],
+      "category": "sparc_methodology",
+      "phase": "P"
+    },
+    "architecture": {
+      "name": "architecture",
+      "type": "methodology",
+      "description": "SPARC Architecture phase agent",
+      "priority": "high",
+      "capabilities": ["system_design", "component_architecture", "integration_patterns"],
+      "category": "sparc_methodology",
+      "phase": "A"
+    },
+    "refinement": {
+      "name": "refinement",
+      "type": "methodology",
+      "description": "SPARC Refinement phase agent",
+      "priority": "high",
+      "capabilities": ["code_optimization", "quality_improvement", "performance_tuning"],
+      "category": "sparc_methodology",
+      "phase": "R"
+    },
+    "typescript-specialist": {
+      "name": "typescript-specialist",
+      "type": "language_specialist",
+      "description": "TypeScript development specialist with security-first approach",
+      "priority": "medium",
+      "capabilities": ["types", "generics", "decorators", "async_await", "modules"],
+      "category": "specialized_development",
+      "focus": ["security_audit", "input_validation", "authentication", "encryption"],
+      "temperature": 0.2
+    },
+    "python-specialist": {
+      "name": "python-specialist",
+      "type": "language_specialist",
+      "description": "Python development specialist",
+      "priority": "medium",
+      "capabilities": ["type_hints", "async_await", "data_processing", "ml_integration"],
+      "category": "specialized_development"
+    },
+    "database-specialist": {
+      "name": "database-specialist",
+      "type": "domain_specialist",
+      "description": "Database design and optimization specialist",
+      "priority": "medium",
+      "capabilities": ["schema_design", "query_optimization", "indexing", "migrations"],
+      "category": "specialized_development"
+    },
+    "security-auditor": {
+      "name": "security-auditor",
+      "type": "security_specialist",
+      "description": "Security audit and hardening specialist",
+      "priority": "critical",
+      "capabilities": ["vulnerability_scan", "auth", "encryption", "input_validation", "owasp"],
+      "category": "specialized_development",
+      "focus": ["security", "compliance", "hardening"],
+      "temperature": 0.2
+    },
+    "investment-analyst": {
+      "name": "investment-analyst",
+      "type": "domain_specialist",
+      "description": "Investment analysis and research specialist",
+      "priority": "high",
+      "capabilities": ["financial_analysis", "market_research", "valuation", "due_diligence"],
+      "category": "financial_domain"
+    },
+    "deal-underwriter": {
+      "name": "deal-underwriter",
+      "type": "domain_specialist",
+      "description": "Deal underwriting and risk assessment specialist",
+      "priority": "high",
+      "capabilities": ["risk_assessment", "deal_structuring", "terms_negotiation", "compliance_check"],
+      "category": "financial_domain"
+    },
+    "financial-modeler": {
+      "name": "financial-modeler",
+      "type": "domain_specialist",
+      "description": "Financial modeling and forecasting specialist",
+      "priority": "high",
+      "capabilities": ["dcf_modeling", "scenario_analysis", "sensitivity_analysis", "projections"],
+      "category": "financial_domain"
+    },
+    "portfolio-manager": {
+      "name": "portfolio-manager",
+      "type": "domain_specialist",
+      "description": "Portfolio management and optimization specialist",
+      "priority": "high",
+      "capabilities": ["asset_allocation", "risk_management", "performance_tracking", "rebalancing"],
+      "category": "financial_domain"
+    },
+    "risk-assessor": {
+      "name": "risk-assessor",
+      "type": "domain_specialist",
+      "description": "Risk assessment and mitigation specialist",
+      "priority": "high",
+      "capabilities": ["risk_identification", "risk_quantification", "mitigation_strategies", "monitoring"],
+      "category": "financial_domain"
+    },
+    "trading-predictor": {
+      "name": "trading-predictor",
+      "type": "domain_specialist",
+      "description": "Trading prediction and market analysis specialist",
+      "priority": "medium",
+      "capabilities": ["price_prediction", "trend_analysis", "signal_generation", "backtesting"],
+      "category": "financial_domain"
+    },
+    "performance-benchmarker": {
+      "name": "performance-benchmarker",
+      "type": "performance",
+      "description": "Comprehensive performance analysis and optimization for consensus protocols",
+      "priority": "high",
+      "capabilities": ["throughput_measurement", "latency_analysis", "resource_monitoring", "comparative_analysis", "adaptive_tuning"],
+      "category": "performance_optimization"
+    },
+    "performance-optimizer": {
+      "name": "performance-optimizer",
+      "type": "performance",
+      "description": "Performance optimization specialist",
+      "priority": "high",
+      "capabilities": ["bottleneck_identification", "optimization_strategies", "caching", "lazy_loading"],
+      "category": "performance_optimization"
+    },
+    "topology-optimizer": {
+      "name": "topology-optimizer",
+      "type": "performance",
+      "description": "Network topology optimization specialist",
+      "priority": "high",
+      "capabilities": ["topology_analysis", "network_optimization", "routing_optimization", "load_distribution"],
+      "category": "performance_optimization"
+    },
+    "load-balancer": {
+      "name": "load-balancer",
+      "type": "infrastructure",
+      "description": "Load balancing and distribution specialist",
+      "priority": "high",
+      "capabilities": ["load_distribution", "health_checking", "failover", "scaling"],
+      "category": "performance_optimization"
+    },
+    "v3-integration-architect": {
+      "name": "v3-integration-architect",
+      "type": "architect",
+      "description": "V3 integration architecture specialist",
+      "priority": "high",
+      "capabilities": ["agentic_flow_integration", "mcp_optimization", "api_design"],
+      "category": "v3_specialized"
+    },
+    "v3-memory-specialist": {
+      "name": "v3-memory-specialist",
+      "type": "specialist",
+      "description": "V3 memory unification and AgentDB specialist",
+      "priority": "high",
+      "capabilities": ["agentdb_optimization", "memory_unification", "hnsw_indexing"],
+      "category": "v3_specialized",
+      "performance_target": "150x-12500x search improvement"
+    },
+    "v3-performance-engineer": {
+      "name": "v3-performance-engineer",
+      "type": "engineer",
+      "description": "V3 performance engineering specialist",
+      "priority": "high",
+      "capabilities": ["flash_attention", "quantization", "neural_optimization"],
+      "category": "v3_specialized",
+      "performance_target": "2.49x-7.47x speedup"
+    },
+    "v3-security-architect": {
+      "name": "v3-security-architect",
+      "type": "architect",
+      "description": "V3 security architecture specialist",
+      "priority": "critical",
+      "capabilities": ["cve_remediation", "security_hardening", "compliance"],
+      "category": "v3_specialized"
+    },
+    "build-error-resolver": {
+      "name": "build-error-resolver",
+      "type": "troubleshooter",
+      "description": "Build error diagnosis and resolution specialist",
+      "priority": "high",
+      "capabilities": ["error_analysis", "dependency_resolution", "configuration_fixing"],
+      "category": "core_development"
+    },
+    "doc-updater": {
+      "name": "doc-updater",
+      "type": "documentation",
+      "description": "Documentation maintenance and update specialist",
+      "priority": "medium",
+      "capabilities": ["documentation_generation", "api_docs", "readme_updates"],
+      "category": "core_development"
+    },
+    "refactor-cleaner": {
+      "name": "refactor-cleaner",
+      "type": "maintenance",
+      "description": "Code refactoring and dead code cleanup specialist",
+      "priority": "medium",
+      "capabilities": ["dead_code_removal", "code_reorganization", "pattern_improvement"],
+      "category": "core_development"
+    },
+    "architect": {
+      "name": "architect",
+      "type": "design",
+      "description": "System architecture and design specialist",
+      "priority": "high",
+      "capabilities": ["system_design", "architecture_decisions", "scalability_planning"],
+      "category": "core_development",
+      "model_tier": "opus"
+    }
+  },
+  "routing_rules": {
+    "by_task_type": {
+      "bug_fix": {
+        "agents": ["coordinator", "researcher", "coder", "tester"],
+        "topology": "hierarchical",
+        "max_agents": 4
+      },
+      "feature": {
+        "agents": ["coordinator", "architect", "coder", "tester", "reviewer"],
+        "topology": "hierarchical",
+        "max_agents": 5
+      },
+      "refactor": {
+        "agents": ["coordinator", "architect", "coder", "reviewer"],
+        "topology": "hierarchical",
+        "max_agents": 4
+      },
+      "performance": {
+        "agents": ["coordinator", "perf-engineer", "coder"],
+        "topology": "hierarchical",
+        "max_agents": 3
+      },
+      "security": {
+        "agents": ["coordinator", "security-architect", "auditor"],
+        "topology": "hierarchical",
+        "max_agents": 3
+      },
+      "documentation": {
+        "agents": ["researcher", "api-docs"],
+        "topology": "mesh",
+        "max_agents": 2
+      }
+    },
+    "by_complexity": {
+      "simple": {
+        "model_tier": "haiku",
+        "max_agents": 2,
+        "topology": "hierarchical"
+      },
+      "medium": {
+        "model_tier": "sonnet",
+        "max_agents": 5,
+        "topology": "hierarchical"
+      },
+      "complex": {
+        "model_tier": "opus",
+        "max_agents": 10,
+        "topology": "hierarchical-mesh"
+      }
+    },
+    "model_routing": {
+      "tier_1_agent_booster": {
+        "latency": "<1ms",
+        "cost": "$0",
+        "use_cases": ["var_to_const", "add_types", "remove_console", "add_error_handling", "async_await", "add_logging"]
+      },
+      "tier_2_haiku": {
+        "latency": "~500ms",
+        "cost": "$0.0002",
+        "use_cases": ["simple_tasks", "bug_fixes", "low_complexity"]
+      },
+      "tier_3_sonnet_opus": {
+        "latency": "2-5s",
+        "cost": "$0.003-$0.015",
+        "use_cases": ["architecture", "security", "complex_reasoning"]
+      }
+    }
+  },
+  "swarm_configurations": {
+    "topologies": {
+      "hierarchical": {
+        "description": "Queen controls workers directly",
+        "anti_drift": true,
+        "best_for": "small teams (6-8 agents)",
+        "fault_tolerance": "medium",
+        "scalability": "high",
+        "coordination_overhead": "low"
+      },
+      "hierarchical-mesh": {
+        "description": "V3 queen + peer communication",
+        "anti_drift": true,
+        "best_for": "large teams (10-15 agents)",
+        "fault_tolerance": "high",
+        "scalability": "high",
+        "coordination_overhead": "variable"
+      },
+      "mesh": {
+        "description": "Fully connected peer network",
+        "anti_drift": false,
+        "best_for": "critical systems, high-availability",
+        "fault_tolerance": "high",
+        "scalability": "medium",
+        "coordination_overhead": "high"
+      },
+      "ring": {
+        "description": "Circular communication pattern",
+        "anti_drift": false,
+        "best_for": "pipeline processing",
+        "fault_tolerance": "low",
+        "scalability": "medium",
+        "coordination_overhead": "low"
+      },
+      "star": {
+        "description": "Central coordinator with spokes",
+        "anti_drift": true,
+        "best_for": "centralized coordination",
+        "fault_tolerance": "low",
+        "scalability": "medium",
+        "coordination_overhead": "low"
+      },
+      "adaptive": {
+        "description": "Dynamic topology switching",
+        "anti_drift": true,
+        "best_for": "variable workloads",
+        "fault_tolerance": "high",
+        "scalability": "high",
+        "coordination_overhead": "variable",
+        "ml_integration": true
+      }
+    },
+    "consensus_strategies": {
+      "byzantine": {
+        "description": "BFT (tolerates f < n/3 faulty)",
+        "use_case": "high_security",
+        "latency": "high"
+      },
+      "raft": {
+        "description": "Leader-based (tolerates f < n/2)",
+        "use_case": "consistency",
+        "latency": "medium"
+      },
+      "gossip": {
+        "description": "Epidemic for eventual consistency",
+        "use_case": "scalability",
+        "latency": "low"
+      },
+      "crdt": {
+        "description": "Conflict-free replicated data types",
+        "use_case": "availability",
+        "latency": "low"
+      },
+      "quorum": {
+        "description": "Configurable quorum-based",
+        "use_case": "flexible",
+        "latency": "medium"
+      }
+    }
+  },
+  "memory_patterns": {
+    "key_structure": {
+      "coordinator_status": "swarm/{coordinator-type}/status",
+      "worker_status": "swarm/worker-{id}/status",
+      "shared_data": "swarm/shared/{data-type}",
+      "progress": "swarm/{agent-id}/progress",
+      "metrics": "swarm/{agent-id}/metrics",
+      "complete": "swarm/{agent-id}/complete"
+    },
+    "namespace": "coordination",
+    "sync_intervals": {
+      "status": "30s",
+      "progress": "30-60s",
+      "metrics": "60s",
+      "critical_alerts": "immediate"
+    },
+    "operations": {
+      "store": "mcp__claude-flow__memory_usage with action: 'store'",
+      "retrieve": "mcp__claude-flow__memory_usage with action: 'retrieve'",
+      "search": "mcp__claude-flow__memory_search"
+    }
+  },
+  "performance_targets": {
+    "v3_goals": {
+      "flash_attention_speedup": "2.49x-7.47x",
+      "hnsw_search": "150x-12500x faster",
+      "memory_reduction": "50-75% with quantization",
+      "mcp_response": "<100ms",
+      "cli_startup": "<500ms",
+      "sona_adaptation": "<0.05ms"
+    },
+    "agent_utilization": {
+      "target": ">85%",
+      "parallel_efficiency": ">90%"
+    },
+    "quality": {
+      "test_coverage": ">80%",
+      "task_completion_rate": ">95%"
+    }
+  }
+}

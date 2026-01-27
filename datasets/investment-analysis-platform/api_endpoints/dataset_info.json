@@ -1,0 +1,32 @@
+{
+  "citation": "",
+  "description": "",
+  "features": {
+    "router_file": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "method": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "path": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "function_name": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "response_model": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "prefix": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": ""
+}

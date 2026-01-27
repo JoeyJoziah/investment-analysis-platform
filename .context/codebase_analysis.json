@@ -1,0 +1,633 @@
+{
+  "metadata": {
+    "analysis_date": "2026-01-26",
+    "platform": "investment-analysis-platform",
+    "total_python_files": 342,
+    "primary_language": "Python",
+    "framework": "FastAPI",
+    "database": "PostgreSQL with SQLAlchemy async"
+  },
+  "modules": {
+    "api_routers": {
+      "path": "backend/api/routers/",
+      "description": "FastAPI REST API endpoints for the investment platform",
+      "files": [
+        {
+          "file": "stocks.py",
+          "lines": 706,
+          "description": "Stock data API with real-time quotes, historical prices, and search functionality",
+          "classes": [
+            {
+              "name": "StockResponse",
+              "type": "Pydantic BaseModel",
+              "fields": ["id", "symbol", "name", "exchange", "sector", "industry", "market_cap", "is_active", "is_tradable", "created_at", "updated_at"]
+            },
+            {
+              "name": "StockDetailResponse",
+              "type": "Pydantic BaseModel",
+              "parent": "StockResponse",
+              "fields": ["shares_outstanding", "float_shares", "country", "currency", "ipo_date", "description", "website", "employees"]
+            },
+            {
+              "name": "PriceHistoryResponse",
+              "type": "Pydantic BaseModel",
+              "fields": ["date", "open", "high", "low", "close", "adjusted_close", "volume", "split_coefficient", "dividend_amount"]
+            },
+            {
+              "name": "StockQuoteResponse",
+              "type": "Pydantic BaseModel",
+              "fields": ["symbol", "price", "change", "change_percent", "volume", "timestamp", "open", "high", "low", "previous_close", "bid", "ask", "market_cap", "pe_ratio", "fifty_two_week_high", "fifty_two_week_low", "data_source", "is_real_time"]
+            }
+          ],
+          "endpoints": [
+            {"method": "GET", "path": "", "function": "get_stocks", "description": "Get list of stocks with filtering, sorting, pagination"},
+            {"method": "GET", "path": "/search", "function": "search_stocks", "description": "Search stocks by symbol or company name"},
+            {"method": "GET", "path": "/sectors", "function": "get_sectors", "description": "Get list of available sectors"},
+            {"method": "GET", "path": "/sectors/summary", "function": "get_sector_summary", "description": "Get sector summary with statistics"},
+            {"method": "GET", "path": "/top-performers", "function": "get_top_performers", "description": "Get top performing stocks by timeframe"},
+            {"method": "GET", "path": "/{symbol}", "function": "get_stock_detail", "description": "Get detailed stock information"},
+            {"method": "GET", "path": "/{symbol}/quote", "function": "get_stock_quote", "description": "Get real-time stock quote"},
+            {"method": "GET", "path": "/{symbol}/history", "function": "get_stock_history", "description": "Get historical price data"},
+            {"method": "GET", "path": "/{symbol}/statistics", "function": "get_stock_statistics", "description": "Get comprehensive price statistics"}
+          ],
+          "dependencies": ["AlphaVantageClient", "FinnhubClient", "PolygonClient", "stock_repository", "price_repository"]
+        },
+        {
+          "file": "portfolio.py",
+          "lines": 985,
+          "description": "Portfolio management API with positions, transactions, performance tracking, and analysis",
+          "classes": [
+            {
+              "name": "Position",
+              "type": "Pydantic BaseModel",
+              "fields": ["id", "symbol", "name", "quantity", "average_cost", "current_price", "market_value", "cost_basis", "unrealized_gain", "unrealized_gain_percent", "realized_gain", "asset_class", "sector", "allocation_percent"]
+            },
+            {
+              "name": "PortfolioSummary",
+              "type": "Pydantic BaseModel",
+              "fields": ["id", "name", "total_value", "total_cost", "total_gain", "total_gain_percent", "cash_balance", "buying_power", "day_change", "day_change_percent", "positions_count", "strategy", "risk_score"]
+            },
+            {
+              "name": "PortfolioDetail",
+              "type": "Pydantic BaseModel",
+              "parent": "PortfolioSummary",
+              "fields": ["positions", "asset_allocation", "sector_allocation", "top_performers", "worst_performers", "recent_transactions", "performance_metrics"]
+            },
+            {
+              "name": "Transaction",
+              "type": "Pydantic BaseModel",
+              "fields": ["id", "portfolio_id", "symbol", "transaction_type", "quantity", "price", "total_amount", "fees", "notes", "timestamp"]
+            },
+            {
+              "name": "PerformanceMetrics",
+              "type": "Pydantic BaseModel",
+              "fields": ["total_return", "annualized_return", "volatility", "sharpe_ratio", "sortino_ratio", "max_drawdown", "beta", "alpha", "treynor_ratio", "calmar_ratio", "win_rate", "profit_factor", "risk_adjusted_return"]
+            },
+            {
+              "name": "PortfolioAnalysis",
+              "type": "Pydantic BaseModel",
+              "fields": ["portfolio_id", "analysis_date", "risk_analysis", "diversification_score", "concentration_risk", "correlation_matrix", "efficient_frontier", "optimization_suggestions", "rebalancing_needed", "recommended_changes"]
+            }
+          ],
+          "enums": [
+            {"name": "TransactionType", "values": ["buy", "sell", "dividend", "transfer_in", "transfer_out"]},
+            {"name": "AssetClass", "values": ["stocks", "bonds", "etf", "crypto", "commodities", "cash", "real_estate"]},
+            {"name": "PortfolioStrategy", "values": ["aggressive_growth", "growth", "balanced", "conservative", "income", "preservation"]},
+            {"name": "RebalanceFrequency", "values": ["weekly", "monthly", "quarterly", "semi_annual", "annual", "manual"]}
+          ],
+          "endpoints": [
+            {"method": "GET", "path": "/summary", "function": "get_portfolios_summary", "description": "Get summary of all user portfolios"},
+            {"method": "GET", "path": "/{portfolio_id}", "function": "get_portfolio_detail", "description": "Get detailed portfolio information"},
+            {"method": "POST", "path": "/{portfolio_id}/positions", "function": "add_position", "description": "Add a new position"},
+            {"method": "DELETE", "path": "/{portfolio_id}/positions/{symbol}", "function": "remove_position", "description": "Remove or reduce a position"},
+            {"method": "GET", "path": "/{portfolio_id}/transactions", "function": "get_transactions", "description": "Get portfolio transaction history"},
+            {"method": "GET", "path": "/{portfolio_id}/performance", "function": "get_portfolio_performance", "description": "Get portfolio performance over time"},
+            {"method": "POST", "path": "/{portfolio_id}/analyze", "function": "analyze_portfolio", "description": "Perform comprehensive portfolio analysis"},
+            {"method": "POST", "path": "/{portfolio_id}/rebalance", "function": "rebalance_portfolio", "description": "Generate rebalancing recommendations"},
+            {"method": "GET", "path": "/{portfolio_id}/watchlist", "function": "get_watchlist", "description": "Get portfolio watchlist"}
+          ],
+          "dependencies": ["portfolio_repository", "stock_repository", "price_repository", "get_current_user"]
+        },
+        {
+          "file": "recommendations.py",
+          "lines": 1057,
+          "description": "Investment recommendations API with ML-powered analysis and SEC 2025 compliance",
+          "classes": [
+            {
+              "name": "SECDisclosure",
+              "type": "Pydantic BaseModel",
+              "description": "SEC 2025 Required Disclosure Fields",
+              "fields": ["methodology_disclosure", "data_sources", "model_version", "model_training_date", "risk_warning", "limitations_statement", "confidence_level", "conflict_of_interest_statement"]
+            },
+            {
+              "name": "RecommendationDetail",
+              "type": "Pydantic BaseModel",
+              "fields": ["id", "symbol", "company_name", "recommendation_type", "category", "confidence_score", "target_price", "current_price", "expected_return", "time_horizon", "risk_level", "reasoning", "key_factors", "technical_signals", "fundamental_metrics", "risk_factors", "entry_points", "exit_points", "stop_loss", "sector", "market_cap", "volume", "analyst_consensus", "similar_stocks", "sec_disclosure"]
+            },
+            {
+              "name": "DailyRecommendations",
+              "type": "Pydantic BaseModel",
+              "fields": ["date", "market_outlook", "top_picks", "watchlist", "avoid_list", "sector_focus", "market_sentiment", "risk_assessment", "special_situations", "sec_global_disclosure", "data_as_of", "recommendation_model_version"]
+            },
+            {
+              "name": "RecommendationPerformance",
+              "type": "Pydantic BaseModel",
+              "fields": ["recommendation_id", "symbol", "recommended_date", "recommendation_type", "entry_price", "current_price", "target_price", "actual_return", "expected_return", "days_since_recommendation", "status", "performance_rating"]
+            }
+          ],
+          "enums": [
+            {"name": "RecommendationType", "values": ["strong_buy", "buy", "hold", "sell", "strong_sell"]},
+            {"name": "TimeHorizon", "values": ["short_term", "medium_term", "long_term"]},
+            {"name": "RiskLevel", "values": ["conservative", "moderate", "aggressive"]},
+            {"name": "RecommendationCategory", "values": ["value", "growth", "dividend", "momentum", "contrarian", "index", "sector_rotation"]}
+          ],
+          "endpoints": [
+            {"method": "GET", "path": "/daily", "function": "get_daily_recommendations", "description": "Get daily curated ML-powered recommendations"},
+            {"method": "GET", "path": "/list", "function": "get_recommendations", "description": "Get list of recommendations with filters"},
+            {"method": "GET", "path": "/{recommendation_id}", "function": "get_recommendation_detail", "description": "Get specific recommendation details"},
+            {"method": "POST", "path": "/filter", "function": "filter_recommendations", "description": "Advanced filtering of recommendations"},
+            {"method": "GET", "path": "/portfolio/{portfolio_id}", "function": "get_portfolio_recommendations", "description": "Get personalized portfolio recommendations"},
+            {"method": "GET", "path": "/performance/track", "function": "track_recommendation_performance", "description": "Track performance of past recommendations"},
+            {"method": "POST", "path": "/backtest", "function": "backtest_strategy", "description": "Backtest a recommendation strategy"},
+            {"method": "GET", "path": "/trending", "function": "get_trending_recommendations", "description": "Get trending recommendations"}
+          ],
+          "dependencies": ["RecommendationEngine", "ModelManager", "recommendation_repository", "stock_repository", "portfolio_repository", "price_repository"],
+          "features": ["SEC 2025 compliance", "ML-powered recommendations", "N+1 query optimization", "Batch processing"]
+        },
+        {
+          "file": "analysis.py",
+          "lines": 1060,
+          "description": "Comprehensive stock analysis API with technical, fundamental, sentiment, and ML analysis",
+          "classes": [
+            {
+              "name": "TechnicalIndicators",
+              "type": "Pydantic BaseModel",
+              "fields": ["rsi", "rsi_signal", "macd", "macd_signal", "moving_averages", "bollinger_bands", "volume_analysis", "support_levels", "resistance_levels", "trend", "volatility"]
+            },
+            {
+              "name": "FundamentalMetrics",
+              "type": "Pydantic BaseModel",
+              "fields": ["pe_ratio", "peg_ratio", "eps", "revenue_growth", "profit_margin", "debt_to_equity", "roe", "current_ratio", "dividend_yield", "market_cap", "enterprise_value", "book_value", "intrinsic_value", "valuation_score"]
+            },
+            {
+              "name": "SentimentAnalysis",
+              "type": "Pydantic BaseModel",
+              "fields": ["overall_sentiment", "sentiment_label", "news_sentiment", "social_sentiment", "analyst_sentiment", "insider_sentiment", "sentiment_momentum", "key_topics", "sentiment_sources"]
+            },
+            {
+              "name": "MLPredictions",
+              "type": "Pydantic BaseModel",
+              "fields": ["price_prediction_1d", "price_prediction_7d", "price_prediction_30d", "confidence_score", "predicted_volatility", "risk_score", "pattern_recognition", "anomaly_detection", "trend_prediction"]
+            },
+            {
+              "name": "RiskMetrics",
+              "type": "Pydantic BaseModel",
+              "fields": ["beta", "alpha", "sharpe_ratio", "sortino_ratio", "max_drawdown", "var_95", "cvar_95", "correlation_with_market", "risk_adjusted_return", "overall_risk_score"]
+            },
+            {
+              "name": "AnalysisResponse",
+              "type": "Pydantic BaseModel",
+              "fields": ["symbol", "timestamp", "analysis_type", "technical", "fundamental", "sentiment", "ml_predictions", "risk_metrics", "overall_score", "recommendation", "confidence", "key_insights", "warnings", "next_earnings_date", "last_updated"]
+            }
+          ],
+          "enums": [
+            {"name": "AnalysisType", "values": ["technical", "fundamental", "sentiment", "comprehensive", "quick"]},
+            {"name": "Indicator", "values": ["rsi", "macd", "bollinger_bands", "moving_average", "volume", "stochastic", "adx", "atr"]},
+            {"name": "SignalStrength", "values": ["strong_buy", "buy", "neutral", "sell", "strong_sell"]}
+          ],
+          "endpoints": [
+            {"method": "POST", "path": "/analyze", "function": "analyze_stock", "description": "Perform comprehensive analysis on a single stock"},
+            {"method": "POST", "path": "/batch", "function": "batch_analysis", "description": "Analyze multiple stocks at once"},
+            {"method": "POST", "path": "/compare", "function": "compare_stocks", "description": "Compare multiple stocks side by side"},
+            {"method": "GET", "path": "/indicators/{symbol}", "function": "get_technical_indicators", "description": "Get specific technical indicators"},
+            {"method": "GET", "path": "/sentiment/{symbol}", "function": "get_sentiment_analysis", "description": "Get detailed sentiment analysis"}
+          ],
+          "dependencies": ["TechnicalAnalysisEngine", "FundamentalAnalysisEngine", "SentimentAnalysisEngine", "ModelManager", "AlphaVantageClient", "FinnhubClient"],
+          "features": ["Parallel API calls", "Timeout handling", "Fallback data sources", "Caching"]
+        }
+      ]
+    },
+    "analytics": {
+      "path": "backend/analytics/",
+      "description": "Core analytics engines for technical, fundamental, and sentiment analysis",
+      "files": [
+        {
+          "file": "technical_analysis.py",
+          "lines": 1350,
+          "description": "Advanced technical analysis engine with 200+ indicators and pattern recognition",
+          "classes": [
+            {
+              "name": "TechnicalAnalysisEngine",
+              "description": "Main engine for all technical analysis calculations",
+              "methods": [
+                {"name": "analyze_stock", "description": "Comprehensive technical analysis for a stock", "async": true},
+                {"name": "_calculate_trend_indicators", "description": "SMA, EMA, MACD calculations"},
+                {"name": "_calculate_momentum_indicators", "description": "RSI, Stochastic, Williams %R, CCI, MFI"},
+                {"name": "_calculate_volatility_indicators", "description": "Bollinger Bands, ATR, Keltner Channels"},
+                {"name": "_detect_patterns", "description": "Candlestick pattern detection (head & shoulders, double top/bottom, triangles, flags)"},
+                {"name": "_find_support_resistance", "description": "Support and resistance level identification"},
+                {"name": "_analyze_volume", "description": "OBV, Volume profile analysis"},
+                {"name": "_calculate_adx", "description": "ADX trend strength indicator"},
+                {"name": "_calculate_ichimoku", "description": "Ichimoku Cloud calculations"}
+              ],
+              "indicators": [
+                "SMA (20, 50, 200)", "EMA (12, 26)", "MACD", "RSI", "Stochastic",
+                "Bollinger Bands", "ATR", "ADX", "Ichimoku Cloud", "Williams %R",
+                "CCI", "MFI", "OBV", "Keltner Channels", "VWAP"
+              ],
+              "patterns": [
+                "Head and Shoulders", "Inverse Head and Shoulders", "Double Top", "Double Bottom",
+                "Ascending Triangle", "Descending Triangle", "Symmetrical Triangle",
+                "Bull Flag", "Bear Flag", "Pennant", "Cup and Handle",
+                "Doji", "Hammer", "Shooting Star", "Engulfing", "Morning Star", "Evening Star"
+              ]
+            }
+          ],
+          "dependencies": ["numpy", "pandas", "talib (optional)"]
+        },
+        {
+          "file": "fundamental_analysis.py",
+          "lines": 1591,
+          "description": "Comprehensive fundamental analysis with DCF, DDM, and quality metrics",
+          "classes": [
+            {
+              "name": "FinancialMetrics",
+              "type": "dataclass",
+              "description": "Container for all financial metrics",
+              "categories": {
+                "profitability": ["gross_margin", "operating_margin", "net_margin", "roe", "roa", "roic"],
+                "growth": ["revenue_growth", "earnings_growth", "fcf_growth"],
+                "valuation": ["pe_ratio", "pb_ratio", "ps_ratio", "ev_ebitda", "peg_ratio"],
+                "financial_health": ["current_ratio", "quick_ratio", "debt_to_equity", "interest_coverage"],
+                "efficiency": ["asset_turnover", "inventory_turnover", "receivables_turnover"]
+              }
+            },
+            {
+              "name": "FundamentalAnalysisEngine",
+              "description": "Main engine for fundamental analysis",
+              "methods": [
+                {"name": "analyze_company", "description": "Full fundamental analysis", "async": true},
+                {"name": "_run_valuation_models", "description": "Execute all valuation models in parallel"},
+                {"name": "_calculate_dcf", "description": "Discounted Cash Flow valuation"},
+                {"name": "_calculate_ddm", "description": "Dividend Discount Model"},
+                {"name": "_calculate_residual_income", "description": "Residual Income Model"},
+                {"name": "_calculate_wacc", "description": "Weighted Average Cost of Capital"},
+                {"name": "_calculate_quality_score", "description": "Composite quality score"},
+                {"name": "_analyze_moat", "description": "Economic moat analysis"},
+                {"name": "_calculate_altman_z_score", "description": "Bankruptcy prediction"},
+                {"name": "_calculate_piotroski_f_score", "description": "Financial strength score (0-9)"},
+                {"name": "_calculate_beneish_m_score", "description": "Earnings manipulation detection"}
+              ],
+              "valuation_models": [
+                "DCF (Discounted Cash Flow)",
+                "DDM (Dividend Discount Model)",
+                "Residual Income Model",
+                "Asset-Based Valuation",
+                "EPV (Earnings Power Value)",
+                "Sum of Parts Valuation"
+              ],
+              "risk_scores": ["Altman Z-Score", "Piotroski F-Score", "Beneish M-Score"]
+            }
+          ],
+          "dependencies": ["numpy", "pandas", "scipy"]
+        },
+        {
+          "file": "recommendation_engine.py",
+          "lines": 1300,
+          "description": "Master recommendation engine orchestrating all analysis types",
+          "classes": [
+            {
+              "name": "RecommendationAction",
+              "type": "Enum",
+              "values": ["STRONG_BUY", "BUY", "HOLD", "SELL", "STRONG_SELL"]
+            },
+            {
+              "name": "StockRecommendation",
+              "type": "dataclass",
+              "fields": ["symbol", "action", "confidence", "target_price", "current_price", "expected_return", "risk_level", "time_horizon", "technical_score", "fundamental_score", "sentiment_score", "ml_score", "key_factors", "risk_factors", "entry_points", "exit_points", "stop_loss", "position_size", "portfolio_weight"]
+            },
+            {
+              "name": "RecommendationEngine",
+              "description": "Orchestrates all analysis engines to generate recommendations",
+              "methods": [
+                {"name": "generate_daily_recommendations", "description": "Generate daily stock recommendations", "async": true},
+                {"name": "analyze_stock", "description": "Full stock analysis for recommendation", "async": true},
+                {"name": "_generate_recommendation", "description": "Generate recommendation from scores"},
+                {"name": "_calculate_risk_metrics", "description": "VaR, CVaR, Sharpe ratio calculations"},
+                {"name": "_rank_recommendations", "description": "Rank and prioritize recommendations"},
+                {"name": "_optimize_recommendations", "description": "Portfolio optimization with Kelly Criterion"},
+                {"name": "_calculate_position_size", "description": "Kelly Criterion position sizing"}
+              ]
+            }
+          ],
+          "dependencies": ["TechnicalAnalysisEngine", "FundamentalAnalysisEngine", "SentimentAnalysisEngine", "ModelManager", "MarketScanner", "RiskManager", "PortfolioOptimizer"]
+        },
+        {
+          "file": "sentiment_analysis.py",
+          "lines": 478,
+          "description": "Hybrid sentiment analysis with FinBERT and lexicon fallback",
+          "classes": [
+            {
+              "name": "SentimentResult",
+              "type": "dataclass",
+              "fields": ["score", "confidence", "label", "breakdown", "keywords", "sources_analyzed", "timestamp"]
+            },
+            {
+              "name": "SentimentAnalysisEngine",
+              "description": "Hybrid sentiment engine with FinBERT and lexicon fallback",
+              "methods": [
+                {"name": "analyze_sentiment", "description": "Analyze sentiment of text (uses FinBERT if available)", "async": true},
+                {"name": "analyze_stock_sentiment", "description": "Analyze multiple texts for a stock with batch processing", "async": true},
+                {"name": "analyze_comprehensive_sentiment", "description": "Combine news and social sentiment", "async": true},
+                {"name": "_analyze_with_finbert", "description": "Use FinBERT model for analysis"},
+                {"name": "_analyze_with_lexicon", "description": "Fallback lexicon-based analysis"},
+                {"name": "_batch_analyze_finbert", "description": "Batch FinBERT analysis for efficiency"},
+                {"name": "_extract_keywords", "description": "Extract meaningful keywords from text"}
+              ],
+              "features": ["FinBERT (ProsusAI/finbert)", "Lexicon fallback", "Batch processing", "Confidence-weighted aggregation"]
+            }
+          ],
+          "dependencies": ["transformers (optional)", "torch (optional)"]
+        }
+      ]
+    },
+    "ml": {
+      "path": "backend/ml/",
+      "description": "Machine learning models, training pipelines, and inference",
+      "files": [
+        {
+          "file": "model_manager.py",
+          "lines": 691,
+          "description": "Centralized ML model management with HuggingFace Hub integration",
+          "classes": [
+            {
+              "name": "ModelManager",
+              "description": "Manages loading, caching, and inference for all ML models",
+              "methods": [
+                {"name": "_initialize_models", "description": "Load all available models with error handling"},
+                {"name": "_load_lstm_model", "description": "Load trained LSTM with config and scaler"},
+                {"name": "_load_xgboost_model", "description": "Load XGBoost model with config and scaler"},
+                {"name": "_load_prophet_models", "description": "Load Prophet models for multiple stocks"},
+                {"name": "_load_finbert_model", "description": "Load FinBERT sentiment analyzer"},
+                {"name": "predict", "description": "Make prediction with error handling"},
+                {"name": "_predict_lstm", "description": "LSTM-specific prediction"},
+                {"name": "_predict_xgboost", "description": "XGBoost-specific prediction"},
+                {"name": "_predict_prophet", "description": "Prophet-specific prediction"},
+                {"name": "health_check", "description": "Health check on all models"},
+                {"name": "_download_from_hf_hub", "description": "Download model from HuggingFace Hub fallback"}
+              ],
+              "models": [
+                {"name": "lstm_price_predictor", "type": "PyTorch LSTM", "description": "Price prediction with attention"},
+                {"name": "xgboost_classifier", "type": "XGBoost", "description": "Direction classification"},
+                {"name": "prophet_forecaster", "type": "Prophet", "description": "Time series forecasting"},
+                {"name": "sentiment_analyzer", "type": "FinBERT", "description": "Financial sentiment analysis"},
+                {"name": "risk_assessor", "type": "Ensemble", "description": "Risk assessment model"}
+              ],
+              "features": ["HuggingFace Hub fallback", "Thread-safe model loading", "Fallback dummy models", "Health monitoring"]
+            }
+          ],
+          "dependencies": ["torch", "joblib", "xgboost", "prophet", "transformers"]
+        },
+        {
+          "file": "training_pipeline.py",
+          "lines": 345,
+          "description": "Main entry point for ML model training",
+          "classes": [
+            {
+              "name": "MLTrainingPipeline",
+              "description": "Complete ML training pipeline orchestration",
+              "methods": [
+                {"name": "initialize", "description": "Initialize pipeline components"},
+                {"name": "load_training_data", "description": "Load data from database or generate sample"},
+                {"name": "train_models", "description": "Train multiple ML models"},
+                {"name": "evaluate_models", "description": "Evaluate and select best model"},
+                {"name": "deploy_model", "description": "Deploy best model to production"},
+                {"name": "run_training_pipeline", "description": "Run complete training pipeline"}
+              ],
+              "model_configs": [
+                {"name": "xgboost_classifier", "type": "CLASSIFICATION"},
+                {"name": "time_series_predictor", "type": "TIME_SERIES"},
+                {"name": "ensemble_model", "type": "ENSEMBLE"}
+              ]
+            }
+          ],
+          "dependencies": ["MLOrchestrator", "ModelRegistry", "ModelMonitor", "ModelDeployer"]
+        },
+        {
+          "file": "pipeline/__init__.py",
+          "lines": 72,
+          "description": "ML Pipeline module exports",
+          "exports": [
+            {"category": "Base", "classes": ["ModelPipeline", "PipelineConfig", "PipelineStep", "PipelineResult", "ModelArtifact"]},
+            {"category": "Orchestrator", "classes": ["MLOrchestrator", "OrchestratorConfig", "TrainingSchedule", "RetrainingTrigger"]},
+            {"category": "Registry", "classes": ["ModelRegistry", "ModelVersion", "ModelMetadata", "DeploymentStatus"]},
+            {"category": "Monitoring", "classes": ["ModelMonitor", "PerformanceMetrics", "DriftDetector", "AlertManager"]},
+            {"category": "Deployment", "classes": ["ModelDeployer", "DeploymentStrategy", "RollbackManager", "ABTestManager"]}
+          ]
+        }
+      ]
+    },
+    "etl": {
+      "path": "backend/etl/",
+      "description": "Extract, Transform, Load pipeline for stock data",
+      "files": [
+        {
+          "file": "etl_orchestrator.py",
+          "lines": 728,
+          "description": "Main ETL orchestration with multi-source extraction and distributed processing",
+          "classes": [
+            {
+              "name": "ETLOrchestrator",
+              "description": "Enhanced ETL orchestrator with multi-source extraction",
+              "methods": [
+                {"name": "run_full_pipeline", "description": "Run complete ETL pipeline", "async": true},
+                {"name": "_run_distributed_pipeline", "description": "Run with distributed batch processing", "async": true},
+                {"name": "_run_standard_pipeline", "description": "Run standard pipeline with enhanced extraction", "async": true},
+                {"name": "get_active_tickers", "description": "Get list of active tickers from database", "async": true},
+                {"name": "enhanced_extract_phase", "description": "Multi-source extraction phase", "async": true},
+                {"name": "validation_phase", "description": "Data validation and quality assurance", "async": true},
+                {"name": "transform_phase", "description": "Transform extracted data", "async": true},
+                {"name": "load_phase", "description": "Load transformed data to database", "async": true},
+                {"name": "ml_phase", "description": "Generate ML predictions and recommendations", "async": true},
+                {"name": "cleanup_phase", "description": "Cleanup old data and optimize", "async": true},
+                {"name": "run_incremental_update", "description": "Incremental update for specific tickers", "async": true},
+                {"name": "run_realtime_update", "description": "Real-time update for single ticker", "async": true}
+              ],
+              "features": ["Distributed processing", "Multi-source extraction", "Data validation", "Concurrent processing", "ML integration"]
+            },
+            {
+              "name": "ETLScheduler",
+              "description": "Schedule and manage ETL pipeline runs",
+              "methods": [
+                {"name": "run_daily_pipeline", "description": "Run daily ETL pipeline", "async": true},
+                {"name": "run_hourly_update", "description": "Run hourly incremental updates", "async": true}
+              ]
+            }
+          ],
+          "dependencies": ["DataExtractor", "DataTransformer", "DataLoader", "MultiSourceStockExtractor", "DistributedBatchProcessor", "FinancialDataValidator"]
+        },
+        {
+          "file": "data_extractor.py",
+          "lines": 508,
+          "description": "Unlimited stock data extraction with no rate limits",
+          "classes": [
+            {
+              "name": "DataExtractor",
+              "description": "Main extractor powered by unlimited extraction system",
+              "parent": "MultiSourceDataExtractor",
+              "methods": [
+                {"name": "extract_stock_data", "description": "Extract data for single ticker", "async": true},
+                {"name": "batch_extract", "description": "Extract data for multiple tickers (no rate limits)", "async": true},
+                {"name": "fetch_stock_data", "description": "Alias for extract_stock_data", "async": true},
+                {"name": "get_extraction_stats", "description": "Get comprehensive extraction statistics"}
+              ],
+              "features": ["No rate limits", "6000+ stocks support", "Multiple free data sources", "Intelligent fallbacks", "Multi-tier caching"]
+            },
+            {
+              "name": "DataValidator",
+              "description": "Basic data validation wrapper",
+              "methods": [
+                {"name": "validate_stock_data", "description": "Validate stock data completeness and quality", "static": true}
+              ]
+            }
+          ],
+          "data_sources": ["Yahoo Finance (web scraping)", "SEC EDGAR", "IEX Cloud free tier", "Fallback sources"]
+        }
+      ]
+    },
+    "repositories": {
+      "path": "backend/repositories/",
+      "description": "Database repository layer with async CRUD operations",
+      "files": [
+        {
+          "file": "__init__.py",
+          "lines": 76,
+          "description": "Repository exports and base classes",
+          "exports": [
+            {"name": "AsyncBaseRepository", "description": "Base async repository"},
+            {"name": "AsyncCRUDRepository", "description": "CRUD operations repository"},
+            {"name": "FilterCriteria", "description": "Query filter criteria"},
+            {"name": "SortParams", "description": "Sorting parameters"},
+            {"name": "PaginationParams", "description": "Pagination parameters"},
+            {"name": "SortDirection", "description": "Sort direction enum"},
+            {"name": "stock_repository", "description": "Stock data repository instance"},
+            {"name": "price_repository", "description": "Price history repository instance"},
+            {"name": "recommendation_repository", "description": "Recommendations repository instance"},
+            {"name": "user_repository", "description": "User repository instance"},
+            {"name": "portfolio_repository", "description": "Portfolio repository instance"},
+            {"name": "watchlist_repository", "description": "Watchlist repository instance"}
+          ]
+        }
+      ]
+    },
+    "data_ingestion": {
+      "path": "backend/data_ingestion/",
+      "description": "External data source API clients",
+      "files": [
+        {"file": "alpha_vantage_client.py", "description": "Alpha Vantage API client for market data"},
+        {"file": "finnhub_client.py", "description": "Finnhub API client for quotes and news"},
+        {"file": "polygon_client.py", "description": "Polygon.io API client for market data"},
+        {"file": "sec_edgar_client.py", "description": "SEC EDGAR client for fundamental data"},
+        {"file": "smart_data_fetcher.py", "description": "Intelligent data fetcher with fallbacks"},
+        {"file": "robust_api_client.py", "description": "Base API client with retry logic"}
+      ]
+    }
+  },
+  "class_hierarchies": {
+    "repositories": {
+      "base": "AsyncBaseRepository",
+      "crud": "AsyncCRUDRepository -> AsyncBaseRepository",
+      "specific": [
+        "StockRepository -> AsyncCRUDRepository",
+        "PriceHistoryRepository -> AsyncCRUDRepository",
+        "RecommendationRepository -> AsyncCRUDRepository",
+        "UserRepository -> AsyncCRUDRepository",
+        "PortfolioRepository -> AsyncCRUDRepository",
+        "WatchlistRepository -> AsyncCRUDRepository"
+      ]
+    },
+    "analysis_engines": {
+      "engines": [
+        "TechnicalAnalysisEngine",
+        "FundamentalAnalysisEngine",
+        "SentimentAnalysisEngine",
+        "RecommendationEngine (orchestrator)"
+      ]
+    },
+    "pydantic_models": {
+      "stock": ["StockResponse", "StockDetailResponse -> StockResponse"],
+      "portfolio": ["PortfolioSummary", "PortfolioDetail -> PortfolioSummary"],
+      "analysis": ["AnalysisResponse", "ComparisonResult"]
+    }
+  },
+  "dependencies": {
+    "core": {
+      "framework": "FastAPI",
+      "database": ["SQLAlchemy 2.0 (async)", "asyncpg", "PostgreSQL"],
+      "validation": "Pydantic v2",
+      "authentication": "OAuth2 with JWT"
+    },
+    "data_processing": {
+      "scientific": ["numpy", "pandas", "scipy"],
+      "technical_analysis": ["talib (optional)"],
+      "statistics": ["statistics (stdlib)"]
+    },
+    "machine_learning": {
+      "deep_learning": ["torch", "transformers"],
+      "traditional_ml": ["xgboost", "scikit-learn", "joblib"],
+      "time_series": ["prophet"],
+      "nlp": ["FinBERT (ProsusAI/finbert)"]
+    },
+    "external_apis": {
+      "market_data": ["Alpha Vantage", "Finnhub", "Polygon.io", "Yahoo Finance"],
+      "fundamentals": ["SEC EDGAR"],
+      "model_hosting": ["HuggingFace Hub"]
+    },
+    "infrastructure": {
+      "caching": ["Redis (optional)", "In-memory caching"],
+      "logging": ["Python logging"],
+      "async": ["asyncio", "aiohttp"]
+    }
+  },
+  "architecture_patterns": {
+    "api_layer": "FastAPI with dependency injection",
+    "repository_pattern": "Async repository pattern for database access",
+    "service_layer": "Analysis engines as services",
+    "caching": "Multi-tier caching (L1, L2, L3)",
+    "error_handling": "Fallback patterns with graceful degradation",
+    "concurrency": "Parallel API calls and batch processing",
+    "validation": "Pydantic models with comprehensive validation"
+  },
+  "key_features": {
+    "analysis": [
+      "200+ technical indicators",
+      "DCF and DDM valuation models",
+      "Altman Z-Score, Piotroski F-Score, Beneish M-Score",
+      "FinBERT sentiment analysis",
+      "Pattern recognition (candlesticks, chart patterns)"
+    ],
+    "ml_models": [
+      "LSTM with attention for price prediction",
+      "XGBoost for direction classification",
+      "Prophet for time series forecasting",
+      "Ensemble predictions"
+    ],
+    "data_pipeline": [
+      "6000+ stocks support without rate limits",
+      "Multi-source extraction with fallbacks",
+      "Distributed batch processing",
+      "Comprehensive data validation"
+    ],
+    "compliance": [
+      "SEC 2025 disclosure requirements",
+      "Risk warnings and methodology disclosure",
+      "Model versioning and training date tracking"
+    ],
+    "performance": [
+      "N+1 query optimization",
+      "Parallel API calls",
+      "Batch processing",
+      "Multi-tier caching"
+    ]
+  }
+}

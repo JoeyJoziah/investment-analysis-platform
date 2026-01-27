@@ -1,9 +1,17 @@
 """
 ML Pipeline Orchestrator - Handles scheduling, execution, and automated retraining
+
+Integrates with Claude Flow V3 for:
+- Neural pattern training coordination
+- Swarm agent task delegation
+- Memory-based learning persistence
+- Hook-based event handling
 """
 
 import asyncio
 import logging
+import os
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
@@ -18,6 +26,14 @@ import uuid
 from .base import ModelPipeline, PipelineConfig, PipelineResult, PipelineStatus, ModelArtifact
 from .registry import ModelRegistry
 from .monitoring import ModelMonitor, PerformanceMetrics
+
+# Claude Flow integration imports (lazy loaded)
+try:
+    from .memory_sync import get_memory_adapter, ClaudeFlowMemoryAdapter
+    from .task_bridge import get_task_bridge, TaskBridge, TaskStatus
+    CLAUDE_FLOW_AVAILABLE = True
+except ImportError:
+    CLAUDE_FLOW_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -608,9 +624,272 @@ class MLOrchestrator:
                 if r.status == PipelineStatus.FAILED
             ),
             "models_monitored": len(self.performance_history),
+            "claude_flow_integration": CLAUDE_FLOW_AVAILABLE,
             "config": {
                 "max_concurrent": self.config.max_concurrent_pipelines,
                 "auto_retraining": self.config.enable_auto_retraining,
                 "scheduling": self.config.enable_scheduling
             }
         }
+
+    # =========================================================================
+    # CLAUDE FLOW V3 INTEGRATION - Hook Listeners
+    # =========================================================================
+
+    async def handle_pre_task_hook(self, task_description: str) -> Dict:
+        """
+        Handle Claude Flow pre-task hook
+        Called before a task starts to get routing recommendations
+        """
+        if not CLAUDE_FLOW_AVAILABLE:
+            return {"status": "skipped", "reason": "claude_flow_not_available"}
+
+        try:
+            # Get memory adapter for pattern lookup
+            memory = await get_memory_adapter()
+
+            # Search for similar past tasks
+            similar_tasks = await memory.search(
+                query=task_description,
+                namespace="training-jobs",
+                limit=5
+            )
+
+            # Determine optimal model/approach based on history
+            recommendation = {
+                "task_description": task_description,
+                "similar_tasks_found": len(similar_tasks),
+                "recommended_approach": "standard",
+                "estimated_duration": None,
+                "patterns_applied": []
+            }
+
+            if similar_tasks:
+                # Analyze past performance
+                successes = [t for t in similar_tasks if t.get("value", {}).get("status") == "completed"]
+                if successes:
+                    recommendation["recommended_approach"] = "learned"
+                    recommendation["patterns_applied"] = [t["key"] for t in successes[:3]]
+
+            # Store pre-task event
+            await memory.store(
+                key=f"pre_task_{datetime.utcnow().timestamp()}",
+                value={
+                    "task": task_description,
+                    "recommendation": recommendation,
+                    "timestamp": datetime.utcnow().isoformat()
+                },
+                namespace="pipeline-state"
+            )
+
+            logger.info(f"Pre-task hook: {task_description[:50]}...")
+            return recommendation
+
+        except Exception as e:
+            logger.error(f"Pre-task hook error: {e}")
+            return {"status": "error", "error": str(e)}
+
+    async def handle_post_task_hook(
+        self,
+        task_id: str,
+        success: bool,
+        result: Optional[Dict] = None,
+        store_results: bool = True
+    ) -> Dict:
+        """
+        Handle Claude Flow post-task hook
+        Called after a task completes to record outcome for learning
+        """
+        if not CLAUDE_FLOW_AVAILABLE:
+            return {"status": "skipped", "reason": "claude_flow_not_available"}
+
+        try:
+            memory = await get_memory_adapter()
+
+            # Record task outcome
+            outcome = {
+                "task_id": task_id,
+                "success": success,
+                "result": result,
+                "completed_at": datetime.utcnow().isoformat()
+            }
+
+            if store_results:
+                await memory.sync_training_job(task_id, outcome)
+
+            # If successful, extract patterns for learning
+            if success and result:
+                await self._extract_learning_patterns(task_id, result)
+
+            # Trigger neural training update if significant
+            if success:
+                await self._trigger_neural_update(task_id, result)
+
+            logger.info(f"Post-task hook: {task_id} (success={success})")
+            return {"status": "recorded", "task_id": task_id}
+
+        except Exception as e:
+            logger.error(f"Post-task hook error: {e}")
+            return {"status": "error", "error": str(e)}
+
+    async def handle_post_edit_hook(
+        self,
+        file_path: str,
+        success: bool = True,
+        train_neural: bool = False
+    ) -> Dict:
+        """
+        Handle Claude Flow post-edit hook
+        Called after file edits to potentially trigger retraining
+        """
+        if not CLAUDE_FLOW_AVAILABLE:
+            return {"status": "skipped", "reason": "claude_flow_not_available"}
+
+        try:
+            # Check if edit affects ML pipeline
+            ml_related = any(p in file_path for p in [
+                "backend/ml/",
+                "data_pipelines/",
+                "models/",
+                ".py"
+            ])
+
+            if not ml_related:
+                return {"status": "skipped", "reason": "not_ml_related"}
+
+            memory = await get_memory_adapter()
+
+            # Record edit event
+            await memory.store(
+                key=f"edit_{Path(file_path).name}_{datetime.utcnow().timestamp()}",
+                value={
+                    "file": file_path,
+                    "success": success,
+                    "train_neural": train_neural,
+                    "timestamp": datetime.utcnow().isoformat()
+                },
+                namespace="ml-patterns"
+            )
+
+            # Trigger neural training if requested
+            if train_neural:
+                result = await self._run_neural_training("post-edit")
+                return {"status": "neural_training_triggered", "result": result}
+
+            return {"status": "recorded", "file": file_path}
+
+        except Exception as e:
+            logger.error(f"Post-edit hook error: {e}")
+            return {"status": "error", "error": str(e)}
+
+    async def _extract_learning_patterns(
+        self,
+        task_id: str,
+        result: Dict
+    ):
+        """Extract learning patterns from successful task execution"""
+        try:
+            memory = await get_memory_adapter()
+
+            # Extract key metrics
+            patterns = {
+                "task_id": task_id,
+                "execution_time": result.get("execution_time"),
+                "model_type": result.get("model_type"),
+                "accuracy": result.get("metrics", {}).get("accuracy"),
+                "hyperparameters": result.get("hyperparameters"),
+                "extracted_at": datetime.utcnow().isoformat()
+            }
+
+            # Store pattern
+            await memory.store(
+                key=f"pattern_{task_id}",
+                value=patterns,
+                namespace="ml-patterns",
+                metadata={"type": "execution_pattern"}
+            )
+
+        except Exception as e:
+            logger.warning(f"Pattern extraction failed: {e}")
+
+    async def _trigger_neural_update(
+        self,
+        task_id: str,
+        result: Optional[Dict] = None
+    ):
+        """Trigger neural pattern training update via CLI"""
+        try:
+            # Run neural training via claude-flow CLI
+            cmd = [
+                "npx", "@claude-flow/cli@latest", "hooks",
+                "post-task", "--task-id", task_id, "--success", "true"
+            ]
+
+            if result:
+                cmd.extend(["--store-results", "true"])
+
+            # Run async
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await process.wait()
+
+        except Exception as e:
+            logger.warning(f"Neural update trigger failed: {e}")
+
+    async def _run_neural_training(self, trigger: str) -> Dict:
+        """Run neural pattern training via CLI"""
+        try:
+            cmd = [
+                "npx", "@claude-flow/cli@latest", "neural",
+                "train", "--pattern-type", "coordination", "--epochs", "10"
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+
+            return {
+                "trigger": trigger,
+                "success": process.returncode == 0,
+                "output": stdout.decode() if stdout else None
+            }
+
+        except Exception as e:
+            logger.error(f"Neural training failed: {e}")
+            return {"trigger": trigger, "success": False, "error": str(e)}
+
+    async def sync_with_claude_flow_memory(self) -> Dict:
+        """Sync pipeline state with Claude Flow memory system"""
+        if not CLAUDE_FLOW_AVAILABLE:
+            return {"status": "skipped", "reason": "claude_flow_not_available"}
+
+        try:
+            memory = await get_memory_adapter()
+
+            # Sync model registry
+            result = await memory.sync_registry_to_memory()
+
+            # Store pipeline status
+            status = self.get_status()
+            await memory.store(
+                key="orchestrator_status",
+                value=status,
+                namespace="pipeline-state"
+            )
+
+            logger.info(f"Synced with Claude Flow: {result.entries_synced} entries")
+            return {
+                "status": "synced",
+                "entries_synced": result.entries_synced,
+                "errors": result.errors
+            }
+
+        except Exception as e:
+            logger.error(f"Memory sync failed: {e}")
+            return {"status": "error", "error": str(e)}
