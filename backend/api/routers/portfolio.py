@@ -264,23 +264,26 @@ async def get_portfolios_summary(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> List[PortfolioSummary]:
     """
-    Get summary of all user portfolios with real data.
-    
+    Get summary of all user portfolios with real-time price data.
+
     Returns comprehensive portfolio summaries including:
-    - Current market values calculated from real-time prices
+    - Current market values calculated from real-time prices via RealtimePriceService
     - Performance metrics and gains/losses
     - Risk assessment scores
     - Position counts and allocation data
     """
     try:
         logger.info(f"Fetching portfolio summaries for user {current_user.id}")
-        
+
+        from backend.services.realtime_price_service import get_realtime_price_service
+        price_service = await get_realtime_price_service()
+
         # Get user's portfolios from database
         portfolios = await portfolio_repository.get_user_portfolios(
             user_id=current_user.id,
             session=db
         )
-        
+
         if not portfolios:
             logger.info(f"No portfolios found for user {current_user.id}, creating default portfolio")
             # Create a default portfolio if none exists
@@ -289,9 +292,9 @@ async def get_portfolios_summary(
                 session=db
             )
             portfolios = [default_portfolio]
-        
+
         summaries = []
-        
+
         for portfolio in portfolios:
             try:
                 # Calculate portfolio metrics
@@ -299,36 +302,43 @@ async def get_portfolios_summary(
                     portfolio_id=portfolio.id,
                     session=db
                 )
-                
+
+                # Get all prices at once using bulk fetch
+                symbols = [pos.symbol for pos in positions]
+                prices = await price_service.get_latest_prices_bulk(symbols, db)
+
                 # Calculate total values
                 total_value = 0.0
                 total_cost = 0.0
                 day_change = 0.0
-                
+
                 for position in positions:
-                    # Get current price (would integrate with real-time data)
-                    current_price = await get_current_stock_price(position.symbol, db)
+                    # Get current price from realtime service
+                    price_update = prices.get(position.symbol)
+                    current_price = price_update.price if price_update else await get_current_stock_price(position.symbol, db)
+
                     position_value = position.quantity * current_price
                     position_cost = position.quantity * position.average_cost
-                    
+
                     total_value += position_value
                     total_cost += position_cost
-                    
-                    # Calculate day change (simplified)
-                    day_change += position.quantity * (current_price - position.average_cost) * 0.01  # Approximation
-                
+
+                    # Calculate day change
+                    if price_update and price_update.close:
+                        day_change += position.quantity * (price_update.close - position.average_cost) * 0.01
+
                 # Add cash balance
                 cash_balance = float(portfolio.cash_balance or 0)
                 total_value += cash_balance
-                
+
                 # Calculate metrics
                 total_gain = total_value - total_cost
                 total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
                 day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
-                
-                # Calculate risk score (simplified)
+
+                # Calculate risk score
                 risk_score = await calculate_portfolio_risk_score(portfolio.id, positions, db)
-                
+
                 summaries.append(PortfolioSummary(
                     id=str(portfolio.portfolio_id or portfolio.id),
                     name=portfolio.name or f"Portfolio {portfolio.id}",
@@ -337,7 +347,7 @@ async def get_portfolios_summary(
                     total_gain=round(total_gain, 2),
                     total_gain_percent=round(total_gain_percent, 2),
                     cash_balance=round(cash_balance, 2),
-                    buying_power=round(cash_balance * 2, 2),  # 2x margin approximation
+                    buying_power=round(cash_balance * 2, 2),
                     day_change=round(day_change, 2),
                     day_change_percent=round(day_change_percent, 2),
                     positions_count=len(positions),
@@ -346,7 +356,7 @@ async def get_portfolios_summary(
                     created_at=portfolio.created_at,
                     last_updated=portfolio.updated_at or datetime.utcnow()
                 ))
-                
+
             except Exception as e:
                 logger.error(f"Error calculating summary for portfolio {portfolio.id}: {e}")
                 # Add fallback summary
@@ -367,13 +377,12 @@ async def get_portfolios_summary(
                     created_at=portfolio.created_at,
                     last_updated=datetime.utcnow()
                 ))
-        
+
         logger.info(f"Successfully calculated {len(summaries)} portfolio summaries")
         return summaries
-        
+
     except Exception as e:
         logger.error(f"Error fetching portfolio summaries: {e}")
-        # await handle_database_error(e, "fetch portfolio summaries")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error fetching portfolio summaries"
@@ -434,10 +443,10 @@ async def get_portfolio_detail(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> PortfolioDetail:
     """
-    Get detailed portfolio information with real-time calculations.
-    
+    Get detailed portfolio information with real-time price updates.
+
     Provides comprehensive portfolio details including:
-    - All positions with current market values
+    - All positions with current market values from RealtimePriceService
     - Asset and sector allocation breakdown
     - Performance metrics and risk analysis
     - Recent transaction history
@@ -445,44 +454,58 @@ async def get_portfolio_detail(
     """
     try:
         logger.info(f"Fetching detailed portfolio {portfolio_id} for user {current_user.id}")
-        
+
+        from backend.services.realtime_price_service import get_realtime_price_service
+        price_service = await get_realtime_price_service()
+
         # Get portfolio from database
         portfolio = await portfolio_repository.get_user_portfolio(
             portfolio_id=portfolio_id,
             user_id=current_user.id,
             session=db
         )
-        
+
         if not portfolio:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Portfolio '{portfolio_id}' not found or access denied"
             )
-        
+
         # Get portfolio positions
         db_positions = await portfolio_repository.get_portfolio_positions(
             portfolio_id=portfolio.id,
             session=db
         )
-        
+
+        # Bulk fetch all prices at once
+        symbols = [pos.symbol for pos in db_positions]
+        prices = await price_service.get_latest_prices_bulk(symbols, db)
+
         # Convert to response format and calculate current values
         positions = []
         total_value = 0.0
         total_cost = 0.0
         day_change = 0.0
-        
+
         for db_pos in db_positions:
-            # Get current market price
-            current_price = await get_current_stock_price(db_pos.symbol, db)
+            # Get current market price from realtime service
+            price_update = prices.get(db_pos.symbol)
+            if price_update:
+                current_price = price_update.price
+                day_change_raw = price_update.change or 0
+            else:
+                current_price = await get_current_stock_price(db_pos.symbol, db)
+                day_change_raw = 0
+
             market_value = db_pos.quantity * current_price
             cost_basis = db_pos.quantity * db_pos.average_cost
             unrealized_gain = market_value - cost_basis
             unrealized_gain_percent = (unrealized_gain / cost_basis * 100) if cost_basis > 0 else 0.0
-            
+
             # Get stock info for sector
             stock_info = await stock_repository.get_by_symbol(db_pos.symbol, session=db)
             sector = stock_info.sector if stock_info else "Unknown"
-            
+
             position = Position(
                 id=str(db_pos.id),
                 symbol=db_pos.symbol,
@@ -495,15 +518,15 @@ async def get_portfolio_detail(
                 unrealized_gain=unrealized_gain,
                 unrealized_gain_percent=unrealized_gain_percent,
                 realized_gain=float(db_pos.realized_gain or 0),
-                asset_class=AssetClass.STOCKS,  # Would determine from stock type
+                asset_class=AssetClass.STOCKS,
                 sector=sector,
-                allocation_percent=0.0  # Will calculate below
+                allocation_percent=0.0
             )
-            
+
             positions.append(position)
             total_value += market_value
             total_cost += cost_basis
-            day_change += unrealized_gain * 0.1  # Approximation for daily change
+            day_change += db_pos.quantity * day_change_raw
         
         # Add cash to total value
         cash_balance = float(portfolio.cash_balance or 0)

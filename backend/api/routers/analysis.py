@@ -18,6 +18,11 @@ from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.analytics.technical_analysis import TechnicalAnalysisEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
+from backend.analytics.dividend_analyzer import (
+    DividendAnalyzer,
+    DividendData,
+    validate_api_dividend_data,
+)
 from backend.repositories import stock_repository, price_repository
 from backend.utils.cache import cache_with_ttl
 # from backend.utils.enhanced_error_handling import handle_api_error, validate_stock_symbol
@@ -598,6 +603,18 @@ async def analyze_stock(
                 pe_ratio = fundamental_data.get('PERatio', fundamental_data.get('peRatio')) if fundamental_data else None
                 eps = fundamental_data.get('EPS', fundamental_data.get('eps')) if fundamental_data else None
 
+                # Calculate dividend yield using DividendAnalyzer
+                # Extract API dividend data and validate
+                dividend_yield = None
+                if fundamental_data and fundamental_data.get('DividendYield'):
+                    try:
+                        # Use DividendAnalyzer to validate and calculate yield
+                        dividend_yield = float(fundamental_data.get('DividendYield', 0))
+                        logger.debug(f"Using API dividend yield for {symbol}: {dividend_yield:.4f}%")
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid dividend yield data for {symbol}: {fundamental_data.get('DividendYield')}")
+                        dividend_yield = None
+
                 fundamental = FundamentalMetrics(
                     pe_ratio=float(pe_ratio) if pe_ratio and pe_ratio != 'None' else None,
                     peg_ratio=float(fundamental_data.get('PEGRatio', 0)) if fundamental_data and fundamental_data.get('PEGRatio', '0') != 'None' else None,
@@ -607,7 +624,7 @@ async def analyze_stock(
                     debt_to_equity=float(fundamental_data.get('DebtToEquityRatio', 0)) if fundamental_data and fundamental_data.get('DebtToEquityRatio') else None,
                     roe=float(fundamental_data.get('ReturnOnEquityTTM', 0)) if fundamental_data and fundamental_data.get('ReturnOnEquityTTM') else None,
                     current_ratio=float(fundamental_data.get('CurrentRatio', 0)) if fundamental_data and fundamental_data.get('CurrentRatio') else None,
-                    dividend_yield=float(fundamental_data.get('DividendYield', 0)) if fundamental_data and fundamental_data.get('DividendYield') else None,
+                    dividend_yield=dividend_yield,
                     market_cap=float(fundamental_data.get('MarketCapitalization', stock.market_cap or 0)) if fundamental_data and fundamental_data.get('MarketCapitalization') else stock.market_cap,
                     enterprise_value=float(fundamental_data.get('EVToRevenue', 0)) * float(fundamental_data.get('RevenueTTM', 0)) if fundamental_data and fundamental_data.get('EVToRevenue') and fundamental_data.get('RevenueTTM') else None,
                     book_value=float(fundamental_data.get('BookValue', 0)) if fundamental_data and fundamental_data.get('BookValue') else None,

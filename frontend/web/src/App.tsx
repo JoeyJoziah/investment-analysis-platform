@@ -42,6 +42,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 // Utility pages - rarely accessed
 const Settings = lazy(() => import('./pages/Settings'));
 const Help = lazy(() => import('./pages/Help'));
+const InvestmentThesis = lazy(() => import('./pages/InvestmentThesis'));
 
 // =============================================================================
 // SUSPENSE WRAPPER COMPONENT
@@ -176,6 +177,14 @@ function AppContent() {
               element={
                 <SuspenseWrapper loadingMessage="Loading help...">
                   <Help />
+                </SuspenseWrapper>
+              }
+            />
+            <Route
+              path="thesis/:stockId"
+              element={
+                <SuspenseWrapper loadingMessage="Loading investment thesis...">
+                  <InvestmentThesis />
                 </SuspenseWrapper>
               }
             />

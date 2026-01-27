@@ -227,6 +227,37 @@ class PriceHistory(Base):
         CheckConstraint('close >= low AND close <= high', name='check_close_in_range'),
     )
 
+# Dividend History model
+class DividendHistory(Base):
+    __tablename__ = "dividend_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    ex_date = Column(Date, nullable=False, index=True)
+    record_date = Column(Date)
+    pay_date = Column(Date, nullable=False, index=True)
+    announcement_date = Column(Date)
+    dividend_amount = Column(DECIMAL(10, 4), nullable=False)
+    currency = Column(String(3), default="USD")
+    is_special = Column(Boolean, default=False, index=True)
+    dividend_type = Column(String(50), default="regular")  # regular, special, stock, etc.
+    notes = Column(Text)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    stock = relationship("Stock", backref="dividend_history")
+
+    # Constraints and Indexes
+    __table_args__ = (
+        UniqueConstraint('stock_id', 'ex_date', name='uq_stock_ex_date'),
+        Index('idx_dividend_stock_ex_date', 'stock_id', 'ex_date'),
+        Index('idx_dividend_pay_date', 'pay_date'),
+        Index('idx_dividend_is_special', 'is_special'),
+        CheckConstraint('dividend_amount >= 0', name='check_dividend_non_negative'),
+        CheckConstraint('ex_date <= pay_date', name='check_ex_before_pay'),
+    )
+
 # Portfolio model
 class Portfolio(Base):
     __tablename__ = "portfolios"
