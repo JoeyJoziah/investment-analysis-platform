@@ -1,6 +1,6 @@
 # Claude Code Configuration - Claude Flow V3
 
-**Claude Flow V3 | Version 3.0.0-alpha | Last Updated: 2026-01-27**
+**Claude Flow V3 | Version 3.0.0-alpha.178 | Last Updated: 2026-01-27**
 
 ## 🚨 AUTOMATIC SWARM ORCHESTRATION
 
@@ -495,7 +495,7 @@ The 4-step intelligence pipeline:
 3. **DISTILL** - Extract key learnings via LoRA
 4. **CONSOLIDATE** - Prevent catastrophic forgetting via EWC++
 
-## 📦 Embeddings Package (v3.0.0-alpha.12)
+## 📦 Embeddings Package (v3.0.0-alpha.178)
 
 Features:
 - **sql.js**: Cross-platform SQLite persistent cache (WASM, no native compilation)
