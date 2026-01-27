@@ -8,6 +8,8 @@ import uuid
 import os
 import logging
 
+from backend.models.api_response import ApiResponse, success_response
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -173,11 +175,11 @@ def check_admin_permission(current_user = Depends(get_current_admin_user)):
     return current_user
 
 # Endpoints
-@router.get("/health", response_model=SystemHealth)
-async def get_system_health(current_user = Depends(check_admin_permission)) -> SystemHealth:
+@router.get("/health")
+async def get_system_health(current_user = Depends(check_admin_permission)) -> ApiResponse[SystemHealth]:
     """Get comprehensive system health status"""
-    
-    return SystemHealth(
+
+    return success_response(data=SystemHealth(
         status=SystemStatus.OPERATIONAL,
         uptime=random.randint(86400, 864000),  # 1-10 days in seconds
         cpu_usage=random.uniform(20, 80),
@@ -196,16 +198,16 @@ async def get_system_health(current_user = Depends(check_admin_permission)) -> S
             "websocket": ServiceStatus.RUNNING
         },
         last_check=datetime.utcnow()
-    )
+    ))
 
-@router.get("/users", response_model=List[User])
+@router.get("/users")
 async def list_users(
     current_user = Depends(check_admin_permission),
     limit: int = Query(50, le=500),
     offset: int = 0,
     role: Optional[UserRole] = None,
     is_active: Optional[bool] = None
-) -> List[User]:
+) -> ApiResponse[List[User]]:
     """List all users with filtering options"""
     
     users = []
@@ -230,18 +232,18 @@ async def list_users(
             continue
         
         users.append(user)
-    
-    return users[offset:offset + limit]
 
-@router.get("/users/{user_id}", response_model=User)
+    return success_response(data=users[offset:offset + limit])
+
+@router.get("/users/{user_id}")
 async def get_user_details(
     user_id: str,
     current_user = Depends(check_admin_permission)
-) -> User:
+) -> ApiResponse[User]:
     """Get detailed information about a specific user"""
     logger.info(f"Admin {current_user.username} accessing user details for {user_id}")
-    
-    return User(
+
+    return success_response(data=User(
         id=user_id,
         email="user@example.com",
         full_name="John Doe",
@@ -253,14 +255,14 @@ async def get_user_details(
         subscription_tier="premium",
         api_calls_today=150,
         storage_used_mb=250.5
-    )
+    ))
 
-@router.patch("/users/{user_id}", response_model=User)
+@router.patch("/users/{user_id}")
 async def update_user(
     user_id: str,
     update: UserUpdate,
     current_user = Depends(check_admin_permission)
-) -> User:
+) -> ApiResponse[User]:
     """Update user information"""
     
     # In production, update user in database
@@ -268,9 +270,9 @@ async def update_user(
     
     update_data = update.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(user, field, value)
-    
-    return user
+        setattr(user.data if hasattr(user, 'data') else user, field, value)
+
+    return success_response(data=user.data if hasattr(user, 'data') else user)
 
 @router.delete("/users/{user_id}")
 async def delete_user(
@@ -284,11 +286,11 @@ async def delete_user(
         "status": "success"
     }
 
-@router.get("/analytics/api-usage", response_model=List[ApiUsageStats])
+@router.get("/analytics/api-usage")
 async def get_api_usage_stats(
     current_user = Depends(check_admin_permission),
     days_back: int = Query(7, le=90)
-) -> List[ApiUsageStats]:
+) -> ApiResponse[List[ApiUsageStats]]:
     """Get API usage statistics"""
     
     endpoints = [
@@ -315,14 +317,14 @@ async def get_api_usage_stats(
             unique_users=random.randint(10, 500),
             last_called=datetime.utcnow() - timedelta(minutes=random.randint(0, 60))
         ))
-    
-    return stats
 
-@router.get("/metrics", response_model=SystemMetrics)
-async def get_system_metrics(admin: bool = Depends(check_admin_permission)) -> SystemMetrics:
+    return success_response(data=stats)
+
+@router.get("/metrics")
+async def get_system_metrics(admin: bool = Depends(check_admin_permission)) -> ApiResponse[SystemMetrics]:
     """Get detailed system metrics"""
-    
-    return SystemMetrics(
+
+    return success_response(data=SystemMetrics(
         timestamp=datetime.utcnow(),
         cpu={
             "usage_percent": random.uniform(20, 80),
@@ -375,13 +377,13 @@ async def get_system_metrics(admin: bool = Depends(check_admin_permission)) -> S
             "failed": random.randint(0, 50),
             "retry": random.randint(0, 10)
         }
-    )
+    ))
 
-@router.get("/jobs", response_model=List[BackgroundJob])
+@router.get("/jobs")
 async def list_background_jobs(
     current_user = Depends(check_admin_permission),
     status: Optional[JobStatus] = None
-) -> List[BackgroundJob]:
+) -> ApiResponse[List[BackgroundJob]]:
     """List background jobs"""
     
     jobs = []
@@ -406,8 +408,8 @@ async def list_background_jobs(
     
     if status:
         jobs = [j for j in jobs if j.status == status]
-    
-    return jobs
+
+    return success_response(data=jobs)
 
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(
@@ -434,11 +436,11 @@ async def retry_job(
         "new_job_id": str(uuid.uuid4())
     }
 
-@router.get("/config", response_model=Dict[str, Any])
+@router.get("/config")
 async def get_configuration(
     current_user = Depends(check_admin_permission),
     section: Optional[ConfigSection] = None
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Get system configuration"""
     
     config = {
@@ -489,35 +491,35 @@ async def get_configuration(
     }
     
     if section:
-        return {section: config.get(section, {})}
-    
-    return config
+        return success_response(data={section: config.get(section, {})})
+
+    return success_response(data=config)
 
 @router.patch("/config")
 async def update_configuration(
     update: ConfigUpdate,
     current_user = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = BackgroundTasks()
-) -> Dict[str, str]:
+) -> ApiResponse[Dict]:
     """Update system configuration"""
-    
+
     # In production, update configuration in database/config file
     background_tasks.add_task(reload_configuration, update.section)
-    
-    return {
+
+    return success_response(data={
         "message": f"Configuration updated: {update.section}.{update.key}",
         "status": "success",
         "requires_restart": update.section in [ConfigSection.DATABASE, ConfigSection.CACHE]
-    }
+    })
 
-@router.get("/audit-logs", response_model=List[AuditLog])
+@router.get("/audit-logs")
 async def get_audit_logs(
     current_user = Depends(check_admin_permission),
     user_id: Optional[str] = None,
     action: Optional[str] = None,
     limit: int = Query(100, le=1000),
     offset: int = 0
-) -> List[AuditLog]:
+) -> ApiResponse[List[AuditLog]]:
     """Get audit logs"""
     
     logs = []
@@ -546,26 +548,26 @@ async def get_audit_logs(
             continue
         
         logs.append(log)
-    
-    return sorted(logs, key=lambda x: x.timestamp, reverse=True)[offset:offset + limit]
 
-@router.post("/announcements", response_model=Announcement)
+    return success_response(data=sorted(logs, key=lambda x: x.timestamp, reverse=True)[offset:offset + limit])
+
+@router.post("/announcements")
 async def create_announcement(
     announcement: Announcement,
     current_user = Depends(check_admin_permission)
-) -> Announcement:
+) -> ApiResponse[Announcement]:
     """Create a system announcement"""
-    
-    announcement.id = str(uuid.uuid4())
-    return announcement
 
-@router.get("/announcements", response_model=List[Announcement])
+    announcement.id = str(uuid.uuid4())
+    return success_response(data=announcement)
+
+@router.get("/announcements")
 async def list_announcements(
     current_user = Depends(check_admin_permission),
     active_only: bool = True
-) -> List[Announcement]:
+) -> ApiResponse[List[Announcement]]:
     """List system announcements"""
-    
+
     announcements = [
         Announcement(
             id=str(uuid.uuid4()),
@@ -586,37 +588,37 @@ async def list_announcements(
             end_time=None
         )
     ]
-    
+
     if active_only:
         announcements = [a for a in announcements if a.active]
-    
-    return announcements
 
-@router.post("/export", response_model=Dict[str, Any])
+    return success_response(data=announcements)
+
+@router.post("/export")
 async def export_data(
     export_request: DataExport,
     current_user = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = BackgroundTasks()
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Export system data"""
-    
+
     job_id = str(uuid.uuid4())
     background_tasks.add_task(process_data_export, job_id, export_request)
-    
-    return {
+
+    return success_response(data={
         "job_id": job_id,
         "status": "processing",
         "estimated_time_seconds": random.randint(30, 300),
         "download_url": f"/admin/export/{job_id}/download"
-    }
+    })
 
-@router.post("/command", response_model=Dict[str, Any])
+@router.post("/command")
 async def execute_system_command(
     command: SystemCommand,
     current_user = Depends(check_admin_permission)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Execute a system command"""
-    
+
     # List of allowed commands
     allowed_commands = [
         "clear_cache",
@@ -626,11 +628,11 @@ async def execute_system_command(
         "refresh_models",
         "sync_data"
     ]
-    
+
     if command.command not in allowed_commands:
         raise HTTPException(status_code=400, detail=f"Command not allowed: {command.command}")
-    
-    return {
+
+    return success_response(data={
         "command": command.command,
         "status": "executed",
         "result": {
@@ -638,28 +640,28 @@ async def execute_system_command(
             "message": f"Command {command.command} executed successfully",
             "execution_time_ms": random.randint(100, 5000)
         }
-    }
+    })
 
 @router.post("/maintenance/enable")
 async def enable_maintenance_mode(
     current_user = Depends(check_admin_permission),
     message: str = "System is under maintenance"
-) -> Dict[str, str]:
+) -> ApiResponse[Dict]:
     """Enable maintenance mode"""
-    
-    return {
+
+    return success_response(data={
         "status": "maintenance_enabled",
         "message": message
-    }
+    })
 
 @router.post("/maintenance/disable")
-async def disable_maintenance_mode(admin: bool = Depends(check_admin_permission)) -> Dict[str, str]:
+async def disable_maintenance_mode(admin: bool = Depends(check_admin_permission)) -> ApiResponse[Dict]:
     """Disable maintenance mode"""
-    
-    return {
+
+    return success_response(data={
         "status": "maintenance_disabled",
         "message": "System is operational"
-    }
+    })
 
 # Background task functions
 async def reload_configuration(section: ConfigSection):
