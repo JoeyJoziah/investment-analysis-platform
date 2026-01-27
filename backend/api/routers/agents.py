@@ -13,6 +13,7 @@ from backend.analytics.agents import HybridAnalysisEngine, AnalysisMode
 from backend.utils.auth import get_current_user, require_admin
 from backend.utils.rate_limiter import rate_limit
 from backend.utils.llm_budget_manager import BudgetExceededException
+from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,14 +94,14 @@ class AgentCapabilitiesResponse(BaseModel):
 
 # Routes
 
-@router.post("/analyze", response_model=AgentAnalysisResponse)
+@router.post("/analyze")
 @rate_limit(requests_per_minute=10)  # 10 calls per minute
 async def analyze_stock_with_agents(
     request: AgentAnalysisRequest,
     background_tasks: BackgroundTasks,
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[AgentAnalysisResponse]:
     """
     Analyze a stock using hybrid traditional + LLM agent approach
     """
@@ -142,8 +143,8 @@ async def analyze_stock_with_agents(
             result.analysis_duration,
             len(result.agents_used or [])
         )
-        
-        return response
+
+        return success_response(data=response)
         
     except BudgetExceededException as e:
         logger.warning(f"Budget exceeded for {request.ticker}: {e}")
@@ -166,7 +167,7 @@ async def batch_analyze_stocks(
     background_tasks: BackgroundTasks,
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict]:
     """
     Analyze multiple stocks in batch with resource management
     """
@@ -219,8 +220,8 @@ async def batch_analyze_stocks(
             total_duration,
             agents_used_count
         )
-        
-        return {
+
+        return success_response(data={
             "results": response_data,
             "summary": {
                 "requested": len(request.tickers),
@@ -229,7 +230,7 @@ async def batch_analyze_stocks(
                 "avg_duration": total_duration / len(results) if results else 0,
                 "agents_used_count": agents_used_count
             }
-        }
+        })
         
     except Exception as e:
         logger.error(f"Batch analysis failed: {e}")
@@ -239,18 +240,18 @@ async def batch_analyze_stocks(
         )
 
 
-@router.get("/budget-status", response_model=BudgetStatusResponse)
+@router.get("/budget-status")
 async def get_budget_status(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[BudgetStatusResponse]:
     """
     Get current LLM budget status and usage statistics
     """
     try:
         status = await engine.budget_manager.get_budget_status()
-        
-        return BudgetStatusResponse(
+
+        return success_response(data=BudgetStatusResponse(
             monthly_budget=status['budget']['monthly_budget'],
             monthly_used=status['budget']['monthly_used'],
             monthly_remaining=status['budget']['monthly_remaining'],
@@ -259,7 +260,7 @@ async def get_budget_status(
             cost_health=status['cost_health'],
             recommended_actions=status['recommended_actions'],
             usage_stats=status['usage_stats']
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Failed to get budget status: {e}")
@@ -269,21 +270,21 @@ async def get_budget_status(
         )
 
 
-@router.get("/capabilities", response_model=AgentCapabilitiesResponse)
+@router.get("/capabilities")
 async def get_agent_capabilities(
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[AgentCapabilitiesResponse]:
     """
     Get information about available agents and their capabilities
     """
     try:
         capabilities = await engine.trading_agents.get_agent_capabilities()
-        
-        return AgentCapabilitiesResponse(
+
+        return success_response(data=AgentCapabilitiesResponse(
             available_analysts=capabilities['available_analysts'],
             analysis_types=capabilities['analysis_types'],
             current_config=capabilities['current_config']
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Failed to get agent capabilities: {e}")
@@ -297,13 +298,13 @@ async def get_agent_capabilities(
 async def get_engine_status(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict]:
     """
     Get comprehensive engine status and statistics
     """
     try:
         status = await engine.get_engine_status()
-        return status
+        return success_response(data=status)
         
     except Exception as e:
         logger.error(f"Failed to get engine status: {e}")
@@ -317,17 +318,17 @@ async def get_engine_status(
 async def test_agent_connectivity(
     current_user = Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict]:
     """
     Test agent connectivity and system health (admin only)
     """
     try:
         test_results = await engine.trading_agents.test_agent_connectivity()
-        return {
+        return success_response(data={
             "status": "success",
             "test_results": test_results,
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except Exception as e:
         logger.error(f"Agent connectivity test failed: {e}")
@@ -342,7 +343,7 @@ async def set_analysis_mode(
     mode: str,
     current_user = Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict]:
     """
     Set analysis mode (admin only)
     """
@@ -354,14 +355,14 @@ async def set_analysis_mode(
                 status_code=400,
                 detail=f"Invalid mode. Valid modes: {valid_modes}"
             )
-        
+
         engine.set_analysis_mode(AnalysisMode(mode))
-        
-        return {
+
+        return success_response(data={
             "status": "success",
             "new_mode": mode,
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -377,13 +378,13 @@ async def set_analysis_mode(
 async def get_agent_selection_stats(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict]:
     """
     Get agent selection statistics and criteria
     """
     try:
         stats = await engine.agent_orchestrator.get_selection_stats()
-        return stats
+        return success_response(data=stats)
         
     except Exception as e:
         logger.error(f"Failed to get selection stats: {e}")
