@@ -21,12 +21,12 @@ RESET='\033[0m'
 # Helper functions
 log_error() {
   echo -e "${RED}❌ ERROR: $1${RESET}"
-  ((ERRORS++))
+  ERRORS=$((ERRORS + 1))
 }
 
 log_warning() {
   echo -e "${YELLOW}⚠️  WARNING: $1${RESET}"
-  ((WARNINGS++))
+  WARNINGS=$((WARNINGS + 1))
 }
 
 log_success() {
@@ -44,8 +44,8 @@ required_dirs=(
   ".claude/helpers"
   ".claude-flow/metrics"
   ".claude-flow/security"
-  "src"
-  "src/domains"
+  "backend"
+  "backend/api"
 )
 
 for dir in "${required_dirs[@]}"; do
@@ -76,10 +76,10 @@ for file in "${required_files[@]}"; do
     # Additional checks for specific files
     case "$file" in
       "package.json")
-        if grep -q "agentic-flow.*alpha" "$file" 2>/dev/null; then
-          log_success "agentic-flow@alpha dependency found"
+        if grep -q "claude-flow.*alpha" "$file" 2>/dev/null; then
+          log_success "claude-flow@alpha dependency found"
         else
-          log_warning "agentic-flow@alpha dependency not found in package.json"
+          log_warning "claude-flow@alpha dependency not found in package.json (optional for Python projects)"
         fi
         ;;
       ".claude/helpers/update-v3-progress.sh")
@@ -105,17 +105,17 @@ for file in "${required_files[@]}"; do
   fi
 done
 
-# Check 3: Domain structure
+# Check 3: Backend module structure
 echo ""
-echo "🏗️ Checking Domain Structure..."
-expected_domains=("task-management" "session-management" "health-monitoring" "lifecycle-management" "event-coordination")
+echo "🏗️ Checking Backend Module Structure..."
+expected_modules=("api" "analytics" "auth" "compliance" "etl" "ml" "monitoring" "security")
 
-for domain in "${expected_domains[@]}"; do
-  domain_path="src/domains/$domain"
-  if [ -d "$domain_path" ]; then
-    log_success "Domain directory exists: $domain"
+for module in "${expected_modules[@]}"; do
+  module_path="backend/$module"
+  if [ -d "$module_path" ]; then
+    log_success "Backend module exists: $module"
   else
-    log_warning "Domain directory missing: $domain (will be created during development)"
+    log_warning "Backend module missing: $module (will be created during development)"
   fi
 done
 
