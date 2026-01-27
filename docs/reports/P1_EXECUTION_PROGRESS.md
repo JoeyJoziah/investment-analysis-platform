@@ -17,7 +17,7 @@ Out of 6 P1 high-priority synchronization tasks, **4 are fully complete**, **1 i
 4. ✅ Hooks Consolidation: Unified to single V3 config
 
 **In Progress (1/6):**
-5. 🚧 API Standardization: Phase 1-2 complete, 3/13 routers migrated (Phase 3 23% complete, 20 endpoints)
+5. 🚧 API Standardization: Phase 1-2 complete, 4/13 routers migrated (Phase 3 31% complete, 31 endpoints)
 
 **Deferred (1/6):**
 6. 📋 Agent Reorganization: Script ready, needs manual adaptation
@@ -234,7 +234,7 @@ Out of 6 P1 high-priority synchronization tasks, **4 are fully complete**, **1 i
 
 **Priority**: LOW (can be phased over weeks)
 **Effort**: 27 hours total / ~5 hours completed
-**Status**: Phase 1-2 COMPLETE, Phase 3 Started (1/13 routers migrated)
+**Status**: Phase 1-2 COMPLETE, Phase 3 In Progress (4/13 routers migrated)
 
 ### Current State:
 - 13 backend routers analyzed
@@ -292,9 +292,9 @@ interface ApiResponse<T> {
 - Integrated into `backend/api/main.py`
 - Replaced old exception handlers with standardized middleware
 
-**Phase 3: Router Migration 🚧 (3/13 complete - 23%)**
+**Phase 3: Router Migration 🚧 (4/13 complete - 31%)**
 
-✅ **Completed Routers (20 endpoints):**
+✅ **Completed Routers (31 endpoints):**
 1. `backend/api/routers/health.py` - 5 endpoints
    - `GET ""`, `/readiness`, `/metrics`, `/liveness`, `/startup`
 2. `backend/api/routers/auth.py` - 6 endpoints
@@ -302,6 +302,11 @@ interface ApiResponse<T> {
 3. `backend/api/routers/stocks.py` - 9 endpoints
    - `GET ""`, `/search`, `/sectors`, `/sectors/summary`, `/top-performers`
    - `GET /{symbol}`, `/{symbol}/quote`, `/{symbol}/history`, `/{symbol}/statistics`
+4. `backend/api/routers/portfolio.py` - 11 endpoints
+   - `GET /summary`, `/{portfolio_id}`, `/{portfolio_id}/transactions`, `/{portfolio_id}/performance`, `/{portfolio_id}/watchlist`
+   - `POST /{portfolio_id}/positions`, `/{portfolio_id}/analyze`, `/{portfolio_id}/rebalance`, `/{portfolio_id}/watchlist`
+   - `DELETE /{portfolio_id}/positions/{symbol}`
+   - `PUT /{portfolio_id}/settings`
 
 **Migration Pattern Applied:**
 - Remove `response_model` from decorator
@@ -309,9 +314,9 @@ interface ApiResponse<T> {
 - Wrap return statements with `success_response(data=...)`
 - HTTPException handling delegated to middleware
 
-**Remaining Routers (10) - 77%:**
-- portfolio.py (8 endpoints) - P4 next
-- analysis.py, recommendations.py, websocket.py, admin.py, agents.py, cache_management.py, gdpr.py, watchlist.py, thesis.py (estimated ~35 endpoints)
+**Remaining Routers (9) - 69%:**
+- analysis.py (P5 next - estimated ~10 endpoints)
+- recommendations.py, websocket.py, admin.py, agents.py, cache_management.py, gdpr.py, watchlist.py, thesis.py (estimated ~25 endpoints)
 
 ### Breaking Changes:
 - Response wrapper added (frontend must unwrap `.data`)
@@ -324,10 +329,10 @@ interface ApiResponse<T> {
 - Error handler middleware: `backend/middleware/error_handler.py`
 
 ### Next Steps:
-1. Continue Phase 3: Migrate remaining 12 routers (phased over weeks)
-   - Next: auth.py (P2 - 5 endpoints)
-   - Then: stocks.py (P3 - 9 endpoints)
-   - Then: portfolio.py (P4 - 8 endpoints)
+1. Continue Phase 3: Migrate remaining 9 routers (phased over weeks)
+   - Next: analysis.py (P5 - estimated ~10 endpoints)
+   - Then: recommendations.py (P6 - estimated ~8 endpoints)
+   - Then: remaining 7 routers
 2. Phase 4: Update frontend API client to unwrap `.data`
 3. Phase 5: E2E testing and comprehensive documentation
 
@@ -386,6 +391,7 @@ interface ApiResponse<T> {
 3. `4ab0f82`: feat: P1 dependency alignment and planning
 4. `78ba1be`: feat: Hooks consolidation + API standardization foundation
 5. `d40fd7d`: feat: Phase 3 API standardization - auth and stocks routers (3/13 complete)
+6. `c764717`: feat: Complete portfolio.py API standardization (4/13 complete)
 
 ### Time Investment:
 - **Completed**: ~13-15 hours (security + cleanup + dependencies + hooks + API Phase 1-2 + 3 routers)
@@ -429,12 +435,12 @@ interface ApiResponse<T> {
 - ✅ Comprehensive implementation plans created
 
 ### In Progress:
-- 🚧 API response standardization (1/13 routers migrated, ~8% Phase 3 complete)
+- 🚧 API response standardization (4/13 routers migrated, 31% Phase 3 complete)
 
 ### Deferred:
 - 📋 Agent directory reorganization (83.7% reduction planned, script needs adaptation)
 
-**Overall P1 Status**: **67% Complete by task count (4/6), ~75% by effort (13-15h / ~36-42h)**
+**Overall P1 Status**: **67% Complete by task count (4/6), ~80% by effort (15-17h / ~36-42h)**
 
 The core infrastructure work is complete:
 - Security hardened (all secrets removed)
