@@ -1,6 +1,6 @@
 # Scripts Reference
 
-> Auto-generated from project scripts. Last updated: 2026-01-26
+> Auto-generated from project scripts. Last updated: 2026-01-27
 
 This document provides a comprehensive reference for all shell and Python scripts in the investment-analysis-platform.
 
@@ -235,6 +235,29 @@ Located in `scripts/testing/validation/`
 | `notion_sync.py` | Sync with Notion API |
 | `validate_cicd.py` | Validate CI/CD pipeline |
 | `validate_data.py` | Validate data integrity |
+| `validate_environment.py` | Validate environment configuration |
+| `validate_implementation.py` | Validate implementation completeness |
+| `validate_rate_limits.py` | Validate API rate limit compliance |
+| `verify_database.py` | Verify database integrity |
+| `unified_sync.py` | Unified sync across multiple services |
+
+---
+
+## Hugging Face Hub Scripts
+
+| Script | Description |
+|--------|-------------|
+| `migrate_to_hf_hub.py` | Migrate models to Hugging Face Hub |
+| `create_hf_dataset.py` | Create HF dataset from local data |
+| `sync_hf_datasets.py` | Synchronize datasets with HF Hub |
+
+---
+
+## Airflow Pool Setup
+
+| Script | Description |
+|--------|-------------|
+| `setup_airflow_pools.py` | Create Airflow pools for rate limiting |
 
 ---
 

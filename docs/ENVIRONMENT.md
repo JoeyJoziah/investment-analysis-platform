@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-> Auto-generated from `.env.example`. Last updated: 2026-01-26
+> Auto-generated from `.env.example`. Last updated: 2026-01-27
 
 This document provides a comprehensive reference for all environment variables used in the investment-analysis-platform.
 
@@ -442,6 +442,64 @@ This document provides a comprehensive reference for all environment variables u
 | `EMAIL_USERNAME` | - | SMTP username |
 | `EMAIL_PASSWORD` | - | SMTP password |
 | `DEFAULT_FROM_EMAIL` | - | Default sender |
+
+---
+
+## Hugging Face Hub Integration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HF_TOKEN` | - | Hugging Face API token ([Get token](https://huggingface.co/settings/tokens)) |
+| `HF_HOME` | `/app/ml_models/.hf_cache` | Cache directory for HF models |
+| `HF_MODEL_REPO` | - | Your HF model repository |
+| `HF_DATASET_REPO` | - | Your HF dataset repository |
+| `HF_HUB_ENABLED` | `false` | Enable HF Hub integration |
+| `HF_AUTO_UPLOAD` | `false` | Auto-upload trained models |
+| `HF_AUTO_DOWNLOAD` | `false` | Auto-download models on startup |
+| `HF_PRIVATE_REPOS` | `true` | Use private repositories |
+
+---
+
+## Claude Flow V3 Integration
+
+### Core Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDE_FLOW_CONFIG` | `./.claude-flow/config.yaml` | Config file path |
+| `CLAUDE_FLOW_LOG_LEVEL` | `info` | Logging level |
+| `CLAUDE_FLOW_MEMORY_BACKEND` | `hybrid` | Memory backend type |
+| `CLAUDE_FLOW_MEMORY_PATH` | `./.swarm/memory.db` | Memory database path |
+| `CLAUDE_FLOW_MCP_PORT` | `3000` | MCP server port |
+| `CLAUDE_FLOW_MCP_HOST` | `localhost` | MCP server host |
+| `CLAUDE_FLOW_MCP_TRANSPORT` | `stdio` | MCP transport protocol |
+
+### Swarm Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SWARM_TOPOLOGY` | `hierarchical` | Swarm topology (hierarchical, mesh, hybrid) |
+| `SWARM_MAX_AGENTS` | `8` | Maximum concurrent agents |
+| `SWARM_STRATEGY` | `specialized` | Agent strategy |
+| `SWARM_CONSENSUS` | `raft` | Consensus algorithm |
+
+### Performance Targets
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_SPAWN_TIMEOUT_MS` | `200` | Agent spawn timeout |
+| `SWARM_COORDINATION_TIMEOUT_MS` | `100` | Swarm coordination timeout |
+| `SONA_ADAPTATION_TARGET_MS` | `0.05` | SONA adaptation target |
+| `HNSW_SEARCH_SPEEDUP` | `150` | HNSW search speedup factor |
+
+### Neural Training
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NEURAL_PATTERN_EPOCHS` | `50` | Training epochs |
+| `NEURAL_EMBEDDING_DIM` | `256` | Embedding dimensions |
+| `NEURAL_BATCH_SIZE` | `32` | Batch size |
+| `NEURAL_LEARNING_RATE` | `0.01` | Learning rate |
 
 ---
 
