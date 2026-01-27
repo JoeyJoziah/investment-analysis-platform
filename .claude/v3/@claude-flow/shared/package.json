@@ -20,11 +20,12 @@
     "build": "tsc"
   },
   "dependencies": {
-    "sql.js": "^1.10.3"
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/sql.js": "^1.4.9",
+    "typescript": "^5.3.3",
     "vitest": "^4.0.16"
   },
   "publishConfig": {

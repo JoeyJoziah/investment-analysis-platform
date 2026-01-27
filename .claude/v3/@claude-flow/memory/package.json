@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "agentdb": "alpha",
-    "sql.js": "^1.10.3"
+    "sql.js": "^1.13.0"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.0.0"
@@ -24,6 +24,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/sql.js": "^1.4.9",
+    "typescript": "^5.3.3",
     "vitest": "^4.0.16"
   },
   "publishConfig": {
