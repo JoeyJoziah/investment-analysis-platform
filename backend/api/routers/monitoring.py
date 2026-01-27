@@ -10,14 +10,15 @@ from datetime import datetime
 from backend.utils.grafana_client import grafana_client
 from backend.utils.auth import get_current_user
 from backend.utils.cost_monitor import cost_monitor
+from backend.models.api_response import ApiResponse, success_response
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
 
 @router.get("/health")
-async def health_check() -> Dict[str, Any]:
+async def health_check() -> ApiResponse[Dict]:
     """Complete system health check"""
-    return {
+    return success_response(data={
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "services": {
@@ -26,35 +27,35 @@ async def health_check() -> Dict[str, Any]:
             "redis": "healthy",     # Add actual Redis check
             "grafana": grafana_client.test_connection()
         }
-    }
+    })
 
 
 @router.get("/metrics/cost")
-async def get_cost_metrics() -> Dict[str, Any]:
+async def get_cost_metrics() -> ApiResponse[Dict]:
     """Get current cost tracking metrics"""
     daily_costs = await cost_monitor.get_daily_costs()
     monthly_estimate = await cost_monitor.get_monthly_estimate()
-    
-    return {
+
+    return success_response(data={
         "daily_costs": daily_costs,
         "monthly_estimate": monthly_estimate,
         "budget_remaining": 50.0 - monthly_estimate,
         "budget_percentage": (monthly_estimate / 50.0) * 100
-    }
+    })
 
 
 @router.get("/grafana/dashboards")
-async def get_dashboard_links() -> Dict[str, str]:
+async def get_dashboard_links() -> ApiResponse[Dict]:
     """Get Grafana dashboard URLs"""
     base_url = os.getenv('GRAFANA_URL', 'http://localhost:3001')
-    
-    return {
+
+    return success_response(data={
         "main": f"{base_url}/d/investment-analysis",
         "api_usage": f"{base_url}/d/api-usage",
         "ml_performance": f"{base_url}/d/ml-performance",
         "cost_tracking": f"{base_url}/d/cost-tracking",
         "system_metrics": f"{base_url}/d/system-metrics"
-    }
+    })
 
 
 @router.post("/grafana/annotation")
@@ -62,21 +63,21 @@ async def create_annotation(
     text: str,
     tags: List[str] = None,
     current_user: dict = Depends(get_current_user)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Create an annotation in Grafana (for important events)"""
     success = grafana_client.create_annotation(
         text=f"[{current_user['email']}] {text}",
         tags=tags or ["user-action"]
     )
-    
+
     if not success:
         raise HTTPException(status_code=500, detail="Failed to create annotation")
-    
-    return {"message": "Annotation created successfully"}
+
+    return success_response(data={"message": "Annotation created successfully"})
 
 
 @router.post("/alerts/test")
-async def test_alert_system() -> Dict[str, Any]:
+async def test_alert_system() -> ApiResponse[Dict]:
     """Test the alert system"""
     # Create a test alert in Grafana
     alert_created = grafana_client.create_alert(
@@ -100,17 +101,17 @@ async def test_alert_system() -> Dict[str, Any]:
         },
         message="This is a test alert from the Investment Analysis Platform"
     )
-    
-    return {
+
+    return success_response(data={
         "alert_created": alert_created,
         "grafana_connected": grafana_client.test_connection()
-    }
+    })
 
 
 @router.get("/metrics/api-usage")
-async def get_api_usage_metrics() -> Dict[str, Any]:
+async def get_api_usage_metrics() -> ApiResponse[Dict]:
     """Get API usage metrics for all providers"""
-    return {
+    return success_response(data={
         "alpha_vantage": {
             "daily_limit": 25,
             "used_today": await cost_monitor.get_provider_usage("alpha_vantage"),
@@ -126,4 +127,4 @@ async def get_api_usage_metrics() -> Dict[str, Any]:
             "daily_limit": 7200,
             "used_today": await cost_monitor.get_provider_usage("polygon")
         }
-    }
+    })
