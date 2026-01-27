@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -9,6 +9,8 @@ import { store } from './store';
 import { theme } from './theme';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/common/LoadingSpinner';
+import PageSkeleton from './components/common/PageSkeleton';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { useAppDispatch, useAppSelector } from './hooks/redux';
 import { initializeApp } from './store/slices/appSlice';
 
@@ -44,24 +46,96 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Help = lazy(() => import('./pages/Help'));
 
 // =============================================================================
+// ROUTE PREFETCHING
+// =============================================================================
+// Prefetch commonly navigated routes to improve perceived performance
+// =============================================================================
+
+const routeModules = {
+  dashboard: () => import('./pages/Dashboard'),
+  portfolio: () => import('./pages/Portfolio'),
+  recommendations: () => import('./pages/Recommendations'),
+  analysis: () => import('./pages/Analysis'),
+  market: () => import('./pages/MarketOverview'),
+  watchlist: () => import('./pages/Watchlist'),
+  alerts: () => import('./pages/Alerts'),
+  reports: () => import('./pages/Reports'),
+  settings: () => import('./pages/Settings'),
+  help: () => import('./pages/Help'),
+};
+
+/**
+ * Prefetch a route module for faster navigation
+ */
+const prefetchRoute = (route: keyof typeof routeModules): void => {
+  routeModules[route]();
+};
+
+/**
+ * Prefetch related routes based on current location
+ */
+const usePrefetchRoutes = (): void => {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Prefetch related routes based on current page
+    const prefetchMap: Record<string, (keyof typeof routeModules)[]> = {
+      '/dashboard': ['portfolio', 'recommendations', 'analysis'],
+      '/portfolio': ['dashboard', 'analysis', 'reports'],
+      '/recommendations': ['analysis', 'portfolio'],
+      '/analysis': ['portfolio', 'recommendations'],
+      '/market': ['analysis', 'watchlist'],
+      '/watchlist': ['analysis', 'alerts'],
+    };
+
+    const routesToPrefetch = prefetchMap[location.pathname];
+    if (routesToPrefetch) {
+      // Delay prefetching to prioritize current page resources
+      const timeoutId = setTimeout(() => {
+        routesToPrefetch.forEach(prefetchRoute);
+      }, 1000);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [location.pathname]);
+};
+
+// =============================================================================
 // SUSPENSE WRAPPER COMPONENT
 // =============================================================================
-// Provides consistent loading states for lazy-loaded components
+// Provides consistent loading states with skeleton loaders and error boundaries
 // =============================================================================
+
+type SkeletonType = 'dashboard' | 'portfolio' | 'analysis' | 'list' | 'default';
 
 interface SuspenseWrapperProps {
   children: React.ReactNode;
   loadingMessage?: string;
+  skeletonType?: SkeletonType;
 }
 
 const SuspenseWrapper: React.FC<SuspenseWrapperProps> = ({
   children,
   loadingMessage = 'Loading...',
+  skeletonType = 'default',
 }) => (
-  <Suspense fallback={<LoadingSpinner message={loadingMessage} />}>
-    {children}
-  </Suspense>
+  <ErrorBoundary>
+    <Suspense fallback={<PageSkeleton type={skeletonType} />}>
+      {children}
+    </Suspense>
+  </ErrorBoundary>
 );
+
+// =============================================================================
+// ROUTE PREFETCH COMPONENT
+// =============================================================================
+// Component that handles prefetching logic within Router context
+// =============================================================================
+
+const RoutePrefetcher: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  usePrefetchRoutes();
+  return <>{children}</>;
+};
 
 // =============================================================================
 // APP CONTENT COMPONENT
@@ -83,6 +157,7 @@ function AppContent() {
 
   return (
     <Router>
+      <RoutePrefetcher>
       <Routes>
         {!isAuthenticated ? (
           <>
@@ -102,7 +177,7 @@ function AppContent() {
             <Route
               path="dashboard"
               element={
-                <SuspenseWrapper loadingMessage="Loading dashboard...">
+                <SuspenseWrapper skeletonType="dashboard">
                   <Dashboard />
                 </SuspenseWrapper>
               }
@@ -110,7 +185,7 @@ function AppContent() {
             <Route
               path="recommendations"
               element={
-                <SuspenseWrapper loadingMessage="Loading recommendations...">
+                <SuspenseWrapper skeletonType="list">
                   <Recommendations />
                 </SuspenseWrapper>
               }
@@ -118,7 +193,7 @@ function AppContent() {
             <Route
               path="analysis/:ticker?"
               element={
-                <SuspenseWrapper loadingMessage="Loading analysis...">
+                <SuspenseWrapper skeletonType="analysis">
                   <Analysis />
                 </SuspenseWrapper>
               }
@@ -126,7 +201,7 @@ function AppContent() {
             <Route
               path="portfolio"
               element={
-                <SuspenseWrapper loadingMessage="Loading portfolio...">
+                <SuspenseWrapper skeletonType="portfolio">
                   <Portfolio />
                 </SuspenseWrapper>
               }
@@ -134,7 +209,7 @@ function AppContent() {
             <Route
               path="market"
               element={
-                <SuspenseWrapper loadingMessage="Loading market overview...">
+                <SuspenseWrapper skeletonType="analysis">
                   <MarketOverview />
                 </SuspenseWrapper>
               }
@@ -142,7 +217,7 @@ function AppContent() {
             <Route
               path="watchlist"
               element={
-                <SuspenseWrapper loadingMessage="Loading watchlist...">
+                <SuspenseWrapper skeletonType="list">
                   <Watchlist />
                 </SuspenseWrapper>
               }
@@ -150,7 +225,7 @@ function AppContent() {
             <Route
               path="alerts"
               element={
-                <SuspenseWrapper loadingMessage="Loading alerts...">
+                <SuspenseWrapper skeletonType="list">
                   <Alerts />
                 </SuspenseWrapper>
               }
@@ -158,7 +233,7 @@ function AppContent() {
             <Route
               path="reports"
               element={
-                <SuspenseWrapper loadingMessage="Loading reports...">
+                <SuspenseWrapper skeletonType="list">
                   <Reports />
                 </SuspenseWrapper>
               }
@@ -166,7 +241,7 @@ function AppContent() {
             <Route
               path="settings"
               element={
-                <SuspenseWrapper loadingMessage="Loading settings...">
+                <SuspenseWrapper skeletonType="default">
                   <Settings />
                 </SuspenseWrapper>
               }
@@ -174,7 +249,7 @@ function AppContent() {
             <Route
               path="help"
               element={
-                <SuspenseWrapper loadingMessage="Loading help...">
+                <SuspenseWrapper skeletonType="default">
                   <Help />
                 </SuspenseWrapper>
               }
@@ -183,6 +258,7 @@ function AppContent() {
           </Route>
         )}
       </Routes>
+      </RoutePrefetcher>
     </Router>
   );
 }

@@ -375,3 +375,19 @@ def log_operation(logger: StructuredLogger, operation: str, **context):
 
 # Create default logger instance
 default_logger = StructuredLogger(__name__)
+
+
+def get_structured_logger(name: str) -> StructuredLogger:
+    """
+    Get or create a structured logger for the given name.
+
+    This is a convenience function that creates a StructuredLogger instance
+    for the given module name, similar to logging.getLogger().
+
+    Args:
+        name: The name for the logger, typically __name__
+
+    Returns:
+        A StructuredLogger instance
+    """
+    return StructuredLogger(name)

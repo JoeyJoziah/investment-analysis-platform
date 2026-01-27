@@ -1,6 +1,9 @@
 """
 Business Metrics Tracking for Investment Analysis Platform
 Tracks key business indicators and cost metrics for the $50/month budget
+
+Includes AlertManager webhook integration for automatic alerts when
+business metric thresholds are exceeded.
 """
 
 import asyncio
@@ -10,6 +13,14 @@ from typing import Dict, List, Optional
 import json
 
 from prometheus_client import Counter, Gauge, Histogram
+
+from backend.monitoring.alertmanager_webhook import (
+    alert_webhook,
+    send_budget_alert,
+    send_pipeline_alert,
+    send_ml_alert,
+    send_job_alert,
+)
 
 # Business-specific metrics
 daily_recommendations_generated = Counter(
@@ -168,31 +179,51 @@ class BusinessMetricsTracker:
         prediction_type: str,
         accuracy: float
     ):
-        """Track ML model accuracy"""
+        """Track ML model accuracy and send alerts if below threshold"""
         try:
             ml_model_accuracy_tracking.labels(
                 model_name=model_name,
                 prediction_type=prediction_type
             ).set(accuracy)
-            
+
             logger.info(f"ML accuracy updated: {model_name}/{prediction_type} = {accuracy:.3f}")
-            
+
+            # Send alert if accuracy drops below threshold (75% warning, 65% critical)
+            if accuracy < 0.75:
+                await send_ml_alert(
+                    model_name=model_name,
+                    accuracy=accuracy,
+                    prediction_type=prediction_type
+                )
+
         except Exception as e:
             logger.error(f"Error tracking ML accuracy metrics: {e}")
     
     async def track_pipeline_success_rate(
         self,
         pipeline_name: str,
-        success_rate: float
+        success_rate: float,
+        error_message: Optional[str] = None
     ):
-        """Track data pipeline success rates"""
+        """Track data pipeline success rates and send alerts if below threshold"""
         try:
             data_pipeline_success_rate.labels(
                 pipeline_name=pipeline_name
             ).set(success_rate)
-            
+
             logger.info(f"Pipeline success rate: {pipeline_name} = {success_rate:.1f}%")
-            
+
+            # Convert percentage to decimal for alert threshold comparison
+            success_rate_decimal = success_rate / 100.0 if success_rate > 1 else success_rate
+
+            # Send alert if success rate drops below threshold (95% warning, 90% critical)
+            if success_rate_decimal < 0.95:
+                await send_pipeline_alert(
+                    pipeline_name=pipeline_name,
+                    success_rate=success_rate_decimal,
+                    error=error_message
+                )
+
         except Exception as e:
             logger.error(f"Error tracking pipeline metrics: {e}")
     
@@ -236,20 +267,21 @@ class BusinessMetricsTracker:
             return {}
     
     async def _send_budget_alert(self, usage_percent: float, monthly_projection: float):
-        """Send budget usage alert"""
+        """Send budget usage alert via AlertManager webhook"""
         try:
-            # In a real implementation, this would send notifications
-            # For now, just log the alert
             alert_message = (
                 f"BUDGET ALERT: Usage at {usage_percent:.1f}% "
                 f"(${monthly_projection:.2f}/month projected)"
             )
-            
+
             logger.warning(alert_message)
-            
-            # TODO: Integrate with AlertManager webhook
-            # await self._send_webhook_alert(alert_message)
-            
+
+            # Send alert via AlertManager webhook integration
+            await send_budget_alert(
+                current_spend=monthly_projection,
+                budget=50.0  # $50/month budget
+            )
+
         except Exception as e:
             logger.error(f"Error sending budget alert: {e}")
     
@@ -281,17 +313,62 @@ class BusinessMetricsTracker:
         """Reset daily tracking metrics (called daily via cron)"""
         try:
             logger.info("Resetting daily metrics...")
-            
+
             # Archive current day's data before reset
             await self.generate_daily_report()
-            
+
             # Reset daily counters (Prometheus counters can't be reset, but we can track resets)
             self.current_daily_cost = 0.0
-            
+
             logger.info("Daily metrics reset completed")
-            
+
         except Exception as e:
             logger.error(f"Error resetting daily metrics: {e}")
+
+    async def track_job_failure(
+        self,
+        job_name: str,
+        error_message: str,
+        job_type: Optional[str] = None
+    ):
+        """Track job/task failures and send alerts"""
+        try:
+            logger.error(f"Job failed: {job_name} - {error_message}")
+
+            # Send alert for job failure
+            await send_job_alert(
+                job_name=job_name,
+                error_message=error_message,
+                job_type=job_type
+            )
+
+        except Exception as e:
+            logger.error(f"Error tracking job failure: {e}")
+
+    def get_alert_statistics(self) -> Dict:
+        """Get current alert statistics from the webhook system"""
+        try:
+            return alert_webhook.get_stats()
+        except Exception as e:
+            logger.error(f"Error getting alert statistics: {e}")
+            return {}
+
+    def get_active_alerts(self) -> List:
+        """Get list of currently active alerts"""
+        try:
+            return [
+                {
+                    'name': alert.alert_name,
+                    'severity': alert.severity.value,
+                    'summary': alert.summary,
+                    'started_at': alert.started_at.isoformat(),
+                    'fingerprint': alert.fingerprint
+                }
+                for alert in alert_webhook.get_active_alerts()
+            ]
+        except Exception as e:
+            logger.error(f"Error getting active alerts: {e}")
+            return []
 
 # Global business metrics tracker instance
 business_metrics = BusinessMetricsTracker()
@@ -316,3 +393,18 @@ async def update_model_accuracy(model: str, prediction_type: str, accuracy: floa
 async def track_portfolio_perf(performance: float, horizon: str = '1d'):
     """Convenience function to track portfolio performance"""
     await business_metrics.track_portfolio_performance(performance, horizon)
+
+
+async def track_job_failure(job_name: str, error_message: str, job_type: Optional[str] = None):
+    """Convenience function to track job failures with alerts"""
+    await business_metrics.track_job_failure(job_name, error_message, job_type)
+
+
+def get_alert_stats() -> Dict:
+    """Convenience function to get alert statistics"""
+    return business_metrics.get_alert_statistics()
+
+
+def get_active_business_alerts() -> List:
+    """Convenience function to get active alerts"""
+    return business_metrics.get_active_alerts()

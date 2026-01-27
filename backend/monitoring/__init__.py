@@ -232,5 +232,10 @@ __version__ = "2.0.0"
 __all__ = [
     'MonitoringSystem',
     'monitoring_system',
-    'setup_monitoring_for_app'
+    'setup_monitoring_for_app',
+    # AlertManager webhook integration
+    'alertmanager_webhook',
 ]
+
+# Import alertmanager webhook for convenience
+from backend.monitoring import alertmanager_webhook
