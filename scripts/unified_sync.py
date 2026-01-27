@@ -70,7 +70,8 @@ NOTION_DATA_SOURCE_ID = "2f3b9fc9-1d9d-80cc-b349-000b8158ee99"
 
 class ConflictResolution(Enum):
     """Conflict resolution strategies."""
-    GITHUB_WINS = "github_wins"
+    LOCAL_WINS = "local_wins"  # Local repo data wins (same as github_wins)
+    GITHUB_WINS = "github_wins"  # Alias for LOCAL_WINS (backward compatibility)
     NOTION_WINS = "notion_wins"
     NEWEST_WINS = "newest_wins"
     MANUAL = "manual"
@@ -687,7 +688,7 @@ class FieldMapper:
 class UnifiedSyncCoordinator:
     """Coordinates bidirectional sync between GitHub and Notion."""
 
-    def __init__(self, conflict_resolution: ConflictResolution = ConflictResolution.GITHUB_WINS):
+    def __init__(self, conflict_resolution: ConflictResolution = ConflictResolution.LOCAL_WINS):
         self.github = GitHubClient()
         self.notion = NotionClient()
         self.mapper = FieldMapper()
@@ -804,7 +805,7 @@ class UnifiedSyncCoordinator:
         github_item = conflict["github"]
         notion_item = conflict["notion"]
 
-        if self.conflict_resolution == ConflictResolution.GITHUB_WINS:
+        if self.conflict_resolution in (ConflictResolution.LOCAL_WINS, ConflictResolution.GITHUB_WINS):
             return github_item
         elif self.conflict_resolution == ConflictResolution.NOTION_WINS:
             return notion_item
@@ -817,9 +818,9 @@ class UnifiedSyncCoordinator:
                 return notion_item
         else:  # MANUAL
             print(f"\nConflict detected for: {github_item.title}")
-            print(f"  GitHub:  status={github_item.status.value}, priority={github_item.priority.value}")
+            print(f"  Local:   status={github_item.status.value}, priority={github_item.priority.value}")
             print(f"  Notion:  status={notion_item.status.value}, priority={notion_item.priority.value}")
-            print(f"  Using: github_wins (default)")
+            print(f"  Using: local_wins (default)")
             return github_item
 
     def sync_to_github(self, item: SyncItem, create: bool = False) -> bool:
@@ -1186,8 +1187,9 @@ Examples:
     sync_group.add_argument("--github-only", action="store_true", help="Sync to GitHub only")
     sync_group.add_argument("--notion-only", action="store_true", help="Sync to Notion only")
     sync_parser.add_argument("--dry-run", action="store_true", help="Preview without applying changes")
-    sync_parser.add_argument("--conflict-resolution", choices=["github_wins", "notion_wins", "newest_wins"],
-                             default="github_wins", help="Conflict resolution strategy")
+    sync_parser.add_argument("--conflict-resolution",
+                             choices=["local_wins", "github_wins", "notion_wins", "newest_wins"],
+                             default="local_wins", help="Conflict resolution strategy (local_wins = local repo data takes precedence)")
 
     # Status command
     subparsers.add_parser("status", help="Show sync status")
@@ -1202,7 +1204,7 @@ Examples:
         sys.exit(1)
 
     # Determine conflict resolution strategy
-    resolution = ConflictResolution.GITHUB_WINS
+    resolution = ConflictResolution.LOCAL_WINS
     if hasattr(args, "conflict_resolution") and args.conflict_resolution:
         resolution = ConflictResolution(args.conflict_resolution)
 
