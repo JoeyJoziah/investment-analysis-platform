@@ -180,6 +180,24 @@ celery_app.conf.update(
             'options': {'queue': 'analysis'}
         },
         
+        # Cache warming tasks - Pre-warm cache before market open
+        'warm-cache-morning': {
+            'task': 'backend.tasks.maintenance_tasks.warm_cache_for_market_open',
+            'schedule': crontab(hour=9, minute=0, day_of_week='mon-fri'),  # 9:00 AM EST (30 min before open)
+            'args': [500],  # Top 500 stocks
+            'options': {'queue': 'data_ingestion'}
+        },
+        'warm-cache-status-check': {
+            'task': 'backend.tasks.maintenance_tasks.check_cache_warming_status',
+            'schedule': crontab(hour=9, minute=25, day_of_week='mon-fri'),  # 9:25 AM EST (5 min before open)
+            'options': {'queue': 'low_priority'}
+        },
+        'refresh-hot-stocks-midday': {
+            'task': 'backend.tasks.maintenance_tasks.refresh_hot_stocks_cache',
+            'schedule': crontab(hour=12, minute=30, day_of_week='mon-fri'),  # 12:30 PM EST
+            'options': {'queue': 'data_ingestion'}
+        },
+
         # Maintenance tasks
         'cleanup-old-data': {
             'task': 'backend.tasks.maintenance_tasks.cleanup_old_data',

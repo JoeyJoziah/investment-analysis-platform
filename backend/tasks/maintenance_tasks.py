@@ -15,8 +15,8 @@ from backend.tasks.celery_app import celery_app
 from backend.utils.database import get_db_sync, get_engine
 from backend.utils.cache import get_redis_client
 from backend.models.tables import (
-    PriceHistory, News, Recommendation, RecommendationPerformance,
-    PortfolioPerformance, AuditLog, SystemMetrics
+    Stock, PriceHistory, News, Recommendation, RecommendationPerformance,
+    PortfolioPerformance, AuditLog, SystemMetrics, Portfolio, User, Fundamental
 )
 from sqlalchemy import text, select, delete, and_, func
 from sqlalchemy.orm import Session
@@ -749,6 +749,338 @@ def send_health_alert(health_status: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Error sending health alert: {e}")
         return False
+
+# =============================================================================
+# Cache Warming Tasks for Market Open
+# =============================================================================
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=300)
+def warm_cache_for_market_open(self, top_n: int = 500) -> Dict[str, Any]:
+    """
+    Pre-warm cache with top N stocks before market open.
+
+    This task runs before market open (e.g., 9:00 AM ET) to ensure
+    frequently accessed stock data is cached and ready for fast access
+    when trading begins at 9:30 AM ET.
+
+    Target: 50% faster response times at market open.
+
+    Args:
+        top_n: Number of top stocks to pre-load (default 500)
+
+    Returns:
+        Dict with warming statistics and success rate
+    """
+    import asyncio
+
+    logger.info(f"Starting cache warming task for top {top_n} stocks")
+
+    try:
+        # Import the intelligent cache manager
+        from backend.etl.intelligent_cache_system import IntelligentCacheManager
+
+        # Initialize cache manager with Redis connection
+        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+        cache_dir = os.getenv('CACHE_DIR', '/tmp/intelligent_cache')
+
+        cache_manager = IntelligentCacheManager(
+            cache_dir=cache_dir,
+            memory_size_mb=256,
+            disk_size_mb=2048,
+            redis_url=redis_url,
+            enable_analytics=True
+        )
+
+        # Define data fetcher that uses our existing data sources
+        async def fetch_stock_data(symbol: str) -> Dict[str, Any]:
+            """Fetch comprehensive stock data for caching."""
+            return await _fetch_stock_data_for_warming(symbol)
+
+        # Run the async warming function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            result = loop.run_until_complete(
+                cache_manager.warm_cache_for_market_open(
+                    top_n=top_n,
+                    data_fetcher=fetch_stock_data,
+                    batch_size=50,
+                    max_concurrent=10,
+                    rate_limit_delay=2.0,  # Respect API rate limits
+                    ttl_hours=4  # Cache valid until after market close
+                )
+            )
+        finally:
+            loop.close()
+
+        # Convert result to dict for Celery serialization
+        warming_result = {
+            'total_stocks': result.total_stocks,
+            'successful': result.successful,
+            'failed': result.failed,
+            'skipped': result.skipped,
+            'duration_seconds': result.duration_seconds,
+            'success_rate': result.success_rate,
+            'errors': result.errors[:10] if result.errors else [],  # Limit errors
+            'timestamp': datetime.utcnow().isoformat(),
+            'status': 'completed'
+        }
+
+        # Log summary
+        logger.info(
+            f"Cache warming completed: {warming_result['successful']}/{warming_result['total_stocks']} "
+            f"stocks warmed in {warming_result['duration_seconds']:.1f}s "
+            f"(success rate: {warming_result['success_rate']:.1%})"
+        )
+
+        # Store warming metrics
+        try:
+            redis_client = get_redis_client()
+            redis_client.setex(
+                'cache_warming:last_run',
+                86400,  # Keep for 24 hours
+                json.dumps(warming_result)
+            )
+        except Exception as e:
+            logger.warning(f"Failed to store warming metrics: {e}")
+
+        return warming_result
+
+    except Exception as e:
+        logger.error(f"Cache warming task failed: {e}")
+
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=60 * (self.request.retries + 1))
+
+
+async def _fetch_stock_data_for_warming(symbol: str) -> Dict[str, Any]:
+    """
+    Fetch stock data from database/APIs for cache warming.
+
+    This function retrieves data that should be pre-cached:
+    - Current price and daily OHLCV
+    - Technical indicators
+    - Basic fundamentals
+    - Recent price history (30 days)
+
+    Args:
+        symbol: Stock symbol
+
+    Returns:
+        Dict with stock data for caching
+    """
+    stock_data = {
+        'symbol': symbol,
+        'cached_at': datetime.utcnow().isoformat()
+    }
+
+    try:
+        # Use synchronous database access for reliability
+        with get_db_sync() as db:
+            from backend.models.tables import Stock, PriceHistory, Fundamental
+
+            # Get stock info
+            stock = db.query(Stock).filter(Stock.symbol == symbol).first()
+            if not stock:
+                return None
+
+            stock_data['name'] = stock.name
+            stock_data['sector'] = stock.sector
+            stock_data['industry'] = stock.industry
+            stock_data['market_cap'] = stock.market_cap
+
+            # Get recent price history (30 days)
+            cutoff_date = date.today() - timedelta(days=30)
+            prices = db.query(PriceHistory).filter(
+                and_(
+                    PriceHistory.stock_id == stock.id,
+                    PriceHistory.date >= cutoff_date
+                )
+            ).order_by(PriceHistory.date.desc()).all()
+
+            if prices:
+                stock_data['prices'] = [
+                    {
+                        'date': p.date.isoformat(),
+                        'open': float(p.open) if p.open else None,
+                        'high': float(p.high) if p.high else None,
+                        'low': float(p.low) if p.low else None,
+                        'close': float(p.close) if p.close else None,
+                        'volume': p.volume
+                    }
+                    for p in prices
+                ]
+
+                # Calculate basic indicators from price data
+                if len(prices) >= 2:
+                    latest = prices[0]
+                    previous = prices[1]
+                    stock_data['indicators'] = {
+                        'current_price': float(latest.close) if latest.close else None,
+                        'previous_close': float(previous.close) if previous.close else None,
+                        'daily_change': float(latest.close - previous.close) if latest.close and previous.close else None,
+                        'daily_change_pct': float((latest.close - previous.close) / previous.close * 100) if latest.close and previous.close else None,
+                        'volume': latest.volume,
+                        'avg_volume_30d': sum(p.volume or 0 for p in prices) / len(prices)
+                    }
+
+            # Get latest fundamentals
+            fundamental = db.query(Fundamental).filter(
+                Fundamental.stock_id == stock.id
+            ).order_by(Fundamental.report_date.desc()).first()
+
+            if fundamental:
+                stock_data['fundamentals'] = {
+                    'pe_ratio': float(fundamental.pe_ratio) if fundamental.pe_ratio else None,
+                    'pb_ratio': float(fundamental.pb_ratio) if fundamental.pb_ratio else None,
+                    'dividend_yield': float(fundamental.dividend_yield) if fundamental.dividend_yield else None,
+                    'roe': float(fundamental.roe) if fundamental.roe else None,
+                    'report_date': fundamental.report_date.isoformat() if fundamental.report_date else None
+                }
+
+    except Exception as e:
+        logger.warning(f"Error fetching data for {symbol}: {e}")
+        return None
+
+    return stock_data
+
+
+@celery_app.task
+def check_cache_warming_status() -> Dict[str, Any]:
+    """
+    Check the status of the last cache warming operation.
+
+    Returns:
+        Dict with last warming status and cache readiness metrics
+    """
+    try:
+        from backend.etl.intelligent_cache_system import IntelligentCacheManager
+
+        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+        cache_dir = os.getenv('CACHE_DIR', '/tmp/intelligent_cache')
+
+        cache_manager = IntelligentCacheManager(
+            cache_dir=cache_dir,
+            redis_url=redis_url
+        )
+
+        # Get warming status
+        status = cache_manager.get_warming_status()
+
+        # Get last run info from Redis
+        try:
+            redis_client = get_redis_client()
+            last_run_json = redis_client.get('cache_warming:last_run')
+            if last_run_json:
+                status['last_run'] = json.loads(last_run_json)
+        except Exception as e:
+            status['last_run'] = None
+            status['last_run_error'] = str(e)
+
+        return status
+
+    except Exception as e:
+        logger.error(f"Error checking cache warming status: {e}")
+        return {'error': str(e)}
+
+
+@celery_app.task
+def refresh_hot_stocks_cache(symbols: List[str] = None) -> Dict[str, Any]:
+    """
+    Refresh cache for specific high-value stocks.
+
+    This task can be triggered during market hours to refresh
+    cache for stocks experiencing high trading activity.
+
+    Args:
+        symbols: List of stock symbols to refresh (defaults to top 100)
+
+    Returns:
+        Dict with refresh statistics
+    """
+    import asyncio
+
+    logger.info(f"Starting hot stocks cache refresh")
+
+    try:
+        from backend.etl.intelligent_cache_system import IntelligentCacheManager
+
+        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+        cache_dir = os.getenv('CACHE_DIR', '/tmp/intelligent_cache')
+
+        cache_manager = IntelligentCacheManager(
+            cache_dir=cache_dir,
+            redis_url=redis_url
+        )
+
+        # If no symbols provided, get top 100 by volume
+        if not symbols:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                top_stocks = loop.run_until_complete(
+                    cache_manager.get_top_stocks_by_volume(100)
+                )
+                symbols = [s['symbol'] for s in top_stocks]
+            finally:
+                loop.close()
+
+        refreshed = 0
+        failed = 0
+        errors = []
+
+        for symbol in symbols:
+            try:
+                # Invalidate existing cache
+                cache_keys = [
+                    f"stock:{symbol}:summary",
+                    f"stock:{symbol}:prices",
+                    f"stock:{symbol}:indicators"
+                ]
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    for key in cache_keys:
+                        loop.run_until_complete(cache_manager.delete(key))
+
+                    # Fetch fresh data
+                    fresh_data = loop.run_until_complete(
+                        _fetch_stock_data_for_warming(symbol)
+                    )
+
+                    if fresh_data:
+                        loop.run_until_complete(
+                            cache_manager.set(
+                                f"stock:{symbol}:summary",
+                                fresh_data,
+                                category='stocks',
+                                ttl_hours=1
+                            )
+                        )
+                        refreshed += 1
+                    else:
+                        failed += 1
+                finally:
+                    loop.close()
+
+            except Exception as e:
+                failed += 1
+                errors.append(f"{symbol}: {str(e)}")
+
+        return {
+            'total_symbols': len(symbols),
+            'refreshed': refreshed,
+            'failed': failed,
+            'errors': errors[:10],
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Hot stocks cache refresh failed: {e}")
+        return {'error': str(e)}
+
 
 # Additional maintenance tasks
 @celery_app.task
