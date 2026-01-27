@@ -107,6 +107,9 @@ loading_progress.json
 .ipynb_checkpoints
 *.ipynb
 
+# Hugging Face cache (contains tokens - never commit)
+ml_models/.hf_cache/
+
 # ============================================================================
 # IDE & EDITORS
 # ============================================================================

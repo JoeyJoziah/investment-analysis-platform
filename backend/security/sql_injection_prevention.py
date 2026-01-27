@@ -3,15 +3,23 @@ SQL Injection Prevention Middleware and Utilities
 
 This module provides comprehensive protection against SQL injection attacks through:
 - Input sanitization and validation
-- SQL query pattern detection
+- SQL query pattern detection with weighted scoring
 - Parameterized query enforcement
 - Database query monitoring and logging
+
+Enhanced with:
+- Weighted pattern combination scoring
+- Obfuscation detection with bonus weights
+- Context-aware scoring (comments, string concatenation)
+- UNION-based, time-based blind, error-based, and stacked query detection
+- Tuned thresholds to minimize false positives
 """
 
 import re
 import logging
-from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass
+import time
+from typing import Any, Dict, List, Optional, Tuple, Set
+from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy import text, inspect
 from sqlalchemy.orm import Session
@@ -19,26 +27,64 @@ from sqlalchemy.sql import ClauseElement
 from fastapi import HTTPException, status
 import html
 import urllib.parse
+import hashlib
 
 logger = logging.getLogger(__name__)
 
 
 class SQLInjectionThreatLevel(Enum):
     """Threat levels for potential SQL injection attempts"""
+    NONE = "none"
     LOW = "low"
-    MEDIUM = "medium" 
+    MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
 
+class AttackType(Enum):
+    """Types of SQL injection attacks"""
+    UNION_BASED = "union_based"
+    TIME_BASED_BLIND = "time_based_blind"
+    ERROR_BASED = "error_based"
+    STACKED_QUERIES = "stacked_queries"
+    BOOLEAN_BASED = "boolean_based"
+    COMMENT_BASED = "comment_based"
+    OBFUSCATION = "obfuscation"
+    SYSTEM_ACCESS = "system_access"
+    FILE_OPERATION = "file_operation"
+    BASIC_INJECTION = "basic_injection"
+
+
+@dataclass
+class PatternMatch:
+    """Details of a matched pattern"""
+    category: str
+    pattern_name: str
+    matched_text: str
+    base_weight: float
+    attack_type: AttackType
+    context_multiplier: float = 1.0
+
+    @property
+    def weighted_score(self) -> float:
+        return self.base_weight * self.context_multiplier
+
+
 @dataclass
 class SQLInjectionDetection:
-    """Result of SQL injection detection"""
+    """Result of SQL injection detection with detailed scoring"""
     is_threat: bool
     threat_level: SQLInjectionThreatLevel
     detected_patterns: List[str]
     sanitized_input: Optional[str] = None
     recommendation: str = ""
+    raw_score: float = 0.0
+    weighted_score: float = 0.0
+    attack_types: List[AttackType] = field(default_factory=list)
+    pattern_matches: List[PatternMatch] = field(default_factory=list)
+    obfuscation_detected: bool = False
+    combination_bonus: float = 0.0
+    request_id: str = ""
 
 
 class SQLInjectionPrevention:

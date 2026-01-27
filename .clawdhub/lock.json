@@ -4,6 +4,70 @@
     "mcporter": {
       "version": "1.0.0",
       "installedAt": 1769458510765
+    },
+    "polymarket-api": {
+      "version": "1.0.0",
+      "installedAt": 1769530662508
+    },
+    "news-aggregator-skill-2": {
+      "version": "0.1.0",
+      "installedAt": 1769530712625
+    },
+    "searxng": {
+      "version": "1.0.3",
+      "installedAt": 1769530821678
+    },
+    "council-of-the-wise": {
+      "version": "1.2.0",
+      "installedAt": 1769530861228
+    },
+    "playwright-cli": {
+      "version": "1.0.1",
+      "installedAt": 1769530933856
+    },
+    "youtube-summarizer": {
+      "version": "1.0.0",
+      "installedAt": 1769531037148
+    },
+    "venice-ai-media": {
+      "version": "1.0.0",
+      "installedAt": 1769531115666
+    },
+    "clawdbot-security-check": {
+      "version": "2.2.2",
+      "installedAt": 1769531140170
+    },
+    "prompt-engineering-expert": {
+      "version": "1.0.0",
+      "installedAt": 1769531171880
+    },
+    "excel": {
+      "version": "1.0.0",
+      "installedAt": 1769531252554
+    },
+    "web-design-guidelines": {
+      "version": "1.0.0",
+      "installedAt": 1769531333303
+    },
+    "marketing-mode": {
+      "version": "1.0.0",
+      "installedAt": 1769531386280
+    },
+    "pinak-frontend-guru": {
+      "version": "1.0.0",
+      "installedAt": 1769531427849
+    },
+    "todo-tracker": {
+      "version": "1.0.0",
+      "installedAt": 1769531503726
+    },
+    "auto-updater": {
+      "version": "1.0.0",
+      "installedAt": 1769531547487
+    },
+    "dexter": {
+      "version": "1.0.0",
+      "installedAt": 1769531571717
     }
   }
 }

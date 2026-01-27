@@ -9,14 +9,14 @@ import os
 import json
 import base64
 import hashlib
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pathlib import Path
 from datetime import datetime, timedelta
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 from backend.config.settings import settings
@@ -42,6 +42,78 @@ class SecretMetadata:
     rotated_at: Optional[datetime] = None
     rotation_count: int = 0
     description: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert metadata to dictionary for serialization"""
+        return {
+            'secret_type': self.secret_type.value,
+            'created_at': self.created_at.isoformat(),
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'rotated_at': self.rotated_at.isoformat() if self.rotated_at else None,
+            'rotation_count': self.rotation_count,
+            'description': self.description
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SecretMetadata':
+        """Create SecretMetadata from dictionary"""
+        return cls(
+            secret_type=SecretType(data['secret_type']),
+            created_at=datetime.fromisoformat(data['created_at']),
+            expires_at=datetime.fromisoformat(data['expires_at']) if data.get('expires_at') else None,
+            rotated_at=datetime.fromisoformat(data['rotated_at']) if data.get('rotated_at') else None,
+            rotation_count=data.get('rotation_count', 0),
+            description=data.get('description')
+        )
+
+
+@dataclass
+class ManifestEntry:
+    """Entry in the encrypted secrets manifest"""
+    secret_name: str
+    file_hash: str
+    metadata: SecretMetadata
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert entry to dictionary for serialization"""
+        return {
+            'secret_name': self.secret_name,
+            'file_hash': self.file_hash,
+            'metadata': self.metadata.to_dict()
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ManifestEntry':
+        """Create ManifestEntry from dictionary"""
+        return cls(
+            secret_name=data['secret_name'],
+            file_hash=data['file_hash'],
+            metadata=SecretMetadata.from_dict(data['metadata'])
+        )
+
+
+@dataclass
+class SecretsInventoryReport:
+    """Report of secrets inventory with recommendations"""
+    total_secrets: int
+    secrets_by_type: Dict[str, int]
+    stale_secrets: List[Dict[str, Any]]
+    expiring_soon: List[Dict[str, Any]]
+    never_rotated: List[Dict[str, Any]]
+    rotation_recommendations: List[Dict[str, Any]]
+    generated_at: datetime = field(default_factory=datetime.utcnow)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert report to dictionary"""
+        return {
+            'total_secrets': self.total_secrets,
+            'secrets_by_type': self.secrets_by_type,
+            'stale_secrets': self.stale_secrets,
+            'expiring_soon': self.expiring_soon,
+            'never_rotated': self.never_rotated,
+            'rotation_recommendations': self.rotation_recommendations,
+            'generated_at': self.generated_at.isoformat()
+        }
 
 
 class SecretsManager:
@@ -90,8 +162,10 @@ class SecretsManager:
         self._fernet = self._initialize_encryption()
         self._secrets_cache: Dict[str, Any] = {}
         self._metadata_cache: Dict[str, SecretMetadata] = {}
-        
-        # Load existing secrets
+        self._manifest: Dict[str, ManifestEntry] = {}
+
+        # Load existing secrets and manifest
+        self._load_manifest()
         self._load_secrets()
     
     def _initialize_encryption(self) -> Fernet:

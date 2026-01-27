@@ -1,13 +1,20 @@
 """
-Optimized Airflow DAG for Daily Stock Data Pipeline
+Optimized Airflow DAG for Daily Stock Data Pipeline (v2 - Native Parallelism)
 
 Features:
-- Parallel processing with TaskGroups for 8x faster data ingestion
-- Dynamic task mapping for batch processing
-- ProcessPoolExecutor for CPU-intensive operations
-- Airflow pool for API rate limiting
-- Market hours sensor
-- Processes all 6000+ stocks (no artificial limits)
+- Native Airflow dynamic task mapping with expand() for true parallelism
+- TaskGroups for logical organization and monitoring
+- ProcessPoolExecutor for CPU-intensive indicator calculations
+- Airflow pool for API rate limiting (8 concurrent connections)
+- Market hours sensor for after-close processing
+- Processes all 6000+ stocks with <1 hour target runtime
+
+Performance Optimizations:
+- Dynamic task mapping creates independent Airflow tasks per batch
+- Each batch task runs truly parallel (not just threads in one task)
+- Better monitoring: Each batch visible in Airflow UI
+- Better retry: Individual batch failures don't affect others
+- Better resource utilization: Airflow scheduler manages parallelism
 
 Technical Indicator Optimization (HIGH-5):
 - PostgreSQL window functions for SMA, EMA, RSI, MACD, Bollinger calculations
@@ -15,11 +22,16 @@ Technical Indicator Optimization (HIGH-5):
 - Bulk insert using psycopg2.extras.execute_values
 - Memory-efficient batching (500 stocks per batch)
 - Full indicator set: SMA(5,10,20,50,200), EMA(12,26), RSI(14), MACD, Bollinger Bands
+
+Performance Targets:
+- 6000+ stocks in <1 hour (vs 6-8 hours sequential)
+- 8 concurrent API batch tasks
+- ~100 stocks/second throughput
 """
 
 from datetime import datetime, timedelta, time as dt_time
 from airflow import DAG
-from airflow.decorators import task, task_group
+from airflow.decorators import task, task_group, dag
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.providers.postgres.operators.postgres import PostgresOperator
@@ -28,6 +40,7 @@ from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.models import Pool
 from airflow.utils.db import create_session
+from airflow.exceptions import AirflowException
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import yfinance as yf
 import pandas as pd
@@ -35,9 +48,10 @@ import numpy as np
 import logging
 import os
 import sys
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import time
 import pytz
+import json
 
 # Add project root to path for imports
 sys.path.insert(0, '/app')
@@ -46,11 +60,14 @@ logger = logging.getLogger(__name__)
 
 # Configuration constants
 BATCH_SIZE = 50  # Stocks per batch for optimal API performance
-MAX_PARALLEL_BATCHES = 8  # Number of concurrent batch tasks
+MAX_PARALLEL_BATCHES = 8  # Number of concurrent batch tasks (Airflow parallelism)
+MAX_ACTIVE_TIS_PER_DAG = 8  # Maximum active task instances per DAG
 API_RATE_LIMIT_PER_MIN = 60  # yfinance/finnhub rate limits
 POOL_NAME = 'stock_api_pool'
 POOL_SLOTS = 8  # Concurrent API connections
 US_EASTERN = pytz.timezone('US/Eastern')
+INDICATOR_BATCH_SIZE = 500  # Stocks per indicator calculation batch
+RECOMMENDATION_BATCH_SIZE = 200  # Stocks per recommendation batch
 
 # Default arguments with optimized retry settings
 default_args = {
