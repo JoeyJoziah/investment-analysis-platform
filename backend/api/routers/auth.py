@@ -14,6 +14,7 @@ from backend.config.settings import settings
 from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, rate_limit
 from backend.security.jwt_manager import get_jwt_manager, TokenClaims
 from backend.security.secrets_manager import get_secrets_manager
+from backend.security.security_config import SecurityConfig
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -21,10 +22,10 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
-# JWT settings from environment
-SECRET_KEY = settings.JWT_SECRET_KEY
-ALGORITHM = getattr(settings, 'JWT_ALGORITHM', 'HS256')
-ACCESS_TOKEN_EXPIRE_MINUTES = getattr(settings, 'JWT_EXPIRATION_MINUTES', 30)
+# JWT settings - use centralized SecurityConfig as single source of truth
+SECRET_KEY = SecurityConfig.JWT_SECRET_KEY
+ALGORITHM = SecurityConfig.JWT_ALGORITHM_FALLBACK  # HS256 for legacy compatibility
+ACCESS_TOKEN_EXPIRE_MINUTES = SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 logger = logging.getLogger(__name__)
 

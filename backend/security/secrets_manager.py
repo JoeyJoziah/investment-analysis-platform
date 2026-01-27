@@ -191,6 +191,73 @@ class SecretsManager:
         """Get metadata file path for a secret"""
         safe_name = hashlib.sha256(secret_name.encode()).hexdigest()[:16]
         return self.secrets_dir / f"{safe_name}.meta"
+
+    def _get_manifest_path(self) -> Path:
+        """Get path to the encrypted manifest file"""
+        return self.secrets_dir / ".manifest.enc"
+
+    def _load_manifest(self) -> None:
+        """Load and decrypt the secrets manifest"""
+        manifest_path = self._get_manifest_path()
+        if not manifest_path.exists():
+            self._manifest = {}
+            return
+
+        try:
+            with open(manifest_path, 'rb') as f:
+                encrypted_data = f.read()
+
+            decrypted_data = self._fernet.decrypt(encrypted_data).decode()
+            manifest_dict = json.loads(decrypted_data)
+
+            self._manifest = {
+                name: ManifestEntry.from_dict(entry)
+                for name, entry in manifest_dict.items()
+            }
+            logger.debug(f"Loaded manifest with {len(self._manifest)} entries")
+
+        except Exception as e:
+            logger.error(f"Failed to load manifest: {e}")
+            self._manifest = {}
+
+    def _save_manifest(self) -> bool:
+        """Encrypt and save the secrets manifest"""
+        try:
+            manifest_dict = {
+                name: entry.to_dict()
+                for name, entry in self._manifest.items()
+            }
+
+            manifest_json = json.dumps(manifest_dict, indent=2)
+            encrypted_data = self._fernet.encrypt(manifest_json.encode())
+
+            manifest_path = self._get_manifest_path()
+            with open(manifest_path, 'wb') as f:
+                f.write(encrypted_data)
+
+            manifest_path.chmod(0o600)
+            logger.debug("Manifest saved successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save manifest: {e}")
+            return False
+
+    def _update_manifest(self, secret_name: str, metadata: SecretMetadata) -> None:
+        """Update manifest entry for a secret"""
+        file_hash = hashlib.sha256(secret_name.encode()).hexdigest()[:16]
+        self._manifest[secret_name] = ManifestEntry(
+            secret_name=secret_name,
+            file_hash=file_hash,
+            metadata=metadata
+        )
+        self._save_manifest()
+
+    def _remove_from_manifest(self, secret_name: str) -> None:
+        """Remove a secret from the manifest"""
+        if secret_name in self._manifest:
+            del self._manifest[secret_name]
+            self._save_manifest()
     
     def store_secret(
         self,
@@ -260,10 +327,13 @@ class SecretsManager:
             # Update cache
             self._secrets_cache[secret_name] = secret_value
             self._metadata_cache[secret_name] = metadata
-            
+
+            # Update encrypted manifest
+            self._update_manifest(secret_name, metadata)
+
             logger.info(f"Secret '{secret_name}' stored successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to store secret '{secret_name}': {e}")
             return False
@@ -401,48 +471,330 @@ class SecretsManager:
             # Remove from cache
             self._secrets_cache.pop(secret_name, None)
             self._metadata_cache.pop(secret_name, None)
-            
+
+            # Remove from encrypted manifest
+            self._remove_from_manifest(secret_name)
+
             logger.info(f"Secret '{secret_name}' deleted successfully")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to delete secret '{secret_name}': {e}")
             return False
     
     def list_secrets(self) -> Dict[str, SecretMetadata]:
-        """List all stored secrets with metadata"""
-        secrets = {}
-        
-        for file_path in self.secrets_dir.glob("*.meta"):
-            # Extract secret name hash and try to load metadata
-            safe_name = file_path.stem
-            
-            # Find corresponding .enc file
-            enc_path = self.secrets_dir / f"{safe_name}.enc"
-            if not enc_path.exists():
+        """
+        List all stored secrets with metadata using the encrypted manifest.
+
+        Returns:
+            Dictionary mapping secret names to their metadata
+        """
+        return {
+            name: entry.metadata
+            for name, entry in self._manifest.items()
+        }
+
+    def query_secrets_by_type(self, secret_type: SecretType) -> Dict[str, SecretMetadata]:
+        """
+        Query secrets filtered by type.
+
+        Args:
+            secret_type: The type of secrets to filter for
+
+        Returns:
+            Dictionary of matching secrets with their metadata
+        """
+        return {
+            name: entry.metadata
+            for name, entry in self._manifest.items()
+            if entry.metadata.secret_type == secret_type
+        }
+
+    def query_secrets_by_age(
+        self,
+        min_age_days: Optional[int] = None,
+        max_age_days: Optional[int] = None
+    ) -> Dict[str, SecretMetadata]:
+        """
+        Query secrets filtered by age (time since creation).
+
+        Args:
+            min_age_days: Minimum age in days (inclusive)
+            max_age_days: Maximum age in days (inclusive)
+
+        Returns:
+            Dictionary of matching secrets with their metadata
+        """
+        now = datetime.utcnow()
+        results = {}
+
+        for name, entry in self._manifest.items():
+            age_days = (now - entry.metadata.created_at).days
+
+            if min_age_days is not None and age_days < min_age_days:
                 continue
-            
+            if max_age_days is not None and age_days > max_age_days:
+                continue
+
+            results[name] = entry.metadata
+
+        return results
+
+    def query_stale_secrets(self, stale_threshold_days: int = 90) -> Dict[str, SecretMetadata]:
+        """
+        Query secrets that haven't been rotated within the threshold.
+
+        Args:
+            stale_threshold_days: Number of days without rotation to be considered stale
+
+        Returns:
+            Dictionary of stale secrets with their metadata
+        """
+        now = datetime.utcnow()
+        stale_threshold = timedelta(days=stale_threshold_days)
+        results = {}
+
+        for name, entry in self._manifest.items():
+            metadata = entry.metadata
+
+            # Use rotated_at if available, otherwise use created_at
+            last_update = metadata.rotated_at or metadata.created_at
+
+            if (now - last_update) > stale_threshold:
+                results[name] = metadata
+
+        return results
+
+    def query_secrets_by_rotation_status(
+        self,
+        never_rotated: bool = False,
+        rotated_count_min: Optional[int] = None,
+        rotated_count_max: Optional[int] = None
+    ) -> Dict[str, SecretMetadata]:
+        """
+        Query secrets by their rotation status.
+
+        Args:
+            never_rotated: If True, return only secrets that have never been rotated
+            rotated_count_min: Minimum rotation count (inclusive)
+            rotated_count_max: Maximum rotation count (inclusive)
+
+        Returns:
+            Dictionary of matching secrets with their metadata
+        """
+        results = {}
+
+        for name, entry in self._manifest.items():
+            metadata = entry.metadata
+
+            if never_rotated and metadata.rotation_count > 0:
+                continue
+            if rotated_count_min is not None and metadata.rotation_count < rotated_count_min:
+                continue
+            if rotated_count_max is not None and metadata.rotation_count > rotated_count_max:
+                continue
+
+            results[name] = metadata
+
+        return results
+
+    def generate_inventory_report(
+        self,
+        stale_threshold_days: int = 90,
+        expiring_soon_days: int = 30
+    ) -> SecretsInventoryReport:
+        """
+        Generate a comprehensive secrets inventory report with recommendations.
+
+        Args:
+            stale_threshold_days: Days without rotation to be considered stale
+            expiring_soon_days: Days until expiration to be flagged
+
+        Returns:
+            SecretsInventoryReport with inventory details and recommendations
+        """
+        now = datetime.utcnow()
+
+        # Count secrets by type
+        secrets_by_type: Dict[str, int] = {}
+        stale_secrets: List[Dict[str, Any]] = []
+        expiring_soon: List[Dict[str, Any]] = []
+        never_rotated: List[Dict[str, Any]] = []
+        rotation_recommendations: List[Dict[str, Any]] = []
+
+        stale_threshold = timedelta(days=stale_threshold_days)
+        expiring_threshold = timedelta(days=expiring_soon_days)
+
+        for name, entry in self._manifest.items():
+            metadata = entry.metadata
+            secret_type_str = metadata.secret_type.value
+
+            # Count by type
+            secrets_by_type[secret_type_str] = secrets_by_type.get(secret_type_str, 0) + 1
+
+            # Check for stale secrets
+            last_update = metadata.rotated_at or metadata.created_at
+            days_since_update = (now - last_update).days
+
+            if (now - last_update) > stale_threshold:
+                stale_secrets.append({
+                    'secret_name': name,
+                    'secret_type': secret_type_str,
+                    'days_since_rotation': days_since_update,
+                    'last_rotated': (metadata.rotated_at or metadata.created_at).isoformat(),
+                    'description': metadata.description
+                })
+
+            # Check for expiring secrets
+            if metadata.expires_at:
+                time_until_expiry = metadata.expires_at - now
+                if time_until_expiry < expiring_threshold:
+                    expiring_soon.append({
+                        'secret_name': name,
+                        'secret_type': secret_type_str,
+                        'expires_at': metadata.expires_at.isoformat(),
+                        'days_until_expiry': time_until_expiry.days,
+                        'description': metadata.description
+                    })
+
+            # Check for never rotated
+            if metadata.rotation_count == 0:
+                age_days = (now - metadata.created_at).days
+                never_rotated.append({
+                    'secret_name': name,
+                    'secret_type': secret_type_str,
+                    'created_at': metadata.created_at.isoformat(),
+                    'age_days': age_days,
+                    'description': metadata.description
+                })
+
+        # Generate rotation recommendations
+        # High priority: API keys older than 90 days, never rotated
+        for secret in stale_secrets:
+            priority = 'HIGH' if secret['days_since_rotation'] > 180 else 'MEDIUM'
+            rotation_recommendations.append({
+                'secret_name': secret['secret_name'],
+                'priority': priority,
+                'reason': f"Not rotated in {secret['days_since_rotation']} days",
+                'recommendation': 'Rotate immediately' if priority == 'HIGH' else 'Schedule rotation'
+            })
+
+        # Add never-rotated secrets to recommendations
+        for secret in never_rotated:
+            if secret['age_days'] > 30:
+                rotation_recommendations.append({
+                    'secret_name': secret['secret_name'],
+                    'priority': 'MEDIUM' if secret['age_days'] < 90 else 'HIGH',
+                    'reason': f"Never rotated, created {secret['age_days']} days ago",
+                    'recommendation': 'Implement rotation policy'
+                })
+
+        return SecretsInventoryReport(
+            total_secrets=len(self._manifest),
+            secrets_by_type=secrets_by_type,
+            stale_secrets=stale_secrets,
+            expiring_soon=expiring_soon,
+            never_rotated=never_rotated,
+            rotation_recommendations=sorted(
+                rotation_recommendations,
+                key=lambda x: (0 if x['priority'] == 'HIGH' else 1, x['secret_name'])
+            )
+        )
+
+    def export_for_audit(
+        self,
+        output_path: Optional[str] = None,
+        include_recommendations: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Export secrets inventory for audit purposes (no secret values).
+
+        Args:
+            output_path: Optional file path to save the export
+            include_recommendations: Whether to include rotation recommendations
+
+        Returns:
+            Dictionary containing the audit export data
+        """
+        report = self.generate_inventory_report()
+
+        export_data = {
+            'export_metadata': {
+                'generated_at': datetime.utcnow().isoformat(),
+                'export_version': '1.0',
+                'secrets_directory': str(self.secrets_dir)
+            },
+            'summary': {
+                'total_secrets': report.total_secrets,
+                'secrets_by_type': report.secrets_by_type,
+                'stale_count': len(report.stale_secrets),
+                'expiring_soon_count': len(report.expiring_soon),
+                'never_rotated_count': len(report.never_rotated)
+            },
+            'secrets_inventory': [
+                {
+                    'secret_name': name,
+                    'file_hash': entry.file_hash,
+                    'secret_type': entry.metadata.secret_type.value,
+                    'created_at': entry.metadata.created_at.isoformat(),
+                    'expires_at': entry.metadata.expires_at.isoformat() if entry.metadata.expires_at else None,
+                    'rotated_at': entry.metadata.rotated_at.isoformat() if entry.metadata.rotated_at else None,
+                    'rotation_count': entry.metadata.rotation_count,
+                    'description': entry.metadata.description
+                }
+                for name, entry in sorted(self._manifest.items())
+            ],
+            'stale_secrets': report.stale_secrets,
+            'expiring_soon': report.expiring_soon,
+            'never_rotated': report.never_rotated
+        }
+
+        if include_recommendations:
+            export_data['rotation_recommendations'] = report.rotation_recommendations
+
+        if output_path:
             try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                
-                metadata = SecretMetadata(
-                    secret_type=SecretType(data['secret_type']),
-                    created_at=datetime.fromisoformat(data['created_at']),
-                    expires_at=datetime.fromisoformat(data['expires_at']) if data['expires_at'] else None,
-                    rotated_at=datetime.fromisoformat(data['rotated_at']) if data['rotated_at'] else None,
-                    rotation_count=data.get('rotation_count', 0),
-                    description=data.get('description')
-                )
-                
-                # Use safe_name as key since we can't reverse the hash
-                secrets[safe_name] = metadata
-                
+                output_file = Path(output_path)
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+
+                with open(output_file, 'w') as f:
+                    json.dump(export_data, f, indent=2)
+
+                output_file.chmod(0o600)
+                logger.info(f"Audit export saved to {output_path}")
+
             except Exception as e:
-                logger.error(f"Failed to load metadata from {file_path}: {e}")
-                continue
-        
-        return secrets
+                logger.error(f"Failed to save audit export: {e}")
+
+        return export_data
+
+    def rebuild_manifest_from_files(self) -> int:
+        """
+        Rebuild the encrypted manifest from existing .meta files.
+        Useful for migration or recovery when manifest is corrupted.
+
+        Note: This will only work for secrets where the original name
+        is stored in a mapping file, or must be provided externally.
+
+        Returns:
+            Number of entries recovered (limited to what can be determined)
+        """
+        recovered = 0
+        logger.warning(
+            "Rebuilding manifest from files. Secret names cannot be recovered "
+            "from hashed filenames - only metadata will be preserved."
+        )
+
+        # Since we can't reverse the hash, we need to rely on the metadata cache
+        # or any existing manifest entries. This is mainly useful when the
+        # manifest file is corrupted but in-memory state is intact.
+
+        for name, metadata in self._metadata_cache.items():
+            self._update_manifest(name, metadata)
+            recovered += 1
+
+        logger.info(f"Manifest rebuilt with {recovered} entries from cache")
+        return recovered
     
     def validate_secret(self, secret_name: str, expected_pattern: Optional[str] = None) -> bool:
         """

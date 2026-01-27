@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     
     # Security
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+
+    # JWT Settings - NOTE: These are kept for backward compatibility.
+    # The SINGLE SOURCE OF TRUTH for JWT config is backend/security/security_config.py
+    # New code should import from SecurityConfig, not from settings.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     ALGORITHM: str = "HS256"

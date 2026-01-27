@@ -111,11 +111,49 @@ class SecurityConfig:
     PASSWORD_REQUIRE_SPECIAL = True
     PASSWORD_MAX_AGE_DAYS = 90
     
-    # JWT Settings
-    JWT_ALGORITHM = "HS256"
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
+    # ==========================================================================
+    # JWT Settings - SINGLE SOURCE OF TRUTH
+    # ==========================================================================
+    # All JWT configuration should be read from this class.
+    # Do NOT define JWT settings elsewhere in the codebase.
+    #
+    # Supported algorithms:
+    #   - HS256: HMAC with SHA-256 (symmetric, uses secret key)
+    #   - RS256: RSA with SHA-256 (asymmetric, uses private/public key pair)
+    #
+    # The jwt_manager.py uses RS256 with RSA key pairs for enhanced security.
+    # Fallback/legacy code may use HS256 with JWT_SECRET_KEY.
+    # ==========================================================================
+
+    # Primary algorithm for new tokens (RS256 recommended for production)
+    JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "RS256")
+
+    # Fallback algorithm for legacy compatibility
+    JWT_ALGORITHM_FALLBACK = "HS256"
+
+    # Access token expiration (short-lived for security)
+    # Default: 30 minutes - balances security with user experience
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+    # Refresh token expiration (longer-lived for convenience)
+    # Default: 7 days - allows users to stay logged in
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+    # MFA token expiration (very short-lived for security)
+    # Default: 5 minutes - MFA verification should be quick
+    JWT_MFA_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_MFA_TOKEN_EXPIRE_MINUTES", "5"))
+
+    # Reset token expiration (for password reset flows)
+    # Default: 1 hour - gives users time to complete reset
+    JWT_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_RESET_TOKEN_EXPIRE_MINUTES", "60"))
+
+    # Secret key for HS256 algorithm (fallback/legacy)
+    # In production, this MUST be set via environment variable
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+
+    # Token issuer and audience for validation
+    JWT_ISSUER = "investment-analysis-app"
+    JWT_AUDIENCE = "investment-analysis-users"
     
     # API Key Settings
     API_KEY_LENGTH = 32

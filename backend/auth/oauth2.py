@@ -17,6 +17,7 @@ from backend.models.unified_models import User
 from backend.utils.database import get_db
 from backend.security.jwt_manager import get_jwt_manager, TokenClaims, TokenType
 from backend.security.secrets_manager import get_secrets_manager
+from backend.security.security_config import SecurityConfig
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -89,9 +90,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = datetime.utcnow() + timedelta(minutes=SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
+        encoded_jwt = jwt.encode(to_encode, SecurityConfig.JWT_SECRET_KEY, algorithm=SecurityConfig.JWT_ALGORITHM_FALLBACK)
         return encoded_jwt
 
 
@@ -128,7 +129,7 @@ def create_tokens(user: User, request: Optional[Request] = None) -> dict:
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            "expires_in": SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
         }
         
     except Exception as e:

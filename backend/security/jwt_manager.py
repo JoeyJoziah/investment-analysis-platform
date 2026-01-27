@@ -27,6 +27,7 @@ from pathlib import Path
 
 from backend.security.secrets_manager import get_secrets_manager, SecretType
 from backend.config.settings import settings
+from backend.security.security_config import SecurityConfig
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +74,12 @@ class JWTManager:
         # Initialize RSA key pair
         self.private_key, self.public_key = self._initialize_rsa_keys()
         
-        # Token settings
-        self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
+        # Token settings - use centralized SecurityConfig as single source of truth
+        self.access_token_expire_minutes = SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        self.refresh_token_expire_days = SecurityConfig.JWT_REFRESH_TOKEN_EXPIRE_DAYS
+        self.mfa_token_expire_minutes = SecurityConfig.JWT_MFA_TOKEN_EXPIRE_MINUTES
+        self.issuer = SecurityConfig.JWT_ISSUER
+        self.audience = SecurityConfig.JWT_AUDIENCE
         
         # Blacklist key prefix
         self.blacklist_prefix = "jwt_blacklist"
@@ -194,8 +198,8 @@ class JWTManager:
                 "type": TokenType.ACCESS.value,
                 "iat": datetime.utcnow(),
                 "exp": expire,
-                "iss": "investment-analysis-app",
-                "aud": "investment-analysis-users"
+                "iss": self.issuer,
+                "aud": self.audience
             }
             
             # Sign with RS256
@@ -256,8 +260,8 @@ class JWTManager:
                 "type": TokenType.REFRESH.value,
                 "iat": datetime.utcnow(),
                 "exp": expire,
-                "iss": "investment-analysis-app",
-                "aud": "investment-analysis-users"
+                "iss": self.issuer,
+                "aud": self.audience
             }
             
             # Sign with RS256
@@ -296,8 +300,8 @@ class JWTManager:
                 token,
                 self.public_key,
                 algorithms=["RS256"],
-                issuer="investment-analysis-app",
-                audience="investment-analysis-users"
+                issuer=self.issuer,
+                audience=self.audience
             )
             
             # Verify token type

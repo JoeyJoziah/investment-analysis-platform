@@ -21,6 +21,11 @@ from backend.api.routers import (
     auth, health, admin, cache_management,
     websocket, agents, gdpr, watchlist
 )
+from backend.api.versioning import (
+    V1DeprecationMiddleware,
+    v1_migration_router,
+    v1_migration_metrics
+)
 from backend.utils.database import init_db, close_db
 from backend.config.database import initialize_database, cleanup_database
 from backend.utils.cache import init_cache
@@ -159,6 +164,17 @@ app.add_middleware(
     cache_excluded_paths=["/api/auth/", "/api/admin/", "/api/ws/", "/api/metrics"]
 )
 
+# Add V1 API deprecation middleware
+# This handles V1 requests with deprecation warnings, usage tracking, and optional redirects
+# Set enable_redirects=True to automatically redirect V1 requests to V2
+# Set strict_mode=True to immediately return 410 for V1 requests (post-sunset)
+app.add_middleware(
+    V1DeprecationMiddleware,
+    enable_redirects=False,  # Set to True for automatic redirects
+    grace_period_days=30,    # Days after sunset to still allow V1 (with warnings)
+    strict_mode=False        # Set to True to immediately reject V1 requests
+)
+
 # Include routers
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -172,6 +188,7 @@ app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
 app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
 app.include_router(watchlist.router, prefix="/api", tags=["watchlists"])
+app.include_router(v1_migration_router)  # V1 migration monitoring endpoints
 
 
 @app.exception_handler(HTTPException)

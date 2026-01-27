@@ -30,6 +30,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 
 from .secrets_vault import get_secrets_vault
+from .security_config import SecurityConfig
 
 logger = logging.getLogger(__name__)
 
@@ -213,13 +214,16 @@ class MFAManager:
 
 class JWTManager:
     """JWT token management with enhanced security"""
-    
+
     def __init__(self):
         self.vault = get_secrets_vault()
-        self.algorithm = "HS256"
-        self.access_token_expire_minutes = 15
-        self.refresh_token_expire_days = 7
-        self.mfa_token_expire_minutes = 5
+        # Use centralized SecurityConfig as single source of truth for JWT settings
+        self.algorithm = SecurityConfig.JWT_ALGORITHM_FALLBACK  # HS256 for this manager
+        self.access_token_expire_minutes = SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
+        self.refresh_token_expire_days = SecurityConfig.JWT_REFRESH_TOKEN_EXPIRE_DAYS
+        self.mfa_token_expire_minutes = SecurityConfig.JWT_MFA_TOKEN_EXPIRE_MINUTES
+        self.issuer = SecurityConfig.JWT_ISSUER
+        self.audience = SecurityConfig.JWT_AUDIENCE
     
     async def _get_secret_key(self) -> str:
         """Get JWT secret from vault"""
@@ -268,8 +272,8 @@ class JWTManager:
             "exp": expire,
             "iat": datetime.utcnow(),
             "jti": str(uuid.uuid4()),  # JWT ID for token tracking
-            "iss": "investment-platform",
-            "aud": "investment-platform-users"
+            "iss": self.issuer,
+            "aud": self.audience
         }
         
         # Add additional claims
@@ -283,11 +287,11 @@ class JWTManager:
         try:
             secret_key = await self._get_secret_key()
             payload = jwt.decode(
-                token, 
-                secret_key, 
+                token,
+                secret_key,
                 algorithms=[self.algorithm],
-                audience="investment-platform-users",
-                issuer="investment-platform"
+                audience=self.audience,
+                issuer=self.issuer
             )
             return payload
         except jwt.ExpiredSignatureError:
@@ -641,7 +645,7 @@ class EnhancedAuthManager:
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
-            expires_in=900,  # 15 minutes
+            expires_in=SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             scope="read write",
             user_id=user_id,
             role=role.value
