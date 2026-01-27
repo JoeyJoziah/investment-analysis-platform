@@ -193,10 +193,10 @@ async def invalidate_cache(
     symbol: Optional[str] = Query(None, description="Stock symbol to invalidate"),
     data_type: Optional[str] = Query(None, description="Data type to invalidate"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-):
+) -> ApiResponse[Dict]:
     """
     Invalidate cache entries based on pattern, symbol, or data type
-    
+
     This is an administrative endpoint that allows manual cache invalidation.
     Use with caution as it can impact performance temporarily.
     """
@@ -226,12 +226,12 @@ async def invalidate_cache(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Must specify at least one of: pattern, symbol, or data_type"
             )
-        
-        return {
+
+        return success_response(data={
             "message": f"Cache invalidation completed",
             "operations": invalidated_count,
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except HTTPException:
         raise
@@ -248,10 +248,10 @@ async def warm_cache(
     symbols: List[str] = Query(..., description="Stock symbols to warm in cache"),
     data_types: List[str] = Query(["real_time_quote", "company_overview"], description="Data types to warm"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-):
+) -> ApiResponse[Dict]:
     """
     Manually warm cache with specified symbols and data types
-    
+
     This endpoint allows administrators to preload frequently accessed data
     into the cache to improve performance.
     """
@@ -271,14 +271,14 @@ async def warm_cache(
         # Execute warming
         cache_manager = await get_cache_manager()
         await cache_manager.warm_cache(warming_tasks, priority=1)
-        
-        return {
+
+        return success_response(data={
             "message": f"Cache warming initiated for {len(symbols)} symbols",
             "symbols": [s.upper() for s in symbols],
             "data_types": data_types,
             "total_tasks": len(warming_tasks),
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error warming cache: {e}")
@@ -289,10 +289,10 @@ async def warm_cache(
 
 
 @router.get("/health")
-async def get_cache_health():
+async def get_cache_health() -> ApiResponse[Dict]:
     """
     Get cache system health status
-    
+
     Provides a quick health check of all caching components:
     - Cache manager connectivity
     - Redis status
@@ -365,8 +365,8 @@ async def get_cache_health():
                 "status": "unhealthy",
                 "error": str(e)
             }
-        
-        return health_status
+
+        return success_response(data=health_status)
         
     except Exception as e:
         logger.error(f"Error checking cache health: {e}")
@@ -377,10 +377,10 @@ async def get_cache_health():
 
 
 @router.get("/statistics")
-async def get_cache_statistics():
+async def get_cache_statistics() -> ApiResponse[Dict]:
     """
     Get detailed cache statistics for analysis and debugging
-    
+
     Provides comprehensive statistics about cache usage patterns,
     performance metrics, and storage utilization.
     """
@@ -400,8 +400,8 @@ async def get_cache_statistics():
             l3_effectiveness = cache_stats['cache_metrics']['l3_hits'] / total_requests
         else:
             l1_effectiveness = l2_effectiveness = l3_effectiveness = 0
-        
-        return {
+
+        return success_response(data={
             "timestamp": datetime.utcnow().isoformat(),
             "cache_layer_statistics": {
                 "l1": {
@@ -433,7 +433,7 @@ async def get_cache_statistics():
                 "api_calls_saved": cache_stats['cache_metrics']['api_calls_saved'],
                 "estimated_cost_savings": cache_stats['cache_metrics']['estimated_cost_savings']
             }
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error retrieving cache statistics: {e}")

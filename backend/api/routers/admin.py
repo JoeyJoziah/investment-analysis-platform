@@ -278,13 +278,13 @@ async def update_user(
 async def delete_user(
     user_id: str,
     current_user = Depends(check_admin_permission)
-) -> Dict[str, str]:
+) -> ApiResponse[Dict]:
     """Delete a user account"""
-    
-    return {
+
+    return success_response(data={
         "message": f"User {user_id} has been deleted",
         "status": "success"
-    }
+    })
 
 @router.get("/analytics/api-usage")
 async def get_api_usage_stats(
@@ -415,26 +415,26 @@ async def list_background_jobs(
 async def cancel_job(
     job_id: str,
     current_user = Depends(check_admin_permission)
-) -> Dict[str, str]:
+) -> ApiResponse[Dict]:
     """Cancel a running job"""
-    
-    return {
+
+    return success_response(data={
         "message": f"Job {job_id} has been cancelled",
         "status": "success"
-    }
+    })
 
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(
     job_id: str,
     current_user = Depends(check_admin_permission)
-) -> Dict[str, str]:
+) -> ApiResponse[Dict]:
     """Retry a failed job"""
-    
-    return {
+
+    return success_response(data={
         "message": f"Job {job_id} has been queued for retry",
         "status": "success",
         "new_job_id": str(uuid.uuid4())
-    }
+    })
 
 @router.get("/config")
 async def get_configuration(
