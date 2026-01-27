@@ -20,6 +20,7 @@ from backend.models.schemas import (
     InvestmentThesisUpdate,
     InvestmentThesisResponse,
 )
+from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,6 @@ def convert_thesis_to_response(thesis: Any, stock_symbol: str = None, stock_name
 
 @router.post(
     "/",
-    response_model=InvestmentThesisResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create Investment Thesis",
     description="Create a new investment thesis for a stock"
@@ -120,7 +120,7 @@ async def create_thesis(
     thesis_data: InvestmentThesisCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[InvestmentThesisResponse]:
     """
     Create a new investment thesis.
 
@@ -161,7 +161,7 @@ async def create_thesis(
 
         logger.info(f"Created thesis {thesis.id} for user {current_user.id}, stock {thesis_data.stock_id}")
 
-        return convert_thesis_to_response(thesis, stock.symbol, stock.name)
+        return success_response(data=convert_thesis_to_response(thesis, stock.symbol, stock.name))
 
     except IntegrityError as e:
         logger.error(f"Database integrity error creating thesis: {e}")
@@ -181,7 +181,6 @@ async def create_thesis(
 
 @router.get(
     "/{thesis_id}",
-    response_model=InvestmentThesisResponse,
     summary="Get Investment Thesis",
     description="Get a specific investment thesis by ID"
 )
@@ -189,7 +188,7 @@ async def get_thesis(
     thesis_id: int = Path(..., gt=0, description="Thesis ID"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[InvestmentThesisResponse]:
     """
     Retrieve a specific investment thesis by ID.
 
@@ -200,16 +199,15 @@ async def get_thesis(
     # Get stock info
     stock = await stock_repository.get_by_id(thesis.stock_id, session=db)
 
-    return convert_thesis_to_response(
+    return success_response(data=convert_thesis_to_response(
         thesis,
         stock.symbol if stock else None,
         stock.name if stock else None
-    )
+    ))
 
 
 @router.get(
     "/stock/{stock_id}",
-    response_model=InvestmentThesisResponse,
     summary="Get Thesis by Stock",
     description="Get the investment thesis for a specific stock"
 )
@@ -217,7 +215,7 @@ async def get_thesis_by_stock(
     stock_id: int = Path(..., gt=0, description="Stock ID"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[InvestmentThesisResponse]:
     """
     Retrieve the investment thesis for a specific stock.
 
@@ -238,16 +236,15 @@ async def get_thesis_by_stock(
     # Get stock info
     stock = await stock_repository.get_by_id(stock_id, session=db)
 
-    return convert_thesis_to_response(
+    return success_response(data=convert_thesis_to_response(
         thesis,
         stock.symbol if stock else None,
         stock.name if stock else None
-    )
+    ))
 
 
 @router.get(
     "/",
-    response_model=List[InvestmentThesisResponse],
     summary="List Investment Theses",
     description="Get all investment theses for the current user"
 )
@@ -256,7 +253,7 @@ async def list_theses(
     offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[List[InvestmentThesisResponse]]:
     """
     List all investment theses for the current user.
 
@@ -269,15 +266,14 @@ async def list_theses(
         session=db
     )
 
-    return [
+    return success_response(data=[
         InvestmentThesisResponse(**thesis_dict)
         for thesis_dict in theses_data
-    ]
+    ])
 
 
 @router.put(
     "/{thesis_id}",
-    response_model=InvestmentThesisResponse,
     summary="Update Investment Thesis",
     description="Update an existing investment thesis"
 )
@@ -286,7 +282,7 @@ async def update_thesis(
     thesis_data: InvestmentThesisUpdate = ...,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[InvestmentThesisResponse]:
     """
     Update an existing investment thesis.
 
@@ -322,11 +318,11 @@ async def update_thesis(
 
     logger.info(f"Updated thesis {thesis_id} for user {current_user.id}, now version {thesis.version}")
 
-    return convert_thesis_to_response(
+    return success_response(data=convert_thesis_to_response(
         thesis,
         stock.symbol if stock else None,
         stock.name if stock else None
-    )
+    ))
 
 
 @router.delete(
