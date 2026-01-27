@@ -532,8 +532,9 @@ async def record_consent(
             f"{consent_request.consent_type}"
         )
 
-        # Get client IP address
-        ip_address = get_client_ip(request)
+        # Get client IP address and anonymize immediately for GDPR compliance
+        raw_ip_address = get_client_ip(request)
+        ip_address = data_anonymizer.anonymize_ip(raw_ip_address) if raw_ip_address else None
         user_agent = request.headers.get("user-agent")
 
         # Map string to ConsentType enum
@@ -570,7 +571,7 @@ async def record_consent(
             granted=consent_request.granted,
             timestamp=datetime.utcnow(),
             legal_basis=consent_request.legal_basis,
-            ip_address=data_anonymizer.anonymize_ip(ip_address) if ip_address else None
+            ip_address=ip_address  # Already anonymized above
         ))
 
     except HTTPException:

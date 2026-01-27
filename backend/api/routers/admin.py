@@ -442,13 +442,19 @@ async def get_configuration(
     section: Optional[ConfigSection] = None
 ) -> ApiResponse[Dict]:
     """Get system configuration"""
-    
+
+    def mask_secret(value: Optional[str]) -> str:
+        """Mask secret values for safe display"""
+        if not value or len(value) < 8:
+            return "***NOT_SET***"
+        return f"{value[:4]}...{value[-4:]}"
+
     config = {
         "api_keys": {
-            "alpha_vantage": "***REDACTED***",
-            "finnhub": "***REDACTED***",
-            "polygon": "***REDACTED***",
-            "news_api": "***REDACTED***"
+            "alpha_vantage": mask_secret(os.getenv("ALPHA_VANTAGE_API_KEY")),
+            "finnhub": mask_secret(os.getenv("FINNHUB_API_KEY")),
+            "polygon": mask_secret(os.getenv("POLYGON_API_KEY")),
+            "news_api": mask_secret(os.getenv("NEWS_API_KEY"))
         },
         "database": {
             "host": "postgres",
