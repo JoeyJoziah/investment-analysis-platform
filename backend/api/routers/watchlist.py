@@ -25,6 +25,7 @@ from backend.models.schemas import (
     WatchlistItemUpdate,
     WatchlistItemResponse,
 )
+from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,6 @@ def convert_watchlist_to_summary(watchlist: Any, summary_data: Dict = None) -> W
 
 @router.get(
     "",
-    response_model=List[WatchlistSummary],
     summary="Get user's watchlists",
     responses={
         200: {"description": "List of user's watchlists"},
@@ -174,7 +174,7 @@ async def get_user_watchlists(
     include_items: bool = Query(False, description="Include item count in response"),
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> List[WatchlistSummary]:
+) -> ApiResponse[List[WatchlistSummary]]:
     """
     Get all watchlists for the authenticated user.
 
@@ -198,7 +198,7 @@ async def get_user_watchlists(
                 )
             summaries.append(convert_watchlist_to_summary(watchlist, summary_data))
 
-        return summaries
+        return success_response(data=summaries)
 
     except Exception as e:
         logger.error(f"Error fetching watchlists for user {current_user.id}: {e}")
@@ -210,7 +210,6 @@ async def get_user_watchlists(
 
 @router.post(
     "",
-    response_model=WatchlistResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new watchlist",
     responses={
@@ -223,7 +222,7 @@ async def create_watchlist(
     watchlist_data: WatchlistCreate,
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistResponse:
+) -> ApiResponse[WatchlistResponse]:
     """
     Create a new watchlist for the authenticated user.
 
@@ -239,7 +238,7 @@ async def create_watchlist(
         )
 
         logger.info(f"Created watchlist '{watchlist.name}' for user {current_user.id}")
-        return convert_watchlist_to_response(watchlist)
+        return success_response(data=convert_watchlist_to_response(watchlist))
 
     except IntegrityError:
         raise HTTPException(
@@ -256,7 +255,6 @@ async def create_watchlist(
 
 @router.get(
     "/default",
-    response_model=WatchlistResponse,
     summary="Get default watchlist",
     responses={
         200: {"description": "Default watchlist with items"},
@@ -266,7 +264,7 @@ async def create_watchlist(
 async def get_default_watchlist(
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistResponse:
+) -> ApiResponse[WatchlistResponse]:
     """
     Get or create the user's default watchlist.
 
@@ -285,7 +283,7 @@ async def get_default_watchlist(
             session=db
         )
 
-        return convert_watchlist_to_response(watchlist, items_data)
+        return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
     except Exception as e:
         logger.error(f"Error getting default watchlist: {e}")
@@ -297,7 +295,6 @@ async def get_default_watchlist(
 
 @router.get(
     "/{watchlist_id}",
-    response_model=WatchlistResponse,
     summary="Get watchlist by ID",
     responses={
         200: {"description": "Watchlist with items"},
@@ -310,7 +307,7 @@ async def get_watchlist(
     watchlist_id: int = Path(..., description="Watchlist ID", gt=0),
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistResponse:
+) -> ApiResponse[WatchlistResponse]:
     """
     Get a specific watchlist with all items and current price data.
 
@@ -334,7 +331,7 @@ async def get_watchlist(
             session=db
         )
 
-        return convert_watchlist_to_response(watchlist, items_data)
+        return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
     except HTTPException:
         raise
@@ -348,7 +345,6 @@ async def get_watchlist(
 
 @router.put(
     "/{watchlist_id}",
-    response_model=WatchlistResponse,
     summary="Update watchlist",
     responses={
         200: {"description": "Watchlist updated successfully"},
@@ -363,7 +359,7 @@ async def update_watchlist(
     watchlist_data: WatchlistUpdate = ...,
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistResponse:
+) -> ApiResponse[WatchlistResponse]:
     """
     Update a watchlist's name, description, or visibility.
 
@@ -396,7 +392,7 @@ async def update_watchlist(
         )
 
         logger.info(f"Updated watchlist {watchlist_id} for user {current_user.id}")
-        return convert_watchlist_to_response(watchlist, items_data)
+        return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
     except HTTPException:
         raise
@@ -467,7 +463,6 @@ async def delete_watchlist(
 
 @router.post(
     "/{watchlist_id}/items",
-    response_model=WatchlistItemResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add item to watchlist",
     responses={
@@ -483,7 +478,7 @@ async def add_watchlist_item(
     item_data: WatchlistItemCreate = ...,
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistItemResponse:
+) -> ApiResponse[WatchlistItemResponse]:
     """
     Add a stock to a watchlist.
 
@@ -515,7 +510,7 @@ async def add_watchlist_item(
 
         logger.info(f"Added {item_data.symbol} to watchlist {watchlist_id}")
 
-        return WatchlistItemResponse(
+        return success_response(data=WatchlistItemResponse(
             id=item.id,
             watchlist_id=item.watchlist_id,
             stock_id=item.stock_id,
@@ -531,7 +526,7 @@ async def add_watchlist_item(
             volume=None,
             market_cap=stock.market_cap,
             sector=stock.sector,
-        )
+        ))
 
     except HTTPException:
         raise
@@ -555,7 +550,6 @@ async def add_watchlist_item(
 
 @router.put(
     "/{watchlist_id}/items/{item_id}",
-    response_model=WatchlistItemResponse,
     summary="Update watchlist item",
     responses={
         200: {"description": "Item updated successfully"},
@@ -570,7 +564,7 @@ async def update_watchlist_item(
     item_data: WatchlistItemUpdate = ...,
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistItemResponse:
+) -> ApiResponse[WatchlistItemResponse]:
     """
     Update a watchlist item's target price, notes, or alert status.
 
@@ -612,7 +606,7 @@ async def update_watchlist_item(
 
         logger.info(f"Updated item {item_id} in watchlist {watchlist_id}")
 
-        return WatchlistItemResponse(
+        return success_response(data=WatchlistItemResponse(
             id=updated_item.id,
             watchlist_id=updated_item.watchlist_id,
             stock_id=updated_item.stock_id,
@@ -628,7 +622,7 @@ async def update_watchlist_item(
             volume=None,
             market_cap=stock.market_cap if stock else None,
             sector=stock.sector if stock else None,
-        )
+        ))
 
     except HTTPException:
         raise
@@ -715,7 +709,6 @@ async def remove_watchlist_item(
 
 @router.post(
     "/default/symbols/{symbol}",
-    response_model=WatchlistItemResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add symbol to default watchlist",
     responses={
@@ -729,7 +722,7 @@ async def add_to_default_watchlist(
     symbol: str = Path(..., description="Stock symbol", min_length=1, max_length=10),
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> WatchlistItemResponse:
+) -> ApiResponse[WatchlistItemResponse]:
     """
     Quick add a stock to the user's default watchlist.
 
@@ -762,7 +755,7 @@ async def add_to_default_watchlist(
 
         logger.info(f"Added {symbol} to default watchlist for user {current_user.id}")
 
-        return WatchlistItemResponse(
+        return success_response(data=WatchlistItemResponse(
             id=item.id,
             watchlist_id=item.watchlist_id,
             stock_id=item.stock_id,
@@ -778,7 +771,7 @@ async def add_to_default_watchlist(
             volume=None,
             market_cap=stock.market_cap,
             sector=stock.sector,
-        )
+        ))
 
     except HTTPException:
         raise
@@ -872,7 +865,6 @@ async def remove_from_default_watchlist(
 
 @router.get(
     "/check/{symbol}",
-    response_model=Dict[str, Any],
     summary="Check if symbol is in any watchlist",
     responses={
         200: {"description": "Watchlist status for symbol"},
@@ -884,7 +876,7 @@ async def check_symbol_in_watchlists(
     symbol: str = Path(..., description="Stock symbol", min_length=1, max_length=10),
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """
     Check if a stock symbol is in any of the user's watchlists.
 
@@ -922,12 +914,12 @@ async def check_symbol_in_watchlists(
                     "watchlist_name": watchlist.name
                 })
 
-        return {
+        return success_response(data={
             "symbol": symbol,
             "stock_id": stock.id,
             "in_watchlists": in_watchlists,
             "is_watched": len(in_watchlists) > 0
-        }
+        })
 
     except HTTPException:
         raise
