@@ -36,6 +36,7 @@ from backend.utils.database_query_cache import setup_cache_invalidation_triggers
 from backend.utils.api_cache_decorators import CacheControlMiddleware
 from backend.utils.monitoring import PrometheusMiddleware, export_metrics
 from backend.config.settings import settings
+from backend.middleware.error_handler import register_exception_handlers
 
 # Configure logging
 logging.basicConfig(
@@ -135,6 +136,9 @@ app = FastAPI(
     redoc_url="/api/redoc" if settings.DEBUG else None
 )
 
+# Register standardized error handlers
+register_exception_handlers(app)
+
 # Add comprehensive security middleware stack
 # This provides CORS, security headers, rate limiting, input validation, and injection prevention
 try:
@@ -190,37 +194,6 @@ app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
 app.include_router(watchlist.router, prefix="/api", tags=["watchlists"])
 app.include_router(thesis.router, prefix="/api/v1", tags=["investment-thesis"])
 app.include_router(v1_migration_router)  # V1 migration monitoring endpoints
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc):
-    """
-    Global HTTP exception handler
-    """
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": exc.detail,
-            "timestamp": datetime.utcnow().isoformat(),
-            "path": str(request.url)
-        }
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request, exc):
-    """
-    Global exception handler for unhandled errors
-    """
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "Internal server error",
-            "timestamp": datetime.utcnow().isoformat(),
-            "path": str(request.url)
-        }
-    )
 
 
 @app.get("/")
