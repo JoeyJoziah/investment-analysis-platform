@@ -1,0 +1,393 @@
+name: Monitoring & Notifications
+# Centralized monitoring, alerting, and notification system
+
+on:
+  workflow_run:
+    workflows: [
+      "CI Pipeline",
+      "Production Deployment",
+      "Security Scan",
+      "Release Management & Versioning"
+    ]
+    types: [completed, requested]
+  schedule:
+    # Health check every hour
+    - cron: '0 * * * *'
+    # Daily summary at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of health check'
+        required: true
+        type: choice
+        options:
+          - full
+          - quick
+          - metrics-only
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  # Workflow status monitoring
+  workflow-monitor:
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Analyze workflow result
+      id: analyze
+      run: |
+        WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
+        CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+        RUN_ID="${{ github.event.workflow_run.id }}"
+        ACTOR="${{ github.event.workflow_run.actor.login }}"
+
+        echo "Workflow: $WORKFLOW_NAME"
+        echo "Conclusion: $CONCLUSION"
+        echo "Run ID: $RUN_ID"
+        echo "Actor: $ACTOR"
+
+        # Determine severity
+        if [ "$CONCLUSION" = "failure" ]; then
+          SEVERITY="high"
+          EMOJI="🔴"
+          COLOR="danger"
+        elif [ "$CONCLUSION" = "success" ]; then
+          SEVERITY="info"
+          EMOJI="✅"
+          COLOR="good"
+        else
+          SEVERITY="medium"
+          EMOJI="⚠️ "
+          COLOR="warning"
+        fi
+
+        echo "severity=$SEVERITY" >> $GITHUB_OUTPUT
+        echo "emoji=$EMOJI" >> $GITHUB_OUTPUT
+        echo "color=$COLOR" >> $GITHUB_OUTPUT
+
+    - name: Send notification for failures
+      if: github.event.workflow_run.conclusion == 'failure'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'danger',
+              title: '🔴 Workflow Failed: ${{ github.event.workflow_run.name }}',
+              fields: [
+                {
+                  title: 'Repository',
+                  value: '${{ github.repository }}',
+                  short: true
+                },
+                {
+                  title: 'Branch',
+                  value: '${{ github.event.workflow_run.head_branch }}',
+                  short: true
+                },
+                {
+                  title: 'Triggered by',
+                  value: '@${{ github.event.workflow_run.actor.login }}',
+                  short: true
+                },
+                {
+                  title: 'Run ID',
+                  value: '${{ github.event.workflow_run.id }}',
+                  short: true
+                }
+              ],
+              actions: [{
+                type: 'button',
+                text: 'View Logs',
+                url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}'
+              }],
+              footer: 'GitHub Actions Monitor'
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Repository health checks
+  health-check:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check open issues
+      id: issues
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Count issues by priority
+        CRITICAL=$(gh issue list --label "priority:critical" --state open --json number | jq '. | length')
+        HIGH=$(gh issue list --label "priority:high" --state open --json number | jq '. | length')
+        TOTAL=$(gh issue list --state open --json number | jq '. | length')
+
+        echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+        echo "high=$HIGH" >> $GITHUB_OUTPUT
+        echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+        echo "Critical issues: $CRITICAL"
+        echo "High priority issues: $HIGH"
+        echo "Total open issues: $TOTAL"
+
+    - name: Check stale PRs
+      id: prs
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Count open PRs and stale PRs
+        OPEN_PRS=$(gh pr list --state open --json number | jq '. | length')
+        STALE_PRS=$(gh pr list --state open --label "stale" --json number | jq '. | length')
+        DRAFT_PRS=$(gh pr list --state open --draft --json number | jq '. | length')
+
+        echo "open=$OPEN_PRS" >> $GITHUB_OUTPUT
+        echo "stale=$STALE_PRS" >> $GITHUB_OUTPUT
+        echo "draft=$DRAFT_PRS" >> $GITHUB_OUTPUT
+
+        echo "Open PRs: $OPEN_PRS"
+        echo "Stale PRs: $STALE_PRS"
+        echo "Draft PRs: $DRAFT_PRS"
+
+    - name: Check recent workflow failures
+      id: workflows
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Get recent workflow runs
+        RECENT_RUNS=$(gh run list --limit 20 --json conclusion,status,name)
+
+        FAILED=$(echo "$RECENT_RUNS" | jq '[.[] | select(.conclusion == "failure")] | length')
+        SUCCESS=$(echo "$RECENT_RUNS" | jq '[.[] | select(.conclusion == "success")] | length')
+
+        echo "failed=$FAILED" >> $GITHUB_OUTPUT
+        echo "success=$SUCCESS" >> $GITHUB_OUTPUT
+
+        echo "Recent failures: $FAILED"
+        echo "Recent successes: $SUCCESS"
+
+    - name: Calculate health score
+      id: health
+      run: |
+        # Simple health scoring algorithm
+        CRITICAL=${{ steps.issues.outputs.critical }}
+        HIGH=${{ steps.issues.outputs.high }}
+        FAILED=${{ steps.workflows.outputs.failed }}
+        STALE_PRS=${{ steps.prs.outputs.stale }}
+
+        # Calculate score (100 is perfect)
+        SCORE=100
+
+        # Deduct points for issues
+        SCORE=$((SCORE - CRITICAL * 10))
+        SCORE=$((SCORE - HIGH * 5))
+        SCORE=$((SCORE - FAILED * 3))
+        SCORE=$((SCORE - STALE_PRS * 2))
+
+        # Ensure score doesn't go below 0
+        if [ $SCORE -lt 0 ]; then
+          SCORE=0
+        fi
+
+        echo "score=$SCORE" >> $GITHUB_OUTPUT
+
+        # Determine health status
+        if [ $SCORE -ge 80 ]; then
+          STATUS="healthy"
+          EMOJI="💚"
+        elif [ $SCORE -ge 60 ]; then
+          STATUS="warning"
+          EMOJI="💛"
+        else
+          STATUS="critical"
+          EMOJI="❤️ "
+        fi
+
+        echo "status=$STATUS" >> $GITHUB_OUTPUT
+        echo "emoji=$EMOJI" >> $GITHUB_OUTPUT
+
+        echo "Health Score: $SCORE"
+        echo "Status: $STATUS"
+
+    - name: Create health report
+      run: |
+        echo "## ${{ steps.health.outputs.emoji }} Repository Health Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Overall Health Score**: ${{ steps.health.outputs.score }}/100" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.health.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Issues" >> $GITHUB_STEP_SUMMARY
+        echo "- Critical: ${{ steps.issues.outputs.critical }}" >> $GITHUB_STEP_SUMMARY
+        echo "- High Priority: ${{ steps.issues.outputs.high }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Total Open: ${{ steps.issues.outputs.total }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Pull Requests" >> $GITHUB_STEP_SUMMARY
+        echo "- Open: ${{ steps.prs.outputs.open }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Stale: ${{ steps.prs.outputs.stale }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Draft: ${{ steps.prs.outputs.draft }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Recent Workflows" >> $GITHUB_STEP_SUMMARY
+        echo "- Failures: ${{ steps.workflows.outputs.failed }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Successes: ${{ steps.workflows.outputs.success }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Send health alert if critical
+      if: steps.health.outputs.status == 'critical'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'danger',
+              title: '❤️  Critical Repository Health Alert',
+              text: 'Repository health score has dropped to ${{ steps.health.outputs.score }}/100',
+              fields: [
+                {
+                  title: 'Critical Issues',
+                  value: '${{ steps.issues.outputs.critical }}',
+                  short: true
+                },
+                {
+                  title: 'Recent Failures',
+                  value: '${{ steps.workflows.outputs.failed }}',
+                  short: true
+                },
+                {
+                  title: 'Open Issues',
+                  value: '${{ steps.issues.outputs.total }}',
+                  short: true
+                },
+                {
+                  title: 'Stale PRs',
+                  value: '${{ steps.prs.outputs.stale }}',
+                  short: true
+                }
+              ],
+              footer: 'Repository Health Monitor'
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Daily summary report
+  daily-summary:
+    if: github.event.schedule == '0 9 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate daily metrics
+      id: metrics
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Yesterday's date
+        YESTERDAY=$(date -d '1 day ago' --iso-8601)
+
+        # Commits in last 24 hours
+        COMMITS=$(gh api repos/${{ github.repository }}/commits --jq '. | length' || echo "0")
+
+        # PRs opened yesterday
+        PRS_OPENED=$(gh pr list --search "created:>=$YESTERDAY" --json number | jq '. | length')
+
+        # PRs merged yesterday
+        PRS_MERGED=$(gh pr list --search "merged:>=$YESTERDAY" --json number | jq '. | length')
+
+        # Issues opened yesterday
+        ISSUES_OPENED=$(gh issue list --search "created:>=$YESTERDAY" --json number | jq '. | length')
+
+        # Issues closed yesterday
+        ISSUES_CLOSED=$(gh issue list --search "closed:>=$YESTERDAY" --json number | jq '. | length')
+
+        echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+        echo "prs_opened=$PRS_OPENED" >> $GITHUB_OUTPUT
+        echo "prs_merged=$PRS_MERGED" >> $GITHUB_OUTPUT
+        echo "issues_opened=$ISSUES_OPENED" >> $GITHUB_OUTPUT
+        echo "issues_closed=$ISSUES_CLOSED" >> $GITHUB_OUTPUT
+
+    - name: Send daily summary
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'good',
+              title: '📊 Daily Repository Summary',
+              text: 'Activity summary for the past 24 hours',
+              fields: [
+                {
+                  title: 'Commits',
+                  value: '${{ steps.metrics.outputs.commits }}',
+                  short: true
+                },
+                {
+                  title: 'PRs Opened',
+                  value: '${{ steps.metrics.outputs.prs_opened }}',
+                  short: true
+                },
+                {
+                  title: 'PRs Merged',
+                  value: '${{ steps.metrics.outputs.prs_merged }}',
+                  short: true
+                },
+                {
+                  title: 'Issues Opened',
+                  value: '${{ steps.metrics.outputs.issues_opened }}',
+                  short: true
+                },
+                {
+                  title: 'Issues Closed',
+                  value: '${{ steps.metrics.outputs.issues_closed }}',
+                  short: true
+                }
+              ],
+              footer: 'Daily Summary Report'
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Deployment status tracking
+  deployment-monitor:
+    if: github.event_name == 'workflow_run' && contains(github.event.workflow_run.name, 'Deploy')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Track deployment
+      run: |
+        WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
+        CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+
+        echo "Deployment: $WORKFLOW_NAME"
+        echo "Status: $CONCLUSION"
+
+        # Determine environment
+        ENV="unknown"
+        if echo "$WORKFLOW_NAME" | grep -qi "production"; then
+          ENV="production"
+        elif echo "$WORKFLOW_NAME" | grep -qi "staging"; then
+          ENV="staging"
+        fi
+
+        echo "## 🚀 Deployment Tracking" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment**: $ENV" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow**: $WORKFLOW_NAME" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: $CONCLUSION" >> $GITHUB_STEP_SUMMARY
+        echo "**Run ID**: ${{ github.event.workflow_run.id }}" >> $GITHUB_STEP_SUMMARY

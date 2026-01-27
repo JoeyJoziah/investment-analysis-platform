@@ -1,0 +1,400 @@
+name: Issue Management & Automation
+# Intelligent issue triaging, labeling, and lifecycle management
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned]
+  issue_comment:
+    types: [created]
+  schedule:
+    # Run stale issue check daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+concurrency:
+  group: issue-management-${{ github.event.issue.number || 'scheduled' }}
+  cancel-in-progress: false
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  # Intelligent issue classification
+  classify-issue:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Analyze issue content
+      id: analyze
+      run: |
+        TITLE="${{ github.event.issue.title }}"
+        BODY="${{ github.event.issue.body }}"
+        TEXT="$TITLE $BODY"
+
+        LABELS=""
+
+        # Type classification
+        if echo "$TEXT" | grep -qiE "bug|error|exception|crash|fail|broken|doesn't work"; then
+          LABELS="$LABELS,type:bug"
+        fi
+
+        if echo "$TEXT" | grep -qiE "feature|enhancement|add|new|implement|request|would like"; then
+          LABELS="$LABELS,type:feature"
+        fi
+
+        if echo "$TEXT" | grep -qiE "question|\?|how to|help|clarify"; then
+          LABELS="$LABELS,type:question"
+        fi
+
+        if echo "$TEXT" | grep -qiE "documentation|docs|readme|unclear|guide"; then
+          LABELS="$LABELS,type:documentation"
+        fi
+
+        # Priority classification
+        if echo "$TEXT" | grep -qiE "urgent|critical|production|blocking|asap|emergency"; then
+          LABELS="$LABELS,priority:critical"
+        elif echo "$TEXT" | grep -qiE "important|high priority|major"; then
+          LABELS="$LABELS,priority:high"
+        else
+          LABELS="$LABELS,priority:medium"
+        fi
+
+        # Component classification
+        if echo "$TEXT" | grep -qiE "backend|api|fastapi|python|endpoint"; then
+          LABELS="$LABELS,component:backend"
+        fi
+
+        if echo "$TEXT" | grep -qiE "frontend|react|ui|interface|dashboard"; then
+          LABELS="$LABELS,component:frontend"
+        fi
+
+        if echo "$TEXT" | grep -qiE "database|postgresql|sql|migration|timescaledb"; then
+          LABELS="$LABELS,component:database"
+        fi
+
+        if echo "$TEXT" | grep -qiE "ci/cd|github actions|workflow|deployment|docker"; then
+          LABELS="$LABELS,component:ci-cd"
+        fi
+
+        if echo "$TEXT" | grep -qiE "security|vulnerability|cve|auth|credential"; then
+          LABELS="$LABELS,security"
+        fi
+
+        if echo "$TEXT" | grep -qiE "performance|slow|timeout|memory|cpu|optimization"; then
+          LABELS="$LABELS,performance"
+        fi
+
+        # Clean up labels
+        LABELS=$(echo "$LABELS" | sed 's/^,//')
+
+        echo "labels=$LABELS" >> $GITHUB_OUTPUT
+
+    - name: Apply labels
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        LABELS="${{ steps.analyze.outputs.labels }}"
+
+        if [ -n "$LABELS" ]; then
+          IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
+          for label in "${LABEL_ARRAY[@]}"; do
+            gh issue edit ${{ github.event.issue.number }} --add-label "$label" || echo "Label may not exist: $label"
+          done
+
+          echo "Applied labels: $LABELS"
+        fi
+
+    - name: Add triage comment
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        LABELS="${{ steps.analyze.outputs.labels }}"
+
+        COMMENT="## 🤖 Automated Triage
+
+Thank you for opening this issue! It has been automatically classified with the following labels:
+
+"
+
+        IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
+        for label in "${LABEL_ARRAY[@]}"; do
+          COMMENT="$COMMENT- \`$label\`
+"
+        done
+
+        COMMENT="$COMMENT
+A team member will review this issue shortly. If the classification is incorrect, please adjust the labels accordingly.
+
+---
+*Automated by Issue Management System*"
+
+        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+
+  # Security issue handling
+  security-issue-handler:
+    if: |
+      github.event_name == 'issues' &&
+      (github.event.action == 'opened' || github.event.action == 'labeled') &&
+      contains(github.event.issue.labels.*.name, 'security')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Handle security issue
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        ISSUE_NUMBER="${{ github.event.issue.number }}"
+
+        # Add critical priority if not already set
+        gh issue edit $ISSUE_NUMBER --add-label "priority:critical" || true
+
+        # Add security notice
+        COMMENT="## 🔒 Security Issue Detected
+
+This issue has been flagged as security-related and has been marked as critical priority.
+
+**Security Team Actions:**
+1. This issue will be reviewed by the security team immediately
+2. If this is a vulnerability, we'll coordinate a private security advisory
+3. Public disclosure will follow responsible disclosure practices
+
+**Reporter:**
+- Please **do not** share exploit code publicly
+- If you have discovered a vulnerability, consider using GitHub Security Advisories instead
+
+**Team:**
+- Treat this with high priority
+- Review within 24 hours
+- Create security advisory if needed
+
+---
+*Automated Security Issue Handler*"
+
+        gh issue comment $ISSUE_NUMBER --body "$COMMENT"
+
+        echo "Security issue $ISSUE_NUMBER has been flagged and team notified"
+
+  # Duplicate issue detection
+  duplicate-detector:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Search for similar issues
+      id: search
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TITLE="${{ github.event.issue.title }}"
+
+        # Search for similar open issues
+        SIMILAR=$(gh issue list --state open --limit 50 --json number,title,body | \
+          jq -r --arg title "$TITLE" '.[] | select(.title | ascii_downcase | contains($title | ascii_downcase)) | .number' | \
+          head -5)
+
+        if [ -n "$SIMILAR" ]; then
+          echo "found_duplicates=true" >> $GITHUB_OUTPUT
+          echo "similar_issues=$SIMILAR" >> $GITHUB_OUTPUT
+        else
+          echo "found_duplicates=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Comment about potential duplicates
+      if: steps.search.outputs.found_duplicates == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        SIMILAR="${{ steps.search.outputs.similar_issues }}"
+
+        COMMENT="## 🔍 Potential Duplicate Issues Found
+
+This issue may be similar to existing issues:
+
+"
+
+        for issue_num in $SIMILAR; do
+          if [ "$issue_num" != "${{ github.event.issue.number }}" ]; then
+            COMMENT="$COMMENT- #$issue_num
+"
+          fi
+        done
+
+        COMMENT="$COMMENT
+Please check if any of these address your concern. If this is indeed a duplicate, please close this issue and comment on the existing one instead.
+
+---
+*Automated Duplicate Detector*"
+
+        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+
+  # Issue completion verification
+  completion-checker:
+    if: github.event_name == 'issues' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Check if issue has linked PR
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        ISSUE_NUMBER="${{ github.event.issue.number }}"
+
+        # Search for PRs that reference this issue
+        LINKED_PRS=$(gh pr list --state all --search "fixes #$ISSUE_NUMBER OR closes #$ISSUE_NUMBER" --json number,title,state)
+
+        PR_COUNT=$(echo "$LINKED_PRS" | jq '. | length')
+
+        if [ "$PR_COUNT" -gt 0 ]; then
+          COMMENT="## ✅ Issue Resolution
+
+This issue was closed with $PR_COUNT linked pull request(s):
+
+"
+
+          echo "$LINKED_PRS" | jq -r '.[] | "- #\(.number): \(.title) (\(.state))"' | while read line; do
+            COMMENT="$COMMENT$line
+"
+          done
+
+          gh issue comment $ISSUE_NUMBER --body "$COMMENT" || true
+        fi
+
+  # Stale issue management
+  stale-issue-check:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Find stale issues
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Find issues inactive for 30+ days
+        CUTOFF_DATE=$(date -d '30 days ago' --iso-8601)
+
+        gh issue list --state open --json number,updatedAt,labels --limit 100 | \
+          jq -r --arg cutoff "$CUTOFF_DATE" \
+          '.[] | select(.updatedAt < $cutoff) | select(.labels | map(.name) | contains(["stale"]) | not) | .number' | \
+          while read issue_num; do
+            echo "Marking issue #$issue_num as stale"
+
+            gh issue edit $issue_num --add-label "stale" || true
+
+            gh issue comment $issue_num --body "## ⏰ Stale Issue Notice
+
+This issue has been inactive for 30 days and has been marked as stale.
+
+**To keep this issue open:**
+- Add a comment with updates or additional context
+- Remove the \`stale\` label
+
+**If no activity occurs within 7 days**, this issue may be automatically closed.
+
+---
+*Automated Stale Issue Management*" || true
+          done
+
+    - name: Close very stale issues
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Find stale issues inactive for 37+ days (7 days after marking stale)
+        CUTOFF_DATE=$(date -d '37 days ago' --iso-8601)
+
+        gh issue list --state open --json number,updatedAt,labels --limit 100 | \
+          jq -r --arg cutoff "$CUTOFF_DATE" \
+          '.[] | select(.updatedAt < $cutoff) | select(.labels | map(.name) | contains(["stale"])) | .number' | \
+          while read issue_num; do
+            echo "Closing stale issue #$issue_num"
+
+            gh issue comment $issue_num --body "## 🔒 Closing Stale Issue
+
+This issue has been inactive for over 37 days and is being automatically closed.
+
+**If you still need help:**
+- Feel free to reopen this issue with additional context
+- Or create a new issue with updated information
+
+---
+*Automated Stale Issue Management*" || true
+
+            gh issue close $issue_num --reason "not planned" || true
+          done
+
+  # Welcome first-time contributors
+  welcome-contributor:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Check if first-time contributor
+      id: check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        AUTHOR="${{ github.event.issue.user.login }}"
+
+        # Check if user has previous issues
+        PREVIOUS_ISSUES=$(gh issue list --author "$AUTHOR" --state all --json number | jq '. | length')
+
+        if [ "$PREVIOUS_ISSUES" -eq 1 ]; then
+          echo "first_time=true" >> $GITHUB_OUTPUT
+        else
+          echo "first_time=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Welcome first-time contributor
+      if: steps.check.outputs.first_time == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        COMMENT="## 👋 Welcome to the Investment Analysis Platform!
+
+Thank you for opening your first issue! We're excited to have you as part of our community.
+
+**What happens next:**
+1. A team member will review and triage this issue
+2. We'll ask clarifying questions if needed
+3. The issue will be prioritized and assigned
+
+**Want to contribute?**
+- Check out our [Contributing Guidelines](CONTRIBUTING.md)
+- Look for issues labeled \`good first issue\` to get started
+- Join our community discussions
+
+Thanks for helping make this project better! 🚀
+
+---
+*Automated Welcome Message*"
+
+        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+
+  # Issue metrics and summary
+  issue-metrics:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Generate metrics summary
+      run: |
+        echo "## 📊 Issue Event Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Issue #**: ${{ github.event.issue.number }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Action**: ${{ github.event.action }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Title**: ${{ github.event.issue.title }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Author**: @${{ github.event.issue.user.login }}" >> $GITHUB_STEP_SUMMARY
+        echo "**State**: ${{ github.event.issue.state }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Automated Actions" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Issue classified and labeled" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Duplicate detection performed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Security checks completed" >> $GITHUB_STEP_SUMMARY

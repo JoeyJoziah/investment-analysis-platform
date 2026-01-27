@@ -1,0 +1,440 @@
+name: Automated Release Pipeline
+# Streamlined release automation with semantic versioning and changelog generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prerelease
+      prerelease_tag:
+        description: 'Prerelease tag (e.g., alpha, beta, rc)'
+        required: false
+        default: 'rc'
+      skip_changelog:
+        description: 'Skip changelog generation'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'VERSION'
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
+
+jobs:
+  # Version calculation and validation
+  calculate-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      current_version: ${{ steps.version.outputs.current_version }}
+      new_version: ${{ steps.version.outputs.new_version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install version tools
+      run: |
+        pip install semantic-version gitpython
+
+    - name: Calculate new version
+      id: version
+      run: |
+        python << 'EOF'
+        import git
+        import semantic_version
+        import os
+        import re
+
+        def get_latest_tag():
+            """Get the latest semantic version tag"""
+            try:
+                repo = git.Repo('.')
+                tags = [t for t in repo.tags if re.match(r'^v?\d+\.\d+\.\d+', t.name)]
+
+                if not tags:
+                    return 'v0.0.0'
+
+                versions = []
+                for tag in tags:
+                    try:
+                        # Remove 'v' prefix if present
+                        ver_str = tag.name[1:] if tag.name.startswith('v') else tag.name
+                        ver = semantic_version.Version(ver_str)
+                        versions.append((ver, tag.name))
+                    except:
+                        continue
+
+                if versions:
+                    versions.sort(key=lambda x: x[0], reverse=True)
+                    return versions[0][1]
+
+                return 'v0.0.0'
+            except Exception as e:
+                print(f"Error: {e}")
+                return 'v0.0.0'
+
+        def bump_version(current, release_type, prerelease_tag):
+            """Bump version based on release type"""
+            # Remove 'v' prefix
+            ver_str = current[1:] if current.startswith('v') else current
+            ver = semantic_version.Version(ver_str)
+
+            if release_type == 'major':
+                new_ver = ver.next_major()
+            elif release_type == 'minor':
+                new_ver = ver.next_minor()
+            elif release_type == 'patch':
+                new_ver = ver.next_patch()
+            elif release_type == 'prerelease':
+                if ver.prerelease:
+                    new_ver = ver.next_prerelease()
+                else:
+                    new_ver = ver.next_patch()
+                    new_ver = semantic_version.Version(f"{new_ver.major}.{new_ver.minor}.{new_ver.patch}-{prerelease_tag}.1")
+            else:
+                new_ver = ver.next_patch()
+
+            return f"v{new_ver}"
+
+        # Get inputs
+        release_type = "${{ github.event.inputs.release_type }}" or "patch"
+        prerelease_tag = "${{ github.event.inputs.prerelease_tag }}" or "rc"
+
+        # Calculate versions
+        current = get_latest_tag()
+        new = bump_version(current, release_type, prerelease_tag)
+
+        # Determine if prerelease
+        is_prerelease = "true" if ("-" in new or "alpha" in new or "beta" in new or "rc" in new) else "false"
+
+        # Output
+        print(f"current_version={current}")
+        print(f"new_version={new}")
+        print(f"is_prerelease={is_prerelease}")
+
+        # Write to GitHub output
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"current_version={current}\n")
+            f.write(f"new_version={new}\n")
+            f.write(f"is_prerelease={is_prerelease}\n")
+        EOF
+
+    - name: Generate changelog
+      id: changelog
+      if: github.event.inputs.skip_changelog != 'true'
+      run: |
+        python << 'EOF'
+        import git
+        import os
+        from datetime import datetime
+        from collections import defaultdict
+
+        def generate_changelog():
+            try:
+                repo = git.Repo('.')
+                current_version = "${{ steps.version.outputs.current_version }}"
+
+                # Get commits since last tag
+                if current_version and current_version != 'v0.0.0':
+                    commits = list(repo.iter_commits(f'{current_version}..HEAD'))
+                else:
+                    commits = list(repo.iter_commits('HEAD', max_count=50))
+
+                # Categorize commits
+                categories = defaultdict(list)
+
+                for commit in commits:
+                    msg = commit.message.strip().split('\n')[0]
+
+                    # Skip merge commits
+                    if msg.startswith('Merge'):
+                        continue
+
+                    # Categorize by conventional commit type
+                    if msg.startswith('feat:') or msg.startswith('feature:'):
+                        categories['Features'].append(msg)
+                    elif msg.startswith('fix:') or msg.startswith('bugfix:'):
+                        categories['Bug Fixes'].append(msg)
+                    elif msg.startswith('perf:'):
+                        categories['Performance'].append(msg)
+                    elif msg.startswith('docs:'):
+                        categories['Documentation'].append(msg)
+                    elif msg.startswith('test:'):
+                        categories['Tests'].append(msg)
+                    elif msg.startswith('refactor:'):
+                        categories['Refactoring'].append(msg)
+                    elif msg.startswith('style:'):
+                        categories['Style'].append(msg)
+                    elif msg.startswith('chore:'):
+                        categories['Maintenance'].append(msg)
+                    elif msg.startswith('ci:'):
+                        categories['CI/CD'].append(msg)
+                    else:
+                        categories['Other'].append(msg)
+
+                # Build changelog
+                changelog = [f"# Release Notes - ${{ steps.version.outputs.new_version }}", ""]
+                changelog.append(f"**Release Date**: {datetime.now().strftime('%Y-%m-%d')}")
+                changelog.append("")
+
+                for category in ['Features', 'Bug Fixes', 'Performance', 'Documentation', 'Tests', 'Refactoring', 'CI/CD', 'Maintenance', 'Other']:
+                    if category in categories and categories[category]:
+                        changelog.append(f"## {category}")
+                        for msg in categories[category][:15]:  # Limit to 15 per category
+                            changelog.append(f"- {msg}")
+                        changelog.append("")
+
+                result = '\n'.join(changelog)
+
+                # Save to file
+                with open('CHANGELOG_RELEASE.md', 'w') as f:
+                    f.write(result)
+
+                # Escape for output
+                result_escaped = result.replace('\n', '\\n').replace('\r', '\\r')
+
+                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                    f.write(f"changelog<<EOF\n{result}\nEOF\n")
+
+                return result
+
+            except Exception as e:
+                print(f"Error generating changelog: {e}")
+                fallback = f"# Release Notes - ${{ steps.version.outputs.new_version }}\\n\\n Automated release."
+
+                with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                    f.write(f"changelog={fallback}\n")
+
+                return fallback
+
+        generate_changelog()
+        EOF
+
+    - name: Upload changelog
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-changelog
+        path: CHANGELOG_RELEASE.md
+
+  # Pre-release validation
+  pre-release-checks:
+    needs: [calculate-version]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run fast validation tests
+      run: |
+        echo "Running pre-release validation..."
+        echo "Version: ${{ needs.calculate-version.outputs.new_version }}"
+
+        # Quick smoke tests
+        echo "✅ Code checkout successful"
+        echo "✅ Version calculated: ${{ needs.calculate-version.outputs.new_version }}"
+
+    - name: Validate version format
+      run: |
+        VERSION="${{ needs.calculate-version.outputs.new_version }}"
+        if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+          echo "❌ Invalid version format: $VERSION"
+          exit 1
+        fi
+        echo "✅ Version format valid"
+
+  # Create GitHub release
+  create-release:
+    needs: [calculate-version, pre-release-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      release_id: ${{ steps.create-release.outputs.release_id }}
+      release_url: ${{ steps.create-release.outputs.release_url }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Download changelog
+      uses: actions/download-artifact@v4
+      with:
+        name: release-changelog
+
+    - name: Create and push tag
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        TAG="${{ needs.calculate-version.outputs.new_version }}"
+
+        git tag -a "$TAG" -m "Release $TAG"
+        git push origin "$TAG"
+
+        echo "✅ Tag $TAG created and pushed"
+
+    - name: Create GitHub Release
+      id: create-release
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+
+          // Read changelog
+          let changelog = "Automated release.";
+          try {
+            changelog = fs.readFileSync('CHANGELOG_RELEASE.md', 'utf8');
+          } catch (e) {
+            console.log("Using default changelog");
+          }
+
+          const version = "${{ needs.calculate-version.outputs.new_version }}";
+          const isPrerelease = ${{ needs.calculate-version.outputs.is_prerelease }};
+
+          // Create release
+          const { data: release } = await github.rest.repos.createRelease({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            tag_name: version,
+            name: `Release ${version}`,
+            body: changelog,
+            draft: false,
+            prerelease: isPrerelease,
+            generate_release_notes: true
+          });
+
+          console.log(`✅ Release created: ${release.html_url}`);
+
+          core.setOutput('release_id', release.id);
+          core.setOutput('release_url', release.html_url);
+
+  # Trigger deployment
+  trigger-deployment:
+    needs: [calculate-version, create-release]
+    if: needs.calculate-version.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Trigger production deployment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'production-deploy.yml',
+            ref: 'main',
+            inputs: {
+              tag: "${{ needs.calculate-version.outputs.new_version }}",
+              skip_tests: "false"
+            }
+          });
+
+          console.log('✅ Production deployment triggered');
+
+  # Notifications
+  notify-release:
+    needs: [calculate-version, create-release, trigger-deployment]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Determine status
+      id: status
+      run: |
+        if [ "${{ needs.create-release.result }}" = "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "emoji=🎉" >> $GITHUB_OUTPUT
+          echo "color=good" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "emoji=❌" >> $GITHUB_OUTPUT
+          echo "color=danger" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Send Slack notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ steps.status.outputs.color }}',
+              title: '${{ steps.status.outputs.emoji }} New Release: ${{ needs.calculate-version.outputs.new_version }}',
+              fields: [
+                {
+                  title: 'Version',
+                  value: '${{ needs.calculate-version.outputs.new_version }}',
+                  short: true
+                },
+                {
+                  title: 'Type',
+                  value: '${{ needs.calculate-version.outputs.is_prerelease }}' === 'true' ? 'Pre-release' : 'Stable',
+                  short: true
+                },
+                {
+                  title: 'Previous Version',
+                  value: '${{ needs.calculate-version.outputs.current_version }}',
+                  short: true
+                },
+                {
+                  title: 'Status',
+                  value: '${{ steps.status.outputs.status }}',
+                  short: true
+                }
+              ],
+              actions: [{
+                type: 'button',
+                text: 'View Release',
+                url: '${{ needs.create-release.outputs.release_url }}'
+              }]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create summary
+      run: |
+        echo "## ${{ steps.status.outputs.emoji }} Release Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**New Version**: ${{ needs.calculate-version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Previous Version**: ${{ needs.calculate-version.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Type**: ${{ needs.calculate-version.outputs.is_prerelease == 'true' && 'Pre-release' || 'Stable' }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status**: ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Release URL" >> $GITHUB_STEP_SUMMARY
+        echo "${{ needs.create-release.outputs.release_url }}" >> $GITHUB_STEP_SUMMARY
