@@ -81,6 +81,16 @@ from .cost_monitoring import (
     track_ml_cost
 )
 
+# GPU Utilities for accelerated training
+from .gpu_utils import (
+    GPUConfig,
+    get_gpu_config,
+    get_cached_gpu_config,
+    log_gpu_memory_usage,
+    clear_gpu_memory,
+    set_gpu_memory_fraction
+)
+
 __version__ = "1.0.0"
 
 __all__ = [
@@ -152,5 +162,13 @@ __all__ = [
     "OptimizationRecommendation",
     "get_ml_cost_tracker",
     "get_ml_cost_optimizer",
-    "track_ml_cost"
+    "track_ml_cost",
+
+    # GPU Utilities
+    "GPUConfig",
+    "get_gpu_config",
+    "get_cached_gpu_config",
+    "log_gpu_memory_usage",
+    "clear_gpu_memory",
+    "set_gpu_memory_fraction"
 ]

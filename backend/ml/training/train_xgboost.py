@@ -3,7 +3,17 @@
 XGBoost Model Training Script
 Trains XGBoost with Optuna hyperparameter optimization.
 
-Supports automatic upload to HuggingFace Hub for centralized model storage.
+Supports:
+- GPU acceleration via tree_method='gpu_hist' (XGBoost < 2.0) or device='cuda' (XGBoost 2.0+)
+- Automatic fallback to CPU if GPU not available
+- Automatic upload to HuggingFace Hub for centralized model storage
+
+GPU Requirements:
+- NVIDIA GPU with CUDA support
+- CUDA drivers installed
+- XGBoost built with GPU support
+
+Expected speedup: 3-4x faster training with GPU
 """
 
 import os
@@ -25,6 +35,15 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import optuna
 import joblib
 
+# GPU utilities for device detection
+try:
+    from backend.ml.gpu_utils import get_cached_gpu_config, log_gpu_memory_usage, clear_gpu_memory
+except ImportError:
+    # Fallback if running standalone
+    get_cached_gpu_config = None
+    log_gpu_memory_usage = None
+    clear_gpu_memory = None
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -43,7 +62,7 @@ def get_hf_client():
 
 
 class XGBoostTrainer:
-    """Trainer class for XGBoost model with Optuna optimization."""
+    """Trainer class for XGBoost model with Optuna optimization and GPU support."""
 
     def __init__(
         self,
@@ -51,7 +70,8 @@ class XGBoostTrainer:
         model_dir: str = 'ml_models',
         n_trials: int = 50,
         cv_splits: int = 5,
-        early_stopping_rounds: int = 50
+        early_stopping_rounds: int = 50,
+        use_gpu: bool = True  # Enable GPU by default, will fallback to CPU if unavailable
     ):
         self.data_dir = Path(data_dir)
         self.model_dir = Path(model_dir)
@@ -60,12 +80,79 @@ class XGBoostTrainer:
         self.n_trials = n_trials
         self.cv_splits = cv_splits
         self.early_stopping_rounds = early_stopping_rounds
+        self.use_gpu = use_gpu
 
         self.model = None
         self.scaler = StandardScaler()
         self.feature_columns = None
         self.target_column = 'future_return_5d'
         self.best_params = None
+
+        # Initialize GPU configuration
+        self.gpu_config = None
+        self._setup_gpu()
+
+    def _setup_gpu(self):
+        """Setup GPU configuration for XGBoost."""
+        if not self.use_gpu:
+            logger.info("GPU disabled by configuration, using CPU")
+            self.gpu_config = None
+            return
+
+        if get_cached_gpu_config is not None:
+            self.gpu_config = get_cached_gpu_config()
+            if self.gpu_config.xgboost_gpu_available:
+                logger.info(f"XGBoost GPU training enabled: "
+                           f"tree_method={self.gpu_config.xgboost_tree_method}, "
+                           f"device={self.gpu_config.xgboost_device}")
+            else:
+                logger.info("XGBoost GPU not available, using CPU")
+        else:
+            # Fallback detection without gpu_utils module
+            self._fallback_gpu_detection()
+
+    def _fallback_gpu_detection(self):
+        """Fallback GPU detection without gpu_utils module."""
+        try:
+            # Check XGBoost version
+            xgb_version = tuple(int(x) for x in xgb.__version__.split('.')[:2])
+
+            # Try GPU training with minimal data
+            if xgb_version >= (2, 0):
+                test_params = {"tree_method": "hist", "device": "cuda", "n_estimators": 1}
+            else:
+                test_params = {"tree_method": "gpu_hist", "n_estimators": 1}
+
+            model = xgb.XGBRegressor(**test_params)
+            X_test = np.random.randn(10, 2)
+            y_test = np.random.randn(10)
+            model.fit(X_test, y_test, verbose=False)
+
+            # GPU works, create simple config
+            class SimpleGPUConfig:
+                xgboost_gpu_available = True
+                xgboost_tree_method = test_params.get("tree_method", "hist")
+                xgboost_device = test_params.get("device", "cuda" if xgb_version >= (2, 0) else "gpu")
+
+            self.gpu_config = SimpleGPUConfig()
+            logger.info(f"XGBoost GPU detected via fallback: {self.gpu_config.xgboost_device}")
+
+        except Exception as e:
+            logger.debug(f"XGBoost GPU not available: {e}")
+            self.gpu_config = None
+
+    def _get_xgb_gpu_params(self) -> Dict[str, Any]:
+        """Get XGBoost parameters for GPU or CPU training."""
+        if self.gpu_config and self.gpu_config.xgboost_gpu_available:
+            return {
+                "tree_method": self.gpu_config.xgboost_tree_method,
+                "device": self.gpu_config.xgboost_device,
+            }
+        else:
+            return {
+                "tree_method": "hist",  # Fast histogram-based method for CPU
+                "device": "cpu",
+            }
 
     def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Load training, validation, and test data."""
@@ -111,6 +198,7 @@ class XGBoostTrainer:
 
     def objective(self, trial: optuna.Trial, X: np.ndarray, y: np.ndarray) -> float:
         """Optuna objective function for hyperparameter optimization."""
+        # Base hyperparameters
         params = {
             'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
             'max_depth': trial.suggest_int('max_depth', 3, 10),
@@ -122,8 +210,15 @@ class XGBoostTrainer:
             'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0),
             'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
             'random_state': 42,
-            'n_jobs': -1
         }
+
+        # Add GPU parameters (tree_method and device)
+        gpu_params = self._get_xgb_gpu_params()
+        params.update(gpu_params)
+
+        # n_jobs only applies to CPU training
+        if params.get('device', 'cpu') == 'cpu':
+            params['n_jobs'] = -1
 
         # Time series cross-validation
         tscv = TimeSeriesSplit(n_splits=self.cv_splits)
@@ -152,6 +247,15 @@ class XGBoostTrainer:
         logger.info("Starting XGBoost Training with Optuna")
         logger.info("="*60)
 
+        # Log GPU status
+        gpu_params = self._get_xgb_gpu_params()
+        if gpu_params.get('device', 'cpu') != 'cpu':
+            logger.info(f"GPU Training: tree_method={gpu_params['tree_method']}, device={gpu_params['device']}")
+            if log_gpu_memory_usage:
+                log_gpu_memory_usage("Pre-training ")
+        else:
+            logger.info("CPU Training: tree_method=hist")
+
         # Load data
         train_df, val_df, test_df = self.load_data()
 
@@ -175,7 +279,14 @@ class XGBoostTrainer:
 
         self.best_params = study.best_params
         self.best_params['random_state'] = 42
-        self.best_params['n_jobs'] = -1
+
+        # Add GPU parameters to best params
+        gpu_params = self._get_xgb_gpu_params()
+        self.best_params.update(gpu_params)
+
+        # n_jobs only for CPU
+        if self.best_params.get('device', 'cpu') == 'cpu':
+            self.best_params['n_jobs'] = -1
 
         logger.info(f"Best params: {self.best_params}")
         logger.info(f"Best CV score (MSE): {study.best_value:.6f}")
@@ -226,8 +337,21 @@ class XGBoostTrainer:
         for feat, imp in top_features:
             logger.info(f"  {feat}: {imp:.4f}")
 
+        # Log GPU memory after training
+        if log_gpu_memory_usage and gpu_params.get('device', 'cpu') != 'cpu':
+            log_gpu_memory_usage("Post-training ")
+
         # Save model and results
         self._save_model()
+
+        # Determine GPU info for results
+        gpu_info = {
+            'gpu_enabled': gpu_params.get('device', 'cpu') != 'cpu',
+            'tree_method': gpu_params.get('tree_method', 'hist'),
+            'device': gpu_params.get('device', 'cpu'),
+        }
+        if self.gpu_config and hasattr(self.gpu_config, 'cuda_device_name'):
+            gpu_info['gpu_name'] = getattr(self.gpu_config, 'cuda_device_name', '')
 
         results = {
             'model_type': 'xgboost',
@@ -241,7 +365,8 @@ class XGBoostTrainer:
             } if val_mse else None,
             'n_trials': self.n_trials,
             'feature_importance': {k: float(v) for k, v in top_features},
-            'feature_columns': self.feature_columns
+            'feature_columns': self.feature_columns,
+            'gpu_info': gpu_info
         }
 
         # Save results
@@ -367,7 +492,7 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Train XGBoost model')
+    parser = argparse.ArgumentParser(description='Train XGBoost model with GPU support')
     parser.add_argument('--data-dir', type=str, default='data/ml_training/processed')
     parser.add_argument('--model-dir', type=str, default='ml_models')
     parser.add_argument('--n-trials', type=int, default=50)
@@ -379,14 +504,22 @@ def main():
     parser.add_argument('--hf-version-type', type=str, default='patch',
                         choices=['major', 'minor', 'patch'],
                         help='Version bump type if auto-incrementing')
+    parser.add_argument('--no-gpu', action='store_true',
+                        help='Disable GPU acceleration (use CPU only)')
+    parser.add_argument('--force-cpu', action='store_true',
+                        help='Alias for --no-gpu')
 
     args = parser.parse_args()
+
+    # Determine GPU usage
+    use_gpu = not (args.no_gpu or args.force_cpu)
 
     trainer = XGBoostTrainer(
         data_dir=args.data_dir,
         model_dir=args.model_dir,
         n_trials=args.n_trials,
-        cv_splits=args.cv_splits
+        cv_splits=args.cv_splits,
+        use_gpu=use_gpu
     )
 
     results = trainer.train()

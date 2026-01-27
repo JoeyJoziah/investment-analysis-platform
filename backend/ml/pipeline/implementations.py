@@ -1,5 +1,12 @@
 """
 Concrete implementations of ML pipelines for different model types
+
+Supports GPU acceleration for:
+- XGBoost: tree_method='gpu_hist' (< 2.0) or device='cuda' (2.0+)
+- LightGBM: device='gpu'
+- PyTorch: CUDA support for neural networks
+
+GPU support is automatically detected and falls back to CPU if unavailable.
 """
 
 import logging
@@ -25,7 +32,24 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from .base import ModelPipeline, PipelineConfig, PipelineStep, ModelType, ModelArtifact
 
+# GPU utilities for device detection
+try:
+    from backend.ml.gpu_utils import get_cached_gpu_config, log_gpu_memory_usage, GPUConfig
+    GPU_UTILS_AVAILABLE = True
+except ImportError:
+    GPU_UTILS_AVAILABLE = False
+    get_cached_gpu_config = None
+    log_gpu_memory_usage = None
+    GPUConfig = None
+
 logger = logging.getLogger(__name__)
+
+
+def _get_gpu_config() -> Optional[Any]:
+    """Get GPU configuration, returning None if unavailable."""
+    if GPU_UTILS_AVAILABLE and get_cached_gpu_config:
+        return get_cached_gpu_config()
+    return None
 
 
 class DataLoadingStep(PipelineStep):
@@ -259,7 +283,7 @@ class ModelTrainingStep(PipelineStep):
         return self.model, context
     
     def _train_xgboost(self, X_train, y_train, X_val, y_val, config):
-        """Train XGBoost model"""
+        """Train XGBoost model with GPU support."""
         params = {
             'objective': 'reg:squarederror',
             'max_depth': config.hyperparameters.get('max_depth', 6),
@@ -269,20 +293,33 @@ class ModelTrainingStep(PipelineStep):
             'colsample_bytree': config.hyperparameters.get('colsample_bytree', 0.8),
             'random_state': 42
         }
-        
+
+        # Add GPU parameters if available
+        gpu_config = _get_gpu_config()
+        if gpu_config and gpu_config.xgboost_gpu_available:
+            gpu_params = gpu_config.get_xgboost_params()
+            params.update(gpu_params)
+            self.logger.info(f"XGBoost using GPU: tree_method={params.get('tree_method')}, "
+                           f"device={params.get('device')}")
+        else:
+            # CPU fallback with efficient histogram method
+            params['tree_method'] = 'hist'
+            params['device'] = 'cpu'
+            params['n_jobs'] = config.num_workers if hasattr(config, 'num_workers') else -1
+            self.logger.info("XGBoost using CPU: tree_method=hist")
+
         model = xgb.XGBRegressor(**params)
-        
+
         model.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
-            early_stopping_rounds=config.early_stopping_patience,
             verbose=False
         )
-        
+
         return model
     
     def _train_lightgbm(self, X_train, y_train, X_val, y_val, config):
-        """Train LightGBM model"""
+        """Train LightGBM model with GPU support."""
         params = {
             'objective': 'regression',
             'metric': 'rmse',
@@ -295,16 +332,28 @@ class ModelTrainingStep(PipelineStep):
             'random_state': 42,
             'verbose': -1
         }
-        
+
+        # Add GPU parameters if available
+        gpu_config = _get_gpu_config()
+        if gpu_config and gpu_config.lightgbm_gpu_available:
+            gpu_params = gpu_config.get_lightgbm_params()
+            params.update(gpu_params)
+            self.logger.info(f"LightGBM using GPU: device={params.get('device')}")
+        else:
+            # CPU fallback
+            params['device'] = 'cpu'
+            params['n_jobs'] = config.num_workers if hasattr(config, 'num_workers') else -1
+            self.logger.info("LightGBM using CPU")
+
         model = lgb.LGBMRegressor(**params)
-        
+
         model.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
             callbacks=[lgb.early_stopping(config.early_stopping_patience)],
             eval_metric='rmse'
         )
-        
+
         return model
     
     def _train_random_forest(self, X_train, y_train, config):
@@ -324,76 +373,119 @@ class ModelTrainingStep(PipelineStep):
         return model
     
     async def _train_neural_network(self, X_train, y_train, X_val, y_val, config):
-        """Train neural network model"""
+        """Train neural network model with GPU support."""
+        # Determine device
+        gpu_config = _get_gpu_config()
+        if gpu_config and gpu_config.cuda_available:
+            device = torch.device('cuda')
+            self.logger.info(f"Neural network using GPU: {gpu_config.cuda_device_name}")
+            if log_gpu_memory_usage:
+                log_gpu_memory_usage("Pre-training ")
+        else:
+            device = torch.device('cpu')
+            self.logger.info("Neural network using CPU")
+
         # Convert to tensors
         X_train_tensor = torch.FloatTensor(X_train.values if hasattr(X_train, 'values') else X_train)
         y_train_tensor = torch.FloatTensor(y_train.values if hasattr(y_train, 'values') else y_train)
         X_val_tensor = torch.FloatTensor(X_val.values if hasattr(X_val, 'values') else X_val)
         y_val_tensor = torch.FloatTensor(y_val.values if hasattr(y_val, 'values') else y_val)
-        
+
+        # Move validation tensors to device
+        X_val_tensor = X_val_tensor.to(device)
+        y_val_tensor = y_val_tensor.to(device)
+
         # Create data loaders
         train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
         train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
-        
+
         # Define model architecture
         input_size = X_train.shape[1]
         hidden_sizes = config.hyperparameters.get('hidden_sizes', [128, 64, 32])
-        
+
         class NeuralNet(nn.Module):
             def __init__(self):
                 super().__init__()
                 layers = []
                 prev_size = input_size
-                
+
                 for hidden_size in hidden_sizes:
                     layers.append(nn.Linear(prev_size, hidden_size))
                     layers.append(nn.ReLU())
                     layers.append(nn.Dropout(0.2))
                     prev_size = hidden_size
-                
+
                 layers.append(nn.Linear(prev_size, 1))
                 self.model = nn.Sequential(*layers)
-            
+
             def forward(self, x):
                 return self.model(x)
-        
-        model = NeuralNet()
-        
-        # Training
+
+        model = NeuralNet().to(device)
+
+        # Training with optional mixed precision
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
         criterion = nn.MSELoss()
-        
+
+        # Use automatic mixed precision for GPU training (faster)
+        use_amp = device.type == 'cuda' and gpu_config and gpu_config.use_mixed_precision
+        scaler = torch.cuda.amp.GradScaler() if use_amp else None
+
         best_val_loss = float('inf')
         patience_counter = 0
-        
+        best_state_dict = None
+
         for epoch in range(config.epochs):
             # Training
             model.train()
             train_loss = 0
             for X_batch, y_batch in train_loader:
+                X_batch = X_batch.to(device)
+                y_batch = y_batch.to(device)
+
                 optimizer.zero_grad()
-                outputs = model(X_batch).squeeze()
-                loss = criterion(outputs, y_batch)
-                loss.backward()
-                optimizer.step()
+
+                if use_amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = model(X_batch).squeeze()
+                        loss = criterion(outputs, y_batch)
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    outputs = model(X_batch).squeeze()
+                    loss = criterion(outputs, y_batch)
+                    loss.backward()
+                    optimizer.step()
+
                 train_loss += loss.item()
-            
+
             # Validation
             model.eval()
             with torch.no_grad():
                 val_outputs = model(X_val_tensor).squeeze()
                 val_loss = criterion(val_outputs, y_val_tensor).item()
-            
+
             # Early stopping
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 patience_counter = 0
+                best_state_dict = model.state_dict().copy()
             else:
                 patience_counter += 1
                 if patience_counter >= config.early_stopping_patience:
                     break
-        
-        return model
+
+        # Restore best model
+        if best_state_dict:
+            model.load_state_dict(best_state_dict)
+
+        # Log GPU memory after training
+        if device.type == 'cuda' and log_gpu_memory_usage:
+            log_gpu_memory_usage("Post-training ")
+
+        # Return model on CPU for portability
+        return model.cpu()
 
 
 class ModelEvaluationStep(PipelineStep):

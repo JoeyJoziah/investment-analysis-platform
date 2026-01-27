@@ -1,9 +1,22 @@
 """
 Airflow DAG for ML Model Training Pipeline with Automated Retraining
 
-Supports HuggingFace Hub integration for:
-- Downloading training datasets from HF Hub
-- Uploading trained models to HF Hub
+Supports:
+- HuggingFace Hub integration for downloading datasets and uploading models
+- GPU acceleration for XGBoost, LightGBM, and PyTorch models
+- Automatic fallback to CPU if GPU not available
+- Mixed precision training for faster GPU training
+
+GPU Requirements:
+- NVIDIA GPU with CUDA support
+- CUDA drivers installed on worker nodes
+- GPU-enabled Docker images (optional)
+
+Environment Variables:
+- FORCE_CPU=true: Force CPU training even if GPU available
+- HF_HUB_ENABLED=true: Enable HuggingFace Hub integration
+
+Expected speedup with GPU: 3-4x faster training per model
 """
 
 from datetime import datetime, timedelta, timezone
@@ -21,6 +34,30 @@ import logging
 
 # Add backend to path
 sys.path.append('/app')
+
+# GPU utilities (lazy import)
+def get_gpu_config():
+    """Get GPU configuration if available."""
+    try:
+        from backend.ml.gpu_utils import get_cached_gpu_config, log_gpu_memory_usage
+        return get_cached_gpu_config(), log_gpu_memory_usage
+    except ImportError:
+        return None, None
+
+def log_gpu_status():
+    """Log GPU status for debugging."""
+    gpu_config, log_memory = get_gpu_config()
+    if gpu_config:
+        logger.info(f"GPU Config - CUDA: {gpu_config.cuda_available}, "
+                   f"XGBoost GPU: {gpu_config.xgboost_gpu_available}, "
+                   f"LightGBM GPU: {gpu_config.lightgbm_gpu_available}")
+        if gpu_config.cuda_available:
+            logger.info(f"GPU Device: {gpu_config.cuda_device_name} "
+                       f"({gpu_config.cuda_memory_total_gb:.1f}GB)")
+        if log_memory:
+            log_memory("DAG initialization ")
+    else:
+        logger.info("GPU utilities not available, using default device detection")
 
 # HuggingFace Hub integration helpers
 def get_hf_hub_enabled():
@@ -313,37 +350,61 @@ def prepare_training_data(**context):
 
 
 def train_models(**context):
-    """Train all ML models"""
-    
+    """Train all ML models with GPU acceleration when available."""
+
     async def _train_models():
         # Get training data path
         data_path = context['task_instance'].xcom_pull(key='training_data_path')
-        
+
+        # Log GPU status
+        log_gpu_status()
+        gpu_config, _ = get_gpu_config()
+
         # Initialize orchestrator
         orchestrator = MLOrchestrator()
         await orchestrator.start()
-        
-        # Define model configurations
+
+        # Check if GPU is available for config
+        use_gpu = gpu_config and (
+            gpu_config.cuda_available or
+            gpu_config.xgboost_gpu_available or
+            gpu_config.lightgbm_gpu_available
+        )
+
+        # Define model configurations with GPU settings
+        # XGBoost config - GPU params will be auto-detected in training
+        xgboost_hyperparams = {
+            'n_estimators': 200,
+            'max_depth': 8,
+            'learning_rate': 0.01,
+            'subsample': 0.8
+        }
+        # Add GPU-specific params if available
+        if gpu_config and gpu_config.xgboost_gpu_available:
+            xgboost_hyperparams.update(gpu_config.get_xgboost_params())
+            logger.info(f"XGBoost using GPU: {xgboost_hyperparams}")
+
+        # LightGBM config
+        lightgbm_hyperparams = {
+            'n_estimators': 200,
+            'num_leaves': 31,
+            'learning_rate': 0.01,
+            'feature_fraction': 0.8
+        }
+        if gpu_config and gpu_config.lightgbm_gpu_available:
+            lightgbm_hyperparams.update(gpu_config.get_lightgbm_params())
+            logger.info(f"LightGBM using GPU: {lightgbm_hyperparams}")
+
         model_configs = [
             {
                 'name': 'stock_prediction_xgboost',
                 'model_type': ModelType.TIME_SERIES,
-                'hyperparameters': {
-                    'n_estimators': 200,
-                    'max_depth': 8,
-                    'learning_rate': 0.01,
-                    'subsample': 0.8
-                }
+                'hyperparameters': xgboost_hyperparams
             },
             {
                 'name': 'stock_prediction_lightgbm',
                 'model_type': ModelType.TIME_SERIES,
-                'hyperparameters': {
-                    'n_estimators': 200,
-                    'num_leaves': 31,
-                    'learning_rate': 0.01,
-                    'feature_fraction': 0.8
-                }
+                'hyperparameters': lightgbm_hyperparams
             },
             {
                 'name': 'stock_prediction_ensemble',
@@ -388,13 +449,23 @@ def train_models(**context):
                 for result in orchestrator.pipeline_history:
                     if result.pipeline_id == pipeline_id:
                         if result.status in ['completed', 'failed']:
-                            training_results.append({
+                            # Build result with GPU info
+                            training_result = {
                                 'model_name': model_config['name'],
                                 'pipeline_id': pipeline_id,
                                 'status': result.status,
                                 'metrics': result.model_artifact.metrics if result.model_artifact else {},
-                                'duration': result.total_compute_time_seconds
-                            })
+                                'duration': result.total_compute_time_seconds,
+                                'gpu_enabled': use_gpu,
+                            }
+                            if gpu_config:
+                                training_result['gpu_info'] = {
+                                    'cuda_available': gpu_config.cuda_available,
+                                    'device_name': gpu_config.cuda_device_name if gpu_config.cuda_available else None,
+                                    'xgboost_gpu': gpu_config.xgboost_gpu_available,
+                                    'lightgbm_gpu': gpu_config.lightgbm_gpu_available,
+                                }
+                            training_results.append(training_result)
                             break
                 else:
                     await asyncio.sleep(30)
