@@ -59,11 +59,11 @@ services:
     restart: unless-stopped
 
   # Redis Cache - Optimized for $50/month budget
-  # Memory reduced from 600M to 384M - 512mb maxmemory fits comfortably with overhead
+  # Memory increased to 512mb for caching 6000+ stock symbols (2.2 optimization)
   redis:
     image: redis:7-alpine
     container_name: investment_cache
-    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD} --tcp-keepalive 60 --save ""
     volumes:
       - redis_data:/data
     ports:
@@ -76,12 +76,12 @@ services:
     deploy:
       resources:
         limits:
-          # Reduced: 256mb maxmemory + 64M overhead = 320M sufficient
+          # 512mb maxmemory + 128M overhead = 640M for 6000+ stock symbol cache
           cpus: '0.25'
-          memory: 384M
+          memory: 640M
         reservations:
           cpus: '0.1'
-          memory: 192M
+          memory: 256M
     restart: unless-stopped
 
   # Backend API - Resource-optimized for $50/month budget

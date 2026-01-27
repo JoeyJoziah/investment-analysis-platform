@@ -136,14 +136,14 @@ services:
           cpus: '0.5'
           memory: 1G
 
-  # Override Redis for production - Optimized for cost-efficiency
-  # Memory reduced: 384mb maxmemory fits in 512M container with overhead
+  # Override Redis for production - Sized for 6000+ stock symbol cache (2.2 optimization)
+  # Memory increased: 512mb maxmemory for full symbol coverage with market data
   redis:
     command: >
       redis-server
       --appendonly yes
       --appendfsync everysec
-      --maxmemory ${REDIS_MAX_MEMORY:-384mb}
+      --maxmemory ${REDIS_MAX_MEMORY:-512mb}
       --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD}
       --tcp-keepalive 60
@@ -155,12 +155,12 @@ services:
     deploy:
       resources:
         limits:
-          # Reduced 15%: 384mb maxmemory + overhead fits in 512M
+          # 512mb maxmemory + 128M overhead for 6000+ stock symbols
           cpus: '0.3'
-          memory: 512M
+          memory: 640M
         reservations:
           cpus: '0.1'
-          memory: 256M
+          memory: 320M
 
   # =============================================================================
   # Airflow - Production Override

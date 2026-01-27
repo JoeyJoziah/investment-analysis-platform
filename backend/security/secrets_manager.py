@@ -19,6 +19,8 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
+from backend.config.settings import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,16 +63,29 @@ class SecretsManager:
         # Initialize encryption
         self.master_key = master_key or os.getenv("MASTER_SECRET_KEY")
         if not self.master_key:
-            # For development/testing, generate a temporary key
-            # WARNING: In production, MASTER_SECRET_KEY must be set
-            import warnings
-            warnings.warn(
-                "MASTER_SECRET_KEY not set - using temporary key. "
-                "Set MASTER_SECRET_KEY for production use.",
-                RuntimeWarning
-            )
-            import secrets as sec
-            self.master_key = sec.token_urlsafe(32)
+            if settings.is_production:
+                # CRITICAL: In production, MASTER_SECRET_KEY is required
+                raise ValueError(
+                    "CRITICAL SECURITY ERROR: MASTER_SECRET_KEY environment variable "
+                    "is not set. This key is required for production deployment. "
+                    "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\" "
+                    "and set it as MASTER_SECRET_KEY in your environment."
+                )
+            else:
+                # For development/testing only, generate a temporary key
+                import warnings
+                warnings.warn(
+                    f"MASTER_SECRET_KEY not set in {settings.ENVIRONMENT} environment - "
+                    "using temporary key. This is only acceptable for development/testing.",
+                    RuntimeWarning
+                )
+                import secrets as sec
+                self.master_key = sec.token_urlsafe(32)
+                logger.warning(
+                    "Using temporary encryption key in %s environment. "
+                    "Secrets will NOT persist across restarts.",
+                    settings.ENVIRONMENT
+                )
         
         self._fernet = self._initialize_encryption()
         self._secrets_cache: Dict[str, Any] = {}
