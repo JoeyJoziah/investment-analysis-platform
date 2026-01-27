@@ -4,6 +4,7 @@ Provides shared fixtures, test utilities, and configuration for all test modules
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import os
 from datetime import datetime
@@ -36,7 +37,69 @@ def event_loop():
     loop.close()
 
 
-@pytest.fixture(scope="session")
+# ============================================================================
+# ApiResponse Wrapper Validation Helpers
+# ============================================================================
+
+def assert_success_response(response, expected_status=200):
+    """
+    Validate ApiResponse wrapper structure and return unwrapped data.
+
+    Args:
+        response: FastAPI TestClient response object
+        expected_status: Expected HTTP status code (default: 200)
+
+    Returns:
+        Unwrapped data from response["data"]
+
+    Example:
+        data = assert_success_response(response)
+        assert data["title"] == "My Title"
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+
+    json_data = response.json()
+    assert json_data["success"] == True, \
+        f"Expected success=True, got success={json_data.get('success')}"
+    assert "data" in json_data, \
+        "Response missing 'data' field in ApiResponse wrapper"
+
+    return json_data["data"]
+
+
+def assert_api_error_response(response, expected_status, expected_error_substring=None):
+    """
+    Validate ApiResponse error structure.
+
+    Args:
+        response: FastAPI TestClient response object
+        expected_status: Expected HTTP error status code
+        expected_error_substring: Optional substring to verify in error message
+
+    Returns:
+        Full response JSON data
+
+    Example:
+        data = assert_api_error_response(response, 404, "not found")
+        assert "error" in data
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+
+    json_data = response.json()
+    assert json_data["success"] == False, \
+        f"Expected success=False for error response, got success={json_data.get('success')}"
+
+    if expected_error_substring:
+        error_msg = json_data.get("error", "")
+        assert expected_error_substring.lower() in error_msg.lower(), \
+            f"Expected '{expected_error_substring}' in error message, got: {error_msg}"
+
+    return json_data
+
+
+@pytest_asyncio.fixture(scope="session")
 async def test_db_engine():
     """Create test database engine."""
     # Use test database URL if available, otherwise use in-memory SQLite
@@ -44,18 +107,18 @@ async def test_db_engine():
         "TEST_DATABASE_URL",
         "sqlite+aiosqlite:///:memory:"  # Fallback to in-memory for CI/CD
     )
-    
+
     engine = create_async_engine(
         test_db_url,
         echo=False,  # Set to True for SQL debugging
         pool_pre_ping=True
     )
-    
+
     yield engine
     await engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def test_db_session_factory(test_db_engine):
     """Create test database session factory."""
     TestSessionLocal = sessionmaker(
@@ -66,7 +129,7 @@ async def test_db_session_factory(test_db_engine):
     return TestSessionLocal
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(test_db_session_factory):
     """Provide database session for tests."""
     async with test_db_session_factory() as session:
@@ -77,11 +140,17 @@ async def db_session(test_db_session_factory):
             await session.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def async_client():
     """Provide async HTTP client for API testing."""
     async with AsyncClient(app=app, base_url="http://test") as client:
         yield client
+
+
+@pytest_asyncio.fixture
+async def client(async_client):
+    """Alias for async_client for backward compatibility."""
+    return async_client
 
 
 @pytest.fixture

@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from backend.models.thesis import InvestmentThesis
 from backend.models.unified_models import User, Stock
+from backend.tests.conftest import assert_success_response, assert_api_error_response
 
 
 @pytest.fixture
@@ -85,8 +86,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 201
-        data = response.json()
+        data = assert_success_response(response, expected_status=201)
         assert data["stock_id"] == test_stock.id
         assert data["investment_objective"] == thesis_data["investment_objective"]
         assert data["time_horizon"] == thesis_data["time_horizon"]
@@ -173,8 +173,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 200
-        data = response.json()
+        data = assert_success_response(response)
         assert data["id"] == test_thesis.id
         assert data["investment_objective"] == test_thesis.investment_objective
         assert data["stock_symbol"] is not None
@@ -192,8 +191,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 200
-        data = response.json()
+        data = assert_success_response(response)
         assert data["stock_id"] == test_thesis.stock_id
         assert data["investment_objective"] == test_thesis.investment_objective
 
@@ -224,8 +222,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 200
-        data = response.json()
+        data = assert_success_response(response)
         assert isinstance(data, list)
         assert len(data) >= 1
         assert any(t["id"] == test_thesis.id for t in data)
@@ -243,8 +240,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 200
-        data = response.json()
+        data = assert_success_response(response)
         assert isinstance(data, list)
         assert len(data) <= 10
 
@@ -268,8 +264,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 200
-        data = response.json()
+        data = assert_success_response(response)
         assert data["investment_objective"] == update_data["investment_objective"]
         assert float(data["target_price"]) == update_data["target_price"]
         assert data["version"] == test_thesis.version + 1  # Version incremented
