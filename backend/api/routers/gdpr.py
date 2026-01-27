@@ -28,6 +28,7 @@ from backend.compliance.gdpr import (
     DeletionStatus
 )
 from backend.utils.data_anonymization import data_anonymizer
+from backend.models.api_response import ApiResponse, success_response
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -162,7 +163,6 @@ async def get_current_user_from_token(
 
 @router.get(
     "/users/me/data-export",
-    response_model=DataExportFullResponse,
     summary="Export user data (GDPR Right to Access & Portability)",
     description="Export all personal data associated with the authenticated user. "
                 "Implements GDPR Article 15 (Right to Access) and Article 20 "
@@ -177,7 +177,7 @@ async def export_user_data(
     request: Request,
     include_categories: Optional[List[str]] = None,
     db: AsyncSession = Depends(get_async_db_session)
-) -> DataExportFullResponse:
+) -> ApiResponse[DataExportFullResponse]:
     """
     Export all personal data for the authenticated user.
 
@@ -204,14 +204,14 @@ async def export_user_data(
             include_categories=include_categories
         )
 
-        return DataExportFullResponse(
+        return success_response(data=DataExportFullResponse(
             export_id=result.export_id,
             user_id=result.user_id,
             export_date=result.export_date,
             categories=result.categories,
             record_counts=result.record_counts,
             data=result.data
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error exporting user data: {e}")
@@ -233,7 +233,7 @@ async def export_user_data(
 async def export_user_data_json(
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Export user data as JSON format"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -241,7 +241,7 @@ async def export_user_data_json(
             user_id=current_user.id,
             session=db
         )
-        return result.data
+        return success_response(data=result.data)
 
     except Exception as e:
         logger.error(f"Error exporting user data as JSON: {e}")
@@ -257,7 +257,6 @@ async def export_user_data_json(
 
 @router.post(
     "/users/me/delete-request",
-    response_model=DeleteRequestResponse,
     summary="Request account deletion (GDPR Right to Erasure)",
     description="Initiate the right-to-erasure process. User data will be "
                 "anonymized or deleted based on regulatory requirements.",
@@ -272,7 +271,7 @@ async def request_deletion(
     request: Request,
     reason: Optional[str] = None,
     db: AsyncSession = Depends(get_async_db_session)
-) -> DeleteRequestResponse:
+) -> ApiResponse[DeleteRequestResponse]:
     """
     Initiate account deletion request.
 
@@ -296,7 +295,7 @@ async def request_deletion(
             session=db
         )
 
-        return DeleteRequestResponse(
+        return success_response(data=DeleteRequestResponse(
             request_id=result["request_id"],
             status=result["status"],
             message=result["message"],
@@ -310,7 +309,7 @@ async def request_deletion(
                 "Audit logs (retained for regulatory requirements - 7 years)",
                 "Consent records (retained for compliance - 10 years)"
             ]
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error processing deletion request: {e}")
@@ -322,7 +321,6 @@ async def request_deletion(
 
 @router.post(
     "/users/me/delete-request/{request_id}/process",
-    response_model=DeleteRequestResponse,
     summary="Process deletion request",
     description="Process a pending deletion request. Admin only.",
     responses={
@@ -335,7 +333,7 @@ async def process_deletion_request(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> DeleteRequestResponse:
+) -> ApiResponse[DeleteRequestResponse]:
     """Process a pending deletion request"""
     try:
         result = await data_deletion.process_deletion(
@@ -343,7 +341,7 @@ async def process_deletion_request(
             session=db
         )
 
-        return DeleteRequestResponse(
+        return success_response(data=DeleteRequestResponse(
             request_id=result["request_id"],
             status=result["status"],
             message="Deletion completed successfully",
@@ -356,7 +354,7 @@ async def process_deletion_request(
             retained_for_compliance=list(
                 result.get("retained_for_compliance", {}).keys()
             )
-        )
+        ))
 
     except ValueError as e:
         raise HTTPException(
@@ -373,7 +371,6 @@ async def process_deletion_request(
 
 @router.get(
     "/users/me/delete-request/{request_id}/audit",
-    response_model=DeletionAuditResponse,
     summary="Get deletion audit trail",
     description="Get the audit trail for a deletion request.",
     responses={
@@ -385,7 +382,7 @@ async def get_deletion_audit(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> DeletionAuditResponse:
+) -> ApiResponse[DeletionAuditResponse]:
     """Get audit trail for a deletion request"""
     audit = data_deletion.get_deletion_audit(request_id)
 
@@ -395,7 +392,7 @@ async def get_deletion_audit(
             detail=f"Deletion request {request_id} not found"
         )
 
-    return DeletionAuditResponse(
+    return success_response(data=DeletionAuditResponse(
         request_id=audit["request_id"],
         status=audit["status"],
         request_date=audit["request_date"],
@@ -404,7 +401,7 @@ async def get_deletion_audit(
         anonymized_records=audit.get("anonymized_records", {}),
         retained_records=audit.get("retained_records", {}),
         anonymized_user_reference=audit["anonymized_user_reference"]
-    )
+    ))
 
 
 # =============================================================================
@@ -413,7 +410,6 @@ async def get_deletion_audit(
 
 @router.get(
     "/users/me/consent",
-    response_model=ConsentStatusResponse,
     summary="Get consent status",
     description="Retrieve current consent status for all consent types.",
     responses={
@@ -424,7 +420,7 @@ async def get_deletion_audit(
 async def get_consent_status(
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ConsentStatusResponse:
+) -> ApiResponse[ConsentStatusResponse]:
     """
     Get the current consent status for the authenticated user.
 
@@ -451,11 +447,11 @@ async def get_consent_status(
                 if last_updated is None or consent_date > last_updated:
                     last_updated = consent_date
 
-        return ConsentStatusResponse(
+        return success_response(data=ConsentStatusResponse(
             user_id=user_id,
             consents=status_data,
             last_updated=last_updated
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error retrieving consent status: {e}")
@@ -467,7 +463,6 @@ async def get_consent_status(
 
 @router.get(
     "/users/me/consent/history",
-    response_model=ConsentHistoryResponse,
     summary="Get consent history",
     description="Retrieve complete consent history for the user.",
     responses={
@@ -478,7 +473,7 @@ async def get_consent_status(
 async def get_consent_history(
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ConsentHistoryResponse:
+) -> ApiResponse[ConsentHistoryResponse]:
     """Get complete consent history for the authenticated user"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -489,10 +484,10 @@ async def get_consent_history(
             session=db
         )
 
-        return ConsentHistoryResponse(
+        return success_response(data=ConsentHistoryResponse(
             user_id=user_id,
             history=history
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error retrieving consent history: {e}")
@@ -504,7 +499,6 @@ async def get_consent_history(
 
 @router.post(
     "/users/me/consent",
-    response_model=ConsentRecordResponse,
     summary="Record consent",
     description="Record user consent for a specific purpose.",
     responses={
@@ -517,7 +511,7 @@ async def record_consent(
     consent_request: ConsentRequest,
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ConsentRecordResponse:
+) -> ApiResponse[ConsentRecordResponse]:
     """
     Record user consent for a specific purpose.
 
@@ -570,14 +564,14 @@ async def record_consent(
             session=db
         )
 
-        return ConsentRecordResponse(
+        return success_response(data=ConsentRecordResponse(
             consent_id=consent_id,
             consent_type=consent_request.consent_type,
             granted=consent_request.granted,
             timestamp=datetime.utcnow(),
             legal_basis=consent_request.legal_basis,
             ip_address=data_anonymizer.anonymize_ip(ip_address) if ip_address else None
-        )
+        ))
 
     except HTTPException:
         raise
@@ -591,7 +585,6 @@ async def record_consent(
 
 @router.delete(
     "/users/me/consent/{consent_type}",
-    response_model=ConsentRecordResponse,
     summary="Withdraw consent",
     description="Withdraw previously granted consent for a specific purpose.",
     responses={
@@ -607,7 +600,7 @@ async def withdraw_consent(
     ],
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ConsentRecordResponse:
+) -> ApiResponse[ConsentRecordResponse]:
     """
     Withdraw consent for a specific purpose.
 
@@ -648,14 +641,14 @@ async def withdraw_consent(
             session=db
         )
 
-        return ConsentRecordResponse(
+        return success_response(data=ConsentRecordResponse(
             consent_id=consent_id,
             consent_type=consent_type,
             granted=False,
             timestamp=datetime.utcnow(),
             legal_basis="consent_withdrawal",
             ip_address=data_anonymizer.anonymize_ip(ip_address) if ip_address else None
-        )
+        ))
 
     except HTTPException:
         raise
@@ -683,7 +676,7 @@ async def check_consent(
     ],
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """Check if user has valid consent for a specific purpose"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -705,12 +698,12 @@ async def check_consent(
             session=db
         )
 
-        return {
+        return success_response(data={
             "user_id": user_id,
             "consent_type": consent_type,
             "has_consent": has_consent,
             "checked_at": datetime.utcnow().isoformat()
-        }
+        })
 
     except Exception as e:
         logger.error(f"Error checking consent: {e}")
@@ -726,7 +719,6 @@ async def check_consent(
 
 @router.get(
     "/users/me/retention-report",
-    response_model=RetentionReportResponse,
     summary="Get data retention report",
     description="Get a report showing data categories and their retention periods.",
     responses={
@@ -737,7 +729,7 @@ async def check_consent(
 async def get_retention_report(
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> RetentionReportResponse:
+) -> ApiResponse[RetentionReportResponse]:
     """Generate a data retention report for the authenticated user"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -748,11 +740,11 @@ async def get_retention_report(
             session=db
         )
 
-        return RetentionReportResponse(
+        return success_response(data=RetentionReportResponse(
             user_id=report["user_id"],
             report_date=report["report_date"],
             categories=report["categories"]
-        )
+        ))
 
     except Exception as e:
         logger.error(f"Error generating retention report: {e}")
@@ -775,7 +767,7 @@ async def enforce_retention_policies(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db_session)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict]:
     """
     Enforce data retention policies by cleaning up expired data.
     Admin only endpoint.
@@ -787,11 +779,11 @@ async def enforce_retention_policies(
             session=db
         )
 
-        return {
+        return success_response(data={
             "status": "scheduled",
             "message": "Retention policy enforcement scheduled",
             "scheduled_at": datetime.utcnow().isoformat()
-        }
+        })
 
     except Exception as e:
         logger.error(f"Error scheduling retention enforcement: {e}")
