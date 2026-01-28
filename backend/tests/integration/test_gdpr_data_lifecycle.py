@@ -28,6 +28,35 @@ pytestmark = pytest.mark.integration
 
 
 @pytest_asyncio.fixture
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Create NASDAQ exchange for testing."""
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        country="US",
+        currency="USD",
+        timezone="America/New_York"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Create Technology sector for testing."""
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+
+@pytest_asyncio.fixture
 async def gdpr_test_user(db_session: AsyncSession):
     """Create a test user with GDPR-relevant data."""
     user = User(
@@ -58,13 +87,14 @@ async def gdpr_test_user(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User):
+async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nasdaq_exchange: Exchange, technology_sector: Sector):
     """Create complete user data ecosystem for GDPR testing."""
     # Create stocks
     stock1 = Stock(
         symbol="AAPL",
         name="Apple Inc.",
         exchange_id=nasdaq_exchange.id,
+        sector_id=technology_sector.id,
         asset_type="stock",
         is_active=True,
         is_tradable=True
@@ -73,6 +103,7 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User):
         symbol="MSFT",
         name="Microsoft Corporation",
         exchange_id=nasdaq_exchange.id,
+        sector_id=technology_sector.id,
         asset_type="stock",
         is_active=True,
         is_tradable=True
@@ -129,15 +160,6 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User):
     db_session.add(watchlist)
     await db_session.commit()
 
-    watchlist_item = WatchlistItem(
-        watchlist_id=watchlist.id,
-        stock_id=stock2.id,
-        target_price=Decimal("350.00"),
-        alert_enabled=True
-    )
-    db_session.add(watchlist_item)
-    await db_session.commit()
-
     # Create alerts
     alert = Alert(
         user_id=gdpr_test_user.id,
@@ -180,7 +202,6 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User):
         "positions": [position1, position2],
         "transaction": transaction,
         "watchlist": watchlist,
-        "watchlist_item": watchlist_item,
         "alert": alert,
         "session": session,
         "audit_log": audit_log
