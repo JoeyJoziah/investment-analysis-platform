@@ -370,7 +370,7 @@ class TestDataIngestionClients:
             
             # Make multiple rapid requests
             start_time = datetime.now()
-            tasks = [alpha_vantage_client.get_stock_data('AAPL') for _ in range(3)]
+            tasks = [alpha_vantage_client.get_quote('AAPL') for _ in range(3)]
             await asyncio.gather(*tasks)
             end_time = datetime.now()
             
@@ -398,10 +398,10 @@ class TestDataIngestionClients:
                 if should_retry:
                     # Should attempt retries
                     with patch('asyncio.sleep'):  # Mock sleep to speed up test
-                        result = asyncio.run(alpha_vantage_client.get_stock_data('AAPL'))
+                        result = asyncio.run(alpha_vantage_client.get_quote('AAPL'))
                 else:
                     # Should not retry
-                    result = asyncio.run(alpha_vantage_client.get_stock_data('AAPL'))
+                    result = asyncio.run(alpha_vantage_client.get_quote('AAPL'))
     
     def test_data_transformation(self, polygon_client):
         """Test that API responses are properly transformed"""
