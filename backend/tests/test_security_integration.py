@@ -4,6 +4,7 @@ Tests OAuth2 authentication, rate limiting, access control, and security measure
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import json
 from datetime import datetime, timedelta
@@ -72,7 +73,7 @@ class TestSecurityIntegration:
         """Create rate limiter instance."""
         return RateLimiter()
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def async_client(self):
         """Create async HTTP client for testing."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
