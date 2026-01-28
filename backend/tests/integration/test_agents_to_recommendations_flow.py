@@ -54,47 +54,48 @@ async def ml_model_mock():
         yield mock_instance
 
 
-@pytest_asyncio.fixture
-async def llm_agent_mock():
-    """Mock LLM agent for fundamental analysis."""
-    with patch("backend.agents.analysis_agent.AnalysisAgent") as mock_agent:
-        mock_instance = AsyncMock()
-        mock_instance.analyze_fundamentals.return_value = {
-            "summary": "Strong company with solid fundamentals and growth potential",
-            "strengths": [
-                "High profit margins",
-                "Strong balance sheet",
-                "Growing market share",
-                "Innovation pipeline"
-            ],
-            "weaknesses": [
-                "Premium valuation",
-                "Market concentration risk",
-                "Regulatory concerns"
-            ],
-            "opportunities": [
-                "Expanding into new markets",
-                "Product diversification",
-                "Strategic partnerships"
-            ],
-            "threats": [
-                "Increasing competition",
-                "Economic headwinds",
-                "Supply chain disruptions"
-            ],
-            "overall_score": 0.78
-        }
-        mock_instance.generate_thesis.return_value = {
-            "investment_case": "Buy recommendation based on strong fundamentals",
-            "key_points": [
-                "Consistent revenue growth",
-                "Market leadership position",
-                "Strong cash generation"
-            ],
-            "confidence": 0.82
-        }
-        mock_agent.return_value = mock_instance
-        yield mock_instance
+# Commented out - AnalysisAgent doesn't exist yet
+# @pytest_asyncio.fixture
+# async def llm_agent_mock():
+#     """Mock LLM agent for fundamental analysis."""
+#     with patch("backend.agents.analysis_agent.AnalysisAgent") as mock_agent:
+#         mock_instance = AsyncMock()
+#         mock_instance.analyze_fundamentals.return_value = {
+#             "summary": "Strong company with solid fundamentals and growth potential",
+#             "strengths": [
+#                 "High profit margins",
+#                 "Strong balance sheet",
+#                 "Growing market share",
+#                 "Innovation pipeline"
+#             ],
+#             "weaknesses": [
+#                 "Premium valuation",
+#                 "Market concentration risk",
+#                 "Regulatory concerns"
+#             ],
+#             "opportunities": [
+#                 "Expanding into new markets",
+#                 "Product diversification",
+#                 "Strategic partnerships"
+#             ],
+#             "threats": [
+#                 "Increasing competition",
+#                 "Economic headwinds",
+#                 "Supply chain disruptions"
+#             ],
+#             "overall_score": 0.78
+#         }
+#         mock_instance.generate_thesis.return_value = {
+#             "investment_case": "Buy recommendation based on strong fundamentals",
+#             "key_points": [
+#                 "Consistent revenue growth",
+#                 "Market leadership position",
+#                 "Strong cash generation"
+#             ],
+#             "confidence": 0.82
+#         }
+#         mock_agent.return_value = mock_instance
+#         yield mock_instance
 
 
 @pytest_asyncio.fixture
@@ -166,7 +167,7 @@ async def test_agent_analysis_to_recommendation(
     db_session: AsyncSession,
     sample_stock_with_data: Stock,
     ml_model_mock,
-    llm_agent_mock,
+    # llm_agent_mock,  # Removed - AnalysisAgent doesn't exist
     auth_headers
 ):
     """
@@ -223,7 +224,7 @@ async def test_ml_prediction_to_agent_analysis(
     db_session: AsyncSession,
     sample_stock_with_data: Stock,
     ml_model_mock,
-    llm_agent_mock,
+    # llm_agent_mock,  # Removed - AnalysisAgent doesn't exist
     auth_headers
 ):
     """
@@ -276,7 +277,7 @@ async def test_recommendation_confidence_scoring(
     db_session: AsyncSession,
     sample_stock_with_data: Stock,
     ml_model_mock,
-    llm_agent_mock,
+    # llm_agent_mock,  # Removed - AnalysisAgent doesn't exist
     auth_headers
 ):
     """
@@ -360,9 +361,9 @@ async def test_recommendation_to_portfolio_action(
     # Create high-confidence recommendation
     recommendation = Recommendation(
         stock_id=sample_stock_with_data.id,
-        recommendation_type=RecommendationTypeEnum.STRONG_BUY,
-        confidence_score=0.88,
-        current_price=Decimal("450.00"),
+        action=RecommendationTypeEnum.STRONG_BUY.value,
+        confidence=0.88,
+        entry_price=Decimal("450.00"),
         target_price=Decimal("525.00"),
         stop_loss=Decimal("420.00"),
         time_horizon_days=60,

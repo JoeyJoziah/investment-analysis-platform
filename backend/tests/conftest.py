@@ -167,6 +167,39 @@ def test_user():
     )
 
 
+@pytest_asyncio.fixture
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Provide NASDAQ exchange for testing."""
+    from backend.models.unified_models import Exchange
+
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        timezone="America/New_York",
+        country="US",
+        currency="USD"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Provide Technology sector for testing."""
+    from backend.models.unified_models import Sector
+
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+
 @pytest.fixture
 def auth_token(test_user):
     """Provide authentication token."""

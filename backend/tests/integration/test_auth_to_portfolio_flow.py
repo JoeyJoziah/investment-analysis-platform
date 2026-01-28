@@ -439,13 +439,13 @@ async def test_portfolio_rebalancing_with_locks(
         portfolio_id=user_portfolio.id,
         stock_id=aapl_stock.id,
         quantity=Decimal("100"),
-        average_cost=Decimal("150.00")
+        avg_cost_basis=Decimal("150.00")
     )
     position2 = Position(
         portfolio_id=user_portfolio.id,
         stock_id=msft_stock.id,
         quantity=Decimal("50"),
-        average_cost=Decimal("300.00")
+        avg_cost_basis=Decimal("300.00")
     )
     db_session.add(position1)
     db_session.add(position2)

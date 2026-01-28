@@ -127,13 +127,13 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
         portfolio_id=portfolio.id,
         stock_id=stock1.id,
         quantity=Decimal("50"),
-        average_cost=Decimal("150.00")
+        avg_cost_basis=Decimal("150.00")
     )
     position2 = Position(
         portfolio_id=portfolio.id,
         stock_id=stock2.id,
         quantity=Decimal("30"),
-        average_cost=Decimal("300.00")
+        avg_cost_basis=Decimal("300.00")
     )
     db_session.add_all([position1, position2])
     await db_session.commit()
