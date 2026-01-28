@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal
 
 from backend.api.main import app
-from backend.models.unified_models import Portfolio, Position, User, Stock
+from backend.models.unified_models import Portfolio, Position, User, Stock, Exchange, Sector
 from backend.models.thesis import InvestmentThesis
 from backend.repositories.portfolio_repository import PortfolioRepository
 from backend.repositories.thesis_repository import InvestmentThesisRepository
@@ -34,7 +34,7 @@ class TestMiddlewareStackIntegration:
     """Test middleware stack execution order and compatibility"""
 
     @pytest.mark.asyncio
-    async def test_middleware_stack_execution_order(self, async_client: AsyncClient, Exchange, Sector):
+    async def test_middleware_stack_execution_order(self, async_client: AsyncClient):
         """
         Verify middleware executes in correct order:
         Security → CORS → Prometheus → Cache → V1Deprecation
@@ -143,29 +143,29 @@ async def technology_sector(db_session: AsyncSession):
     return sector
 
 @pytest_asyncio.fixture
-    async def test_portfolio(self, db_session: AsyncSession):
-        """Create test portfolio for locking tests"""
-        from backend.models.unified_models import User, Portfolio
+async def test_portfolio(db_session: AsyncSession):
+    """Create test portfolio for locking tests"""
+    from backend.models.unified_models import User, Portfolio
 
-        # Create test user
-        user = User(
-            username="locktest",
-            email="locktest@example.com",
-            hashed_password="test123"
-        , Exchange, Sector)
-        db_session.add(user)
-        await db_session.flush()
+    # Create test user
+    user = User(
+        username="locktest",
+        email="locktest@example.com",
+        hashed_password="test123"
+    )
+    db_session.add(user)
+    await db_session.flush()
 
-        # Create portfolio
-        portfolio = Portfolio(
-            user_id=user.id,
-            name="Lock Test Portfolio",
-            cash_balance=Decimal("10000.00")
-        )
-        db_session.add(portfolio)
-        await db_session.commit()
+    # Create portfolio
+    portfolio = Portfolio(
+        user_id=user.id,
+        name="Lock Test Portfolio",
+        cash_balance=Decimal("10000.00")
+    )
+    db_session.add(portfolio)
+    await db_session.commit()
 
-        return portfolio
+    return portfolio
 
     async def test_row_locking_through_repository(self, db_session: AsyncSession, test_portfolio):
         """
@@ -315,7 +315,7 @@ class TestSecurityIntegration:
 class TestDatabaseIntegration:
     """Test database integration points"""
 
-    async def test_select_for_update_compatibility(self, db_session: AsyncSession):
+    async def test_select_for_update_compatibility(self, db_session: AsyncSession, nasdaq_exchange, technology_sector):
         """
         Test SELECT FOR UPDATE works with existing transaction patterns
 
@@ -328,8 +328,9 @@ class TestDatabaseIntegration:
         stock = Stock(
             symbol="TEST",
             name="Test Stock",
-            sector="Technology"
-        , Exchange, Sector)
+            exchange_id=nasdaq_exchange.id,
+            sector_id=technology_sector.id
+        )
         db_session.add(stock)
         await db_session.commit()
 
@@ -348,7 +349,7 @@ class TestDatabaseIntegration:
         """
         from backend.models.unified_models import Portfolio
 
-        # Check Portfolio model has version field (if implemented, Exchange, Sector)
+        # Check Portfolio model has version field (if implemented)
         # This validates the migration added version columns correctly
         portfolio = Portfolio(
             name="Version Test",
@@ -409,7 +410,7 @@ class TestPerformance:
         assert response.status_code == 200
         assert duration < 1.0  # 1 second threshold
 
-    async def test_row_locking_doesnt_block_reads(self, db_session: AsyncSession):
+    async def test_row_locking_doesnt_block_reads(self, db_session: AsyncSession, nasdaq_exchange, technology_sector):
         """
         Test optimistic locking doesn't block concurrent reads
 
@@ -419,7 +420,7 @@ class TestPerformance:
         from backend.repositories.base import AsyncCRUDRepository
 
         # Create test stock
-        stock = Stock(symbol="PERF", name="Performance Test", sector_id=technology_sector.id, Exchange, Sector)
+        stock = Stock(symbol="PERF", name="Performance Test", exchange_id=nasdaq_exchange.id, sector_id=technology_sector.id)
         db_session.add(stock)
         await db_session.commit()
 
