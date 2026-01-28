@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.unified_models import (
     User, Portfolio, Position, Transaction, Alert,
     Watchlist, Stock, AuditLog,
-    UserSession, ApiLog, Exchange, Sector,
+    UserSession, Exchange, Sector,
     UserRoleEnum, AssetTypeEnum
 )
 from backend.api.main import app
