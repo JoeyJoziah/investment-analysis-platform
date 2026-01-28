@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from fastapi import HTTPException, status
 from jose import jwt
 import bcrypt
@@ -63,7 +63,7 @@ class TestSecurityIntegration:
     @pytest.fixture
     async def async_client(self):
         """Create async HTTP client for testing."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             yield client
 
     @pytest.mark.asyncio

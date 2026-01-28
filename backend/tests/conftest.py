@@ -13,7 +13,7 @@ from unittest.mock import patch, AsyncMock
 import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from backend.api.main import app
 from backend.config.database import get_async_db_session, initialize_database
@@ -26,15 +26,6 @@ from backend.config.settings import settings
 # Configure test logging
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for session-scoped async fixtures."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
 
 
 # ============================================================================
@@ -99,14 +90,13 @@ def assert_api_error_response(response, expected_status, expected_error_substrin
     return json_data
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_db_engine():
     """Create test database engine."""
-    # Use test database URL if available, otherwise use in-memory SQLite
-    test_db_url = os.getenv(
-        "TEST_DATABASE_URL",
-        "sqlite+aiosqlite:///:memory:"  # Fallback to in-memory for CI/CD
-    )
+    from backend.models.unified_models import Base
+
+    # Use in-memory SQLite for tests (safe default)
+    test_db_url = "sqlite+aiosqlite:///:memory:"
 
     engine = create_async_engine(
         test_db_url,
@@ -114,11 +104,15 @@ async def test_db_engine():
         pool_pre_ping=True
     )
 
+    # Create all tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield engine
     await engine.dispose()
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_db_session_factory(test_db_engine):
     """Create test database session factory."""
     TestSessionLocal = sessionmaker(
@@ -143,7 +137,7 @@ async def db_session(test_db_session_factory):
 @pytest_asyncio.fixture
 async def async_client():
     """Provide async HTTP client for API testing."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
 

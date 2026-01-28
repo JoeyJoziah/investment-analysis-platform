@@ -37,7 +37,7 @@ from backend.tests.fixtures.comprehensive_mock_fixtures import (
 
 # Test client for FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 
 class DatabaseTestContainer:
@@ -322,7 +322,7 @@ class TestEndToEndWorkflows:
         
         app.dependency_overrides[get_database] = override_get_database
         
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             
             # Test health endpoint
             response = await client.get("/api/health")

@@ -23,7 +23,7 @@ from fastapi import HTTPException
 from backend.api.main import app
 from backend.models.unified_models import User
 from backend.auth.oauth2 import create_tokens, RateLimiter
-from backend.utils.circuit_breaker import CircuitBreaker, CircuitBreakerState
+from backend.utils.circuit_breaker import CircuitBreaker, CircuitState
 
 logger = logging.getLogger(__name__)
 
@@ -306,7 +306,7 @@ class TestCircuitBreaker:
             expected_exception=Exception,
         )
 
-        assert breaker.state == CircuitBreakerState.CLOSED
+        assert breaker.state == CircuitState.CLOSED
 
     def test_circuit_breaker_opens_after_failures(self):
         """Test circuit breaker opens after threshold failures"""
@@ -326,7 +326,7 @@ class TestCircuitBreaker:
                 pass
 
         # Circuit should open
-        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.state == CircuitState.OPEN
 
     def test_circuit_breaker_rejects_calls_when_open(self):
         """Test circuit breaker rejects calls when OPEN"""
@@ -342,7 +342,7 @@ class TestCircuitBreaker:
             pass
 
         # Circuit should be open
-        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.state == CircuitState.OPEN
 
         # Next call should be rejected immediately
         with pytest.raises(Exception) as exc_info:
@@ -363,7 +363,7 @@ class TestCircuitBreaker:
         except Exception:
             pass
 
-        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.state == CircuitState.OPEN
 
         # Wait for recovery timeout
         time.sleep(0.2)
@@ -376,7 +376,7 @@ class TestCircuitBreaker:
         try:
             result = breaker(successful_operation)()
             # If successful, circuit should close
-            assert breaker.state == CircuitBreakerState.CLOSED
+            assert breaker.state == CircuitState.CLOSED
             assert result == "success"
         except Exception:
             # Depending on timing, might still be in recovery
@@ -440,7 +440,7 @@ class TestCircuitBreaker:
                 pass
 
         # Circuit should open
-        assert breaker.state == CircuitBreakerState.OPEN
+        assert breaker.state == CircuitState.OPEN
 
         # Further calls rejected without attempting API call
         original_call_count = call_count[0]

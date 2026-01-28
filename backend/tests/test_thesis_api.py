@@ -3,6 +3,7 @@ Tests for Investment Thesis API endpoints
 """
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal
@@ -12,7 +13,7 @@ from backend.models.unified_models import User, Stock
 from backend.tests.conftest import assert_success_response, assert_api_error_response
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_stock(db_session: AsyncSession) -> Stock:
     """Create a test stock"""
     stock = Stock(
@@ -29,7 +30,7 @@ async def test_stock(db_session: AsyncSession) -> Stock:
     return stock
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_thesis(db_session: AsyncSession, test_user: User, test_stock: Stock) -> InvestmentThesis:
     """Create a test investment thesis"""
     thesis = InvestmentThesis(
@@ -115,7 +116,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 422  # Validation error
+        assert_api_error_response(response, 422)
 
     @pytest.mark.asyncio
     async def test_create_thesis_invalid_stock_id(
@@ -136,7 +137,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 404
+        assert_api_error_response(response, 404)
 
     @pytest.mark.asyncio
     async def test_create_duplicate_thesis(
@@ -158,7 +159,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 409  # Conflict
+        assert_api_error_response(response, 409)
 
     @pytest.mark.asyncio
     async def test_get_thesis_by_id(
@@ -207,7 +208,7 @@ class TestInvestmentThesisAPI:
             headers=auth_headers
         )
 
-        assert response.status_code == 404
+        assert_api_error_response(response, 404)
 
     @pytest.mark.asyncio
     async def test_list_user_theses(
@@ -304,7 +305,8 @@ class TestInvestmentThesisAPI:
             headers=other_headers
         )
 
-        assert response.status_code in [403, 404]  # Forbidden or Not Found
+        assert response.status_code in [403, 404]
+        assert_api_error_response(response, response.status_code)
 
     @pytest.mark.asyncio
     async def test_delete_thesis(
@@ -326,7 +328,7 @@ class TestInvestmentThesisAPI:
             f"/api/v1/thesis/{test_thesis.id}",
             headers=auth_headers
         )
-        assert get_response.status_code == 404
+        assert_api_error_response(get_response, 404)
 
     @pytest.mark.asyncio
     async def test_delete_thesis_not_owned(
@@ -357,6 +359,7 @@ class TestInvestmentThesisAPI:
         )
 
         assert response.status_code in [403, 404]
+        assert_api_error_response(response, response.status_code)
 
     @pytest.mark.asyncio
     async def test_thesis_requires_authentication(
@@ -367,7 +370,7 @@ class TestInvestmentThesisAPI:
         """Test that all endpoints require authentication"""
         # Test GET
         response = await client.get(f"/api/v1/thesis/{test_thesis.id}")
-        assert response.status_code == 401
+        assert_api_error_response(response, 401)
 
         # Test POST
         response = await client.post(
@@ -378,15 +381,15 @@ class TestInvestmentThesisAPI:
                 "time_horizon": "short-term"
             }
         )
-        assert response.status_code == 401
+        assert_api_error_response(response, 401)
 
         # Test PUT
         response = await client.put(
             f"/api/v1/thesis/{test_thesis.id}",
             json={"investment_objective": "test"}
         )
-        assert response.status_code == 401
+        assert_api_error_response(response, 401)
 
         # Test DELETE
         response = await client.delete(f"/api/v1/thesis/{test_thesis.id}")
-        assert response.status_code == 401
+        assert_api_error_response(response, 401)
