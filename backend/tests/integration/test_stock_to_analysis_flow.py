@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.tables import (
-    Stock, PriceHistory, Recommendation, Fundamental,
-    Alert, Portfolio, Position, RecommendationTypeEnum, AssetTypeEnum
+from backend.models.unified_models import (
+    Stock, PriceHistory, Recommendation, Fundamentals,
+    Alert, Portfolio, Position, RecommendationTypeEnum, AssetTypeEnum, Exchange, Sector
 )
 from backend.api.main import app
 from httpx import AsyncClient, ASGITransport
@@ -25,14 +25,14 @@ pytestmark = pytest.mark.integration
 
 
 @pytest_asyncio.fixture
-async def sample_stock(db_session: AsyncSession):
+async def sample_stock(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector):
     """Create a sample stock for testing."""
     stock = Stock(
         symbol="AAPL",
         name="Apple Inc.",
-        exchange="NASDAQ",
-        asset_type=AssetTypeEnum.STOCK,
-        sector="Technology",
+        exchange_id=nasdaq_exchange.id,
+        asset_type="stock",
+        sector_id=technology_sector.id,
         industry="Consumer Electronics",
         market_cap=3000000000000,
         shares_outstanding=16000000000,

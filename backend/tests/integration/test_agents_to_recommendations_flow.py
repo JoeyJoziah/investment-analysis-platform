@@ -13,9 +13,10 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.tables import (
+from backend.models.unified_models import (
     Stock, Recommendation, RecommendationTypeEnum,
-    Position, Portfolio, AssetTypeEnum
+    Position, Portfolio, AssetTypeEnum,
+    Exchange, Sector, Industry
 )
 from backend.api.main import app
 from httpx import AsyncClient, ASGITransport
@@ -97,15 +98,58 @@ async def llm_agent_mock():
 
 
 @pytest_asyncio.fixture
-async def sample_stock_with_data(db_session: AsyncSession):
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Create NASDAQ exchange for testing."""
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        country="US",
+        currency="USD",
+        timezone="America/New_York"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Create Technology sector for testing."""
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+
+@pytest_asyncio.fixture
+async def semiconductor_industry(db_session: AsyncSession, technology_sector: Sector):
+    """Create Semiconductors industry for testing."""
+    industry = Industry(
+        name="Semiconductors",
+        description="Semiconductor industry",
+        sector_id=technology_sector.id
+    )
+    db_session.add(industry)
+    await db_session.commit()
+    await db_session.refresh(industry)
+    return industry
+
+
+@pytest_asyncio.fixture
+async def sample_stock_with_data(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector, semiconductor_industry: Industry):
     """Create stock with complete data for agent analysis."""
     stock = Stock(
         symbol="NVDA",
         name="NVIDIA Corporation",
-        exchange="NASDAQ",
-        asset_type=AssetTypeEnum.STOCK,
-        sector="Technology",
-        industry="Semiconductors",
+        exchange_id=nasdaq_exchange.id,
+        asset_type="stock",
+        sector_id=technology_sector.id,
+        industry_id=semiconductor_industry.id,
         market_cap=1500000000000,
         is_active=True,
         is_tradable=True

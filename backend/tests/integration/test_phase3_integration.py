@@ -34,7 +34,7 @@ class TestMiddlewareStackIntegration:
     """Test middleware stack execution order and compatibility"""
 
     @pytest.mark.asyncio
-    async def test_middleware_stack_execution_order(self, async_client: AsyncClient):
+    async def test_middleware_stack_execution_order(self, async_client: AsyncClient, Exchange, Sector):
         """
         Verify middleware executes in correct order:
         Security → CORS → Prometheus → Cache → V1Deprecation
@@ -113,7 +113,36 @@ class TestMiddlewareStackIntegration:
 class TestRowLockingIntegration:
     """Test row locking through API endpoints"""
 
-    @pytest_asyncio.fixture
+    
+@pytest_asyncio.fixture
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Create NASDAQ exchange for testing."""
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        country="US",
+        currency="USD",
+        timezone="America/New_York"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Create Technology sector for testing."""
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+@pytest_asyncio.fixture
     async def test_portfolio(self, db_session: AsyncSession):
         """Create test portfolio for locking tests"""
         from backend.models.unified_models import User, Portfolio
@@ -123,7 +152,7 @@ class TestRowLockingIntegration:
             username="locktest",
             email="locktest@example.com",
             hashed_password="test123"
-        )
+        , Exchange, Sector)
         db_session.add(user)
         await db_session.flush()
 
@@ -300,7 +329,7 @@ class TestDatabaseIntegration:
             symbol="TEST",
             name="Test Stock",
             sector="Technology"
-        )
+        , Exchange, Sector)
         db_session.add(stock)
         await db_session.commit()
 
@@ -319,7 +348,7 @@ class TestDatabaseIntegration:
         """
         from backend.models.unified_models import Portfolio
 
-        # Check Portfolio model has version field (if implemented)
+        # Check Portfolio model has version field (if implemented, Exchange, Sector)
         # This validates the migration added version columns correctly
         portfolio = Portfolio(
             name="Version Test",
@@ -390,7 +419,7 @@ class TestPerformance:
         from backend.repositories.base import AsyncCRUDRepository
 
         # Create test stock
-        stock = Stock(symbol="PERF", name="Performance Test", sector="Tech")
+        stock = Stock(symbol="PERF", name="Performance Test", sector_id=technology_sector.id, Exchange, Sector)
         db_session.add(stock)
         await db_session.commit()
 

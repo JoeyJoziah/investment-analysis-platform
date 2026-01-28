@@ -13,8 +13,9 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.tables import (
+from backend.models.unified_models import (
     User, UserSession, Portfolio, Position, Stock, Transaction,
+    Exchange, Sector,
     UserRoleEnum, OrderSideEnum, AssetTypeEnum
 )
 from backend.api.main import app
@@ -32,7 +33,7 @@ async def premium_user(db_session: AsyncSession):
         email="premium@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Premium User",
-        role=UserRoleEnum.PREMIUM_USER,
+        role=UserRoleEnum.PREMIUM_USER.value,
         is_active=True,
         is_verified=True,
         subscription_tier="premium",
@@ -51,7 +52,7 @@ async def free_user(db_session: AsyncSession):
         email="free@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Free User",
-        role=UserRoleEnum.FREE_USER,
+        role=UserRoleEnum.FREE_USER.value,
         is_active=True,
         is_verified=True,
         subscription_tier="free"
@@ -100,33 +101,62 @@ async def user_portfolio(db_session: AsyncSession, premium_user: User):
 
 
 @pytest_asyncio.fixture
-async def sample_stocks(db_session: AsyncSession):
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Create NASDAQ exchange for testing."""
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        country="US",
+        currency="USD",
+        timezone="America/New_York"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Create Technology sector for testing."""
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+
+@pytest_asyncio.fixture
+async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector):
     """Create sample stocks for portfolio testing."""
     stocks = [
         Stock(
             symbol="AAPL",
             name="Apple Inc.",
-            exchange="NASDAQ",
-            asset_type=AssetTypeEnum.STOCK,
-            sector="Technology",
+            exchange_id=nasdaq_exchange.id,
+            asset_type="stock",
+            sector_id=technology_sector.id,
             is_active=True,
             is_tradable=True
         ),
         Stock(
             symbol="MSFT",
             name="Microsoft Corporation",
-            exchange="NASDAQ",
-            asset_type=AssetTypeEnum.STOCK,
-            sector="Technology",
+            exchange_id=nasdaq_exchange.id,
+            asset_type="stock",
+            sector_id=technology_sector.id,
             is_active=True,
             is_tradable=True
         ),
         Stock(
             symbol="GOOGL",
             name="Alphabet Inc.",
-            exchange="NASDAQ",
-            asset_type=AssetTypeEnum.STOCK,
-            sector="Technology",
+            exchange_id=nasdaq_exchange.id,
+            asset_type="stock",
+            sector_id=technology_sector.id,
             is_active=True,
             is_tradable=True
         )

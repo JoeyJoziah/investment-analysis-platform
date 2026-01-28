@@ -14,10 +14,11 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.tables import (
+from backend.models.unified_models import (
     User, Portfolio, Position, Transaction, Alert,
     Watchlist, WatchlistItem, Stock, AuditLog,
-    UserSession, ApiLog, UserRoleEnum, AssetTypeEnum
+    UserSession, ApiLog, Exchange, Sector,
+    UserRoleEnum, AssetTypeEnum
 )
 from backend.api.main import app
 from httpx import AsyncClient, ASGITransport
@@ -33,7 +34,7 @@ async def gdpr_test_user(db_session: AsyncSession):
         email="gdpr.test@example.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="GDPR Test User",
-        role=UserRoleEnum.BASIC_USER,
+        role=UserRoleEnum.BASIC_USER.value,
         is_active=True,
         is_verified=True,
         phone_number="+1234567890",
@@ -63,16 +64,16 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User):
     stock1 = Stock(
         symbol="AAPL",
         name="Apple Inc.",
-        exchange="NASDAQ",
-        asset_type=AssetTypeEnum.STOCK,
+        exchange_id=nasdaq_exchange.id,
+        asset_type="stock",
         is_active=True,
         is_tradable=True
     )
     stock2 = Stock(
         symbol="MSFT",
         name="Microsoft Corporation",
-        exchange="NASDAQ",
-        asset_type=AssetTypeEnum.STOCK,
+        exchange_id=nasdaq_exchange.id,
+        asset_type="stock",
         is_active=True,
         is_tradable=True
     )
