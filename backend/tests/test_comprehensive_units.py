@@ -348,15 +348,15 @@ class TestDataIngestionClients:
     
     @pytest.fixture
     def alpha_vantage_client(self):
-        return AlphaVantageClient(api_key="test_key")
-    
+        return AlphaVantageClient()
+
     @pytest.fixture
     def finnhub_client(self):
-        return FinnhubClient(api_key="test_key")
-    
+        return FinnhubClient()
+
     @pytest.fixture
     def polygon_client(self):
-        return PolygonClient(api_key="test_key")
+        return PolygonClient()
     
     @pytest.mark.asyncio
     async def test_rate_limiting(self, alpha_vantage_client):
