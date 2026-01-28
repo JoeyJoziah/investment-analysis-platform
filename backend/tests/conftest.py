@@ -143,7 +143,7 @@ async def db_session(test_db_session_factory):
 @pytest_asyncio.fixture
 async def async_client():
     """Provide async HTTP client for API testing."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         yield client
 
 

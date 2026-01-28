@@ -16,6 +16,7 @@ from backend.repositories.base import AsyncCRUDRepository
 from backend.models.thesis import InvestmentThesis
 from backend.models.unified_models import Stock
 from backend.config.database import get_db_session
+from backend.exceptions import StaleDataError
 
 logger = logging.getLogger(__name__)
 
@@ -182,46 +183,67 @@ class InvestmentThesisRepository(AsyncCRUDRepository[InvestmentThesis]):
         thesis_id: int,
         user_id: int,
         data: Dict[str, Any],
+        expected_version: Optional[int] = None,
         session: Optional[AsyncSession] = None
     ) -> Optional[InvestmentThesis]:
         """
-        Update an existing thesis (user-scoped).
+        Update an existing thesis with optimistic locking (user-scoped).
 
         Args:
             thesis_id: Thesis ID
             user_id: User ID (for ownership verification)
             data: Updated fields
+            expected_version: Expected version for optimistic locking
             session: Optional existing session
 
         Returns:
             Updated thesis or None if not found/not owned
 
         Raises:
-            ValueError: If user doesn't own the thesis
+            StaleDataError: If version mismatch detected
         """
         async def _update(session: AsyncSession) -> Optional[InvestmentThesis]:
+            # Lock row for update to prevent concurrent modifications
             query = select(InvestmentThesis).where(
                 and_(
                     InvestmentThesis.id == thesis_id,
                     InvestmentThesis.user_id == user_id
                 )
-            )
+            ).with_for_update()
+
             result = await session.execute(query)
             thesis = result.scalar_one_or_none()
 
             if not thesis:
                 return None
 
-            # Increment version on update
-            data['version'] = thesis.version + 1
-            data['updated_at'] = datetime.utcnow()
+            # Check optimistic lock version
+            if expected_version is not None:
+                if thesis.version != expected_version:
+                    raise StaleDataError(
+                        entity_type='InvestmentThesis',
+                        entity_id=thesis_id,
+                        expected_version=expected_version,
+                        current_version=thesis.version
+                    )
 
+            # Increment version on update
+            thesis.version += 1
+            thesis.updated_at = datetime.utcnow()
+
+            # Apply updates
             for key, value in data.items():
-                if hasattr(thesis, key):
+                if hasattr(thesis, key) and key not in ('id', 'user_id', 'version', 'created_at'):
                     setattr(thesis, key, value)
 
             await session.commit()
             await session.refresh(thesis)
+
+            logger.info(
+                f"Updated InvestmentThesis {thesis_id} for user {user_id}, "
+                f"new version: {thesis.version}"
+            )
+
             return thesis
 
         if session:

@@ -606,20 +606,23 @@ class Recommendation(Base):
 class Portfolio(Base):
     """User portfolios"""
     __tablename__ = "portfolios"
-    
+
     id = Column(Integer, primary_key=True)
     portfolio_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    
+
     # Portfolio settings
     is_public = Column(Boolean, default=False)
     is_default = Column(Boolean, default=False)
     benchmark = Column(String(10), default="SPY")
     target_allocation = Column(JSON)
     rebalance_frequency = Column(String(20))  # daily, weekly, monthly, quarterly
-    
+
+    # Optimistic locking
+    version = Column(Integer, default=1, nullable=False, server_default='1')
+
     # Portfolio metrics
     total_value = Column(DECIMAL(20, 2), default=0.0)
     cash_balance = Column(DECIMAL(20, 2), default=0.0)
@@ -659,11 +662,14 @@ class Portfolio(Base):
 class Position(Base):
     """Portfolio positions"""
     __tablename__ = "positions"
-    
+
     id = Column(Integer, primary_key=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    
+
+    # Optimistic locking
+    version = Column(Integer, default=1, nullable=False, server_default='1')
+
     # Position details
     quantity = Column(DECIMAL(15, 6), nullable=False)
     avg_cost_basis = Column(DECIMAL(10, 4), nullable=False)
