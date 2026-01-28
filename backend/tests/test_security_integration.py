@@ -8,7 +8,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock, Mock
 from httpx import AsyncClient, ASGITransport
 from fastapi import HTTPException, status
 from jose import jwt
@@ -24,7 +24,7 @@ from backend.auth.oauth2 import (
 )
 from backend.security.rate_limiter import AdvancedRateLimiter as RateLimiter
 from backend.security.sql_injection_prevention import SQLInjectionPrevention
-from backend.security.jwt_manager import JWTManager
+from backend.security.jwt_manager import JWTManager, TokenClaims
 from backend.models.unified_models import User
 from backend.config.settings import settings
 
@@ -48,12 +48,24 @@ class TestSecurityIntegration:
 
     @pytest.fixture
     def jwt_manager(self):
-        """Create JWT manager instance."""
-        return JWTManager(
-            secret_key=settings.SECRET_KEY,
-            algorithm="HS256",
-            access_token_expire_minutes=30
-        )
+        """Create JWT manager instance with mock Redis."""
+        # Create mock Redis client for blacklist and session testing
+        mock_redis = Mock()
+        mock_redis.setex = Mock(return_value=True)
+        mock_redis.get = Mock(return_value=None)
+        mock_redis.delete = Mock(return_value=True)
+
+        # Smart exists() - return False for blacklist keys, True for session keys
+        def mock_exists(key):
+            if "jwt_blacklist" in key:
+                return False  # Token not blacklisted
+            elif "user_session" in key:
+                return True  # Session exists
+            return False
+
+        mock_redis.exists = Mock(side_effect=mock_exists)
+
+        return JWTManager(redis_client=mock_redis)
 
     @pytest.fixture
     def rate_limiter(self):
@@ -70,33 +82,43 @@ class TestSecurityIntegration:
     @pytest.mark.security
     async def test_jwt_token_creation_and_validation(self, jwt_manager, mock_user):
         """Test JWT token creation, validation, and expiration."""
-        
-        # Test token creation
-        token_data = {"sub": str(mock_user.id), "username": mock_user.username}
-        access_token = jwt_manager.create_token(token_data, expires_delta=timedelta(minutes=30))
+
+        # Test token creation with TokenClaims
+        claims = TokenClaims(
+            user_id=mock_user.id,
+            username=mock_user.username,
+            email=mock_user.email,
+            roles=["user"],
+            scopes=["read", "write"],
+            is_admin=False
+        )
+        access_token = jwt_manager.create_access_token(claims, expires_delta=timedelta(minutes=30))
         
         assert access_token is not None
         assert isinstance(access_token, str)
         
         # Test token validation
-        decoded_token = jwt_manager.decode_token(access_token)
-        assert decoded_token["sub"] == str(mock_user.id)
-        assert decoded_token["username"] == mock_user.username
+        decoded_token = jwt_manager.verify_token(access_token)
+        assert decoded_token["sub"] == mock_user.username  # sub contains username
+        assert decoded_token["user_id"] == mock_user.id  # user_id field contains ID
+        assert decoded_token["email"] == mock_user.email
         assert "exp" in decoded_token
         
         # Test token expiration
-        expired_token = jwt_manager.create_token(
-            token_data, 
+        expired_token = jwt_manager.create_access_token(
+            claims,
             expires_delta=timedelta(seconds=-1)  # Already expired
         )
-        
-        with pytest.raises(Exception):  # Should raise JWT expired exception
-            jwt_manager.decode_token(expired_token)
+
+        # verify_token returns None for expired tokens (doesn't raise exception)
+        expired_decoded = jwt_manager.verify_token(expired_token)
+        assert expired_decoded is None, "Expired token should return None"
         
         # Test invalid token
         invalid_token = "invalid.jwt.token"
-        with pytest.raises(Exception):
-            jwt_manager.decode_token(invalid_token)
+        # verify_token returns None for invalid tokens (doesn't raise exception)
+        invalid_decoded = jwt_manager.verify_token(invalid_token)
+        assert invalid_decoded is None, "Invalid token should return None"
 
     @pytest.mark.asyncio
     @pytest.mark.security
@@ -287,20 +309,30 @@ class TestSecurityIntegration:
     @pytest.mark.security
     async def test_session_management_security(self, jwt_manager, mock_user):
         """Test session management and token security."""
-        
+
+        # Create claims for token rotation test
+        claims = TokenClaims(
+            user_id=mock_user.id,
+            username=mock_user.username,
+            email=mock_user.email,
+            roles=["user"],
+            scopes=["read", "write"],
+            is_admin=False
+        )
+
         # Test token rotation
-        token1 = jwt_manager.create_token({"sub": str(mock_user.id)})
-        
+        token1 = jwt_manager.create_access_token(claims)
+
         # Simulate token refresh
         await asyncio.sleep(1)  # Ensure different timestamp
-        token2 = jwt_manager.create_token({"sub": str(mock_user.id)})
+        token2 = jwt_manager.create_access_token(claims)
         
         # Tokens should be different
         assert token1 != token2
         
         # Both should be valid initially
-        decoded1 = jwt_manager.decode_token(token1)
-        decoded2 = jwt_manager.decode_token(token2)
+        decoded1 = jwt_manager.verify_token(token1)
+        decoded2 = jwt_manager.verify_token(token2)
         
         assert decoded1["sub"] == decoded2["sub"]
         
