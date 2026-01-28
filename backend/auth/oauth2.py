@@ -96,6 +96,37 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         return encoded_jwt
 
 
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a refresh token from data dict - for backward compatibility with tests"""
+    try:
+        jwt_manager = get_jwt_manager()
+
+        # Build claims from data dict
+        claims = TokenClaims(
+            user_id=int(data.get("sub", 0)),
+            username=data.get("username", ""),
+            email=data.get("email", f"{data.get('username', 'user')}@test.com"),
+            roles=[data.get("role")] if data.get("role") else ["user"],
+            scopes=["read", "write"],
+            is_admin=data.get("role") == "admin",
+            is_mfa_verified=False
+        )
+
+        return jwt_manager.create_refresh_token(claims, expires_delta)
+
+    except Exception as e:
+        logger.error(f"Error creating refresh token: {e}")
+        # Fallback to simple JWT creation for tests
+        to_encode = data.copy()
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(days=SecurityConfig.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+        to_encode.update({"exp": expire, "type": "refresh"})
+        encoded_jwt = jwt.encode(to_encode, SecurityConfig.JWT_SECRET_KEY, algorithm=SecurityConfig.JWT_ALGORITHM_FALLBACK)
+        return encoded_jwt
+
+
 def create_tokens(user: User, request: Optional[Request] = None) -> dict:
     """Create both access and refresh tokens using enhanced JWT manager"""
     try:
