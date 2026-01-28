@@ -144,7 +144,7 @@ async def db_session(test_database):
 @pytest.fixture
 def cache_client(test_redis):
     """Cache client fixture"""
-    return CacheManager(redis_client=test_redis.client)
+    return CacheManager(prefix="test")  # CacheManager only accepts 'prefix' parameter
 
 
 @pytest.fixture
