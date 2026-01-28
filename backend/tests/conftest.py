@@ -202,16 +202,56 @@ async def technology_sector(db_session: AsyncSession):
 
 @pytest.fixture
 def auth_token(test_user):
-    """Provide authentication token."""
-    return create_access_token(
-        data={"sub": str(test_user.id), "username": test_user.username}
+    """Provide authentication token for testing."""
+    from backend.security.security_config import SecurityConfig
+    import jwt
+    from datetime import datetime, timedelta
+
+    # Build minimal JWT payload
+    expire = datetime.utcnow() + timedelta(minutes=15)
+    payload = {
+        "sub": str(test_user.id),
+        "username": test_user.username,
+        "email": test_user.email,
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "type": "access"
+    }
+
+    # Create token directly without Redis dependency
+    token = jwt.encode(
+        payload,
+        SecurityConfig.JWT_SECRET_KEY,
+        algorithm=SecurityConfig.JWT_ALGORITHM_FALLBACK
     )
+
+    return token
+
+
+@pytest.fixture
+def csrf_token():
+    """Provide CSRF token for testing."""
+    from backend.security.csrf_protection import CSRFProtection, CSRFConfig
+
+    csrf_config = CSRFConfig(enabled=True, testing_mode=True)
+    csrf_protection = CSRFProtection(csrf_config)
+    token = csrf_protection.generate_token()
+    return token
 
 
 @pytest.fixture
 def auth_headers(auth_token):
     """Provide authentication headers."""
     return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture
+def auth_headers_with_csrf(auth_token, csrf_token):
+    """Provide authentication headers with CSRF token."""
+    return {
+        "Authorization": f"Bearer {auth_token}",
+        "X-CSRF-Token": csrf_token
+    }
 
 
 @pytest.fixture
