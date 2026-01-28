@@ -16,6 +16,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from datetime import datetime, timedelta
 
 import pytest
+import bcrypt
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from fastapi import HTTPException
@@ -47,8 +48,8 @@ def authenticated_client(test_user_data, db_session):
         username=test_user_data["username"],
         email=test_user_data["email"],
         is_active=True,
+        hashed_password=bcrypt.hashpw(test_user_data["password"].encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     )
-    user.set_password(test_user_data["password"])
     db_session.add(user)
     db_session.commit()
     db_session.refresh(user)
@@ -69,7 +70,7 @@ class TestAPIRateLimiting:
             username=test_user_data["username"],
             email=test_user_data["email"],
         )
-        user.set_password(test_user_data["password"])
+        user.hashed_password = bcrypt.hashpw(test_user_data["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
@@ -94,7 +95,7 @@ class TestAPIRateLimiting:
             username=test_user_data["username"],
             email=test_user_data["email"],
         )
-        user.set_password(test_user_data["password"])
+        user.hashed_password = bcrypt.hashpw(test_user_data["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
@@ -157,14 +158,14 @@ class TestAPIRateLimiting:
             email="basic@example.com",
             is_active=True,
         )
-        basic_user.set_password("Pass123!@#")
+        basic_user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         premium_user = User(
             username="premium_user",
             email="premium@example.com",
             is_active=True,
         )
-        premium_user.set_password("Pass123!@#")
+        premium_user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         admin_user = User(
             username="admin_user",
@@ -172,7 +173,7 @@ class TestAPIRateLimiting:
             is_active=True,
             is_admin=True,
         )
-        admin_user.set_password("Pass123!@#")
+        admin_user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         db_session.add_all([basic_user, premium_user, admin_user])
         db_session.commit()
@@ -247,7 +248,7 @@ class TestDatabaseConnectionLoss:
             username="test_user_db",
             email="testdb@example.com",
         )
-        user.set_password("Pass123!@#")
+        user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
@@ -508,7 +509,7 @@ class TestGracefulDegradation:
             username=test_user_data["username"],
             email=test_user_data["email"],
         )
-        user.set_password(test_user_data["password"])
+        user.hashed_password = bcrypt.hashpw(test_user_data["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
@@ -556,7 +557,7 @@ class TestGracefulDegradation:
             username="validation_test",
             email="validation@example.com",
         )
-        user.set_password("Pass123!@#")
+        user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
         # Attempt to set invalid values
         with pytest.raises((ValueError, ValidationError, AttributeError)):
@@ -584,7 +585,7 @@ class TestConcurrencyErrors:
             username="concurrent_test",
             email="concurrent@example.com",
         )
-        user.set_password("Pass123!@#")
+        user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
@@ -618,7 +619,7 @@ class TestConcurrencyErrors:
             username="dup_test",
             email="dup@example.com",
         )
-        user.set_password("Pass123!@#")
+        user.hashed_password = bcrypt.hashpw("Pass123!@#".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         db_session.add(user)
         db_session.commit()
 
