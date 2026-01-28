@@ -18,8 +18,10 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import asyncpg
 import pandas as pd
 import numpy as np
+from testcontainers.postgres import PostgresContainer
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database
+from backend.models.database import Base
 from backend.models.unified_models import (
     User, Stock, Portfolio, Position, Transaction,
     PriceHistory, Recommendation, Alert
@@ -40,28 +42,39 @@ class TestDatabaseIntegration:
 
     @pytest_asyncio.fixture
     async def db_session(self):
-        """Create test database session."""
-        # Use environment variable with fallback to default test database
-        test_db_url = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql+asyncpg://test_user:test_pass@localhost/test_investment_db"
-        )
-        test_engine = create_async_engine(
-            test_db_url,
-            echo=False
-        )
-        
-        TestSessionLocal = sessionmaker(
-            test_engine, 
-            class_=AsyncSession,
-            expire_on_commit=False
-        )
-        
-        session = TestSessionLocal()
+        """Create test database session using testcontainers."""
+        # Start PostgreSQL container
+        container = PostgresContainer("postgres:15")
+        container.start()
+
         try:
-            yield session
+            # Get connection URL and replace psycopg2 with asyncpg for async operations
+            database_url = container.get_connection_url().replace('psycopg2', 'asyncpg')
+
+            # Create async engine
+            test_engine = create_async_engine(database_url, echo=False)
+
+            # Create tables
+            async with test_engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            # Create session factory
+            TestSessionLocal = sessionmaker(
+                bind=test_engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
+
+            # Create and yield session
+            session = TestSessionLocal()
+            try:
+                yield session
+            finally:
+                await session.close()
+                await test_engine.dispose()
         finally:
-            await session.close()
+            # Stop container
+            container.stop()
 
     @pytest.fixture
     def sample_user(self):
