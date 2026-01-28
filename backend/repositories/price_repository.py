@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class PriceHistoryRepository(AsyncCRUDRepository[PriceHistory]):
+    """Price history repository with time-series optimizations"""
     """
     Specialized repository for PriceHistory model with time-series operations.
     """
@@ -538,6 +539,9 @@ class PriceHistoryRepository(AsyncCRUDRepository[PriceHistory]):
             for symbol, prices in bulk_history.items()
         }
 
+
+# Alias for backward compatibility with tests
+PriceRepository = PriceHistoryRepository
 
 # Create repository instance
 price_repository = PriceHistoryRepository()

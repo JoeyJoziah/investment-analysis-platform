@@ -375,3 +375,13 @@ def log_operation(logger: StructuredLogger, operation: str, **context):
 
 # Create default logger instance
 default_logger = StructuredLogger(__name__)
+
+
+def get_structured_logger(name: str) -> StructuredLogger:
+    """
+    Get a structured logger instance for the given name.
+
+    Stub implementation for Phase 2 test fixes.
+    TODO: Implement logger caching and configuration in future phase.
+    """
+    return StructuredLogger(name)
