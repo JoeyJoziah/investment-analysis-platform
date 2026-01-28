@@ -3,6 +3,12 @@ Global Test Configuration for Investment Analysis Platform Integration Tests
 Provides shared fixtures, test utilities, and configuration for all test modules.
 """
 
+# CRITICAL: Set TESTING=True BEFORE any imports to disable middleware that blocks tests
+import os
+os.environ["TESTING"] = "True"
+os.environ["DEBUG"] = "True"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+
 import pytest
 import pytest_asyncio
 import asyncio

@@ -14,12 +14,31 @@ from backend.tests.conftest import assert_success_response, assert_api_error_res
 
 
 @pytest_asyncio.fixture
-async def test_stock(db_session: AsyncSession) -> Stock:
+async def test_exchange(db_session: AsyncSession):
+    """Create a test exchange"""
+    from backend.models.unified_models import Exchange
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        timezone="America/New_York",
+        country="US",
+        currency="USD",
+        market_open="09:30",
+        market_close="16:00"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def test_stock(db_session: AsyncSession, test_exchange) -> Stock:
     """Create a test stock"""
     stock = Stock(
         symbol="AAPL",
         name="Apple Inc.",
-        exchange="NASDAQ",
+        exchange_id=test_exchange.id,  # Fixed: Use exchange_id ForeignKey
         asset_type="stock",
         country="US",
         currency="USD"
