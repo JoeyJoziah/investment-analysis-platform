@@ -38,8 +38,8 @@ The `.env` file contains actual production credentials that should never be comm
 - Redis password: `GUsdQs4uGGBaCcqzsWytqZf2i4uwnM`
 - Elasticsearch password: `ouW9j5W62APKZv4xRBAxOQVT9beS1kGG`
 - Multiple API keys (Alpha Vantage, Finnhub, Polygon, NewsAPI, FMP, Marketaux, FRED, OpenWeather)
-- Google API key: `AIzaSyAda00mCrcTpckLtVy_88eoKTINcUM06XA`
-- HuggingFace token: `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`
+- Google API key: `AIzaSyA***REDACTED***`
+- HuggingFace token: `hf_***REDACTED***`
 - JWT secrets and Fernet encryption keys
 - Airflow admin credentials
 - Email SMTP credentials (Gmail app password)
@@ -73,7 +73,7 @@ The `.env` file contains actual production credentials that should never be comm
 **Location:** `/.env:130`, `/.claude/settings.local.json`
 
 **Issue:**
-Google API key `AIzaSyAda00mCrcTpckLtVy_88eoKTINcUM06XA` is hardcoded and exposed in multiple files.
+Google API key `AIzaSyA***REDACTED***` is hardcoded and exposed in multiple files.
 
 **Impact:**
 - API quota exhaustion
@@ -94,7 +94,7 @@ Google API key `AIzaSyAda00mCrcTpckLtVy_88eoKTINcUM06XA` is hardcoded and expose
 **Location:** `/.env:134`, `/.env:381`
 
 **Issue:**
-HuggingFace token `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` is exposed, potentially granting access to private models and datasets.
+HuggingFace token `hf_***REDACTED***` is exposed, potentially granting access to private models and datasets.
 
 **Impact:**
 - Unauthorized access to private ML models

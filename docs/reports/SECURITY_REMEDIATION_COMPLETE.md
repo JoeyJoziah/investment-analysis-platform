@@ -20,8 +20,8 @@
 - `.claude/settings.local 2.json` (1 edit)
 
 **Secrets Removed:**
-- Google API key: `AIzaSyAda00mCrcTpckLtVy_88eoKTINcUM06XA`
-- HuggingFace token: `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`
+- Google API key: `AIzaSyA***REDACTED***`
+- HuggingFace token: `hf_***REDACTED***`
 - All database passwords (PostgreSQL, Redis, Elasticsearch)
 - All JWT secrets and encryption keys
 - All financial API keys (Alpha Vantage, Finnhub, Polygon, NewsAPI, FMP, Marketaux, FRED, OpenWeather)
