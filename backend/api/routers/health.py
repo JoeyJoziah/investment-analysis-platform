@@ -12,7 +12,7 @@ from backend.models.api_response import ApiResponse, success_response
 router = APIRouter(tags=["health"])
 
 @router.get("")
-async def health_check() -> ApiResponse[Dict]:
+async def health_check() -> ApiResponse[Dict[str, Any]]:
     """Basic health check endpoint"""
     return success_response(data={
         "status": "healthy",
@@ -22,7 +22,7 @@ async def health_check() -> ApiResponse[Dict]:
     })
 
 @router.get("/readiness")
-async def readiness_check() -> ApiResponse[Dict]:
+async def readiness_check() -> ApiResponse[Dict[str, Any]]:
     """Check if all services are ready"""
     logger = logging.getLogger(__name__)
     checks = {
@@ -77,7 +77,7 @@ async def readiness_check() -> ApiResponse[Dict]:
     return success_response(data=data)
 
 @router.get("/metrics")
-async def get_metrics() -> ApiResponse[Dict]:
+async def get_metrics() -> ApiResponse[Dict[str, Any]]:
     """Get system metrics"""
     try:
         # Get database connection pool stats
@@ -136,7 +136,7 @@ async def get_metrics() -> ApiResponse[Dict]:
     return success_response(data=metrics)
 
 @router.get("/liveness")
-async def liveness_check() -> ApiResponse[Dict]:
+async def liveness_check() -> ApiResponse[Dict[str, Any]]:
     """Kubernetes liveness probe endpoint"""
     return success_response(data={
         "status": "alive",
@@ -144,7 +144,7 @@ async def liveness_check() -> ApiResponse[Dict]:
     })
 
 @router.get("/startup")
-async def startup_check() -> ApiResponse[Dict]:
+async def startup_check() -> ApiResponse[Dict[str, Any]]:
     """Kubernetes startup probe endpoint"""
     # Check if critical services are initialized
     try:

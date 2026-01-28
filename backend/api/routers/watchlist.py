@@ -876,7 +876,7 @@ async def check_symbol_in_watchlists(
     symbol: str = Path(..., description="Stock symbol", min_length=1, max_length=10),
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Check if a stock symbol is in any of the user's watchlists.
 

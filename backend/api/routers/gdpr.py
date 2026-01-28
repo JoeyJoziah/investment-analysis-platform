@@ -29,9 +29,18 @@ from backend.compliance.gdpr import (
 )
 from backend.utils.data_anonymization import data_anonymizer
 from backend.models.api_response import ApiResponse, success_response
+from backend.security.rate_limiter import rate_limit, RateLimitCategory, RateLimitRule
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Task 3: Rate limit rule for GDPR data exports
+# 3 requests per hour, 10 requests per day
+GDPR_EXPORT_RATE_LIMIT = RateLimitRule(
+    requests=3,
+    window_seconds=3600,  # 1 hour window
+    block_duration_seconds=3600  # 1 hour block after violation
+)
 
 
 # =============================================================================
@@ -166,13 +175,16 @@ async def get_current_user_from_token(
     summary="Export user data (GDPR Right to Access & Portability)",
     description="Export all personal data associated with the authenticated user. "
                 "Implements GDPR Article 15 (Right to Access) and Article 20 "
-                "(Right to Data Portability).",
+                "(Right to Data Portability). "
+                "Rate limited to 3 requests per hour to prevent abuse.",
     responses={
         200: {"description": "User data exported successfully"},
         401: {"description": "Not authenticated"},
+        429: {"description": "Rate limit exceeded - max 3 requests per hour"},
         500: {"description": "Internal server error during export"}
     }
 )
+@rate_limit(category=RateLimitCategory.API_READ, custom_rule=GDPR_EXPORT_RATE_LIMIT)
 async def export_user_data(
     request: Request,
     include_categories: Optional[List[str]] = None,
@@ -233,7 +245,7 @@ async def export_user_data(
 async def export_user_data_json(
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Export user data as JSON format"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -677,7 +689,7 @@ async def check_consent(
     ],
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Check if user has valid consent for a specific purpose"""
     try:
         current_user = await get_current_user_from_token(request, db)
@@ -768,7 +780,7 @@ async def enforce_retention_policies(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db_session)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Enforce data retention policies by cleaning up expired data.
     Admin only endpoint.

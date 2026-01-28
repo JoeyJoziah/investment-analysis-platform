@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 import os
 import logging
 from backend.utils.database import get_db_sync
@@ -233,7 +233,7 @@ async def login_alt(
     ))
 
 @router.get("/me")
-async def read_users_me(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict]:
+async def read_users_me(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict[str, Any]]:
     """Get current user information"""
     return success_response(data={
         "id": current_user.id,
@@ -245,7 +245,7 @@ async def read_users_me(current_user: User = Depends(get_current_user)) -> ApiRe
     })
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict]:
+async def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict[str, Any]]:
     """Logout endpoint (client should discard token)"""
     logger.info(f"User logged out: {current_user.email}")
     return success_response(data={"message": "Successfully logged out"})

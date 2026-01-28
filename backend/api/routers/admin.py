@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
-from pydantic import BaseModel, Field, EmailStr
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, Request
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta
 from enum import Enum
@@ -9,8 +9,10 @@ import os
 import logging
 
 from backend.models.api_response import ApiResponse, success_response
+from backend.utils.security_logger import get_security_logger, sanitize_log_input
 
 logger = logging.getLogger(__name__)
+security_logger = get_security_logger()
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -51,6 +53,13 @@ class ConfigSection(str, Enum):
     FEATURES = "features"
     LIMITS = "limits"
     MONITORING = "monitoring"
+
+# Protected config sections requiring super admin access (Task 1)
+PROTECTED_CONFIG_SECTIONS = [
+    ConfigSection.API_KEYS,
+    ConfigSection.DATABASE,
+    ConfigSection.SECURITY
+]
 
 # Pydantic models
 class SystemHealth(BaseModel):
@@ -158,10 +167,46 @@ class DataExport(BaseModel):
     date_range: Optional[Dict[str, date]] = None
     filters: Optional[Dict[str, Any]] = None
 
+# Task 5: Command Parameter Validation
 class SystemCommand(BaseModel):
-    command: str
-    parameters: Optional[Dict[str, Any]] = None
+    command: str = Field(..., max_length=100)
+    parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
     execute_at: Optional[datetime] = None
+
+    @field_validator('command')
+    @classmethod
+    def validate_command(cls, v):
+        """Validate command against whitelist"""
+        allowed_commands = [
+            'start', 'stop', 'status', 'restart',
+            'clear_cache', 'restart_workers', 'run_backup',
+            'optimize_database', 'refresh_models', 'sync_data'
+        ]
+        if v not in allowed_commands:
+            raise ValueError(f"Invalid command: {v}")
+        return v
+
+    @field_validator('parameters')
+    @classmethod
+    def sanitize_parameters(cls, v):
+        """Sanitize all string parameters"""
+        if not v:
+            return {}
+
+        sanitized = {}
+        for key, value in v.items():
+            if isinstance(value, str):
+                # Remove control characters and limit length
+                sanitized[key] = value.replace('\n', '').replace('\r', '').replace('\t', ' ')[:200]
+            elif isinstance(value, (int, float, bool)):
+                sanitized[key] = value
+            elif isinstance(value, (list, dict)):
+                # Convert to string and sanitize
+                sanitized[key] = str(value)[:200]
+            else:
+                sanitized[key] = str(value)[:200]
+
+        return sanitized
 
 # Helper functions - SECURE ADMIN AUTHENTICATION
 from backend.auth.oauth2 import get_current_admin_user
@@ -173,6 +218,30 @@ def check_admin_permission(current_user = Depends(get_current_admin_user)):
     # 2. User exists and is active
     # 3. User has admin privileges
     return current_user
+
+# Task 1: Super Admin Check
+def check_super_admin_permission(current_user = Depends(get_current_admin_user)):
+    """Dependency to check super admin permissions"""
+    # Check if user has super_admin attribute
+    if not getattr(current_user, 'is_super_admin', False):
+        security_logger.log_authorization_failure(
+            user_id=current_user.id,
+            action="super_admin_required",
+            resource="protected_config",
+            reason="User is not a super admin"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Super admin privileges required"
+        )
+    return current_user
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP from request"""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 # Endpoints
 @router.get("/health")
@@ -209,7 +278,7 @@ async def list_users(
     is_active: Optional[bool] = None
 ) -> ApiResponse[List[User]]:
     """List all users with filtering options"""
-    
+
     users = []
     for i in range(100):
         user = User(
@@ -225,12 +294,12 @@ async def list_users(
             api_calls_today=random.randint(0, 1000),
             storage_used_mb=random.uniform(0, 1000)
         )
-        
+
         if role and user.role != role:
             continue
         if is_active is not None and user.is_active != is_active:
             continue
-        
+
         users.append(user)
 
     return success_response(data=users[offset:offset + limit])
@@ -238,10 +307,19 @@ async def list_users(
 @router.get("/users/{user_id}")
 async def get_user_details(
     user_id: str,
+    request: Request,
     current_user = Depends(check_admin_permission)
 ) -> ApiResponse[User]:
     """Get detailed information about a specific user"""
-    logger.info(f"Admin {current_user.username} accessing user details for {user_id}")
+    # Task 2 & 4: Structured security logging with sanitized inputs
+    security_logger.log_admin_action(
+        action="get_user_details",
+        user_id=current_user.id,
+        resource=f"user:{sanitize_log_input(user_id)}",
+        success=True,
+        details={"target_user_id": sanitize_log_input(user_id)},
+        ip_address=get_client_ip(request)
+    )
 
     return success_response(data=User(
         id=user_id,
@@ -261,30 +339,73 @@ async def get_user_details(
 async def update_user(
     user_id: str,
     update: UserUpdate,
+    request: Request,
     current_user = Depends(check_admin_permission)
 ) -> ApiResponse[User]:
     """Update user information"""
-    
-    # In production, update user in database
-    user = await get_user_details(user_id, current_user)
-    
-    update_data = update.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(user.data if hasattr(user, 'data') else user, field, value)
 
-    return success_response(data=user.data if hasattr(user, 'data') else user)
+    try:
+        # In production, update user in database
+        user = await get_user_details(user_id, request, current_user)
+
+        update_data = update.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(user.data if hasattr(user, 'data') else user, field, value)
+
+        # Task 2: Log user management action
+        security_logger.log_user_management(
+            admin_id=current_user.id,
+            action="update_user",
+            target_user_id=int(user_id) if user_id.isdigit() else 0,
+            success=True,
+            details={"updated_fields": list(update_data.keys())},
+            ip_address=get_client_ip(request)
+        )
+
+        return success_response(data=user.data if hasattr(user, 'data') else user)
+    except Exception as e:
+        security_logger.log_user_management(
+            admin_id=current_user.id,
+            action="update_user",
+            target_user_id=int(user_id) if user_id.isdigit() else 0,
+            success=False,
+            details={"error": sanitize_log_input(str(e))},
+            ip_address=get_client_ip(request)
+        )
+        raise
 
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: str,
+    request: Request,
     current_user = Depends(check_admin_permission)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Delete a user account"""
 
-    return success_response(data={
-        "message": f"User {user_id} has been deleted",
-        "status": "success"
-    })
+    try:
+        # Task 2: Log user deletion
+        security_logger.log_user_management(
+            admin_id=current_user.id,
+            action="delete_user",
+            target_user_id=int(user_id) if user_id.isdigit() else 0,
+            success=True,
+            ip_address=get_client_ip(request)
+        )
+
+        return success_response(data={
+            "message": f"User {sanitize_log_input(user_id)} has been deleted",
+            "status": "success"
+        })
+    except Exception as e:
+        security_logger.log_user_management(
+            admin_id=current_user.id,
+            action="delete_user",
+            target_user_id=int(user_id) if user_id.isdigit() else 0,
+            success=False,
+            details={"error": sanitize_log_input(str(e))},
+            ip_address=get_client_ip(request)
+        )
+        raise
 
 @router.get("/analytics/api-usage")
 async def get_api_usage_stats(
@@ -292,7 +413,7 @@ async def get_api_usage_stats(
     days_back: int = Query(7, le=90)
 ) -> ApiResponse[List[ApiUsageStats]]:
     """Get API usage statistics"""
-    
+
     endpoints = [
         ("/stocks", "GET"),
         ("/stocks/{symbol}", "GET"),
@@ -301,7 +422,7 @@ async def get_api_usage_stats(
         ("/portfolio", "GET"),
         ("/auth/login", "POST")
     ]
-    
+
     stats = []
     for endpoint, method in endpoints:
         stats.append(ApiUsageStats(
@@ -385,14 +506,14 @@ async def list_background_jobs(
     status: Optional[JobStatus] = None
 ) -> ApiResponse[List[BackgroundJob]]:
     """List background jobs"""
-    
+
     jobs = []
     job_types = ["data_sync", "analysis", "report_generation", "cleanup", "backup"]
-    
+
     for i in range(20):
         job_status = status or random.choice(list(JobStatus))
         started = datetime.utcnow() - timedelta(minutes=random.randint(0, 120))
-        
+
         jobs.append(BackgroundJob(
             id=str(uuid.uuid4()),
             name=f"Job_{i}",
@@ -405,7 +526,7 @@ async def list_background_jobs(
             result={"records_processed": random.randint(100, 10000)} if job_status == JobStatus.COMPLETED else None,
             retry_count=random.randint(0, 3)
         ))
-    
+
     if status:
         jobs = [j for j in jobs if j.status == status]
 
@@ -415,7 +536,7 @@ async def list_background_jobs(
 async def cancel_job(
     job_id: str,
     current_user = Depends(check_admin_permission)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Cancel a running job"""
 
     return success_response(data={
@@ -427,7 +548,7 @@ async def cancel_job(
 async def retry_job(
     job_id: str,
     current_user = Depends(check_admin_permission)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Retry a failed job"""
 
     return success_response(data={
@@ -440,7 +561,7 @@ async def retry_job(
 async def get_configuration(
     current_user = Depends(check_admin_permission),
     section: Optional[ConfigSection] = None
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Get system configuration"""
 
     def mask_secret(value: Optional[str]) -> str:
@@ -495,7 +616,7 @@ async def get_configuration(
             "log_level": "INFO"
         }
     }
-    
+
     if section:
         return success_response(data={section: config.get(section, {})})
 
@@ -504,19 +625,60 @@ async def get_configuration(
 @router.patch("/config")
 async def update_configuration(
     update: ConfigUpdate,
+    request: Request,
     current_user = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = BackgroundTasks()
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Update system configuration"""
 
-    # In production, update configuration in database/config file
-    background_tasks.add_task(reload_configuration, update.section)
+    try:
+        # Task 1: Check if section is protected and requires super admin
+        if update.section in PROTECTED_CONFIG_SECTIONS:
+            if not getattr(current_user, 'is_super_admin', False):
+                security_logger.log_authorization_failure(
+                    user_id=current_user.id,
+                    action="update_protected_config",
+                    resource=f"config:{update.section.value}",
+                    reason=f"Super admin privileges required to modify {update.section.value}",
+                    ip_address=get_client_ip(request)
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Super admin privileges required to modify {update.section.value}"
+                )
 
-    return success_response(data={
-        "message": f"Configuration updated: {update.section}.{update.key}",
-        "status": "success",
-        "requires_restart": update.section in [ConfigSection.DATABASE, ConfigSection.CACHE]
-    })
+        # Task 2: Log configuration change
+        security_logger.log_config_change(
+            user_id=current_user.id,
+            section=update.section.value,
+            key=sanitize_log_input(update.key),
+            old_value=None,  # Would fetch from current config in production
+            new_value=update.value,
+            success=True,
+            ip_address=get_client_ip(request)
+        )
+
+        # In production, update configuration in database/config file
+        background_tasks.add_task(reload_configuration, update.section)
+
+        return success_response(data={
+            "message": f"Configuration updated: {update.section}.{update.key}",
+            "status": "success",
+            "requires_restart": update.section in [ConfigSection.DATABASE, ConfigSection.CACHE]
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        security_logger.log_config_change(
+            user_id=current_user.id,
+            section=update.section.value,
+            key=sanitize_log_input(update.key),
+            old_value=None,
+            new_value=update.value,
+            success=False,
+            ip_address=get_client_ip(request)
+        )
+        raise
 
 @router.get("/audit-logs")
 async def get_audit_logs(
@@ -527,11 +689,11 @@ async def get_audit_logs(
     offset: int = 0
 ) -> ApiResponse[List[AuditLog]]:
     """Get audit logs"""
-    
+
     logs = []
     actions = ["login", "logout", "create", "update", "delete", "export", "import"]
     resources = ["user", "portfolio", "trade", "configuration", "report"]
-    
+
     for i in range(200):
         log = AuditLog(
             id=str(uuid.uuid4()),
@@ -547,12 +709,12 @@ async def get_audit_logs(
             success=random.random() > 0.1,
             error_message="Permission denied" if random.random() < 0.1 else None
         )
-        
+
         if user_id and log.user_id != user_id:
             continue
         if action and log.action != action:
             continue
-        
+
         logs.append(log)
 
     return success_response(data=sorted(logs, key=lambda x: x.timestamp, reverse=True)[offset:offset + limit])
@@ -603,12 +765,23 @@ async def list_announcements(
 @router.post("/export")
 async def export_data(
     export_request: DataExport,
+    request: Request,
     current_user = Depends(check_admin_permission),
     background_tasks: BackgroundTasks = BackgroundTasks()
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Export system data"""
 
     job_id = str(uuid.uuid4())
+
+    # Task 2: Log data export
+    security_logger.log_data_export(
+        user_id=current_user.id,
+        export_type=sanitize_log_input(export_request.export_type),
+        record_count=0,  # Would be actual count in production
+        success=True,
+        ip_address=get_client_ip(request)
+    )
+
     background_tasks.add_task(process_data_export, job_id, export_request)
 
     return success_response(data={
@@ -621,38 +794,48 @@ async def export_data(
 @router.post("/command")
 async def execute_system_command(
     command: SystemCommand,
+    request: Request,
     current_user = Depends(check_admin_permission)
-) -> ApiResponse[Dict]:
-    """Execute a system command"""
+) -> ApiResponse[Dict[str, Any]]:
+    """Execute a system command with validation and logging"""
 
-    # List of allowed commands
-    allowed_commands = [
-        "clear_cache",
-        "restart_workers",
-        "run_backup",
-        "optimize_database",
-        "refresh_models",
-        "sync_data"
-    ]
+    execution_time_ms = random.randint(100, 5000)
 
-    if command.command not in allowed_commands:
-        raise HTTPException(status_code=400, detail=f"Command not allowed: {command.command}")
+    try:
+        # Task 2 & 5: Log system command execution with validated parameters
+        security_logger.log_system_command(
+            user_id=current_user.id,
+            command=command.command,
+            parameters=command.parameters,
+            success=True,
+            execution_time_ms=execution_time_ms,
+            ip_address=get_client_ip(request)
+        )
 
-    return success_response(data={
-        "command": command.command,
-        "status": "executed",
-        "result": {
-            "success": True,
-            "message": f"Command {command.command} executed successfully",
-            "execution_time_ms": random.randint(100, 5000)
-        }
-    })
+        return success_response(data={
+            "command": command.command,
+            "status": "executed",
+            "result": {
+                "success": True,
+                "message": f"Command {command.command} executed successfully",
+                "execution_time_ms": execution_time_ms
+            }
+        })
+    except Exception as e:
+        security_logger.log_system_command(
+            user_id=current_user.id,
+            command=command.command,
+            parameters=command.parameters,
+            success=False,
+            ip_address=get_client_ip(request)
+        )
+        raise
 
 @router.post("/maintenance/enable")
 async def enable_maintenance_mode(
     current_user = Depends(check_admin_permission),
     message: str = "System is under maintenance"
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Enable maintenance mode"""
 
     return success_response(data={
@@ -661,7 +844,7 @@ async def enable_maintenance_mode(
     })
 
 @router.post("/maintenance/disable")
-async def disable_maintenance_mode(admin: bool = Depends(check_admin_permission)) -> ApiResponse[Dict]:
+async def disable_maintenance_mode(admin: bool = Depends(check_admin_permission)) -> ApiResponse[Dict[str, Any]]:
     """Disable maintenance mode"""
 
     return success_response(data={

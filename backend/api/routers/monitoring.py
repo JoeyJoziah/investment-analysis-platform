@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
 
 @router.get("/health")
-async def health_check() -> ApiResponse[Dict]:
+async def health_check() -> ApiResponse[Dict[str, Any]]:
     """Complete system health check"""
     return success_response(data={
         "status": "healthy",
@@ -31,7 +31,7 @@ async def health_check() -> ApiResponse[Dict]:
 
 
 @router.get("/metrics/cost")
-async def get_cost_metrics() -> ApiResponse[Dict]:
+async def get_cost_metrics() -> ApiResponse[Dict[str, Any]]:
     """Get current cost tracking metrics"""
     daily_costs = await cost_monitor.get_daily_costs()
     monthly_estimate = await cost_monitor.get_monthly_estimate()
@@ -45,7 +45,7 @@ async def get_cost_metrics() -> ApiResponse[Dict]:
 
 
 @router.get("/grafana/dashboards")
-async def get_dashboard_links() -> ApiResponse[Dict]:
+async def get_dashboard_links() -> ApiResponse[Dict[str, Any]]:
     """Get Grafana dashboard URLs"""
     base_url = os.getenv('GRAFANA_URL', 'http://localhost:3001')
 
@@ -63,7 +63,7 @@ async def create_annotation(
     text: str,
     tags: List[str] = None,
     current_user: dict = Depends(get_current_user)
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """Create an annotation in Grafana (for important events)"""
     success = grafana_client.create_annotation(
         text=f"[{current_user['email']}] {text}",
@@ -77,7 +77,7 @@ async def create_annotation(
 
 
 @router.post("/alerts/test")
-async def test_alert_system() -> ApiResponse[Dict]:
+async def test_alert_system() -> ApiResponse[Dict[str, Any]]:
     """Test the alert system"""
     # Create a test alert in Grafana
     alert_created = grafana_client.create_alert(
@@ -109,7 +109,7 @@ async def test_alert_system() -> ApiResponse[Dict]:
 
 
 @router.get("/metrics/api-usage")
-async def get_api_usage_metrics() -> ApiResponse[Dict]:
+async def get_api_usage_metrics() -> ApiResponse[Dict[str, Any]]:
     """Get API usage metrics for all providers"""
     return success_response(data={
         "alpha_vantage": {

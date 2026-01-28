@@ -61,7 +61,7 @@ class PerformanceReportResponse(BaseModel):
 @router.get("/metrics")
 async def get_cache_metrics(
     include_historical: bool = Query(False, description="Include historical metrics")
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Get comprehensive cache performance metrics
     
@@ -123,7 +123,7 @@ async def get_cost_analysis() -> ApiResponse[CostAnalysisResponse]:
 
 
 @router.get("/performance-report")
-async def get_performance_report() -> ApiResponse[Dict]:
+async def get_performance_report() -> ApiResponse[Dict[str, Any]]:
     """
     Get comprehensive performance report with optimization recommendations
     
@@ -148,7 +148,7 @@ async def get_performance_report() -> ApiResponse[Dict]:
 
 
 @router.get("/api-usage")
-async def get_api_usage() -> ApiResponse[Dict]:
+async def get_api_usage() -> ApiResponse[Dict[str, Any]]:
     """
     Get current API usage statistics for all providers
     
@@ -193,7 +193,7 @@ async def invalidate_cache(
     symbol: Optional[str] = Query(None, description="Stock symbol to invalidate"),
     data_type: Optional[str] = Query(None, description="Data type to invalidate"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Invalidate cache entries based on pattern, symbol, or data type
 
@@ -248,7 +248,7 @@ async def warm_cache(
     symbols: List[str] = Query(..., description="Stock symbols to warm in cache"),
     data_types: List[str] = Query(["real_time_quote", "company_overview"], description="Data types to warm"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-) -> ApiResponse[Dict]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Manually warm cache with specified symbols and data types
 
@@ -289,7 +289,7 @@ async def warm_cache(
 
 
 @router.get("/health")
-async def get_cache_health() -> ApiResponse[Dict]:
+async def get_cache_health() -> ApiResponse[Dict[str, Any]]:
     """
     Get cache system health status
 
@@ -377,7 +377,7 @@ async def get_cache_health() -> ApiResponse[Dict]:
 
 
 @router.get("/statistics")
-async def get_cache_statistics() -> ApiResponse[Dict]:
+async def get_cache_statistics() -> ApiResponse[Dict[str, Any]]:
     """
     Get detailed cache statistics for analysis and debugging
 
