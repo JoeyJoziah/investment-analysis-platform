@@ -5,6 +5,7 @@ Tests all memory leak fixes, batch processing optimizations, and performance imp
 
 import asyncio
 import pytest
+import pytest_asyncio
 import time
 import gc
 import psutil
@@ -32,7 +33,7 @@ from backend.analytics.recommendation_engine_optimized import OptimizedRecommend
 class TestMemoryManager:
     """Test memory management and leak fixes"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def memory_manager(self):
         """Create memory manager for testing"""
         manager = MemoryManager(
@@ -131,7 +132,7 @@ class TestMemoryManager:
 class TestAdaptiveBatchProcessor:
     """Test batch processing optimizations"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def batch_processor(self):
         """Create batch processor for testing"""
         config = BatchConfiguration(
@@ -232,7 +233,7 @@ class TestAdaptiveBatchProcessor:
 class TestEnhancedParallelProcessor:
     """Test enhanced parallel processing"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def parallel_processor(self):
         """Create parallel processor for testing"""
         processor = EnhancedParallelProcessor(
@@ -317,7 +318,7 @@ class TestEnhancedParallelProcessor:
 class TestDynamicResourceManager:
     """Test dynamic resource management"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def resource_manager(self):
         """Create resource manager for testing"""
         manager = DynamicResourceManager(
@@ -407,7 +408,7 @@ class TestDynamicResourceManager:
 class TestPerformanceProfiler:
     """Test performance profiling and monitoring"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def profiler(self):
         """Create performance profiler for testing"""
         profiler = PerformanceProfiler(
@@ -517,7 +518,7 @@ class TestPerformanceProfiler:
 class TestOptimizedRecommendationEngine:
     """Test optimized recommendation engine"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def recommendation_engine(self):
         """Create optimized recommendation engine for testing"""
         engine = OptimizedRecommendationEngine()

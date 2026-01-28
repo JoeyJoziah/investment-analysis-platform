@@ -4,6 +4,7 @@ Tests CRUD operations, transactions, data integrity, and database performance.
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import json
 import os
@@ -37,7 +38,7 @@ from backend.utils.deadlock_handler import DeadlockHandler
 class TestDatabaseIntegration:
     """Test comprehensive database operations with real PostgreSQL integration."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def db_session(self):
         """Create test database session."""
         # Use environment variable with fallback to default test database
