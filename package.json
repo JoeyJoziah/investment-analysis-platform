@@ -1,5 +1,9 @@
 {
+  "name": "investment-analysis-platform",
+  "version": "1.0.0",
+  "private": true,
   "dependencies": {
-    "claude-flow": "^3.0.0-alpha.184"
-  }
+    "claude-flow": "^3.0.0-alpha.178"
+  },
+  "comment": "Version aligned to match highest available @claude-flow/cli version. See docs/CLAUDE_FLOW_V3_VERSION_ALIGNMENT.md for full analysis."
 }

@@ -18,6 +18,7 @@ import asyncpg
 
 from backend.config.database import get_db_session, TransactionIsolationLevel, db_manager
 from backend.models.unified_models import Base
+from backend.exceptions import StaleDataError
 
 logger = logging.getLogger(__name__)
 
@@ -329,12 +330,12 @@ class AsyncBaseRepository(Generic[ModelType], ABC):
     ) -> Optional[ModelType]:
         """
         Update record by ID.
-        
+
         Args:
             id: Record ID
             data: Update data
             session: Optional existing session
-        
+
         Returns:
             Updated model instance or None if not found
         """
@@ -344,28 +345,155 @@ class AsyncBaseRepository(Generic[ModelType], ABC):
                 update_data = data.dict(exclude_unset=True)
             else:
                 update_data = data
-            
+
             # Remove None values to avoid updating with None
             update_data = {k: v for k, v in update_data.items() if v is not None}
-            
+
             if not update_data:
                 # No data to update, just return existing record
                 return await self.get_by_id(id, session=session)
-            
+
             stmt = update(self.model).where(self.model.id == id).values(**update_data)
             result = await session.execute(stmt)
-            
+
             if result.rowcount == 0:
                 return None
-            
+
             # Return updated record
             return await self.get_by_id(id, session=session)
-        
+
         if session:
             return await _update(session)
         else:
             async with get_db_session() as session:
                 return await _update(session)
+
+    async def update_with_lock(
+        self,
+        id: int,
+        data: Union[dict, UpdateSchemaType],
+        *,
+        expected_version: Optional[int] = None,
+        for_update: bool = True,
+        session: Optional[AsyncSession] = None
+    ) -> Optional[ModelType]:
+        """
+        Update record with optimistic locking and optional pessimistic lock.
+
+        Args:
+            id: Record ID
+            data: Update data
+            expected_version: Expected version for optimistic locking
+            for_update: Use SELECT FOR UPDATE (pessimistic lock)
+            session: Optional existing session
+
+        Returns:
+            Updated model instance or None if not found
+
+        Raises:
+            StaleDataError: If version mismatch detected
+        """
+        async def _update_with_lock(session: AsyncSession) -> Optional[ModelType]:
+            # Build query with optional FOR UPDATE lock
+            query = select(self.model).where(self.model.id == id)
+
+            if for_update:
+                # Pessimistic lock - prevents other transactions from reading/writing
+                query = query.with_for_update()
+
+            result = await session.execute(query)
+            instance = result.scalar_one_or_none()
+
+            if not instance:
+                return None
+
+            # Optimistic locking - check version if model has version column
+            if hasattr(instance, 'version') and expected_version is not None:
+                if instance.version != expected_version:
+                    raise StaleDataError(
+                        entity_type=self.model_name,
+                        entity_id=id,
+                        expected_version=expected_version,
+                        current_version=instance.version
+                    )
+
+            # Convert Pydantic model to dict if necessary
+            if hasattr(data, 'dict'):
+                update_data = data.dict(exclude_unset=True)
+            else:
+                update_data = dict(data) if not isinstance(data, dict) else data
+
+            # Remove None values
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+
+            if not update_data:
+                return instance
+
+            # Increment version if model supports it
+            if hasattr(instance, 'version'):
+                update_data['version'] = instance.version + 1
+
+            # Apply updates
+            for key, value in update_data.items():
+                if hasattr(instance, key):
+                    setattr(instance, key, value)
+
+            await session.flush()
+            await session.refresh(instance)
+
+            logger.debug(
+                f"Updated {self.model_name} ID {id} with version {getattr(instance, 'version', 'N/A')}"
+            )
+
+            return instance
+
+        if session:
+            return await _update_with_lock(session)
+        else:
+            async with get_db_session() as session:
+                return await _update_with_lock(session)
+
+    async def get_with_lock(
+        self,
+        id: int,
+        *,
+        for_update: bool = True,
+        skip_locked: bool = False,
+        nowait: bool = False,
+        session: Optional[AsyncSession] = None
+    ) -> Optional[ModelType]:
+        """
+        Get record with pessimistic lock (SELECT FOR UPDATE).
+
+        Args:
+            id: Record ID
+            for_update: Use FOR UPDATE lock
+            skip_locked: Skip locked rows (returns None if locked)
+            nowait: Don't wait for lock (raises exception if locked)
+            session: Optional existing session
+
+        Returns:
+            Model instance or None if not found/locked
+        """
+        async def _get_with_lock(session: AsyncSession) -> Optional[ModelType]:
+            query = select(self.model).where(self.model.id == id)
+
+            if for_update:
+                if skip_locked:
+                    query = query.with_for_update(skip_locked=True)
+                elif nowait:
+                    query = query.with_for_update(nowait=True)
+                else:
+                    query = query.with_for_update()
+
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+
+        if session:
+            return await _get_with_lock(session)
+        else:
+            async with get_db_session() as session:
+                return await _get_with_lock(session)
     
     async def delete(
         self,

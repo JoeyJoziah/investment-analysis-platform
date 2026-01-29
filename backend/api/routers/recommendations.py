@@ -28,6 +28,7 @@ from backend.utils.enhanced_error_handling import handle_api_error, validate_sto
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User, Recommendation
 from backend.config.settings import settings
+from backend.models.api_response import ApiResponse, success_response
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -669,14 +670,14 @@ def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
     )
 
 # Enhanced Endpoints with ML Integration
-@router.get("/daily", response_model=DailyRecommendations)
+@router.get("/daily")
 @cache_with_ttl(ttl=3600)  # Cache for 1 hour
 async def get_daily_recommendations(
     date_param: Optional[date] = Query(None, alias="date"),
     risk_level: Optional[RiskLevel] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-) -> DailyRecommendations:
+) -> ApiResponse[DailyRecommendations]:
     """
     Get daily curated recommendations powered by ML models and market analysis.
     
@@ -783,8 +784,8 @@ async def get_daily_recommendations(
                     "reasoning": rec.reasoning[:100] + "..." if len(rec.reasoning) > 100 else rec.reasoning,
                     "target_return": rec.expected_return
                 })
-        
-        return DailyRecommendations(
+
+        return success_response(data=DailyRecommendations(
             date=target_date,
             market_outlook=outlook,
             top_picks=top_picks[:5],  # Limit to top 5 for clarity
@@ -794,7 +795,7 @@ async def get_daily_recommendations(
             market_sentiment=round(market_sentiment, 3),
             risk_assessment=risk_assessment,
             special_situations=special_situations
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Error generating daily recommendations: {e}")
@@ -802,7 +803,7 @@ async def get_daily_recommendations(
         
         # Fallback to basic recommendations
         fallback_picks = [generate_recommendation() for _ in range(5)]
-        return DailyRecommendations(
+        return success_response(data=DailyRecommendations(
             date=target_date,
             market_outlook="Market analysis temporarily unavailable",
             top_picks=fallback_picks,
@@ -812,9 +813,9 @@ async def get_daily_recommendations(
             market_sentiment=0.0,
             risk_assessment="Analysis unavailable",
             special_situations=[]
-        )
+        ))
 
-@router.get("/list", response_model=List[RecommendationDetail])
+@router.get("/list")
 async def get_recommendations(
     limit: int = Query(10, le=100),
     offset: int = 0,
@@ -824,7 +825,7 @@ async def get_recommendations(
     min_confidence: float = Query(0.0, ge=0, le=1),
     sort_by: str = Query("confidence_score", pattern="^(confidence_score|expected_return|created_at)$"),
     order: str = Query("desc", pattern="^(asc|desc)$")
-) -> List["RecommendationDetail"]:
+) -> ApiResponse[List[RecommendationDetail]]:
     """Get list of recommendations with filters"""
     
     # Generate sample recommendations
@@ -850,25 +851,25 @@ async def get_recommendations(
         recommendations.sort(key=lambda x: x.expected_return, reverse=reverse)
     elif sort_by == "created_at":
         recommendations.sort(key=lambda x: x.created_at, reverse=reverse)
-    
-    # Pagination
-    return recommendations[offset:offset + limit]
 
-@router.get("/{recommendation_id}", response_model=RecommendationDetail)
-async def get_recommendation_detail(recommendation_id: str) -> "RecommendationDetail":
+    # Pagination
+    return success_response(data=recommendations[offset:offset + limit])
+
+@router.get("/{recommendation_id}")
+async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
     """Get detailed information about a specific recommendation"""
     
     # Generate a recommendation with the specified ID
     recommendation = generate_recommendation()
     recommendation.id = recommendation_id
-    
-    return recommendation
 
-@router.post("/filter", response_model=List[RecommendationDetail])
+    return success_response(data=recommendation)
+
+@router.post("/filter")
 async def filter_recommendations(
     filter_params: RecommendationFilter,
     limit: int = Query(20, le=100)
-) -> List["RecommendationDetail"]:
+) -> ApiResponse[List[RecommendationDetail]]:
     """Advanced filtering of recommendations"""
     
     # Generate recommendations
@@ -901,11 +902,11 @@ async def filter_recommendations(
     
     # Sort by confidence score
     recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
-    
-    return recommendations[:limit]
 
-@router.get("/portfolio/{portfolio_id}", response_model=PortfolioRecommendation)
-async def get_portfolio_recommendations(portfolio_id: str) -> PortfolioRecommendation:
+    return success_response(data=recommendations[:limit])
+
+@router.get("/portfolio/{portfolio_id}")
+async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
     """Get personalized recommendations for a specific portfolio"""
     
     # Generate recommendations tailored to portfolio
@@ -920,21 +921,21 @@ async def get_portfolio_recommendations(portfolio_id: str) -> PortfolioRecommend
         "NVDA": 0.10,
         "Cash": 0.10
     }
-    
-    return PortfolioRecommendation(
+
+    return success_response(data=PortfolioRecommendation(
         portfolio_id=portfolio_id,
         recommendations=recommendations,
         rebalancing_suggestions=rebalancing,
         risk_score=random.uniform(30, 70),
         expected_portfolio_return=random.uniform(0.08, 0.15),
         diversification_score=random.uniform(0.6, 0.9)
-    )
+    ))
 
-@router.get("/performance/track", response_model=List[RecommendationPerformance])
+@router.get("/performance/track")
 async def track_recommendation_performance(
     days_back: int = Query(30, le=365),
     status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
-) -> List[RecommendationPerformance]:
+) -> ApiResponse[List[RecommendationPerformance]]:
     """Track performance of past recommendations"""
     
     performances = []
@@ -962,23 +963,23 @@ async def track_recommendation_performance(
     
     if status:
         performances = [p for p in performances if p.status == status]
-    
-    return performances
+
+    return success_response(data=performances)
 
 @router.post("/alerts/settings")
-async def update_alert_settings(settings: AlertSettings) -> Dict[str, str]:
+async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str, str]]:
     """Update recommendation alert settings"""
     
     # In production, this would save to user preferences
-    return {
+    return success_response(data={
         "message": "Alert settings updated successfully",
         "status": "success"
-    }
+    })
 
 @router.get("/alerts/history")
 async def get_alert_history(
     days_back: int = Query(7, le=30)
-) -> List[Dict[str, Any]]:
+) -> ApiResponse[List[Dict[str, Any]]]:
     """Get history of recommendation alerts"""
     
     alerts = []
@@ -992,8 +993,8 @@ async def get_alert_history(
             "message": "Strong buy signal detected",
             "read": random.choice([True, False])
         })
-    
-    return sorted(alerts, key=lambda x: x["timestamp"], reverse=True)
+
+    return success_response(data=sorted(alerts, key=lambda x: x["timestamp"], reverse=True))
 
 @router.post("/backtest")
 async def backtest_strategy(
@@ -1001,13 +1002,13 @@ async def backtest_strategy(
     start_date: date,
     end_date: date,
     initial_capital: float = 100000
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Backtest a recommendation strategy"""
     
     # Simulate backtest results
     total_return = random.uniform(-0.2, 0.5)
-    
-    return {
+
+    return success_response(data={
         "strategy": strategy,
         "period": {
             "start": start_date.isoformat(),
@@ -1032,12 +1033,12 @@ async def backtest_strategy(
             "symbol": "BBBY",
             "return": -0.25
         }
-    }
+    })
 
 @router.get("/trending")
 async def get_trending_recommendations(
     timeframe: str = Query("24h", pattern="^(1h|24h|7d|30d)$")
-) -> List[Dict[str, Any]]:
+) -> ApiResponse[List[Dict[str, Any]]]:
     """Get trending recommendations based on user activity"""
     
     trending = []
@@ -1053,5 +1054,5 @@ async def get_trending_recommendations(
             "trending_score": random.uniform(70, 100),
             "timeframe": timeframe
         })
-    
-    return sorted(trending, key=lambda x: x["trending_score"], reverse=True)
+
+    return success_response(data=sorted(trending, key=lambda x: x["trending_score"], reverse=True))

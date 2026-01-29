@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Investment Analysis Platform"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
+    TESTING: bool = False  # Set to True in test environments to disable certain middleware
     ENVIRONMENT: str = "production"
     SECRET_KEY: str
     JWT_SECRET_KEY: str

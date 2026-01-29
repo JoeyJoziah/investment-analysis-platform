@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Container,
   Grid,
@@ -27,6 +27,7 @@ import {
   TextField,
   MenuItem,
   Alert,
+  Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,6 +42,7 @@ import {
   Assessment,
   Download,
   Refresh,
+  Bluetooth as WebSocketIcon,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
@@ -65,6 +67,10 @@ import {
   Area,
   AreaChart,
 } from 'recharts';
+import { usePortfolioWebSocket } from '../hooks/usePortfolioWebSocket';
+import CorrelationMatrix from '../components/CorrelationMatrix';
+import EfficientFrontier from '../components/EfficientFrontier';
+import RiskDecomposition from '../components/RiskDecomposition';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -96,6 +102,52 @@ const Portfolio: React.FC = () => {
     price: 0,
     notes: '',
   });
+
+  // Get symbols for WebSocket subscription
+  const symbols = useMemo(() => positions.map((p) => p.ticker), [positions]);
+  const portfolioId = useMemo(() => 'default-portfolio', []); // TODO: Get from props or state
+
+  // Set up WebSocket for real-time price updates
+  const { isConnected, priceUpdates, latency, subscribe, unsubscribe } = usePortfolioWebSocket(
+    portfolioId,
+    symbols,
+    true
+  );
+
+  // Update positions with real-time prices
+  const updatedPositions = useMemo(() => {
+    return positions.map((position) => {
+      const priceUpdate = priceUpdates.get(position.ticker);
+      if (priceUpdate) {
+        return {
+          ...position,
+          currentPrice: priceUpdate.price,
+          dayGain: priceUpdate.change || 0,
+          dayGainPercent: priceUpdate.change_percent || 0,
+          marketValue: position.quantity * priceUpdate.price,
+        };
+      }
+      return position;
+    });
+  }, [positions, priceUpdates]);
+
+  // Update metrics with real-time data
+  const updatedMetrics = useMemo(() => {
+    if (!metrics || updatedPositions.length === 0) return metrics;
+
+    const totalValue = updatedPositions.reduce((sum, p) => sum + (p.marketValue || 0), 0);
+    const totalGain = updatedPositions.reduce((sum, p) => sum + (p.totalGain || 0), 0);
+    const dayGain = updatedPositions.reduce((sum, p) => sum + (p.dayGain || 0), 0);
+
+    return {
+      ...metrics,
+      totalValue,
+      totalGain,
+      totalGainPercent: (totalGain / (totalValue - totalGain)) * 100,
+      dayGain,
+      dayGainPercent: (dayGain / totalValue) * 100,
+    };
+  }, [metrics, updatedPositions]);
 
   useEffect(() => {
     dispatch(fetchPortfolio());
@@ -191,9 +243,40 @@ const Portfolio: React.FC = () => {
   return (
     <Container maxWidth="xl">
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" fontWeight="bold">
-          Portfolio
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h4" fontWeight="bold">
+            Portfolio
+          </Typography>
+          <Badge
+            badgeContent={isConnected ? 'LIVE' : 'OFFLINE'}
+            color={isConnected ? 'success' : 'error'}
+            sx={{
+              '& .MuiBadge-badge': {
+                position: 'relative',
+                transform: 'none',
+                top: 0,
+                right: 0,
+              },
+            }}
+          >
+            <WebSocketIcon
+              sx={{
+                color: isConnected ? 'success.main' : 'error.main',
+                animation: isConnected ? 'pulse 1s infinite' : 'none',
+                '@keyframes pulse': {
+                  '0%': { opacity: 1 },
+                  '50%': { opacity: 0.5 },
+                  '100%': { opacity: 1 },
+                },
+              }}
+            />
+          </Badge>
+          {latency > 0 && (
+            <Typography variant="caption" color="textSecondary">
+              Latency: {latency}ms
+            </Typography>
+          )}
+        </Box>
         <Box>
           <Button
             variant="outlined"
@@ -230,13 +313,13 @@ const Portfolio: React.FC = () => {
                     Total Value
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
-                    {formatCurrency(metrics?.totalValue || 0)}
+                    {formatCurrency(updatedMetrics?.totalValue || 0)}
                   </Typography>
                   <Typography
                     variant="body2"
-                    color={metrics?.dayGainPercent && metrics.dayGainPercent >= 0 ? 'success.main' : 'error.main'}
+                    color={updatedMetrics?.dayGainPercent && updatedMetrics.dayGainPercent >= 0 ? 'success.main' : 'error.main'}
                   >
-                    {formatPercent(metrics?.dayGainPercent || 0)} Today
+                    {formatPercent(updatedMetrics?.dayGainPercent || 0)} Today
                   </Typography>
                 </Box>
                 <AccountBalance sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
@@ -254,16 +337,16 @@ const Portfolio: React.FC = () => {
                     Total Gain/Loss
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
-                    {formatCurrency(metrics?.totalGain || 0)}
+                    {formatCurrency(updatedMetrics?.totalGain || 0)}
                   </Typography>
                   <Typography
                     variant="body2"
-                    color={metrics?.totalGainPercent && metrics.totalGainPercent >= 0 ? 'success.main' : 'error.main'}
+                    color={updatedMetrics?.totalGainPercent && updatedMetrics.totalGainPercent >= 0 ? 'success.main' : 'error.main'}
                   >
-                    {formatPercent(metrics?.totalGainPercent || 0)}
+                    {formatPercent(updatedMetrics?.totalGainPercent || 0)}
                   </Typography>
                 </Box>
-                {metrics?.totalGain && metrics.totalGain >= 0 ? (
+                {updatedMetrics?.totalGain && updatedMetrics.totalGain >= 0 ? (
                   <TrendingUp sx={{ fontSize: 40, color: 'success.main', opacity: 0.3 }} />
                 ) : (
                   <TrendingDown sx={{ fontSize: 40, color: 'error.main', opacity: 0.3 }} />
@@ -282,13 +365,13 @@ const Portfolio: React.FC = () => {
                     Day Gain/Loss
                   </Typography>
                   <Typography variant="h5" fontWeight="bold">
-                    {formatCurrency(metrics?.dayGain || 0)}
+                    {formatCurrency(updatedMetrics?.dayGain || 0)}
                   </Typography>
                   <Typography
                     variant="body2"
-                    color={metrics?.dayGainPercent && metrics.dayGainPercent >= 0 ? 'success.main' : 'error.main'}
+                    color={updatedMetrics?.dayGainPercent && updatedMetrics.dayGainPercent >= 0 ? 'success.main' : 'error.main'}
                   >
-                    {formatPercent(metrics?.dayGainPercent || 0)}
+                    {formatPercent(updatedMetrics?.dayGainPercent || 0)}
                   </Typography>
                 </Box>
                 <ShowChart sx={{ fontSize: 40, color: 'info.main', opacity: 0.3 }} />
@@ -327,6 +410,7 @@ const Portfolio: React.FC = () => {
           <Tab label="Allocation" />
           <Tab label="Transactions" />
           <Tab label="Analysis" />
+          <Tab label="Risk Analysis" />
         </Tabs>
 
         {/* Positions Tab */}
@@ -347,7 +431,7 @@ const Portfolio: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {positions.map((position) => (
+                {updatedPositions.map((position) => (
                   <TableRow key={position.id}>
                     <TableCell>
                       <Typography variant="subtitle2" fontWeight="bold">
@@ -566,7 +650,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Top Performers
                 </Typography>
-                {[...positions]
+                {[...updatedPositions]
                   .sort((a, b) => b.totalGainPercent - a.totalGainPercent)
                   .slice(0, 5)
                   .map((position) => (
@@ -587,7 +671,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Worst Performers
                 </Typography>
-                {[...positions]
+                {[...updatedPositions]
                   .sort((a, b) => a.totalGainPercent - b.totalGainPercent)
                   .slice(0, 5)
                   .map((position) => (
@@ -608,7 +692,7 @@ const Portfolio: React.FC = () => {
                 <Typography variant="subtitle2" gutterBottom>
                   Largest Positions
                 </Typography>
-                {[...positions]
+                {[...updatedPositions]
                   .sort((a, b) => b.marketValue - a.marketValue)
                   .slice(0, 5)
                   .map((position) => (
@@ -621,6 +705,44 @@ const Portfolio: React.FC = () => {
                     </Box>
                   ))}
               </Paper>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        {/* Risk Analysis Tab */}
+        <TabPanel value={tabValue} index={5}>
+          <Grid container spacing={3}>
+            {/* Correlation Matrix */}
+            <Grid item xs={12} lg={6}>
+              <CorrelationMatrix
+                correlations={metrics?.correlationMatrix || {}}
+                title="Asset Correlation Matrix"
+              />
+            </Grid>
+
+            {/* Efficient Frontier */}
+            <Grid item xs={12} lg={6}>
+              <EfficientFrontier
+                frontier={metrics?.efficientFrontier?.points || []}
+                currentPortfolio={metrics?.efficientFrontier?.currentPosition || { risk: 0.15, return: 0.12 }}
+                optimalPortfolio={metrics?.efficientFrontier?.optimalPosition}
+                title="ML-Based Efficient Frontier"
+              />
+            </Grid>
+
+            {/* Risk Decomposition */}
+            <Grid item xs={12}>
+              <RiskDecomposition
+                components={updatedPositions.map((p) => ({
+                  symbol: p.ticker,
+                  riskContribution: p.marketValue / (updatedMetrics?.totalValue || 1),
+                  volatility: (p.currentPrice * 0.15) / 100, // Estimated volatility
+                  beta: 1.0, // Placeholder
+                }))}
+                totalRisk={0.15}
+                diversificationScore={metrics?.diversificationScore || 65}
+                title="Risk Decomposition Analysis"
+              />
             </Grid>
           </Grid>
         </TabPanel>

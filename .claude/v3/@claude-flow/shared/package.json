@@ -1,6 +1,6 @@
 {
   "name": "@claude-flow/shared",
-  "version": "3.0.0-alpha.6",
+  "version": "3.0.0-alpha.178",
   "type": "module",
   "description": "Shared module - common types, events, utilities, core interfaces",
   "main": "dist/index.js",
@@ -20,11 +20,12 @@
     "build": "tsc"
   },
   "dependencies": {
-    "sql.js": "^1.10.3"
+    "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/sql.js": "^1.4.9",
+    "typescript": "^5.3.3",
     "vitest": "^4.0.16"
   },
   "publishConfig": {

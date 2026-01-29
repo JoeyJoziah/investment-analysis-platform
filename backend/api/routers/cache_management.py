@@ -16,6 +16,7 @@ from backend.utils.intelligent_cache_policies import get_policy_manager, get_cac
 from backend.utils.database_query_cache import get_query_cache_manager
 from backend.utils.api_cache_decorators import get_invalidation_manager
 from backend.auth.oauth2 import get_current_user  # For admin authentication
+from backend.models.api_response import ApiResponse, success_response
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,10 @@ class PerformanceReportResponse(BaseModel):
     recommendations: List[Dict[str, Any]]
 
 
-@router.get("/metrics", response_model=Dict[str, Any])
+@router.get("/metrics")
 async def get_cache_metrics(
     include_historical: bool = Query(False, description="Include historical metrics")
-):
+) -> ApiResponse[Dict[str, Any]]:
     """
     Get comprehensive cache performance metrics
     
@@ -77,8 +78,8 @@ async def get_cache_metrics(
         if include_historical:
             historical = await cache_monitor.get_historical_metrics(hours_back=24)
             metrics['historical_data'] = historical
-        
-        return metrics
+
+        return success_response(data=metrics)
         
     except Exception as e:
         logger.error(f"Error retrieving cache metrics: {e}")
@@ -88,8 +89,8 @@ async def get_cache_metrics(
         )
 
 
-@router.get("/cost-analysis", response_model=CostAnalysisResponse)
-async def get_cost_analysis():
+@router.get("/cost-analysis")
+async def get_cost_analysis() -> ApiResponse[CostAnalysisResponse]:
     """
     Get comprehensive cost analysis for the caching system
     
@@ -102,8 +103,8 @@ async def get_cost_analysis():
     try:
         cache_monitor = await get_cache_monitor()
         cost_analysis = await cache_monitor.get_cost_analysis()
-        
-        return CostAnalysisResponse(
+
+        return success_response(data=CostAnalysisResponse(
             current_daily_cost=cost_analysis['current_costs']['daily_cost'],
             current_monthly_cost=cost_analysis['current_costs']['monthly_cost'],
             budget_utilization_percent=cost_analysis['current_costs']['budget_utilization_percent'],
@@ -111,7 +112,7 @@ async def get_cost_analysis():
             estimated_savings=cost_analysis['savings']['estimated_savings'],
             remaining_budget=cost_analysis['budget_status']['remaining_budget'],
             on_track=cost_analysis['budget_status']['on_track']
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Error retrieving cost analysis: {e}")
@@ -121,8 +122,8 @@ async def get_cost_analysis():
         )
 
 
-@router.get("/performance-report", response_model=Dict[str, Any])
-async def get_performance_report():
+@router.get("/performance-report")
+async def get_performance_report() -> ApiResponse[Dict[str, Any]]:
     """
     Get comprehensive performance report with optimization recommendations
     
@@ -135,8 +136,8 @@ async def get_performance_report():
     try:
         cache_monitor = await get_cache_monitor()
         report = await cache_monitor.get_performance_report()
-        
-        return report
+
+        return success_response(data=report)
         
     except Exception as e:
         logger.error(f"Error generating performance report: {e}")
@@ -146,8 +147,8 @@ async def get_performance_report():
         )
 
 
-@router.get("/api-usage", response_model=Dict[str, Any])
-async def get_api_usage():
+@router.get("/api-usage")
+async def get_api_usage() -> ApiResponse[Dict[str, Any]]:
     """
     Get current API usage statistics for all providers
     
@@ -172,11 +173,11 @@ async def get_api_usage():
                 'allocation_plan': allocation.get(provider, [])
             }
         
-        return {
+        return success_response(data={
             'timestamp': datetime.utcnow().isoformat(),
             'api_usage': usage_summary,
             'total_allocated_calls': sum(len(plan) for plan in allocation.values())
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error retrieving API usage: {e}")
@@ -192,10 +193,10 @@ async def invalidate_cache(
     symbol: Optional[str] = Query(None, description="Stock symbol to invalidate"),
     data_type: Optional[str] = Query(None, description="Data type to invalidate"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-):
+) -> ApiResponse[Dict[str, Any]]:
     """
     Invalidate cache entries based on pattern, symbol, or data type
-    
+
     This is an administrative endpoint that allows manual cache invalidation.
     Use with caution as it can impact performance temporarily.
     """
@@ -225,12 +226,12 @@ async def invalidate_cache(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Must specify at least one of: pattern, symbol, or data_type"
             )
-        
-        return {
+
+        return success_response(data={
             "message": f"Cache invalidation completed",
             "operations": invalidated_count,
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except HTTPException:
         raise
@@ -247,10 +248,10 @@ async def warm_cache(
     symbols: List[str] = Query(..., description="Stock symbols to warm in cache"),
     data_types: List[str] = Query(["real_time_quote", "company_overview"], description="Data types to warm"),
     # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
-):
+) -> ApiResponse[Dict[str, Any]]:
     """
     Manually warm cache with specified symbols and data types
-    
+
     This endpoint allows administrators to preload frequently accessed data
     into the cache to improve performance.
     """
@@ -270,14 +271,14 @@ async def warm_cache(
         # Execute warming
         cache_manager = await get_cache_manager()
         await cache_manager.warm_cache(warming_tasks, priority=1)
-        
-        return {
+
+        return success_response(data={
             "message": f"Cache warming initiated for {len(symbols)} symbols",
             "symbols": [s.upper() for s in symbols],
             "data_types": data_types,
             "total_tasks": len(warming_tasks),
             "timestamp": datetime.utcnow().isoformat()
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error warming cache: {e}")
@@ -288,10 +289,10 @@ async def warm_cache(
 
 
 @router.get("/health")
-async def get_cache_health():
+async def get_cache_health() -> ApiResponse[Dict[str, Any]]:
     """
     Get cache system health status
-    
+
     Provides a quick health check of all caching components:
     - Cache manager connectivity
     - Redis status
@@ -364,8 +365,8 @@ async def get_cache_health():
                 "status": "unhealthy",
                 "error": str(e)
             }
-        
-        return health_status
+
+        return success_response(data=health_status)
         
     except Exception as e:
         logger.error(f"Error checking cache health: {e}")
@@ -376,10 +377,10 @@ async def get_cache_health():
 
 
 @router.get("/statistics")
-async def get_cache_statistics():
+async def get_cache_statistics() -> ApiResponse[Dict[str, Any]]:
     """
     Get detailed cache statistics for analysis and debugging
-    
+
     Provides comprehensive statistics about cache usage patterns,
     performance metrics, and storage utilization.
     """
@@ -399,8 +400,8 @@ async def get_cache_statistics():
             l3_effectiveness = cache_stats['cache_metrics']['l3_hits'] / total_requests
         else:
             l1_effectiveness = l2_effectiveness = l3_effectiveness = 0
-        
-        return {
+
+        return success_response(data={
             "timestamp": datetime.utcnow().isoformat(),
             "cache_layer_statistics": {
                 "l1": {
@@ -432,7 +433,7 @@ async def get_cache_statistics():
                 "api_calls_saved": cache_stats['cache_metrics']['api_calls_saved'],
                 "estimated_cost_savings": cache_stats['cache_metrics']['estimated_cost_savings']
             }
-        }
+        })
         
     except Exception as e:
         logger.error(f"Error retrieving cache statistics: {e}")

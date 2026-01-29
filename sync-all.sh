@@ -158,7 +158,7 @@ check_prerequisites() {
 run_unified_sync() {
     local sync_mode="$1"
     local dry_run="${2:-false}"
-    local conflict_resolution="${3:-github_wins}"
+    local conflict_resolution="${3:-local_wins}"
     local attempt=1
     local success=false
 
@@ -242,7 +242,7 @@ run_notion_sync() {
 cmd_sync() {
     local mode="--bidirectional"
     local dry_run="false"
-    local conflict_resolution="github_wins"
+    local conflict_resolution="local_wins"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -267,7 +267,7 @@ cmd_sync() {
                 conflict_resolution="$2"
                 shift 2
                 ;;
-            --github-wins|--notion-wins|--newest-wins)
+            --local-wins|--github-wins|--notion-wins|--newest-wins)
                 conflict_resolution="${1#--}"
                 conflict_resolution="${conflict_resolution//-/_}"
                 shift
@@ -335,7 +335,7 @@ cmd_init() {
 
     # Create initial sync state
     log_info "Creating initial sync state..."
-    run_unified_sync "--bidirectional" "true" "github_wins"  # Dry run first
+    run_unified_sync "--bidirectional" "true" "local_wins"  # Dry run first
 
     log_success "Initialization complete"
     echo ""
@@ -390,16 +390,18 @@ SYNC OPTIONS:
     --github-only       Sync to GitHub only (Notion -> GitHub)
     --notion-only       Sync to Notion only (GitHub -> Notion)
     --dry-run           Preview changes without applying
-    --github-wins       Resolve conflicts with GitHub data (default)
+    --local-wins        Resolve conflicts with local repo data (default)
+    --github-wins       Resolve conflicts with GitHub data (alias for --local-wins)
     --notion-wins       Resolve conflicts with Notion data
     --newest-wins       Resolve conflicts with newest data
 
 EXAMPLES:
-    ./sync-all.sh                              # Full bidirectional sync
+    ./sync-all.sh                              # Full bidirectional sync (local wins)
     ./sync-all.sh --dry-run                    # Preview full sync
     ./sync-all.sh --github-only                # Sync Notion -> GitHub only
     ./sync-all.sh --notion-only --dry-run      # Preview GitHub -> Notion
     ./sync-all.sh sync --notion-wins           # Sync with Notion priority
+    ./sync-all.sh sync --local-wins            # Explicit: local repo data wins (default)
     ./sync-all.sh status                       # Show status
     ./sync-all.sh diff                         # Show differences
 

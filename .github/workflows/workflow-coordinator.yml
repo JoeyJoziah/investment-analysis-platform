@@ -1,0 +1,389 @@
+name: Workflow Coordinator
+# Master workflow orchestration for synchronized CI/CD operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_type:
+        description: 'Workflow to coordinate'
+        required: true
+        type: choice
+        options:
+          - full-ci
+          - fast-ci
+          - release-candidate
+          - hotfix
+          - security-audit
+          - performance-check
+      environment:
+        description: 'Target environment'
+        required: false
+        type: choice
+        default: 'staging'
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip test phase (emergency only)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+
+concurrency:
+  group: workflow-coordinator-${{ github.event.inputs.workflow_type }}
+  cancel-in-progress: false
+
+jobs:
+  # Workflow orchestration decision matrix
+  orchestration-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_tests: ${{ steps.setup.outputs.run_tests }}
+      run_security: ${{ steps.setup.outputs.run_security }}
+      run_build: ${{ steps.setup.outputs.run_build }}
+      run_deploy: ${{ steps.setup.outputs.run_deploy }}
+      deploy_target: ${{ steps.setup.outputs.deploy_target }}
+      notification_channels: ${{ steps.setup.outputs.notification_channels }}
+
+    steps:
+    - name: Determine workflow configuration
+      id: setup
+      run: |
+        WORKFLOW_TYPE="${{ github.event.inputs.workflow_type }}"
+        SKIP_TESTS="${{ github.event.inputs.skip_tests }}"
+        ENVIRONMENT="${{ github.event.inputs.environment }}"
+
+        # Default configuration
+        RUN_TESTS="true"
+        RUN_SECURITY="true"
+        RUN_BUILD="true"
+        RUN_DEPLOY="false"
+        DEPLOY_TARGET="none"
+        NOTIFICATION_CHANNELS="slack"
+
+        case "$WORKFLOW_TYPE" in
+          "full-ci")
+            RUN_TESTS="true"
+            RUN_SECURITY="true"
+            RUN_BUILD="true"
+            RUN_DEPLOY="false"
+            NOTIFICATION_CHANNELS="slack,email"
+            ;;
+          "fast-ci")
+            RUN_TESTS="true"
+            RUN_SECURITY="false"
+            RUN_BUILD="false"
+            RUN_DEPLOY="false"
+            NOTIFICATION_CHANNELS="slack"
+            ;;
+          "release-candidate")
+            RUN_TESTS="true"
+            RUN_SECURITY="true"
+            RUN_BUILD="true"
+            RUN_DEPLOY="true"
+            DEPLOY_TARGET="$ENVIRONMENT"
+            NOTIFICATION_CHANNELS="slack,email,github"
+            ;;
+          "hotfix")
+            RUN_TESTS="true"
+            RUN_SECURITY="true"
+            RUN_BUILD="true"
+            RUN_DEPLOY="true"
+            DEPLOY_TARGET="production"
+            NOTIFICATION_CHANNELS="slack,email,pagerduty"
+            ;;
+          "security-audit")
+            RUN_TESTS="false"
+            RUN_SECURITY="true"
+            RUN_BUILD="false"
+            RUN_DEPLOY="false"
+            NOTIFICATION_CHANNELS="slack,email"
+            ;;
+          "performance-check")
+            RUN_TESTS="true"
+            RUN_SECURITY="false"
+            RUN_BUILD="false"
+            RUN_DEPLOY="false"
+            NOTIFICATION_CHANNELS="slack"
+            ;;
+        esac
+
+        # Override if skip_tests is true
+        if [ "$SKIP_TESTS" = "true" ]; then
+          RUN_TESTS="false"
+          echo "⚠️  WARNING: Tests skipped - Emergency mode"
+        fi
+
+        echo "run_tests=$RUN_TESTS" >> $GITHUB_OUTPUT
+        echo "run_security=$RUN_SECURITY" >> $GITHUB_OUTPUT
+        echo "run_build=$RUN_BUILD" >> $GITHUB_OUTPUT
+        echo "run_deploy=$RUN_DEPLOY" >> $GITHUB_OUTPUT
+        echo "deploy_target=$DEPLOY_TARGET" >> $GITHUB_OUTPUT
+        echo "notification_channels=$NOTIFICATION_CHANNELS" >> $GITHUB_OUTPUT
+
+        echo "## Workflow Configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- Workflow Type: $WORKFLOW_TYPE" >> $GITHUB_STEP_SUMMARY
+        echo "- Run Tests: $RUN_TESTS" >> $GITHUB_STEP_SUMMARY
+        echo "- Run Security: $RUN_SECURITY" >> $GITHUB_STEP_SUMMARY
+        echo "- Run Build: $RUN_BUILD" >> $GITHUB_STEP_SUMMARY
+        echo "- Run Deploy: $RUN_DEPLOY" >> $GITHUB_STEP_SUMMARY
+        echo "- Deploy Target: $DEPLOY_TARGET" >> $GITHUB_STEP_SUMMARY
+
+  # Coordinated test execution
+  coordinated-tests:
+    needs: [orchestration-setup]
+    if: needs.orchestration-setup.outputs.run_tests == 'true'
+    uses: ./.github/workflows/reusable-test.yml
+    secrets: inherit
+    with:
+      test_type: comprehensive
+      coverage_threshold: 85
+
+  # Security scan coordination
+  coordinated-security:
+    needs: [orchestration-setup]
+    if: needs.orchestration-setup.outputs.run_security == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Trigger security scan workflow
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'security-scan.yml',
+            ref: context.ref
+          });
+
+          console.log('Security scan workflow triggered');
+
+  # Build coordination
+  coordinated-build:
+    needs: [orchestration-setup, coordinated-tests]
+    if: |
+      always() &&
+      needs.orchestration-setup.outputs.run_build == 'true' &&
+      (needs.coordinated-tests.result == 'success' || needs.coordinated-tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push images
+      run: |
+        TAG="${GITHUB_SHA::8}"
+
+        # Build backend
+        docker buildx build \
+          --platform linux/amd64 \
+          --file Dockerfile.backend \
+          --tag ${{ env.REGISTRY }}/${{ github.repository }}/backend:$TAG \
+          --tag ${{ env.REGISTRY }}/${{ github.repository }}/backend:latest \
+          --cache-from type=gha,scope=backend-coord \
+          --cache-to type=gha,mode=max,scope=backend-coord \
+          --push \
+          .
+
+        # Build frontend
+        docker buildx build \
+          --platform linux/amd64 \
+          --file Dockerfile.frontend \
+          --tag ${{ env.REGISTRY }}/${{ github.repository }}/frontend:$TAG \
+          --tag ${{ env.REGISTRY }}/${{ github.repository }}/frontend:latest \
+          --cache-from type=gha,scope=frontend-coord \
+          --cache-to type=gha,mode=max,scope=frontend-coord \
+          --push \
+          .
+
+  # Deployment coordination
+  coordinated-deployment:
+    needs: [orchestration-setup, coordinated-build, coordinated-security]
+    if: |
+      always() &&
+      needs.orchestration-setup.outputs.run_deploy == 'true' &&
+      needs.coordinated-build.result == 'success' &&
+      (needs.coordinated-security.result == 'success' || needs.coordinated-security.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.orchestration-setup.outputs.deploy_target }}
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to target environment
+      run: |
+        TARGET="${{ needs.orchestration-setup.outputs.deploy_target }}"
+
+        echo "Deploying to $TARGET environment..."
+
+        if [ "$TARGET" = "production" ]; then
+          echo "Triggering production deployment workflow..."
+          gh workflow run production-deploy.yml \
+            --ref ${{ github.ref }} \
+            --field tag=${{ github.ref_name }}
+        elif [ "$TARGET" = "staging" ]; then
+          echo "Triggering staging deployment workflow..."
+          gh workflow run staging-deploy.yml \
+            --ref ${{ github.ref }}
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Unified notification system
+  unified-notifications:
+    needs: [orchestration-setup, coordinated-tests, coordinated-security, coordinated-build, coordinated-deployment]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Prepare notification data
+      id: notification
+      run: |
+        # Determine overall status
+        TESTS="${{ needs.coordinated-tests.result }}"
+        SECURITY="${{ needs.coordinated-security.result }}"
+        BUILD="${{ needs.coordinated-build.result }}"
+        DEPLOY="${{ needs.coordinated-deployment.result }}"
+
+        # Calculate overall status
+        if [[ "$TESTS" == "failure" || "$SECURITY" == "failure" || "$BUILD" == "failure" || "$DEPLOY" == "failure" ]]; then
+          OVERALL_STATUS="failure"
+          STATUS_EMOJI="🔴"
+          STATUS_COLOR="danger"
+        elif [[ "$TESTS" == "success" || "$SECURITY" == "success" || "$BUILD" == "success" || "$DEPLOY" == "success" ]]; then
+          OVERALL_STATUS="success"
+          STATUS_EMOJI="✅"
+          STATUS_COLOR="good"
+        else
+          OVERALL_STATUS="partial"
+          STATUS_EMOJI="⚠️ "
+          STATUS_COLOR="warning"
+        fi
+
+        echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
+        echo "status_emoji=$STATUS_EMOJI" >> $GITHUB_OUTPUT
+        echo "status_color=$STATUS_COLOR" >> $GITHUB_OUTPUT
+
+    - name: Send Slack notification
+      if: contains(needs.orchestration-setup.outputs.notification_channels, 'slack')
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ steps.notification.outputs.status_color }}',
+              title: '${{ steps.notification.outputs.status_emoji }} Workflow Coordinator: ${{ github.event.inputs.workflow_type }}',
+              fields: [
+                {
+                  title: 'Repository',
+                  value: '${{ github.repository }}',
+                  short: true
+                },
+                {
+                  title: 'Triggered By',
+                  value: '${{ github.actor }}',
+                  short: true
+                },
+                {
+                  title: 'Tests',
+                  value: '${{ needs.coordinated-tests.result }}',
+                  short: true
+                },
+                {
+                  title: 'Security',
+                  value: '${{ needs.coordinated-security.result }}',
+                  short: true
+                },
+                {
+                  title: 'Build',
+                  value: '${{ needs.coordinated-build.result }}',
+                  short: true
+                },
+                {
+                  title: 'Deployment',
+                  value: '${{ needs.coordinated-deployment.result }}',
+                  short: true
+                }
+              ],
+              actions: [{
+                type: 'button',
+                text: 'View Workflow',
+                url: 'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+              }]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+    - name: Create workflow summary
+      run: |
+        echo "## ${{ steps.notification.outputs.status_emoji }} Workflow Coordinator Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow Type**: ${{ github.event.inputs.workflow_type }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Overall Status**: ${{ steps.notification.outputs.overall_status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Stage Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Stage | Result |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Tests | ${{ needs.coordinated-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security | ${{ needs.coordinated-security.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Build | ${{ needs.coordinated-build.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Deployment | ${{ needs.coordinated-deployment.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Triggered by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+
+  # Board sync after workflow completion
+  post-workflow-sync:
+    needs: [coordinated-deployment]
+    if: always() && needs.coordinated-deployment.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      repository-projects: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Sync boards after deployment
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Trigger board sync
+        gh workflow run board-sync.yml \
+          --field sync_type=full 2>/dev/null || echo "Board sync triggered"
+
+        # Trigger Notion sync if configured
+        gh workflow run notion-github-sync.yml \
+          --field direction=github_to_notion \
+          --field conflict_resolution=github_wins 2>/dev/null || echo "Notion sync triggered"

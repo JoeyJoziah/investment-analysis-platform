@@ -29,6 +29,7 @@ from backend.utils.cache import cache_with_ttl
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User, Portfolio, Position, Transaction as TransactionModel
 from backend.config.settings import settings
+from backend.models.api_response import ApiResponse, success_response
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -257,30 +258,33 @@ def calculate_performance_metrics() -> PerformanceMetrics:
     )
 
 # Enhanced Endpoints with Real Database Integration
-@router.get("/summary", response_model=List[PortfolioSummary])
+@router.get("/summary")
 @cache_with_ttl(ttl=60)  # Cache for 1 minute
 async def get_portfolios_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[PortfolioSummary]:
+) -> ApiResponse[List[PortfolioSummary]]:
     """
-    Get summary of all user portfolios with real data.
-    
+    Get summary of all user portfolios with real-time price data.
+
     Returns comprehensive portfolio summaries including:
-    - Current market values calculated from real-time prices
+    - Current market values calculated from real-time prices via RealtimePriceService
     - Performance metrics and gains/losses
     - Risk assessment scores
     - Position counts and allocation data
     """
     try:
         logger.info(f"Fetching portfolio summaries for user {current_user.id}")
-        
+
+        from backend.services.realtime_price_service import get_realtime_price_service
+        price_service = await get_realtime_price_service()
+
         # Get user's portfolios from database
         portfolios = await portfolio_repository.get_user_portfolios(
             user_id=current_user.id,
             session=db
         )
-        
+
         if not portfolios:
             logger.info(f"No portfolios found for user {current_user.id}, creating default portfolio")
             # Create a default portfolio if none exists
@@ -289,9 +293,9 @@ async def get_portfolios_summary(
                 session=db
             )
             portfolios = [default_portfolio]
-        
+
         summaries = []
-        
+
         for portfolio in portfolios:
             try:
                 # Calculate portfolio metrics
@@ -299,36 +303,43 @@ async def get_portfolios_summary(
                     portfolio_id=portfolio.id,
                     session=db
                 )
-                
+
+                # Get all prices at once using bulk fetch
+                symbols = [pos.symbol for pos in positions]
+                prices = await price_service.get_latest_prices_bulk(symbols, db)
+
                 # Calculate total values
                 total_value = 0.0
                 total_cost = 0.0
                 day_change = 0.0
-                
+
                 for position in positions:
-                    # Get current price (would integrate with real-time data)
-                    current_price = await get_current_stock_price(position.symbol, db)
+                    # Get current price from realtime service
+                    price_update = prices.get(position.symbol)
+                    current_price = price_update.price if price_update else await get_current_stock_price(position.symbol, db)
+
                     position_value = position.quantity * current_price
                     position_cost = position.quantity * position.average_cost
-                    
+
                     total_value += position_value
                     total_cost += position_cost
-                    
-                    # Calculate day change (simplified)
-                    day_change += position.quantity * (current_price - position.average_cost) * 0.01  # Approximation
-                
+
+                    # Calculate day change
+                    if price_update and price_update.close:
+                        day_change += position.quantity * (price_update.close - position.average_cost) * 0.01
+
                 # Add cash balance
                 cash_balance = float(portfolio.cash_balance or 0)
                 total_value += cash_balance
-                
+
                 # Calculate metrics
                 total_gain = total_value - total_cost
                 total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
                 day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
-                
-                # Calculate risk score (simplified)
+
+                # Calculate risk score
                 risk_score = await calculate_portfolio_risk_score(portfolio.id, positions, db)
-                
+
                 summaries.append(PortfolioSummary(
                     id=str(portfolio.portfolio_id or portfolio.id),
                     name=portfolio.name or f"Portfolio {portfolio.id}",
@@ -337,7 +348,7 @@ async def get_portfolios_summary(
                     total_gain=round(total_gain, 2),
                     total_gain_percent=round(total_gain_percent, 2),
                     cash_balance=round(cash_balance, 2),
-                    buying_power=round(cash_balance * 2, 2),  # 2x margin approximation
+                    buying_power=round(cash_balance * 2, 2),
                     day_change=round(day_change, 2),
                     day_change_percent=round(day_change_percent, 2),
                     positions_count=len(positions),
@@ -346,7 +357,7 @@ async def get_portfolios_summary(
                     created_at=portfolio.created_at,
                     last_updated=portfolio.updated_at or datetime.utcnow()
                 ))
-                
+
             except Exception as e:
                 logger.error(f"Error calculating summary for portfolio {portfolio.id}: {e}")
                 # Add fallback summary
@@ -367,13 +378,12 @@ async def get_portfolios_summary(
                     created_at=portfolio.created_at,
                     last_updated=datetime.utcnow()
                 ))
-        
+
         logger.info(f"Successfully calculated {len(summaries)} portfolio summaries")
-        return summaries
-        
+        return success_response(data=summaries)
+
     except Exception as e:
         logger.error(f"Error fetching portfolio summaries: {e}")
-        # await handle_database_error(e, "fetch portfolio summaries")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error fetching portfolio summaries"
@@ -426,18 +436,18 @@ async def calculate_portfolio_risk_score(portfolio_id: int, positions: List, db:
         logger.error(f"Error calculating risk score for portfolio {portfolio_id}: {e}")
         return 50.0
 
-@router.get("/{portfolio_id}", response_model=PortfolioDetail)
+@router.get("/{portfolio_id}")
 @cache_with_ttl(ttl=30)  # Cache for 30 seconds
 async def get_portfolio_detail(
     portfolio_id: str = Path(..., description="Portfolio ID"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
-) -> PortfolioDetail:
+) -> ApiResponse[PortfolioDetail]:
     """
-    Get detailed portfolio information with real-time calculations.
-    
+    Get detailed portfolio information with real-time price updates.
+
     Provides comprehensive portfolio details including:
-    - All positions with current market values
+    - All positions with current market values from RealtimePriceService
     - Asset and sector allocation breakdown
     - Performance metrics and risk analysis
     - Recent transaction history
@@ -445,44 +455,58 @@ async def get_portfolio_detail(
     """
     try:
         logger.info(f"Fetching detailed portfolio {portfolio_id} for user {current_user.id}")
-        
+
+        from backend.services.realtime_price_service import get_realtime_price_service
+        price_service = await get_realtime_price_service()
+
         # Get portfolio from database
         portfolio = await portfolio_repository.get_user_portfolio(
             portfolio_id=portfolio_id,
             user_id=current_user.id,
             session=db
         )
-        
+
         if not portfolio:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Portfolio '{portfolio_id}' not found or access denied"
             )
-        
+
         # Get portfolio positions
         db_positions = await portfolio_repository.get_portfolio_positions(
             portfolio_id=portfolio.id,
             session=db
         )
-        
+
+        # Bulk fetch all prices at once
+        symbols = [pos.symbol for pos in db_positions]
+        prices = await price_service.get_latest_prices_bulk(symbols, db)
+
         # Convert to response format and calculate current values
         positions = []
         total_value = 0.0
         total_cost = 0.0
         day_change = 0.0
-        
+
         for db_pos in db_positions:
-            # Get current market price
-            current_price = await get_current_stock_price(db_pos.symbol, db)
+            # Get current market price from realtime service
+            price_update = prices.get(db_pos.symbol)
+            if price_update:
+                current_price = price_update.price
+                day_change_raw = price_update.change or 0
+            else:
+                current_price = await get_current_stock_price(db_pos.symbol, db)
+                day_change_raw = 0
+
             market_value = db_pos.quantity * current_price
             cost_basis = db_pos.quantity * db_pos.average_cost
             unrealized_gain = market_value - cost_basis
             unrealized_gain_percent = (unrealized_gain / cost_basis * 100) if cost_basis > 0 else 0.0
-            
+
             # Get stock info for sector
             stock_info = await stock_repository.get_by_symbol(db_pos.symbol, session=db)
             sector = stock_info.sector if stock_info else "Unknown"
-            
+
             position = Position(
                 id=str(db_pos.id),
                 symbol=db_pos.symbol,
@@ -495,15 +519,15 @@ async def get_portfolio_detail(
                 unrealized_gain=unrealized_gain,
                 unrealized_gain_percent=unrealized_gain_percent,
                 realized_gain=float(db_pos.realized_gain or 0),
-                asset_class=AssetClass.STOCKS,  # Would determine from stock type
+                asset_class=AssetClass.STOCKS,
                 sector=sector,
-                allocation_percent=0.0  # Will calculate below
+                allocation_percent=0.0
             )
-            
+
             positions.append(position)
             total_value += market_value
             total_cost += cost_basis
-            day_change += unrealized_gain * 0.1  # Approximation for daily change
+            day_change += db_pos.quantity * day_change_raw
         
         # Add cash to total value
         cash_balance = float(portfolio.cash_balance or 0)
@@ -567,8 +591,8 @@ async def get_portfolio_detail(
         total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
         day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
         risk_score = await calculate_portfolio_risk_score(portfolio.id, db_positions, db)
-        
-        return PortfolioDetail(
+
+        return success_response(data=PortfolioDetail(
             id=portfolio_id,
             name=portfolio.name or "Main Portfolio",
             total_value=round(total_value, 2),
@@ -591,8 +615,8 @@ async def get_portfolio_detail(
             worst_performers=worst_performers,
             recent_transactions=transactions,
             performance_metrics=performance_metrics
-        )
-        
+        ))
+
     except HTTPException:
         raise
     except Exception as e:
@@ -649,12 +673,12 @@ async def calculate_real_performance_metrics(portfolio_id: int, positions: List[
         logger.error(f"Error calculating performance metrics: {e}")
         return calculate_performance_metrics()  # Fallback
 
-@router.post("/{portfolio_id}/positions", response_model=Dict[str, Any])
+@router.post("/{portfolio_id}/positions")
 async def add_position(
     portfolio_id: str,
     request: AddPositionRequest,
     background_tasks: BackgroundTasks
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Add a new position or add to existing position"""
     
     # Get current price if not provided
@@ -677,20 +701,20 @@ async def add_position(
     
     # Background task to update portfolio metrics
     background_tasks.add_task(update_portfolio_metrics, portfolio_id)
-    
-    return {
+
+    return success_response(data={
         "message": f"Successfully added {request.quantity} shares of {request.symbol}",
         "transaction": transaction.dict(),
         "portfolio_id": portfolio_id
-    }
+    })
 
-@router.delete("/{portfolio_id}/positions/{symbol}", response_model=Dict[str, Any])
+@router.delete("/{portfolio_id}/positions/{symbol}")
 async def remove_position(
     portfolio_id: str,
     symbol: str,
     request: RemovePositionRequest,
     background_tasks: BackgroundTasks
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Remove or reduce a position"""
     
     # Get current price if not provided
@@ -719,15 +743,15 @@ async def remove_position(
     
     # Background task to update portfolio metrics
     background_tasks.add_task(update_portfolio_metrics, portfolio_id)
-    
-    return {
+
+    return success_response(data={
         "message": f"Successfully sold {quantity_to_sell} shares of {symbol}",
         "transaction": transaction.dict(),
         "portfolio_id": portfolio_id,
         "realized_gain": random.uniform(-1000, 5000)
-    }
+    })
 
-@router.get("/{portfolio_id}/transactions", response_model=List[Transaction])
+@router.get("/{portfolio_id}/transactions")
 async def get_transactions(
     portfolio_id: str,
     limit: int = Query(50, le=500),
@@ -736,7 +760,7 @@ async def get_transactions(
     symbol: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
-) -> List[Transaction]:
+) -> ApiResponse[List[Transaction]]:
     """Get portfolio transaction history"""
     
     # Generate sample transactions
@@ -773,15 +797,15 @@ async def get_transactions(
     
     # Sort by timestamp descending
     transactions.sort(key=lambda x: x.timestamp, reverse=True)
-    
-    return transactions[offset:offset + limit]
 
-@router.get("/{portfolio_id}/performance", response_model=Dict[str, Any])
+    return success_response(data=transactions[offset:offset + limit])
+
+@router.get("/{portfolio_id}/performance")
 async def get_portfolio_performance(
     portfolio_id: str,
     period: str = Query("1M", pattern="^(1D|1W|1M|3M|6M|1Y|3Y|5Y|ALL)$"),
     benchmark: str = "SPY"
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Get portfolio performance over time"""
     
     # Generate performance data points
@@ -820,7 +844,7 @@ async def get_portfolio_performance(
     end_value = data_points[-1]["value"]
     total_return = (end_value - start_value) / start_value
     
-    return {
+    return success_response(data={
         "portfolio_id": portfolio_id,
         "period": period,
         "data_points": data_points,
@@ -837,13 +861,13 @@ async def get_portfolio_performance(
             "tracking_error": random.uniform(0.02, 0.1),
             "information_ratio": random.uniform(-0.5, 1.5)
         }
-    }
+    })
 
-@router.post("/{portfolio_id}/analyze", response_model=PortfolioAnalysis)
-async def analyze_portfolio(portfolio_id: str) -> PortfolioAnalysis:
+@router.post("/{portfolio_id}/analyze")
+async def analyze_portfolio(portfolio_id: str) -> ApiResponse[PortfolioAnalysis]:
     """Perform comprehensive portfolio analysis"""
     
-    return PortfolioAnalysis(
+    return success_response(data=PortfolioAnalysis(
         portfolio_id=portfolio_id,
         analysis_date=date.today(),
         risk_analysis={
@@ -880,14 +904,14 @@ async def analyze_portfolio(portfolio_id: str) -> PortfolioAnalysis:
             {"action": "increase", "symbol": "BND", "percent": 10},
             {"action": "add", "symbol": "VXUS", "percent": 5}
         ]
-    )
+    ))
 
-@router.post("/{portfolio_id}/rebalance", response_model=Dict[str, Any])
+@router.post("/{portfolio_id}/rebalance")
 async def rebalance_portfolio(
     portfolio_id: str,
     request: RebalanceRequest,
     background_tasks: BackgroundTasks
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Generate rebalancing recommendations"""
     
     # Validate target allocation sums to 100%
@@ -917,17 +941,17 @@ async def rebalance_portfolio(
     
     # Background task to execute rebalancing
     background_tasks.add_task(execute_rebalancing, portfolio_id, trades)
-    
-    return {
+
+    return success_response(data={
         "portfolio_id": portfolio_id,
         "rebalancing_plan": trades,
         "estimated_cost": sum(t["amount"] * 0.001 for t in trades),  # 0.1% transaction cost
         "tax_impact": random.uniform(-1000, -100) if request.tax_efficient else 0,
         "execution_status": "pending"
-    }
+    })
 
-@router.get("/{portfolio_id}/watchlist", response_model=List[WatchlistItem])
-async def get_watchlist(portfolio_id: str) -> List[WatchlistItem]:
+@router.get("/{portfolio_id}/watchlist")
+async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
     """Get portfolio watchlist"""
     
     watchlist = []
@@ -945,33 +969,33 @@ async def get_watchlist(portfolio_id: str) -> List[WatchlistItem]:
             alert_conditions={"price_below": current_price * 0.95} if random.choice([True, False]) else None,
             added_date=datetime.utcnow() - timedelta(days=random.randint(1, 30))
         ))
-    
-    return watchlist
 
-@router.post("/{portfolio_id}/watchlist", response_model=Dict[str, str])
+    return success_response(data=watchlist)
+
+@router.post("/{portfolio_id}/watchlist")
 async def add_to_watchlist(
     portfolio_id: str,
     item: WatchlistItem
-) -> Dict[str, str]:
+) -> ApiResponse[Dict[str, str]]:
     """Add item to watchlist"""
     
-    return {
+    return success_response(data={
         "message": f"Added {item.symbol} to watchlist",
         "portfolio_id": portfolio_id,
         "watchlist_id": str(uuid.uuid4())
-    }
+    })
 
-@router.put("/{portfolio_id}/settings", response_model=Dict[str, str])
+@router.put("/{portfolio_id}/settings")
 async def update_portfolio_settings(
     portfolio_id: str,
     settings: PortfolioSettings
-) -> Dict[str, str]:
+) -> ApiResponse[Dict[str, str]]:
     """Update portfolio settings"""
     
-    return {
+    return success_response(data={
         "message": "Portfolio settings updated successfully",
         "portfolio_id": portfolio_id
-    }
+    })
 
 # Background task functions
 async def update_portfolio_metrics(portfolio_id: str):

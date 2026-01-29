@@ -13,8 +13,10 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
-from backend.models.unified_models import Portfolio, Position, Transaction, User, Stock, PortfolioPerformance
+from backend.models.unified_models import Portfolio, Position, Transaction, User, Stock
+from backend.models.tables import PortfolioPerformance
 from backend.config.database import get_db_session
+from backend.exceptions import StaleDataError, InsufficientBalanceError, InvalidPositionError
 
 logger = logging.getLogger(__name__)
 
@@ -162,71 +164,124 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         quantity: Decimal,
         price: Decimal,
         transaction_type: str = 'buy',
+        expected_portfolio_version: Optional[int] = None,
         session: Optional[AsyncSession] = None
     ) -> Optional[Position]:
-        """Add or update position in portfolio"""
+        """
+        Add or update position in portfolio with row locking for concurrent safety.
+
+        Uses SELECT FOR UPDATE to prevent race conditions during balance updates.
+
+        Args:
+            portfolio_id: Portfolio ID
+            stock_id: Stock ID
+            quantity: Quantity to buy/sell
+            price: Price per share
+            transaction_type: 'buy' or 'sell'
+            expected_portfolio_version: Expected version for optimistic locking
+            session: Optional existing session
+
+        Returns:
+            Updated or created Position, or None if operation failed
+
+        Raises:
+            StaleDataError: If portfolio version mismatch
+            InsufficientBalanceError: If insufficient cash for buy
+            InvalidPositionError: If trying to sell more than owned
+        """
         async def _add_position(session: AsyncSession) -> Optional[Position]:
-            # Check if position already exists
+            # Lock portfolio for update to prevent race conditions
+            portfolio_query = select(Portfolio).where(
+                Portfolio.id == portfolio_id
+            ).with_for_update()
+
+            portfolio_result = await session.execute(portfolio_query)
+            portfolio = portfolio_result.scalar_one_or_none()
+
+            if not portfolio:
+                return None
+
+            # Check optimistic lock version
+            if expected_portfolio_version is not None:
+                if portfolio.version != expected_portfolio_version:
+                    raise StaleDataError(
+                        entity_type='Portfolio',
+                        entity_id=portfolio_id,
+                        expected_version=expected_portfolio_version,
+                        current_version=portfolio.version
+                    )
+
+            # Lock position for update if it exists
             position_query = select(Position).where(
                 and_(
                     Position.portfolio_id == portfolio_id,
                     Position.stock_id == stock_id
                 )
-            )
-            
+            ).with_for_update()
+
             result = await session.execute(position_query)
             existing_position = result.scalar_one_or_none()
-            
+
+            # Validate transaction before executing
+            trade_amount = quantity * price
+
+            if transaction_type == 'buy':
+                if portfolio.cash_balance < trade_amount:
+                    raise InsufficientBalanceError(
+                        f"Insufficient balance: ${portfolio.cash_balance} available, "
+                        f"${trade_amount} required"
+                    )
+            elif transaction_type == 'sell':
+                if not existing_position or existing_position.quantity < quantity:
+                    owned_quantity = existing_position.quantity if existing_position else 0
+                    raise InvalidPositionError(
+                        f"Invalid sell: trying to sell {quantity} shares, "
+                        f"but only {owned_quantity} owned"
+                    )
+
+            # Execute position update
             if existing_position:
-                # Update existing position
+                # Increment position version
+                existing_position.version += 1
+
                 if transaction_type == 'buy':
                     # Calculate new average cost
-                    total_cost = (existing_position.quantity * existing_position.average_cost) + (quantity * price)
+                    total_cost = (existing_position.quantity * existing_position.avg_cost_basis) + (quantity * price)
                     new_quantity = existing_position.quantity + quantity
                     new_average_cost = total_cost / new_quantity
-                    
+
                     existing_position.quantity = new_quantity
-                    existing_position.average_cost = new_average_cost
+                    existing_position.avg_cost_basis = new_average_cost
                     existing_position.updated_at = datetime.utcnow()
-                    
+
                 elif transaction_type == 'sell':
                     # Reduce position
                     existing_position.quantity -= quantity
                     existing_position.updated_at = datetime.utcnow()
-                    
+
                     # If quantity is zero or negative, remove position
                     if existing_position.quantity <= 0:
                         await session.delete(existing_position)
                         existing_position = None
-                
+
                 position = existing_position
             else:
                 # Create new position (only for buy orders)
                 if transaction_type == 'buy':
-                    position_data = {
-                        'portfolio_id': portfolio_id,
-                        'stock_id': stock_id,
-                        'quantity': quantity,
-                        'average_cost': price
-                    }
-                    
-                    position = Position(**position_data)
+                    position = Position(
+                        portfolio_id=portfolio_id,
+                        stock_id=stock_id,
+                        quantity=quantity,
+                        avg_cost_basis=price,
+                        version=1
+                    )
                     session.add(position)
                     await session.flush()
                 else:
                     # Cannot sell what we don't have
                     return None
-            
+
             # Record transaction
-            transaction_data = {
-                'portfolio_id': portfolio_id,
-                'stock_id': stock_id,
-                'transaction_type': transaction_type.upper(),
-                'quantity': quantity,
-                'price': price,
-                'executed_at': datetime.utcnow()
-            }
-            
             from backend.models.unified_models import Transaction, OrderSideEnum
             transaction = Transaction(
                 portfolio_id=portfolio_id,
@@ -234,20 +289,28 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
                 transaction_type=OrderSideEnum.BUY if transaction_type == 'buy' else OrderSideEnum.SELL,
                 quantity=quantity,
                 price=price,
-                executed_at=datetime.utcnow()
+                trade_date=datetime.utcnow(),
+                total_amount=trade_amount
             )
             session.add(transaction)
-            
-            # Update portfolio cash balance
-            portfolio = await self.get_by_id(portfolio_id, session=session)
-            if portfolio:
-                if transaction_type == 'buy':
-                    portfolio.cash_balance -= quantity * price
-                else:
-                    portfolio.cash_balance += quantity * price
-            
+
+            # Update portfolio cash balance and version
+            portfolio.version += 1
+            if transaction_type == 'buy':
+                portfolio.cash_balance -= trade_amount
+            else:
+                portfolio.cash_balance += trade_amount
+
+            await session.flush()
+
+            logger.info(
+                f"Portfolio {portfolio_id} {transaction_type}: {quantity} shares "
+                f"at ${price}, new balance: ${portfolio.cash_balance}, "
+                f"version: {portfolio.version}"
+            )
+
             return position
-        
+
         if session:
             return await _add_position(session)
         else:

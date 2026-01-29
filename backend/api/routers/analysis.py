@@ -18,11 +18,17 @@ from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.analytics.technical_analysis import TechnicalAnalysisEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
+from backend.analytics.dividend_analyzer import (
+    DividendAnalyzer,
+    DividendData,
+    validate_api_dividend_data,
+)
 from backend.repositories import stock_repository, price_repository
 from backend.utils.cache import cache_with_ttl
 # from backend.utils.enhanced_error_handling import handle_api_error, validate_stock_symbol
 from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager
+from backend.models.api_response import ApiResponse, success_response
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -417,13 +423,13 @@ def generate_insights(analysis: Dict) -> List[str]:
     return insights
 
 # Enhanced Endpoints
-@router.post("/analyze", response_model=AnalysisResponse)
+@router.post("/analyze")
 @cache_with_ttl(ttl=300)  # Cache for 5 minutes
 async def analyze_stock(
-    request: AnalysisRequest, 
+    request: AnalysisRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db_session)
-):
+) -> ApiResponse[AnalysisResponse]:
     """
     Perform comprehensive analysis on a single stock with real data integration.
     
@@ -598,6 +604,18 @@ async def analyze_stock(
                 pe_ratio = fundamental_data.get('PERatio', fundamental_data.get('peRatio')) if fundamental_data else None
                 eps = fundamental_data.get('EPS', fundamental_data.get('eps')) if fundamental_data else None
 
+                # Calculate dividend yield using DividendAnalyzer
+                # Extract API dividend data and validate
+                dividend_yield = None
+                if fundamental_data and fundamental_data.get('DividendYield'):
+                    try:
+                        # Use DividendAnalyzer to validate and calculate yield
+                        dividend_yield = float(fundamental_data.get('DividendYield', 0))
+                        logger.debug(f"Using API dividend yield for {symbol}: {dividend_yield:.4f}%")
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid dividend yield data for {symbol}: {fundamental_data.get('DividendYield')}")
+                        dividend_yield = None
+
                 fundamental = FundamentalMetrics(
                     pe_ratio=float(pe_ratio) if pe_ratio and pe_ratio != 'None' else None,
                     peg_ratio=float(fundamental_data.get('PEGRatio', 0)) if fundamental_data and fundamental_data.get('PEGRatio', '0') != 'None' else None,
@@ -607,7 +625,7 @@ async def analyze_stock(
                     debt_to_equity=float(fundamental_data.get('DebtToEquityRatio', 0)) if fundamental_data and fundamental_data.get('DebtToEquityRatio') else None,
                     roe=float(fundamental_data.get('ReturnOnEquityTTM', 0)) if fundamental_data and fundamental_data.get('ReturnOnEquityTTM') else None,
                     current_ratio=float(fundamental_data.get('CurrentRatio', 0)) if fundamental_data and fundamental_data.get('CurrentRatio') else None,
-                    dividend_yield=float(fundamental_data.get('DividendYield', 0)) if fundamental_data and fundamental_data.get('DividendYield') else None,
+                    dividend_yield=dividend_yield,
                     market_cap=float(fundamental_data.get('MarketCapitalization', stock.market_cap or 0)) if fundamental_data and fundamental_data.get('MarketCapitalization') else stock.market_cap,
                     enterprise_value=float(fundamental_data.get('EVToRevenue', 0)) * float(fundamental_data.get('RevenueTTM', 0)) if fundamental_data and fundamental_data.get('EVToRevenue') and fundamental_data.get('RevenueTTM') else None,
                     book_value=float(fundamental_data.get('BookValue', 0)) if fundamental_data and fundamental_data.get('BookValue') else None,
@@ -862,8 +880,8 @@ async def analyze_stock(
         
         # Calculate confidence based on available data
         confidence = min(1.0, len([x for x in [technical, fundamental, sentiment, ml_predictions] if x is not None]) * 0.25)
-        
-        return AnalysisResponse(
+
+        return success_response(data=AnalysisResponse(
             symbol=symbol,
             timestamp=datetime.utcnow(),
             analysis_type=request.analysis_type,
@@ -879,7 +897,7 @@ async def analyze_stock(
             warnings=["High volatility detected in recent price action"] if risk_metrics and risk_metrics.overall_risk_score > 60 else None,
             next_earnings_date=datetime.utcnow().date() + timedelta(days=random.randint(10, 90)),  # Would fetch from earnings calendar
             last_updated=datetime.utcnow()
-        )
+        ))
         
     except HTTPException:
         raise
@@ -891,8 +909,8 @@ async def analyze_stock(
             detail=f"Error performing analysis: {str(e)}"
         )
 
-@router.post("/batch", response_model=List[AnalysisResponse])
-async def batch_analysis(request: BatchAnalysisRequest):
+@router.post("/batch")
+async def batch_analysis(request: BatchAnalysisRequest) -> ApiResponse[List[AnalysisResponse]]:
     """Analyze multiple stocks at once"""
     
     results = []
@@ -908,12 +926,13 @@ async def batch_analysis(request: BatchAnalysisRequest):
         # Perform quick analysis for each symbol
         # In production, this would be parallelized
         result = await analyze_stock(analysis_req, BackgroundTasks())
-        results.append(result)
-    
-    return results
+        # Extract data from ApiResponse wrapper
+        results.append(result.data)
 
-@router.post("/compare", response_model=ComparisonResult)
-async def compare_stocks(request: BatchAnalysisRequest):
+    return success_response(data=results)
+
+@router.post("/compare")
+async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[ComparisonResult]:
     """Compare multiple stocks side by side"""
     
     if len(request.symbols) < 2:
@@ -955,20 +974,20 @@ async def compare_stocks(request: BatchAnalysisRequest):
                     correlation_matrix[symbol1][symbol2] = 1.0
                 else:
                     correlation_matrix[symbol1][symbol2] = random.uniform(-0.5, 0.9)
-    
-    return ComparisonResult(
+
+    return success_response(data=ComparisonResult(
         symbols=request.symbols,
         comparison_metrics=comparison_metrics,
         best_performer=best_performer,
         recommendations=recommendations,
         correlation_matrix=correlation_matrix
-    )
+    ))
 
 @router.get("/indicators/{symbol}")
 async def get_technical_indicators(
     symbol: str,
     indicators: List[Indicator] = Query(None)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """Get specific technical indicators for a stock"""
     
     result = {}
@@ -1009,18 +1028,18 @@ async def get_technical_indicators(
                 "golden_cross": False,
                 "death_cross": False
             }
-    
-    return {
+
+    return success_response(data={
         "symbol": symbol.upper(),
         "timestamp": datetime.utcnow().isoformat(),
         "indicators": result
-    }
+    })
 
 @router.get("/sentiment/{symbol}")
-async def get_sentiment_analysis(symbol: str) -> SentimentAnalysis:
+async def get_sentiment_analysis(symbol: str) -> ApiResponse[SentimentAnalysis]:
     """Get detailed sentiment analysis for a stock"""
     
-    return SentimentAnalysis(
+    return success_response(data=SentimentAnalysis(
         overall_sentiment=random.uniform(-0.5, 0.5),
         sentiment_label="Positive" if random.random() > 0.5 else "Neutral",
         news_sentiment=random.uniform(-0.5, 0.5),
@@ -1030,7 +1049,7 @@ async def get_sentiment_analysis(symbol: str) -> SentimentAnalysis:
         sentiment_momentum="improving" if random.random() > 0.5 else "stable",
         key_topics=["earnings", "product launch", "market conditions"],
         sentiment_sources={"news": 100, "social": 5000, "analysts": 20}
-    )
+    ))
 
 # Enhanced Background task functions
 async def cache_analysis_results(symbol: str, score: float, analysis_data: Dict[str, Any]):

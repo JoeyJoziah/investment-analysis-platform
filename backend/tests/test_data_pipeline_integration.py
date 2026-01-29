@@ -4,6 +4,7 @@ Tests data loading, processing, caching, and real-time data pipeline components.
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import json
 from datetime import datetime, date, timedelta
@@ -27,14 +28,14 @@ from backend.config.database import get_async_db_session
 class TestDataPipelineIntegration:
     """Test complete data pipeline integration with external APIs and caching."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def data_pipeline(self):
         """Create data pipeline instance."""
         pipeline = DataPipeline()
         await pipeline.initialize()
         return pipeline
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def mock_db_session(self):
         """Create mock database session."""
         session = AsyncMock(spec=AsyncSession)

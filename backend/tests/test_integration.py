@@ -4,6 +4,7 @@ Tests the complete integration of all new components.
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
@@ -29,7 +30,7 @@ from backend.api.versioning import (
 class TestUnifiedDataIngestion:
     """Test unified data ingestion system."""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def ingestion(self):
         """Create ingestion instance."""
         ingestion = UnifiedDataIngestion()
@@ -136,7 +137,7 @@ class TestRedisResilience:
             name="test"
         )
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def redis_client(self):
         """Create resilient Redis client."""
         client = ResilientRedisClient(

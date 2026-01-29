@@ -2,6 +2,115 @@
 
 This directory contains comprehensive integration tests for the Investment Analysis Platform, covering all critical paths and system components.
 
+**Complete Guide**: See [TEST_INFRASTRUCTURE_GUIDE.md](./TEST_INFRASTRUCTURE_GUIDE.md) for detailed documentation of test infrastructure, fixtures, and patterns.
+
+## Quick Start
+
+### Run All Tests
+
+```bash
+# Run all tests with coverage
+pytest backend/tests/ -v
+
+# Run specific test file
+pytest backend/tests/test_thesis_api.py -v
+
+# Run tests matching pattern
+pytest backend/tests/ -k "test_create" -v
+
+# Run with coverage report
+pytest backend/tests/ --cov=backend --cov-report=html
+```
+
+### Test Organization
+
+All tests follow a consistent pattern using the ApiResponse wrapper validation helpers defined in `conftest.py`:
+
+```python
+# Good: Use helper function to validate and extract data
+async def test_create_thesis(async_client, auth_headers):
+    response = await async_client.post(
+        "/api/theses",
+        json={"title": "AI Investments", "description": "..."},
+        headers=auth_headers
+    )
+
+    # Validates response structure and returns unwrapped data
+    data = assert_success_response(response, expected_status=201)
+    assert data["title"] == "AI Investments"
+
+# Error handling
+async def test_thesis_not_found(async_client):
+    response = await async_client.get("/api/theses/999")
+
+    # Validates error structure
+    error_data = assert_api_error_response(
+        response,
+        expected_status=404,
+        expected_error_substring="not found"
+    )
+```
+
+### Coverage Requirements
+
+- **Minimum line coverage**: 85%
+- **Critical path coverage**: 95%
+- **Security code coverage**: 100%
+- **Error handling coverage**: 90%
+
+Coverage threshold is enforced by pytest (see `pytest.ini`):
+```bash
+# Will fail if coverage drops below 85%
+pytest backend/tests/ --cov=backend --cov-fail-under=85
+```
+
+## Test Infrastructure
+
+### Fixture System
+
+The test suite uses a comprehensive fixture system defined in `conftest.py` and `async_fixtures.py`:
+
+**Key Async Fixtures:**
+- `test_db_engine` - Session-scoped database engine
+- `test_db_session_factory` - Session-scoped session factory
+- `db_session` - Function-scoped database session with automatic rollback
+- `async_client` / `client` - HTTP client for API testing
+- `test_user`, `auth_token`, `auth_headers` - Authentication fixtures
+- `mock_cache`, `mock_external_apis` - Mock dependencies
+
+**See [TEST_INFRASTRUCTURE_GUIDE.md](./TEST_INFRASTRUCTURE_GUIDE.md#fixture-usage-guide) for complete fixture documentation.**
+
+### ApiResponse Validation Helpers
+
+All API responses follow a standardized wrapper structure. Two helper functions validate responses:
+
+**For successful responses:**
+```python
+data = assert_success_response(response, expected_status=200)
+# Validates: status code, success=true, "data" field exists
+# Returns: unwrapped data from response["data"]
+```
+
+**For error responses:**
+```python
+error_data = assert_api_error_response(response, expected_status=404, expected_error_substring="not found")
+# Validates: status code, success=false, optional substring match
+# Returns: full response JSON
+```
+
+**See [TEST_INFRASTRUCTURE_GUIDE.md#validation-helper-functions](./TEST_INFRASTRUCTURE_GUIDE.md#validation-helper-functions) for complete documentation.**
+
+### Pytest Configuration
+
+Configuration in `pytest.ini`:
+- **Async mode**: `asyncio_mode = strict` - Proper event loop management
+- **Test discovery**: Automatic detection of test files and functions
+- **Markers**: 10+ custom markers for organizing tests
+- **Coverage**: 85% minimum, with detailed reporting
+- **Asyncio fixture scope**: Function-level by default
+
+**See [TEST_INFRASTRUCTURE_GUIDE.md#pytest-asyncio-configuration](./TEST_INFRASTRUCTURE_GUIDE.md#pytest-asyncio-configuration) for configuration details.**
+
 ## Test Structure
 
 ### Test Categories
@@ -403,16 +512,167 @@ pytest backend/tests/test_api_integration.py -v
 4. Verify environment configuration
 5. Consult the main project documentation
 
+## Adding New Tests
+
+### Step 1: Choose Test File
+
+- **API endpoints**: Add to `test_api_integration.py` or create `test_<feature>_api.py`
+- **Database operations**: Add to `test_database_integration.py`
+- **Business logic**: Create `test_<feature>.py`
+- **Security**: Add to `test_security_integration.py` or `test_security_compliance.py`
+- **Performance**: Add to `test_performance_load.py`
+
+### Step 2: Import Required Fixtures
+
+```python
+import pytest
+import pytest_asyncio
+from conftest import assert_success_response, assert_api_error_response
+
+@pytest.mark.api
+async def test_my_feature(async_client, auth_headers, db_session):
+    """Test description."""
+```
+
+### Step 3: Use ApiResponse Validation
+
+```python
+# Always wrap response validation
+response = await async_client.get("/api/endpoint")
+data = assert_success_response(response)
+
+# For errors
+response = await async_client.post("/api/endpoint", json={})
+error_data = assert_api_error_response(response, expected_status=422)
+```
+
+### Step 4: Proper Test Structure
+
+```python
+@pytest.mark.api
+@pytest.mark.integration
+async def test_create_and_retrieve(async_client, auth_headers):
+    """Test complete workflow: create and retrieve."""
+    # Setup
+    payload = {"title": "Test", "description": "..."}
+
+    # Action 1: Create
+    create_response = await async_client.post(
+        "/api/resource",
+        json=payload,
+        headers=auth_headers
+    )
+    created = assert_success_response(create_response, expected_status=201)
+    resource_id = created["id"]
+
+    # Action 2: Retrieve
+    get_response = await async_client.get(
+        f"/api/resource/{resource_id}",
+        headers=auth_headers
+    )
+    retrieved = assert_success_response(get_response)
+
+    # Assertions
+    assert retrieved["id"] == resource_id
+    assert retrieved["title"] == payload["title"]
+```
+
+### Step 5: Add Markers and Documentation
+
+```python
+@pytest.mark.api                    # Type of test
+@pytest.mark.integration            # Test scope
+@pytest.mark.security              # (Optional) Special category
+async def test_endpoint(async_client):
+    """
+    Test endpoint behavior.
+
+    This test verifies:
+    - Response structure is valid
+    - Data is returned correctly
+    - Error handling works
+
+    See: https://jira.company.com/browse/PROJ-123
+    """
+```
+
+### Step 6: Include Both Success and Error Cases
+
+```python
+# Good: Success case
+@pytest.mark.api
+async def test_create_thesis(async_client, auth_headers):
+    response = await async_client.post(
+        "/api/theses",
+        json={"title": "Test", "description": "..."},
+        headers=auth_headers
+    )
+    data = assert_success_response(response, expected_status=201)
+
+# Also add: Error case
+@pytest.mark.api
+async def test_create_thesis_missing_title(async_client, auth_headers):
+    response = await async_client.post(
+        "/api/theses",
+        json={"description": "..."},  # Missing title
+        headers=auth_headers
+    )
+    error = assert_api_error_response(response, expected_status=422)
+```
+
+### Step 7: Run and Verify
+
+```bash
+# Run your new tests
+pytest backend/tests/test_my_feature.py -v
+
+# Check coverage
+pytest backend/tests/test_my_feature.py --cov=backend.api.routers
+
+# Full test suite
+pytest backend/tests/ -v
+```
+
 ## Contributing
 
 When adding new integration tests:
 
-1. Follow existing test patterns and structure
-2. Add appropriate markers and documentation
-3. Include both positive and negative test cases
-4. Verify tests pass in all environments
-5. Update test documentation as needed
-6. Ensure adequate test coverage
-7. Consider performance implications
+1. Follow existing test patterns (use `assert_success_response()` and `assert_api_error_response()`)
+2. Add appropriate markers (`@pytest.mark.api`, `@pytest.mark.database`, etc.)
+3. Include both positive (success) and negative (error) test cases
+4. Use proper fixtures (don't create clients/sessions manually)
+5. Verify tests pass in all environments
+6. Update test documentation as needed
+7. Ensure adequate test coverage (80%+ minimum)
+8. Consider performance implications
+9. Add docstrings explaining test purpose
 
-For questions or issues, please refer to the main project documentation or create an issue in the project repository.
+### Test Pattern Examples
+
+See [TEST_INFRASTRUCTURE_GUIDE.md#common-testing-patterns](./TEST_INFRASTRUCTURE_GUIDE.md#common-testing-patterns) for complete pattern examples:
+- Basic API tests
+- Authenticated API tests
+- Error handling tests
+- Database tests
+- End-to-end flow tests
+- Performance tests
+- Tests with mocked external APIs
+
+### Troubleshooting
+
+Common test issues and solutions are documented in [TEST_INFRASTRUCTURE_GUIDE.md#troubleshooting-guide](./TEST_INFRASTRUCTURE_GUIDE.md#troubleshooting-guide).
+
+## Documentation
+
+**Complete test infrastructure documentation**: [TEST_INFRASTRUCTURE_GUIDE.md](./TEST_INFRASTRUCTURE_GUIDE.md)
+
+Topics covered:
+- ApiResponse wrapper pattern and validation
+- Helper functions: `assert_success_response()`, `assert_api_error_response()`
+- Pytest-asyncio configuration and event loop management
+- Fixture system and dependencies
+- Common testing patterns (8 complete examples)
+- Troubleshooting guide for 10 common issues
+- Best practices for test writing
+
+For questions or issues, please refer to the test infrastructure guide or create an issue in the project repository.

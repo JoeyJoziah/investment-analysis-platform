@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
 import logging
 from backend.utils.database import get_db_sync
@@ -15,6 +15,7 @@ from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, r
 from backend.security.jwt_manager import get_jwt_manager, TokenClaims
 from backend.security.secrets_manager import get_secrets_manager
 from backend.security.security_config import SecurityConfig
+from backend.models.api_response import ApiResponse, success_response
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -132,13 +133,13 @@ async def registration_rate_limit(request: Request):
     return rate_status
 
 # Endpoints
-@router.post("/register", response_model=Token)
+@router.post("/register")
 async def register(
     user: UserCreate,
     request: Request,
     db: Session = Depends(get_db_sync),
     _rate_status = Depends(registration_rate_limit)
-):
+) -> ApiResponse[Token]:
     """Register a new user"""
     # Check if user exists
     db_user = db.query(User).filter(User.email == user.email).first()
@@ -147,7 +148,7 @@ async def register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    
+
     # Create new user
     hashed_password = get_password_hash(user.password)
     db_user = User(
@@ -157,18 +158,21 @@ async def register(
         is_active=True,
         role="free_user"
     )
-    
+
     try:
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        
+
         # Create access token
         access_token = create_access_token(data={"sub": user.email})
-        
+
         logger.info(f"New user registered: {user.email}")
-        return {"access_token": access_token, "token_type": "bearer"}
-    
+        return success_response(data=Token(
+            access_token=access_token,
+            token_type="bearer"
+        ))
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error registering user: {e}")
@@ -177,13 +181,13 @@ async def register(
             detail="Error creating user"
         )
 
-@router.post("/token", response_model=Token)
+@router.post("/token")
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db_sync),
     _auth_limit = Depends(auth_rate_limit)
-):
+) -> ApiResponse[Token]:
     """Login endpoint for OAuth2"""
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -192,21 +196,24 @@ async def login(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # Update last login
     user.last_login = datetime.utcnow()
     db.commit()
-    
-    access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/login", response_model=Token)
+    access_token = create_access_token(data={"sub": user.email})
+    return success_response(data=Token(
+        access_token=access_token,
+        token_type="bearer"
+    ))
+
+@router.post("/login")
 async def login_alt(
     user: UserLogin,
     request: Request,
     db: Session = Depends(get_db_sync),
     _auth_limit = Depends(auth_rate_limit)
-):
+) -> ApiResponse[Token]:
     """Alternative login endpoint"""
     db_user = authenticate_user(db, user.email, user.password)
     if not db_user:
@@ -214,34 +221,40 @@ async def login_alt(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
-    
+
     # Update last login
     db_user.last_login = datetime.utcnow()
     db.commit()
-    
+
     access_token = create_access_token(data={"sub": db_user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return success_response(data=Token(
+        access_token=access_token,
+        token_type="bearer"
+    ))
 
 @router.get("/me")
-async def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict[str, Any]]:
     """Get current user information"""
-    return {
+    return success_response(data={
         "id": current_user.id,
         "email": current_user.email,
         "full_name": current_user.full_name,
         "role": current_user.role,
         "is_active": current_user.is_active,
         "created_at": current_user.created_at.isoformat()
-    }
+    })
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+async def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict[str, Any]]:
     """Logout endpoint (client should discard token)"""
     logger.info(f"User logged out: {current_user.email}")
-    return {"message": "Successfully logged out"}
+    return success_response(data={"message": "Successfully logged out"})
 
 @router.post("/refresh")
-async def refresh_token(current_user: User = Depends(get_current_user)):
+async def refresh_token(current_user: User = Depends(get_current_user)) -> ApiResponse[Token]:
     """Refresh access token"""
     access_token = create_access_token(data={"sub": current_user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    return success_response(data=Token(
+        access_token=access_token,
+        token_type="bearer"
+    ))

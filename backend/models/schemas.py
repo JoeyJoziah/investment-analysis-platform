@@ -662,6 +662,46 @@ class SystemSettings(BaseSchema):
     cache_ttl_seconds: int = 300
     data_retention_days: int = 365
 
+# Investment Thesis Schemas
+class InvestmentThesisBase(BaseSchema):
+    investment_objective: str = Field(..., min_length=10, max_length=500)
+    time_horizon: str = Field(..., pattern=r'^(short-term|medium-term|long-term)$')
+    target_price: Optional[Decimal] = Field(None, gt=0)
+    business_model: Optional[str] = Field(None, max_length=5000)
+    competitive_advantages: Optional[str] = Field(None, max_length=5000)
+    financial_health: Optional[str] = Field(None, max_length=5000)
+    growth_drivers: Optional[str] = Field(None, max_length=5000)
+    risks: Optional[str] = Field(None, max_length=5000)
+    valuation_rationale: Optional[str] = Field(None, max_length=5000)
+    exit_strategy: Optional[str] = Field(None, max_length=5000)
+    content: Optional[str] = Field(None, max_length=50000)
+
+class InvestmentThesisCreate(InvestmentThesisBase):
+    stock_id: int = Field(..., gt=0)
+
+class InvestmentThesisUpdate(BaseSchema):
+    investment_objective: Optional[str] = Field(None, min_length=10, max_length=500)
+    time_horizon: Optional[str] = Field(None, pattern=r'^(short-term|medium-term|long-term)$')
+    target_price: Optional[Decimal] = Field(None, gt=0)
+    business_model: Optional[str] = Field(None, max_length=5000)
+    competitive_advantages: Optional[str] = Field(None, max_length=5000)
+    financial_health: Optional[str] = Field(None, max_length=5000)
+    growth_drivers: Optional[str] = Field(None, max_length=5000)
+    risks: Optional[str] = Field(None, max_length=5000)
+    valuation_rationale: Optional[str] = Field(None, max_length=5000)
+    exit_strategy: Optional[str] = Field(None, max_length=5000)
+    content: Optional[str] = Field(None, max_length=50000)
+
+class InvestmentThesisResponse(InvestmentThesisBase):
+    id: int
+    user_id: int
+    stock_id: int
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    stock_symbol: Optional[str] = None
+    stock_name: Optional[str] = None
+
 # Forward references update
 Portfolio.model_rebuild()
 PortfolioWithPositions.model_rebuild()
@@ -673,3 +713,4 @@ Watchlist.model_rebuild()
 WatchlistResponse.model_rebuild()
 WatchlistItemResponse.model_rebuild()
 WatchlistWithStocks.model_rebuild()
+InvestmentThesisResponse.model_rebuild()

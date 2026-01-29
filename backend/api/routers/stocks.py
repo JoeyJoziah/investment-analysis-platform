@@ -26,13 +26,14 @@ from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
 from backend.utils.api_cache_decorators import (
-    cache_stock_data, 
+    cache_stock_data,
     cache_analysis_result,
     api_cache,
     generate_cache_key
 )
 from backend.utils.database_query_cache import cached_query
 from backend.config.settings import settings
+from backend.models.api_response import ApiResponse, success_response, paginated_response
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -221,7 +222,7 @@ class PerformanceResponse(BaseModel):
     timeframe: str
 
 
-@router.get("", response_model=List[StockResponse])
+@router.get("")
 @api_cache(data_type="db_query", ttl_override={'l1': 1800, 'l2': 7200, 'l3': 28800})
 async def get_stocks(
     sector: Optional[str] = Query(None, description="Filter by sector"),
@@ -233,7 +234,7 @@ async def get_stocks(
     sort_by: str = Query("market_cap", pattern="^(symbol|name|market_cap|created_at)$", description="Sort field"),
     order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[StockResponse]:
+) -> ApiResponse[List[StockResponse]]:
     """
     Get list of stocks with optional filtering, sorting, and pagination.
     
@@ -277,9 +278,10 @@ async def get_stocks(
             pagination=pagination,
             session=db
         )
-        
-        return [StockResponse.from_orm(stock) for stock in stocks]
-        
+
+        stock_responses = [StockResponse.from_orm(stock) for stock in stocks]
+        return success_response(data=stock_responses)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -287,13 +289,13 @@ async def get_stocks(
         )
 
 
-@router.get("/search", response_model=StockSearchResponse)
+@router.get("/search")
 @api_cache(data_type="db_query", ttl_override={'l1': 3600, 'l2': 14400, 'l3': 86400})
 async def search_stocks(
     query: str = Query(..., min_length=1, description="Search query (symbol or company name)"),
     limit: int = Query(50, le=100, description="Maximum number of results"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> StockSearchResponse:
+) -> ApiResponse[StockSearchResponse]:
     """
     Search stocks by symbol or company name.
     
@@ -306,17 +308,17 @@ async def search_stocks(
             limit=limit,
             session=db
         )
-        
+
         # Get total count for pagination info
         total_count = len(stocks)
-        
-        return StockSearchResponse(
+
+        return success_response(data=StockSearchResponse(
             stocks=[StockResponse.from_orm(stock) for stock in stocks],
             total_count=total_count,
             page=1,
             per_page=limit
-        )
-        
+        ))
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -324,15 +326,16 @@ async def search_stocks(
         )
 
 
-@router.get("/sectors", response_model=List[str])
+@router.get("/sectors")
 async def get_sectors(
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[str]:
+) -> ApiResponse[List[str]]:
     """Get list of available sectors."""
     try:
         sector_summary = await stock_repository.get_sector_summary(session=db)
-        return [item['sector'] for item in sector_summary if item['sector']]
-        
+        sectors = [item['sector'] for item in sector_summary if item['sector']]
+        return success_response(data=sectors)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -340,15 +343,16 @@ async def get_sectors(
         )
 
 
-@router.get("/sectors/summary", response_model=List[SectorSummaryResponse])
+@router.get("/sectors/summary")
 async def get_sector_summary(
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[SectorSummaryResponse]:
+) -> ApiResponse[List[SectorSummaryResponse]]:
     """Get sector summary with statistics."""
     try:
         sector_data = await stock_repository.get_sector_summary(session=db)
-        return [SectorSummaryResponse(**item) for item in sector_data]
-        
+        summaries = [SectorSummaryResponse(**item) for item in sector_data]
+        return success_response(data=summaries)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -356,12 +360,12 @@ async def get_sector_summary(
         )
 
 
-@router.get("/top-performers", response_model=List[PerformanceResponse])
+@router.get("/top-performers")
 async def get_top_performers(
     timeframe: str = Query("1d", pattern="^(1d|1w|1m|3m|6m|1y)$", description="Performance timeframe"),
     limit: int = Query(100, le=500, description="Maximum number of results"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[PerformanceResponse]:
+) -> ApiResponse[List[PerformanceResponse]]:
     """
     Get top performing stocks by timeframe.
     
@@ -374,8 +378,8 @@ async def get_top_performers(
             limit=limit,
             session=db
         )
-        
-        return [
+
+        performance_list = [
             PerformanceResponse(
                 symbol=perf['stock'].symbol,
                 start_price=perf['start_price'],
@@ -385,7 +389,8 @@ async def get_top_performers(
             )
             for perf in performers
         ]
-        
+        return success_response(data=performance_list)
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -393,27 +398,27 @@ async def get_top_performers(
         )
 
 
-@router.get("/{symbol}", response_model=StockDetailResponse)
+@router.get("/{symbol}")
 async def get_stock_detail(
     symbol: str = Path(..., description="Stock symbol"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> StockDetailResponse:
+) -> ApiResponse[StockDetailResponse]:
     """
     Get detailed information about a specific stock.
-    
+
     - **symbol**: Stock symbol (e.g., AAPL, GOOGL)
     """
     try:
         stock = await stock_repository.get_by_symbol(symbol, session=db)
-        
+
         if not stock:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Stock with symbol '{symbol}' not found"
             )
-        
-        return StockDetailResponse.from_orm(stock)
-        
+
+        return success_response(data=StockDetailResponse.from_orm(stock))
+
     except HTTPException:
         raise
     except Exception as e:
@@ -423,13 +428,13 @@ async def get_stock_detail(
         )
 
 
-@router.get("/{symbol}/quote", response_model=StockQuoteResponse)
+@router.get("/{symbol}/quote")
 @cache_stock_data(ttl_hours=0.01)  # Cache for ~30 seconds for real-time data
 async def get_stock_quote(
     symbol: str = Path(..., description="Stock symbol"),
     force_refresh: bool = Query(False, description="Force refresh from external APIs"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> StockQuoteResponse:
+) -> ApiResponse[StockQuoteResponse]:
     """
     Get enhanced real-time quote for a stock with fallback data sources.
     
@@ -469,15 +474,15 @@ async def get_stock_quote(
             
             change = current_price - previous_close if previous_close else 0.0
             change_percent = (change / previous_close * 100) if previous_close else 0.0
-            
-            return StockQuoteResponse(
+
+            return success_response(data=StockQuoteResponse(
                 symbol=symbol,
                 price=current_price,
                 change=change,
                 change_percent=change_percent,
                 volume=int(quote_data.get('volume', quote_data.get('v', 0))),
                 timestamp=datetime.utcnow(),
-                
+
                 # Enhanced data
                 open=float(quote_data.get('open', quote_data.get('o'))) if quote_data.get('open') or quote_data.get('o') else None,
                 high=float(quote_data.get('high', quote_data.get('h'))) if quote_data.get('high') or quote_data.get('h') else None,
@@ -485,17 +490,17 @@ async def get_stock_quote(
                 previous_close=previous_close if previous_close != current_price else None,
                 bid=float(quote_data.get('bid')) if quote_data.get('bid') else None,
                 ask=float(quote_data.get('ask')) if quote_data.get('ask') else None,
-                
+
                 # Additional market data
                 fifty_two_week_high=float(quote_data.get('52_week_high')) if quote_data.get('52_week_high') else None,
                 fifty_two_week_low=float(quote_data.get('52_week_low')) if quote_data.get('52_week_low') else None,
                 pe_ratio=float(quote_data.get('pe')) if quote_data.get('pe') else None,
-                
+
                 # Meta data
                 data_source=data_source,
                 last_updated=datetime.utcnow(),
                 is_real_time=True
-            )
+            ))
         
         # Fallback to database data
         logger.info(f"Falling back to database for {symbol}")
@@ -523,29 +528,29 @@ async def get_stock_quote(
         current_price = float(latest_price.close)
         change = current_price - previous_close
         change_percent = (change / previous_close * 100) if previous_close else 0.0
-        
-        return StockQuoteResponse(
+
+        return success_response(data=StockQuoteResponse(
             symbol=symbol,
             price=current_price,
             change=change,
             change_percent=change_percent,
             volume=latest_price.volume,
             timestamp=datetime.combine(latest_price.date, datetime.min.time()),
-            
+
             # Basic OHLC data
             open=float(latest_price.open),
             high=float(latest_price.high),
             low=float(latest_price.low),
             previous_close=previous_close if previous_price else None,
-            
+
             # Market data from stock model
             market_cap=stock.market_cap,
-            
+
             # Meta data
             data_source="database",
             last_updated=latest_price.updated_at or datetime.utcnow(),
             is_real_time=False
-        )
+        ))
         
     except HTTPException:
         raise
@@ -558,7 +563,7 @@ async def get_stock_quote(
         )
 
 
-@router.get("/{symbol}/history", response_model=List[PriceHistoryResponse])
+@router.get("/{symbol}/history")
 @api_cache(data_type="daily_prices", ttl_override={'l1': 3600, 'l2': 14400, 'l3': 86400})
 async def get_stock_history(
     symbol: str = Path(..., description="Stock symbol"),
@@ -566,7 +571,7 @@ async def get_stock_history(
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
     limit: Optional[int] = Query(252, le=1000, description="Maximum number of records"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> List[PriceHistoryResponse]:
+) -> ApiResponse[List[PriceHistoryResponse]]:
     """
     Get historical price data for a stock.
     
@@ -589,15 +594,16 @@ async def get_stock_history(
             limit=limit,
             session=db
         )
-        
+
         if not price_history:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No price history found for symbol '{symbol}' in the specified date range"
             )
-        
-        return [PriceHistoryResponse.from_orm(price) for price in price_history]
-        
+
+        history_responses = [PriceHistoryResponse.from_orm(price) for price in price_history]
+        return success_response(data=history_responses)
+
     except HTTPException:
         raise
     except Exception as e:
@@ -613,7 +619,7 @@ async def get_stock_statistics(
     symbol: str = Path(..., description="Stock symbol"),
     days: int = Query(252, le=1000, description="Number of days for analysis"),
     db: AsyncSession = Depends(get_async_db_session)
-) -> Dict[str, Any]:
+) -> ApiResponse[Dict[str, Any]]:
     """
     Get comprehensive price statistics for a stock.
     
@@ -639,12 +645,12 @@ async def get_stock_statistics(
             days=min(days, 30),  # Use last 30 days for volatility
             session=db
         )
-        
+
         if volatility is not None:
             statistics['volatility_annualized'] = volatility
-        
-        return statistics
-        
+
+        return success_response(data=statistics)
+
     except HTTPException:
         raise
     except Exception as e:

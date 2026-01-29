@@ -3,7 +3,14 @@ Global Test Configuration for Investment Analysis Platform Integration Tests
 Provides shared fixtures, test utilities, and configuration for all test modules.
 """
 
+# CRITICAL: Set TESTING=True BEFORE any imports to disable middleware that blocks tests
+import os
+os.environ["TESTING"] = "True"
+os.environ["DEBUG"] = "True"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+
 import pytest
+import pytest_asyncio
 import asyncio
 import os
 from datetime import datetime
@@ -12,7 +19,7 @@ from unittest.mock import patch, AsyncMock
 import logging
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from backend.api.main import app
 from backend.config.database import get_async_db_session, initialize_database
@@ -27,35 +34,91 @@ logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for session-scoped async fixtures."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
+# ============================================================================
+# ApiResponse Wrapper Validation Helpers
+# ============================================================================
+
+def assert_success_response(response, expected_status=200):
+    """
+    Validate ApiResponse wrapper structure and return unwrapped data.
+
+    Args:
+        response: FastAPI TestClient response object
+        expected_status: Expected HTTP status code (default: 200)
+
+    Returns:
+        Unwrapped data from response["data"]
+
+    Example:
+        data = assert_success_response(response)
+        assert data["title"] == "My Title"
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+
+    json_data = response.json()
+    assert json_data["success"] == True, \
+        f"Expected success=True, got success={json_data.get('success')}"
+    assert "data" in json_data, \
+        "Response missing 'data' field in ApiResponse wrapper"
+
+    return json_data["data"]
 
 
-@pytest.fixture(scope="session")
+def assert_api_error_response(response, expected_status, expected_error_substring=None):
+    """
+    Validate ApiResponse error structure.
+
+    Args:
+        response: FastAPI TestClient response object
+        expected_status: Expected HTTP error status code
+        expected_error_substring: Optional substring to verify in error message
+
+    Returns:
+        Full response JSON data
+
+    Example:
+        data = assert_api_error_response(response, 404, "not found")
+        assert "error" in data
+    """
+    assert response.status_code == expected_status, \
+        f"Expected status {expected_status}, got {response.status_code}"
+
+    json_data = response.json()
+    assert json_data["success"] == False, \
+        f"Expected success=False for error response, got success={json_data.get('success')}"
+
+    if expected_error_substring:
+        error_msg = json_data.get("error", "")
+        assert expected_error_substring.lower() in error_msg.lower(), \
+            f"Expected '{expected_error_substring}' in error message, got: {error_msg}"
+
+    return json_data
+
+
+@pytest_asyncio.fixture(scope="function")
 async def test_db_engine():
     """Create test database engine."""
-    # Use test database URL if available, otherwise use in-memory SQLite
-    test_db_url = os.getenv(
-        "TEST_DATABASE_URL",
-        "sqlite+aiosqlite:///:memory:"  # Fallback to in-memory for CI/CD
-    )
-    
+    from backend.models.unified_models import Base
+
+    # Use in-memory SQLite for tests (safe default)
+    test_db_url = "sqlite+aiosqlite:///:memory:"
+
     engine = create_async_engine(
         test_db_url,
         echo=False,  # Set to True for SQL debugging
         pool_pre_ping=True
     )
-    
+
+    # Create all tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     yield engine
     await engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_db_session_factory(test_db_engine):
     """Create test database session factory."""
     TestSessionLocal = sessionmaker(
@@ -66,7 +129,7 @@ async def test_db_session_factory(test_db_engine):
     return TestSessionLocal
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(test_db_session_factory):
     """Provide database session for tests."""
     async with test_db_session_factory() as session:
@@ -77,11 +140,17 @@ async def db_session(test_db_session_factory):
             await session.close()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def async_client():
     """Provide async HTTP client for API testing."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         yield client
+
+
+@pytest_asyncio.fixture
+async def client(async_client):
+    """Alias for async_client for backward compatibility."""
+    return async_client
 
 
 @pytest.fixture
@@ -98,18 +167,91 @@ def test_user():
     )
 
 
+@pytest_asyncio.fixture
+async def nasdaq_exchange(db_session: AsyncSession):
+    """Provide NASDAQ exchange for testing."""
+    from backend.models.unified_models import Exchange
+
+    exchange = Exchange(
+        code="NASDAQ",
+        name="NASDAQ Stock Market",
+        timezone="America/New_York",
+        country="US",
+        currency="USD"
+    )
+    db_session.add(exchange)
+    await db_session.commit()
+    await db_session.refresh(exchange)
+    return exchange
+
+
+@pytest_asyncio.fixture
+async def technology_sector(db_session: AsyncSession):
+    """Provide Technology sector for testing."""
+    from backend.models.unified_models import Sector
+
+    sector = Sector(
+        name="Technology",
+        description="Technology sector"
+    )
+    db_session.add(sector)
+    await db_session.commit()
+    await db_session.refresh(sector)
+    return sector
+
+
 @pytest.fixture
 def auth_token(test_user):
-    """Provide authentication token."""
-    return create_access_token(
-        data={"sub": str(test_user.id), "username": test_user.username}
+    """Provide authentication token for testing."""
+    from backend.security.security_config import SecurityConfig
+    import jwt
+    from datetime import datetime, timedelta
+
+    # Build minimal JWT payload
+    expire = datetime.utcnow() + timedelta(minutes=15)
+    payload = {
+        "sub": str(test_user.id),
+        "username": test_user.username,
+        "email": test_user.email,
+        "exp": expire,
+        "iat": datetime.utcnow(),
+        "type": "access"
+    }
+
+    # Create token directly without Redis dependency
+    token = jwt.encode(
+        payload,
+        SecurityConfig.JWT_SECRET_KEY,
+        algorithm=SecurityConfig.JWT_ALGORITHM_FALLBACK
     )
+
+    return token
+
+
+@pytest.fixture
+def csrf_token():
+    """Provide CSRF token for testing."""
+    from backend.security.csrf_protection import CSRFProtection, CSRFConfig
+
+    csrf_config = CSRFConfig(enabled=True, testing_mode=True)
+    csrf_protection = CSRFProtection(csrf_config)
+    token = csrf_protection.generate_token()
+    return token
 
 
 @pytest.fixture
 def auth_headers(auth_token):
     """Provide authentication headers."""
     return {"Authorization": f"Bearer {auth_token}"}
+
+
+@pytest.fixture
+def auth_headers_with_csrf(auth_token, csrf_token):
+    """Provide authentication headers with CSRF token."""
+    return {
+        "Authorization": f"Bearer {auth_token}",
+        "X-CSRF-Token": csrf_token
+    }
 
 
 @pytest.fixture

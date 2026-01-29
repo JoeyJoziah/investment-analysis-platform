@@ -1,0 +1,68 @@
+name: Type Checking (mypy)
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**/*.py'
+      - '.mypy.ini'
+      - 'requirements.txt'
+      - '.github/workflows/mypy.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**/*.py'
+      - '.mypy.ini'
+      - 'requirements.txt'
+
+jobs:
+  mypy:
+    name: Type Check with mypy
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mypy types-python-dateutil types-requests
+        # Install project dependencies for type stubs
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run mypy on backend
+      run: |
+        mypy backend/ --config-file .mypy.ini
+
+    - name: Generate type coverage report
+      if: always()
+      run: |
+        mypy backend/ --config-file .mypy.ini --html-report ./mypy-report --any-exprs-report ./mypy-report
+
+    - name: Upload type coverage report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: mypy-coverage-report
+        path: mypy-report/
+        retention-days: 30
+
+    - name: Check type coverage threshold
+      run: |
+        # Extract type coverage percentage
+        COVERAGE=$(mypy backend/ --config-file .mypy.ini | grep -oP '\d+(?=% typed)' || echo "0")
+        echo "Type coverage: ${COVERAGE}%"
+
+        # Require at least 95% type coverage
+        if [ "$COVERAGE" -lt 95 ]; then
+          echo "Type coverage ${COVERAGE}% is below 95% threshold"
+          exit 1
+        fi
+        echo "Type coverage ${COVERAGE}% meets 95% threshold"

@@ -1,0 +1,395 @@
+name: PR Automation & Management
+# Automated PR management with intelligent labeling, review assignment, and CI coordination
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: pr-automation-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+jobs:
+  # Intelligent PR labeling and classification
+  pr-classifier:
+    if: github.event_name == 'pull_request' && (github.event.action == 'opened' || github.event.action == 'synchronize')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Analyze PR changes
+      id: analyze
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+        HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+
+        # Get changed files
+        git fetch origin $BASE_BRANCH
+        CHANGED_FILES=$(git diff --name-only origin/$BASE_BRANCH...HEAD)
+
+        echo "Changed files:"
+        echo "$CHANGED_FILES"
+
+        # Classify by component
+        LABELS=""
+
+        if echo "$CHANGED_FILES" | grep -q "^backend/"; then
+          LABELS="$LABELS,component:backend"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
+          LABELS="$LABELS,component:frontend"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^infrastructure/"; then
+          LABELS="$LABELS,component:infrastructure"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "\.test\.\|test_\|_test\."; then
+          LABELS="$LABELS,tests"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^\.github/workflows/"; then
+          LABELS="$LABELS,component:ci-cd"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "README\|\.md$"; then
+          LABELS="$LABELS,documentation"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "requirements\.txt\|package\.json\|Dockerfile"; then
+          LABELS="$LABELS,dependencies"
+        fi
+
+        # Classify by size
+        FILES_CHANGED=$(echo "$CHANGED_FILES" | wc -l)
+        LINES_CHANGED=$(git diff --stat origin/$BASE_BRANCH...HEAD | tail -1 | awk '{print $4+$6}')
+
+        if [ "$FILES_CHANGED" -lt 5 ] && [ "$LINES_CHANGED" -lt 100 ]; then
+          SIZE="size:small"
+        elif [ "$FILES_CHANGED" -lt 15 ] && [ "$LINES_CHANGED" -lt 500 ]; then
+          SIZE="size:medium"
+        else
+          SIZE="size:large"
+        fi
+
+        LABELS="$LABELS,$SIZE"
+
+        # Clean up labels (remove leading comma)
+        LABELS=$(echo "$LABELS" | sed 's/^,//')
+
+        echo "labels=$LABELS" >> $GITHUB_OUTPUT
+        echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+        echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
+
+    - name: Apply labels to PR
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        LABELS="${{ steps.analyze.outputs.labels }}"
+
+        if [ -n "$LABELS" ]; then
+          IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
+          for label in "${LABEL_ARRAY[@]}"; do
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "$label" || true
+          done
+
+          echo "Applied labels: $LABELS"
+        fi
+
+    - name: Add size comment
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        FILES="${{ steps.analyze.outputs.files_changed }}"
+        LINES="${{ steps.analyze.outputs.lines_changed }}"
+
+        COMMENT="## 📊 PR Size Analysis
+
+**Files changed**: $FILES
+**Lines changed**: ~$LINES
+
+"
+
+        if [ "$FILES" -gt 20 ] || [ "$LINES" -gt 800 ]; then
+          COMMENT="$COMMENT⚠️  **Large PR detected** - Consider breaking into smaller PRs for easier review.
+
+"
+        fi
+
+        COMMENT="$COMMENT---
+*Automated by PR Automation*"
+
+        gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
+
+  # Intelligent reviewer assignment
+  assign-reviewers:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Determine reviewers
+      id: reviewers
+      run: |
+        PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+
+        # Get changed files to determine expertise needed
+        CHANGED_FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path' | tr '\n' ' ')
+
+        REVIEWERS=""
+
+        # Backend changes
+        if echo "$CHANGED_FILES" | grep -q "backend/"; then
+          # Add backend team reviewers (customize with your team)
+          REVIEWERS="$REVIEWERS backend-team"
+        fi
+
+        # Frontend changes
+        if echo "$CHANGED_FILES" | grep -q "frontend/"; then
+          REVIEWERS="$REVIEWERS frontend-team"
+        fi
+
+        # Infrastructure changes
+        if echo "$CHANGED_FILES" | grep -q "infrastructure/\|\.github/workflows/\|docker"; then
+          REVIEWERS="$REVIEWERS devops-team"
+        fi
+
+        # Security-sensitive changes
+        if echo "$CHANGED_FILES" | grep -q "auth\|security\|encrypt\|credential"; then
+          REVIEWERS="$REVIEWERS security-team"
+        fi
+
+        echo "reviewers=$REVIEWERS" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Request reviews
+      if: steps.reviewers.outputs.reviewers != ''
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        REVIEWERS="${{ steps.reviewers.outputs.reviewers }}"
+
+        # Note: Adjust this based on your team structure
+        # This is a placeholder - you'd replace with actual team members
+        echo "Would request reviews from: $REVIEWERS"
+
+        # Uncomment when you have actual reviewers configured:
+        # gh pr edit ${{ github.event.pull_request.number }} --add-reviewer "$REVIEWERS"
+
+  # PR health checks
+  pr-health-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check PR description
+      id: check-description
+      run: |
+        BODY="${{ github.event.pull_request.body }}"
+
+        ISSUES=""
+
+        # Check if description is too short
+        if [ ${#BODY} -lt 50 ]; then
+          ISSUES="$ISSUES\n- ⚠️  PR description is very short. Please add more context."
+        fi
+
+        # Check for linked issues
+        if ! echo "$BODY" | grep -q "#[0-9]\+\|Closes\|Fixes\|Resolves"; then
+          ISSUES="$ISSUES\n- ℹ️  No linked issues found. Consider linking related issues."
+        fi
+
+        # Check for breaking changes warning
+        if echo "$BODY" | grep -iq "breaking"; then
+          ISSUES="$ISSUES\n- ⚠️  **BREAKING CHANGE** detected. Ensure version bump is appropriate."
+        fi
+
+        echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+
+    - name: Check PR title
+      id: check-title
+      run: |
+        TITLE="${{ github.event.pull_request.title }}"
+
+        TITLE_ISSUES=""
+
+        # Check conventional commit format
+        if ! echo "$TITLE" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\(.+\))?: .+"; then
+          TITLE_ISSUES="$TITLE_ISSUES\n- ℹ️  PR title doesn't follow conventional commit format"
+        fi
+
+        # Check title length
+        if [ ${#TITLE} -gt 72 ]; then
+          TITLE_ISSUES="$TITLE_ISSUES\n- ⚠️  PR title is longer than 72 characters"
+        fi
+
+        echo "title_issues=$TITLE_ISSUES" >> $GITHUB_OUTPUT
+
+    - name: Post health check comment
+      if: steps.check-description.outputs.issues != '' || steps.check-title.outputs.title_issues != ''
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        COMMENT="## 🏥 PR Health Check
+
+"
+
+        if [ -n "${{ steps.check-title.outputs.title_issues }}" ]; then
+          COMMENT="$COMMENT### Title Issues
+${{ steps.check-title.outputs.title_issues }}
+
+"
+        fi
+
+        if [ -n "${{ steps.check-description.outputs.issues }}" ]; then
+          COMMENT="$COMMENT### Description Issues
+${{ steps.check-description.outputs.issues }}
+
+"
+        fi
+
+        COMMENT="$COMMENT---
+*Automated PR health check*"
+
+        gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
+
+  # Auto-merge eligible PRs
+  auto-merge-check:
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Check if PR is eligible for auto-merge
+      id: check-automerge
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+
+        # Get PR details
+        PR_DATA=$(gh pr view $PR_NUMBER --json labels,reviews,mergeable,statusCheckRollup)
+
+        # Check if PR has auto-merge label
+        HAS_AUTOMERGE=$(echo "$PR_DATA" | jq -r '.labels[] | select(.name == "auto-merge") | .name' | head -1)
+
+        # Check if all checks passed
+        CHECKS_STATUS=$(echo "$PR_DATA" | jq -r '.statusCheckRollup[].conclusion' | grep -v "SUCCESS" | wc -l)
+
+        # Check if PR is mergeable
+        IS_MERGEABLE=$(echo "$PR_DATA" | jq -r '.mergeable')
+
+        # Check number of approvals
+        APPROVALS=$(echo "$PR_DATA" | jq -r '[.reviews[] | select(.state == "APPROVED")] | length')
+
+        echo "Auto-merge label: $HAS_AUTOMERGE"
+        echo "Failed checks: $CHECKS_STATUS"
+        echo "Is mergeable: $IS_MERGEABLE"
+        echo "Approvals: $APPROVALS"
+
+        # Determine if eligible
+        if [ "$HAS_AUTOMERGE" = "auto-merge" ] && \
+           [ "$CHECKS_STATUS" -eq 0 ] && \
+           [ "$IS_MERGEABLE" = "MERGEABLE" ] && \
+           [ "$APPROVALS" -ge 1 ]; then
+          echo "eligible=true" >> $GITHUB_OUTPUT
+        else
+          echo "eligible=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Auto-merge PR
+      if: steps.check-automerge.outputs.eligible == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh pr merge ${{ github.event.pull_request.number }} \
+          --squash \
+          --delete-branch \
+          --auto
+
+        echo "✅ Auto-merge enabled for PR #${{ github.event.pull_request.number }}"
+
+  # Stale PR detection
+  stale-pr-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Check PR staleness
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+
+        # Get PR creation date
+        CREATED_AT=$(gh pr view $PR_NUMBER --json createdAt --jq '.createdAt')
+        CREATED_TIMESTAMP=$(date -d "$CREATED_AT" +%s)
+        CURRENT_TIMESTAMP=$(date +%s)
+        DAYS_OLD=$(( ($CURRENT_TIMESTAMP - $CREATED_TIMESTAMP) / 86400 ))
+
+        echo "PR is $DAYS_OLD days old"
+
+        if [ "$DAYS_OLD" -gt 14 ]; then
+          gh pr comment $PR_NUMBER --body "## ⏰ Stale PR Notice
+
+This PR has been open for $DAYS_OLD days. Please consider:
+- Rebasing on the latest main branch
+- Addressing any pending review comments
+- Closing if no longer relevant
+
+---
+*Automated stale PR detection*"
+
+          gh pr edit $PR_NUMBER --add-label "stale" || true
+        fi
+
+  # PR summary generation
+  pr-summary:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Generate PR summary
+      run: |
+        echo "## 📝 Pull Request Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**PR #**: ${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Author**: @${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Title**: ${{ github.event.pull_request.title }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Base**: ${{ github.event.pull_request.base.ref }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Head**: ${{ github.event.pull_request.head.ref }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Automated Actions Taken" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ PR classified and labeled" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Size analysis completed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Health checks performed" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Reviewers assigned (if applicable)" >> $GITHUB_STEP_SUMMARY

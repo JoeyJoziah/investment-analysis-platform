@@ -9,7 +9,7 @@ import json
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,7 +56,7 @@ class TestAPIEndpointsIntegration:
     @pytest.mark.api
     async def test_health_endpoint_integration(self):
         """Test health endpoint with all components."""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             with patch('backend.config.database.get_async_db_session') as mock_db:
                 mock_session = AsyncMock()
                 mock_db.return_value = mock_session
@@ -81,7 +81,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Mock portfolio repository responses
                 mock_portfolios = [
                     MagicMock(
@@ -139,7 +139,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Mock portfolio data
                 mock_portfolio = MagicMock(
                     id=1,
@@ -209,7 +209,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Mock stock data
                 mock_stocks = [
                     MagicMock(
@@ -253,7 +253,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Mock price history for technical analysis
                 mock_price_data = [
                     MagicMock(
@@ -292,7 +292,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Test 404 error for non-existent stock
                 response = await client.get(
                     "/api/stocks/NONEXISTENT",
@@ -309,7 +309,7 @@ class TestAPIEndpointsIntegration:
         self.override_dependencies()
 
         try:
-            async with AsyncClient(app=app, base_url="http://test") as client:
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Mock fast responses
                 with patch('backend.repositories.stock_repository.search_stocks') as mock_search:
                     mock_search.return_value = [

@@ -1,6 +1,6 @@
 {
   "name": "@claude-flow/providers",
-  "version": "3.0.0-alpha.6",
+  "version": "3.0.0-alpha.178",
   "description": "Multi-LLM Provider System for Claude Flow V3",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -49,7 +49,7 @@
     "@types/node": "^20.0.0",
     "dotenv": "^16.4.5",
     "tsx": "^4.19.0",
-    "typescript": "^5.5.0",
+    "typescript": "^5.3.3",
     "vitest": "^4.0.16"
   },
   "peerDependencies": {

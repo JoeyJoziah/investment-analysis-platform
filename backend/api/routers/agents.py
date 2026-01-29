@@ -13,6 +13,7 @@ from backend.analytics.agents import HybridAnalysisEngine, AnalysisMode
 from backend.utils.auth import get_current_user, require_admin
 from backend.utils.rate_limiter import rate_limit
 from backend.utils.llm_budget_manager import BudgetExceededException
+from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -91,16 +92,99 @@ class AgentCapabilitiesResponse(BaseModel):
     current_config: Dict[str, Any]
 
 
+class AgentSelectionResponse(BaseModel):
+    """Response for agent selection recommendation"""
+    recommended_agent: str = Field(..., description="Recommended agent type")
+    confidence_score: float = Field(..., ge=0.0, le=1.0, description="Confidence in recommendation")
+    reasoning: str = Field(..., description="Why this agent was selected")
+    alternative_agents: List[str] = Field(default_factory=list, description="Alternative agent options")
+    estimated_tokens: Optional[int] = Field(None, description="Estimated token usage")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "recommended_agent": "coder",
+                "confidence_score": 0.92,
+                "reasoning": "Task requires code generation with TDD approach",
+                "alternative_agents": ["tdd-guide", "refactor-cleaner"],
+                "estimated_tokens": 2500
+            }
+        }
+
+
+class AgentBudgetResponse(BaseModel):
+    """Response for agent budget calculation"""
+    total_budget: float = Field(..., description="Total budget in USD")
+    estimated_cost: float = Field(..., description="Estimated cost for this task")
+    budget_remaining: float = Field(..., description="Remaining budget after task")
+    cost_breakdown: Dict[str, float] = Field(default_factory=dict, description="Cost by component")
+    within_budget: bool = Field(..., description="Whether task is within budget")
+    optimization_suggestions: List[str] = Field(default_factory=list, description="Ways to reduce cost")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_budget": 50.0,
+                "estimated_cost": 3.45,
+                "budget_remaining": 46.55,
+                "cost_breakdown": {"llm_calls": 2.50, "embeddings": 0.95},
+                "within_budget": True,
+                "optimization_suggestions": ["Use haiku for simple tasks"]
+            }
+        }
+
+
+class EngineStatusResponse(BaseModel):
+    """Response for engine status query"""
+    status: str = Field(..., description="Overall engine status")
+    uptime_seconds: float = Field(..., description="Engine uptime in seconds")
+    analysis_count: int = Field(..., description="Total analyses performed")
+    error_count: int = Field(..., description="Number of errors encountered")
+    active_analyses: int = Field(..., description="Currently active analyses")
+    performance_metrics: Dict[str, Any] = Field(default_factory=dict, description="Performance statistics")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "status": "operational",
+                "uptime_seconds": 3600.0,
+                "analysis_count": 42,
+                "error_count": 0,
+                "active_analyses": 2,
+                "performance_metrics": {"avg_latency_ms": 2300, "success_rate": 0.98}
+            }
+        }
+
+
+class ConnectivityTestResponse(BaseModel):
+    """Response for agent connectivity test"""
+    status: str = Field(..., description="Test status (success/failure)")
+    test_results: Dict[str, Any] = Field(..., description="Detailed test results")
+    timestamp: str = Field(..., description="ISO format timestamp")
+
+
+class AnalysisModeResponse(BaseModel):
+    """Response for analysis mode change"""
+    status: str = Field(..., description="Operation status")
+    new_mode: str = Field(..., description="New analysis mode")
+    timestamp: str = Field(..., description="ISO format timestamp")
+
+
+class SelectionStatsResponse(BaseModel):
+    """Response for agent selection statistics"""
+    stats: Dict[str, Any] = Field(..., description="Selection statistics and criteria")
+
+
 # Routes
 
-@router.post("/analyze", response_model=AgentAnalysisResponse)
+@router.post("/analyze")
 @rate_limit(requests_per_minute=10)  # 10 calls per minute
 async def analyze_stock_with_agents(
     request: AgentAnalysisRequest,
     background_tasks: BackgroundTasks,
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[AgentAnalysisResponse]:
     """
     Analyze a stock using hybrid traditional + LLM agent approach
     """
@@ -142,8 +226,8 @@ async def analyze_stock_with_agents(
             result.analysis_duration,
             len(result.agents_used or [])
         )
-        
-        return response
+
+        return success_response(data=response)
         
     except BudgetExceededException as e:
         logger.warning(f"Budget exceeded for {request.ticker}: {e}")
@@ -166,7 +250,7 @@ async def batch_analyze_stocks(
     background_tasks: BackgroundTasks,
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[Dict[str, Any]]:
     """
     Analyze multiple stocks in batch with resource management
     """
@@ -219,8 +303,8 @@ async def batch_analyze_stocks(
             total_duration,
             agents_used_count
         )
-        
-        return {
+
+        return success_response(data={
             "results": response_data,
             "summary": {
                 "requested": len(request.tickers),
@@ -229,7 +313,7 @@ async def batch_analyze_stocks(
                 "avg_duration": total_duration / len(results) if results else 0,
                 "agents_used_count": agents_used_count
             }
-        }
+        })
         
     except Exception as e:
         logger.error(f"Batch analysis failed: {e}")
@@ -239,18 +323,18 @@ async def batch_analyze_stocks(
         )
 
 
-@router.get("/budget-status", response_model=BudgetStatusResponse)
+@router.get("/budget-status")
 async def get_budget_status(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[BudgetStatusResponse]:
     """
     Get current LLM budget status and usage statistics
     """
     try:
         status = await engine.budget_manager.get_budget_status()
-        
-        return BudgetStatusResponse(
+
+        return success_response(data=BudgetStatusResponse(
             monthly_budget=status['budget']['monthly_budget'],
             monthly_used=status['budget']['monthly_used'],
             monthly_remaining=status['budget']['monthly_remaining'],
@@ -259,7 +343,7 @@ async def get_budget_status(
             cost_health=status['cost_health'],
             recommended_actions=status['recommended_actions'],
             usage_stats=status['usage_stats']
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Failed to get budget status: {e}")
@@ -269,21 +353,21 @@ async def get_budget_status(
         )
 
 
-@router.get("/capabilities", response_model=AgentCapabilitiesResponse)
+@router.get("/capabilities")
 async def get_agent_capabilities(
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[AgentCapabilitiesResponse]:
     """
     Get information about available agents and their capabilities
     """
     try:
         capabilities = await engine.trading_agents.get_agent_capabilities()
-        
-        return AgentCapabilitiesResponse(
+
+        return success_response(data=AgentCapabilitiesResponse(
             available_analysts=capabilities['available_analysts'],
             analysis_types=capabilities['analysis_types'],
             current_config=capabilities['current_config']
-        )
+        ))
         
     except Exception as e:
         logger.error(f"Failed to get agent capabilities: {e}")
@@ -297,13 +381,20 @@ async def get_agent_capabilities(
 async def get_engine_status(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[EngineStatusResponse]:
     """
     Get comprehensive engine status and statistics
     """
     try:
         status = await engine.get_engine_status()
-        return status
+        return success_response(data=EngineStatusResponse(
+            status=status.get("status", "unknown"),
+            uptime_seconds=status.get("uptime_seconds", 0.0),
+            analysis_count=status.get("analysis_count", 0),
+            error_count=status.get("error_count", 0),
+            active_analyses=status.get("active_analyses", 0),
+            performance_metrics=status.get("performance_metrics", {})
+        ))
         
     except Exception as e:
         logger.error(f"Failed to get engine status: {e}")
@@ -317,17 +408,17 @@ async def get_engine_status(
 async def test_agent_connectivity(
     current_user = Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[ConnectivityTestResponse]:
     """
     Test agent connectivity and system health (admin only)
     """
     try:
         test_results = await engine.trading_agents.test_agent_connectivity()
-        return {
-            "status": "success",
-            "test_results": test_results,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return success_response(data=ConnectivityTestResponse(
+            status="success",
+            test_results=test_results,
+            timestamp=datetime.utcnow().isoformat()
+        ))
         
     except Exception as e:
         logger.error(f"Agent connectivity test failed: {e}")
@@ -342,7 +433,7 @@ async def set_analysis_mode(
     mode: str,
     current_user = Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[AnalysisModeResponse]:
     """
     Set analysis mode (admin only)
     """
@@ -354,14 +445,14 @@ async def set_analysis_mode(
                 status_code=400,
                 detail=f"Invalid mode. Valid modes: {valid_modes}"
             )
-        
+
         engine.set_analysis_mode(AnalysisMode(mode))
-        
-        return {
-            "status": "success",
-            "new_mode": mode,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+
+        return success_response(data=AnalysisModeResponse(
+            status="success",
+            new_mode=mode,
+            timestamp=datetime.utcnow().isoformat()
+        ))
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -377,13 +468,13 @@ async def set_analysis_mode(
 async def get_agent_selection_stats(
     current_user = Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
-):
+) -> ApiResponse[SelectionStatsResponse]:
     """
     Get agent selection statistics and criteria
     """
     try:
         stats = await engine.agent_orchestrator.get_selection_stats()
-        return stats
+        return success_response(data=SelectionStatsResponse(stats=stats))
         
     except Exception as e:
         logger.error(f"Failed to get selection stats: {e}")
