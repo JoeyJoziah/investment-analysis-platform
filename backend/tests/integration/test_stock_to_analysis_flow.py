@@ -74,7 +74,7 @@ async def sample_price_history(db_session: AsyncSession, sample_stock: Stock):
 @pytest_asyncio.fixture
 async def sample_fundamentals(db_session: AsyncSession, sample_stock: Stock):
     """Create fundamental data for the sample stock."""
-    fundamental = Fundamental(
+    fundamental = Fundamentals(
         stock_id=sample_stock.id,
         report_date=date.today() - timedelta(days=90),
         period="Q4",
