@@ -1,0 +1,148 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    INTEGRATION TEST COVERAGE ANALYSIS
+                           Generated: 2026-01-28
+═══════════════════════════════════════════════════════════════════════════════
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                            CURRENT STATUS                                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Total Tests:        38
+  Passing:            10  (26.3%)  ████████░░░░░░░░░░░░░░░░░░░░░░░░
+  Failing:            28  (73.7%)  ███████████████████████████░░░░░
+
+  Overall Coverage:   10.51%       ███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+  Target Coverage:    80.00%
+  Gap:                69.49%
+
+  Schema Errors:      0   ✓ ALL FIXED!
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         FAILURE BREAKDOWN (28 Tests)                      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Category 1: Missing Endpoints (404)         15 tests (54%)
+  ████████████████████████████████████████████░░░░░░░░░░░░
+
+  Category 2: Missing Services (AttributeError)  3 tests (11%)
+  ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+  Category 3: CSRF/Auth Issues (403)           5 tests (18%)
+  ██████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+  Category 4: Middleware Integration           5 tests (18%)
+  ██████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         COVERAGE BY MODULE                                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  HIGH COVERAGE (>50%) ✓
+  ├─ exceptions.py                 80.00%  ████████████████████████████████
+  ├─ middleware/error_handler.py   60.00%  ████████████████████████
+  ├─ api/routers/monitoring.py     57.89%  ███████████████████████
+  ├─ api/routers/admin.py          53.70%  █████████████████████
+  └─ api/main.py                   51.82%  ████████████████████
+
+  CRITICAL LOW COVERAGE (<10%) ✗✗✗
+  ├─ analytics/fundamental_analysis.py      8.56%  ███░░░░░░░░░░░░░░░░░
+  ├─ analytics/technical_analysis.py        7.03%  ███░░░░░░░░░░░░░░░░░
+  ├─ data_ingestion/sec_edgar_client.py     7.83%  ███░░░░░░░░░░░░░░░░░
+  ├─ analytics/recommendation_engine.py    13.11%  █████░░░░░░░░░░░░░░░
+  └─ analytics/dividend_analyzer.py        12.60%  █████░░░░░░░░░░░░░░░
+
+  ZERO COVERAGE (0%) ✗✗✗
+  ├─ All ETL modules                        0.00%  ░░░░░░░░░░░░░░░░░░░░
+  ├─ All portfolio analytics                0.00%  ░░░░░░░░░░░░░░░░░░░░
+  ├─ recommendation_engine_optimized.py     0.00%  ░░░░░░░░░░░░░░░░░░░░
+  ├─ api/security_integration.py            0.00%  ░░░░░░░░░░░░░░░░░░░░
+  └─ auth/password_validator.py             0.00%  ░░░░░░░░░░░░░░░░░░░░
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                       TOP 5 PRIORITY FIXES                                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  1. CSRF Configuration (4h)              ⚡ CRITICAL
+     Impact: Fixes 5 tests (18%)
+     File: backend/tests/integration/conftest.py
+
+  2. Missing Endpoints (16h)              🔴 HIGH
+     Impact: Fixes 15 tests (54%)
+     Files: agents.py, stocks.py, thesis.py, portfolio.py, gdpr.py
+
+  3. Service Layer (24h)                  🔴 HIGH
+     Impact: Fixes 3 tests (11%)
+     Files: recommendation_service.py, trading_service.py, analysis_agent.py
+
+  4. Middleware Integration (16h)         🟡 MEDIUM
+     Impact: Fixes 5 tests (18%)
+     Files: main.py, security_headers.py, request_size_limiter.py
+
+  5. Core Analytics Coverage (40h)        ⚡ CRITICAL
+     Impact: Core business logic validation
+     Files: fundamental_analysis.py, technical_analysis.py
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         ESTIMATED TIMELINE                                ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Milestone                Tests     Coverage   Timeline
+  ───────────────────────────────────────────────────────────────
+  Current                  10/38     10.51%     ● 2026-01-28
+  Quick Wins               18/38     15%        ○ Day 2
+  Critical Path            28/38     25%        ○ Week 2
+  Core Coverage            35/38     40%        ○ Week 4
+  Comprehensive            38/38     60%        ○ Week 6
+  Production Ready         50+ tests 80%        ○ Week 8
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         EFFORT BREAKDOWN                                  ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  CSRF Configuration             4h   ████
+  Missing Endpoints             16h   ████████████████
+  Service Layer                 24h   ████████████████████████
+  Middleware Fixes              16h   ████████████████
+  Core Analytics Tests          40h   ████████████████████████████████████████
+  API Router Tests              32h   ████████████████████████████████
+  Data Ingestion Tests          24h   ████████████████████████
+  ML System Tests               24h   ████████████████████████
+  E2E Tests                     16h   ████████████████
+  ───────────────────────────────────────────────────────────────
+  TOTAL                        196h   (~5 weeks full-time)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         KEY RECOMMENDATIONS                               ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  IMMEDIATE (This Week):
+  ✓ Fix CSRF configuration (unblocks 5 auth tests)
+  ✓ Implement 3 critical endpoints (agents, ML, stocks)
+  ✓ Create recommendation_service (unblocks recommendation tests)
+
+  SHORT-TERM (Next 2 Weeks):
+  ✓ Complete all missing endpoints (full API surface)
+  ✓ Fix middleware integration (stable infrastructure)
+  ✓ Add service layer tests (business logic validation)
+
+  LONG-TERM (Next Month):
+  ✓ Comprehensive unit test suite (>60% coverage per module)
+  ✓ E2E test suite (critical user flows)
+  ✓ Performance test suite (load/stress testing)
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                         SUCCESS METRICS                                   ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+  Week 1:  47% test pass rate, 0 CSRF failures
+  Week 2:  82% test pass rate, middleware stable
+  Week 3:  100% integration tests passing
+  Week 4:  40% overall coverage
+  Week 8:  80% overall coverage, production-ready
+
+═══════════════════════════════════════════════════════════════════════════════
+  📄 Detailed Reports:
+     - test-coverage-analysis-report.md (full analysis)
+     - test-fix-priority-matrix.md (action items)
+     - htmlcov/index.html (interactive coverage)
+═══════════════════════════════════════════════════════════════════════════════
