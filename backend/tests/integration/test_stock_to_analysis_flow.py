@@ -24,6 +24,12 @@ from httpx import AsyncClient, ASGITransport
 pytestmark = pytest.mark.integration
 
 
+@pytest.fixture
+def mock_cache():
+    """Provide a mock cache for testing cache scenarios."""
+    return MagicMock()
+
+
 @pytest_asyncio.fixture
 async def sample_stock(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector, consumer_electronics_industry):
     """Create a sample stock for testing."""
@@ -76,25 +82,24 @@ async def sample_fundamentals(db_session: AsyncSession, sample_stock: Stock):
     """Create fundamental data for the sample stock."""
     fundamental = Fundamentals(
         stock_id=sample_stock.id,
-        report_date=date.today() - timedelta(days=90),
-        period="Q4",
+        period_date=date.today() - timedelta(days=90),
+        period_type="quarterly",
         revenue=90000000000,
         gross_profit=40000000000,
         operating_income=25000000000,
         net_income=22000000000,
         eps=Decimal("5.50"),
-        eps_diluted=Decimal("5.45"),
+        diluted_eps=Decimal("5.45"),
         total_assets=350000000000,
         total_liabilities=280000000000,
         total_equity=70000000000,
         cash=50000000000,
-        debt=120000000000,
+        total_debt=120000000000,
         free_cash_flow=28000000000,
         pe_ratio=28.5,
         peg_ratio=1.8,
         ps_ratio=7.2,
         pb_ratio=40.0,
-        dividend_yield=0.5,
         roe=0.35,
         roa=0.22,
         roic=0.28,
@@ -159,9 +164,9 @@ async def test_stock_lookup_to_recommendation(
         mock_rec.return_value = Recommendation(
             id=1,
             stock_id=sample_stock.id,
-            recommendation_type=RecommendationTypeEnum.BUY,
-            confidence_score=0.82,
-            current_price=Decimal("165.00"),
+            action="buy",
+            confidence=0.82,
+            entry_price=Decimal("165.00"),
             target_price=Decimal("185.00"),
             stop_loss=Decimal("155.00"),
             time_horizon_days=90,

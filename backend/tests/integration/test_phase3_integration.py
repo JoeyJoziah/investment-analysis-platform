@@ -156,7 +156,8 @@ async def test_portfolio(db_session: AsyncSession):
     user = User(
         username="locktest",
         email="locktest@example.com",
-        hashed_password="test123"
+        hashed_password="test123",
+        full_name="Lock Test User"
     )
     db_session.add(user)
     await db_session.flush()

@@ -802,12 +802,13 @@ class Order(Base):
 class Watchlist(Base):
     """User watchlists"""
     __tablename__ = "watchlists"
-    
+
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     name = Column(String(100))
-    
+    is_public = Column(Boolean, default=False)
+
     # Watchlist details
     added_date = Column(DateTime, default=func.now())
     notes = Column(Text)

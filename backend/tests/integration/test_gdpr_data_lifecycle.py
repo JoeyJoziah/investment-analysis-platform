@@ -155,6 +155,7 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
     # Create watchlist
     watchlist = Watchlist(
         user_id=gdpr_test_user.id,
+        stock_id=stock1.id,
         name="Tech Watchlist",
         is_public=False
     )
@@ -176,7 +177,6 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
     session = UserSession(
         user_id=gdpr_test_user.id,
         session_token="test_session_token",
-        refresh_token="test_refresh_token",
         ip_address="192.168.1.1",
         user_agent="Mozilla/5.0",
         is_active=True,
@@ -189,9 +189,9 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
     audit_log = AuditLog(
         user_id=gdpr_test_user.id,
         action="user_login",
-        entity_type="user",
-        entity_id=gdpr_test_user.id,
-        details={"ip": "192.168.1.1", "timestamp": datetime.utcnow().isoformat()},
+        resource_type="user",
+        resource_id=str(gdpr_test_user.id),
+        meta_data={"ip": "192.168.1.1", "timestamp": datetime.utcnow().isoformat()},
         ip_address="192.168.1.1"
     )
     db_session.add(audit_log)
@@ -431,8 +431,8 @@ async def test_data_deletion_cascades(
 
     # Audit logs should be anonymized but preserved
     for log in audit_logs:
-        assert log.details.get("anonymized") == True
-        assert log.details.get("deletion_date") is not None
+        assert log.meta_data.get("anonymized") == True
+        assert log.meta_data.get("deletion_date") is not None
 
 
 @pytest.mark.asyncio

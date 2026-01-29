@@ -161,6 +161,7 @@ def test_user():
         username="testuser",
         email="test@example.com",
         hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
+        full_name="Test User",
         is_active=True,
         is_verified=True,
         created_at=datetime.utcnow()
