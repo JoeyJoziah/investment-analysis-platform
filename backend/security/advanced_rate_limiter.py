@@ -627,9 +627,14 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process request through rate limiting pipeline"""
+        import os
         start_time = time.time()
-        
+
         try:
+            # Skip rate limiting in test mode
+            if os.getenv("TESTING", "False").lower() == "true":
+                return await call_next(request)
+
             # Skip rate limiting for health checks
             if request.url.path in ["/api/health", "/api/metrics"]:
                 return await call_next(request)
