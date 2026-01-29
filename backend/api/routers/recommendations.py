@@ -33,7 +33,7 @@ from backend.models.api_response import ApiResponse, success_response
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+router = APIRouter(tags=["recommendations"])
 
 # =============================================================================
 # SEC 2025 COMPLIANCE CONSTANTS

@@ -14,7 +14,7 @@ from backend.utils.security_logger import get_security_logger, sanitize_log_inpu
 logger = logging.getLogger(__name__)
 security_logger = get_security_logger()
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(tags=["admin"])
 
 # Enums
 class UserRole(str, Enum):

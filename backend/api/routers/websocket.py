@@ -30,7 +30,7 @@ from backend.security.audit_logging import get_audit_logger, AuditEventType, Aud
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ws", tags=["websocket"])
+router = APIRouter(tags=["websocket"])
 
 # Enhanced WebSocket connection manager with error handling and persistence
 class EnhancedConnectionManager:

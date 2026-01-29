@@ -162,3 +162,8 @@ async def startup_check() -> ApiResponse[Dict[str, Any]]:
         })
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
+
+@router.get("/ping")
+async def ping() -> ApiResponse[Dict[str, Any]]:
+    """Simple ping endpoint for health checks"""
+    return success_response(data={"status": "pong", "timestamp": datetime.utcnow().isoformat()})

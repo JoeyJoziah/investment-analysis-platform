@@ -17,7 +17,7 @@ from backend.security.secrets_manager import get_secrets_manager
 from backend.security.security_config import SecurityConfig
 from backend.models.api_response import ApiResponse, success_response
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])
 
 # Security configurations
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

@@ -33,7 +33,7 @@ from backend.models.api_response import ApiResponse, success_response
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/analysis", tags=["analysis"])
+router = APIRouter(tags=["analysis"])
 
 # Initialize data clients and analyzers
 alpha_vantage_client = AlphaVantageClient() if settings.ALPHA_VANTAGE_API_KEY else None

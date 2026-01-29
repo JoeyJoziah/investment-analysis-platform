@@ -34,7 +34,7 @@ from backend.models.api_response import ApiResponse, success_response
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+router = APIRouter(tags=["portfolio"])
 
 # Enums
 class TransactionType(str, Enum):
