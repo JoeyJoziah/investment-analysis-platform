@@ -1,0 +1,297 @@
+{
+  "workflow": {
+    "name": "Intelligent Debug & Fix Workflow",
+    "version": "1.0.0",
+    "description": "Automated workflow for bug detection, analysis, research, and orchestrated fixing using swarm coordination",
+    "trigger": "on_bug_detection",
+    "coordinator": "swarm-coordinator",
+    "phases": [
+      {
+        "id": "phase1_detection",
+        "name": "Bug Detection & Initial Analysis",
+        "strategy": "parallel",
+        "agents": [
+          {
+            "type": "security-agent",
+            "role": "security_scanner",
+            "task": "Scan for security vulnerabilities and potential bugs",
+            "tools": ["code_analyzer", "vulnerability_scanner"],
+            "output": "security_findings"
+          },
+          {
+            "type": "test-agent",
+            "role": "test_analyzer",
+            "task": "Analyze test failures and identify root causes",
+            "tools": ["test_coverage", "test_gaps"],
+            "output": "test_findings"
+          },
+          {
+            "type": "code-reviewer",
+            "role": "code_quality",
+            "task": "Review code for quality issues and anti-patterns",
+            "tools": ["static_analysis", "pattern_detection"],
+            "output": "quality_findings"
+          }
+        ],
+        "aggregation": {
+          "method": "merge_findings",
+          "priority_weight": {
+            "security": 1.0,
+            "test_failure": 0.9,
+            "quality": 0.7
+          }
+        },
+        "next_phase": "phase2_debug"
+      },
+      {
+        "id": "phase2_debug",
+        "name": "Deep Debug Analysis with Swarm Coordination",
+        "strategy": "hierarchical",
+        "coordinator_mode": "debug",
+        "swarm_strategy": "consensus",
+        "agents": [
+          {
+            "type": "swarm-coordinator",
+            "role": "debug_coordinator",
+            "task": "Coordinate debug efforts across multiple agents",
+            "config": {
+              "topology": "hierarchical-mesh",
+              "max_agents": 8,
+              "strategy": "specialized"
+            },
+            "sub_agents": [
+              {
+                "type": "analyst",
+                "role": "bug_analyzer",
+                "task": "Analyze bug patterns and root causes",
+                "focus": "deep_analysis"
+              },
+              {
+                "type": "performance-optimizer",
+                "role": "performance_checker",
+                "task": "Check for performance-related bugs",
+                "focus": "bottleneck_detection"
+              },
+              {
+                "type": "data-science-architect",
+                "role": "data_validator",
+                "task": "Validate data flow and transformations",
+                "focus": "data_integrity"
+              }
+            ]
+          }
+        ],
+        "consensus_required": true,
+        "consensus_threshold": 0.75,
+        "output": "comprehensive_bug_report",
+        "next_phase": "phase3_research"
+      },
+      {
+        "id": "phase3_research",
+        "name": "Research-Driven Solution Development",
+        "strategy": "parallel",
+        "agents": [
+          {
+            "type": "researcher",
+            "role": "solution_researcher",
+            "task": "Research known solutions and best practices for identified bugs",
+            "tools": ["web_search", "documentation_review", "pattern_matching"],
+            "sources": [
+              "stack_overflow",
+              "github_issues",
+              "official_docs",
+              "internal_patterns"
+            ],
+            "output": "research_findings"
+          },
+          {
+            "type": "architect",
+            "role": "solution_architect",
+            "task": "Design architectural solutions for complex bugs",
+            "input": "comprehensive_bug_report",
+            "output": "solution_architecture"
+          },
+          {
+            "type": "tdd-guide",
+            "role": "test_designer",
+            "task": "Design tests to verify bug fixes",
+            "input": "comprehensive_bug_report",
+            "output": "test_specifications"
+          }
+        ],
+        "coordination": {
+          "type": "swarm-strategies",
+          "method": "collaborative_synthesis",
+          "merge_strategy": "weighted_consensus"
+        },
+        "output": "comprehensive_fix_plan",
+        "next_phase": "phase4_plan_review"
+      },
+      {
+        "id": "phase4_plan_review",
+        "name": "Swarm-Based Plan Review & Confirmation",
+        "strategy": "consensus",
+        "agents": [
+          {
+            "type": "reviewer",
+            "role": "plan_reviewer",
+            "task": "Review fix plan for completeness and feasibility",
+            "criteria": ["completeness", "feasibility", "risk_assessment"]
+          },
+          {
+            "type": "security-reviewer",
+            "role": "security_validator",
+            "task": "Validate security implications of proposed fixes",
+            "criteria": ["no_new_vulnerabilities", "proper_input_validation"]
+          },
+          {
+            "type": "architect",
+            "role": "architecture_validator",
+            "task": "Validate architectural soundness of fix plan",
+            "criteria": ["maintains_patterns", "scalability", "maintainability"]
+          }
+        ],
+        "consensus_required": true,
+        "consensus_threshold": 0.85,
+        "approval_criteria": {
+          "all_reviewers_approve": true,
+          "no_critical_issues": true,
+          "risk_level": "acceptable"
+        },
+        "on_approval": "phase5_orchestrate",
+        "on_rejection": "phase3_research"
+      },
+      {
+        "id": "phase5_orchestrate",
+        "name": "Task Orchestration & Parallel Execution",
+        "strategy": "task-orchestrate",
+        "coordinator": "swarm-coordinator",
+        "execution_mode": "parallel",
+        "agents": [
+          {
+            "type": "coder",
+            "role": "bug_fixer",
+            "task": "Implement approved bug fixes",
+            "input": "comprehensive_fix_plan",
+            "model": "haiku",
+            "parallel_count": 3,
+            "output": "code_changes"
+          },
+          {
+            "type": "tester",
+            "role": "test_writer",
+            "task": "Write tests for bug fixes",
+            "input": "test_specifications",
+            "model": "haiku",
+            "output": "test_code"
+          },
+          {
+            "type": "doc-updater",
+            "role": "documentation_updater",
+            "task": "Update documentation affected by fixes",
+            "input": "comprehensive_fix_plan",
+            "model": "haiku",
+            "output": "documentation_updates"
+          }
+        ],
+        "coordination": {
+          "load_balancer": "enabled",
+          "max_concurrent": 5,
+          "priority_queue": true
+        },
+        "verification": {
+          "run_tests": true,
+          "security_scan": true,
+          "code_review": true
+        },
+        "next_phase": "phase6_validation"
+      },
+      {
+        "id": "phase6_validation",
+        "name": "Comprehensive Validation & Integration",
+        "strategy": "sequential",
+        "agents": [
+          {
+            "type": "tester",
+            "role": "integration_tester",
+            "task": "Run integration tests to verify fixes",
+            "input": "code_changes",
+            "output": "test_results"
+          },
+          {
+            "type": "security-agent",
+            "role": "security_tester",
+            "task": "Verify no new security vulnerabilities introduced",
+            "input": "code_changes",
+            "output": "security_validation"
+          },
+          {
+            "type": "reviewer",
+            "role": "final_reviewer",
+            "task": "Final code review before merge",
+            "input": ["code_changes", "test_results", "security_validation"],
+            "output": "approval_status"
+          }
+        ],
+        "success_criteria": {
+          "all_tests_pass": true,
+          "no_security_issues": true,
+          "code_review_approved": true
+        },
+        "on_success": "phase7_deployment",
+        "on_failure": "phase2_debug"
+      },
+      {
+        "id": "phase7_deployment",
+        "name": "Automated Deployment & Monitoring",
+        "strategy": "sequential",
+        "agents": [
+          {
+            "type": "pr-manager",
+            "role": "pr_creator",
+            "task": "Create pull request with bug fixes",
+            "input": ["code_changes", "test_code", "documentation_updates"],
+            "output": "pull_request"
+          },
+          {
+            "type": "github-swarm",
+            "role": "github_coordinator",
+            "task": "Coordinate GitHub workflow for PR",
+            "input": "pull_request",
+            "actions": ["label", "assign_reviewers", "trigger_ci"]
+          },
+          {
+            "type": "monitoring-agent",
+            "role": "post_deployment_monitor",
+            "task": "Monitor for any issues after deployment",
+            "duration": "24h",
+            "output": "monitoring_report"
+          }
+        ],
+        "notifications": {
+          "success": "Bug fix deployed successfully",
+          "failure": "Deployment failed, rolling back"
+        },
+        "next_phase": "complete"
+      }
+    ],
+    "error_handling": {
+      "retry_strategy": "exponential_backoff",
+      "max_retries": 3,
+      "fallback_to_human": true,
+      "rollback_on_critical_failure": true
+    },
+    "memory_persistence": {
+      "enabled": true,
+      "namespace": "debug_workflow",
+      "store_decisions": true,
+      "learn_from_failures": true
+    },
+    "metrics": {
+      "track_performance": true,
+      "track_success_rate": true,
+      "track_time_to_fix": true,
+      "generate_reports": true
+    }
+  }
+}
