@@ -1,9 +1,12 @@
 # Architecture Codemaps
 
+**Last Updated:** 2026-01-28 (Wave 5)
+
 Quick reference to codebase structure for developers.
 
 | Codemap | Purpose |
 |---------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System-wide architecture overview (NEW) |
 | [BACKEND.md](BACKEND.md) | API routers, ML pipeline, ETL modules |
 | [FRONTEND.md](FRONTEND.md) | React pages, components, state |
 | [DATA_FLOW.md](DATA_FLOW.md) | Data sources, caching, pipelines |
@@ -13,13 +16,37 @@ Quick reference to codebase structure for developers.
 
 | Component | Location | Key Files |
 |-----------|----------|-----------|
-| API Routers | `backend/api/routers/` | 14 routers |
+| API Routers | `backend/api/routers/` | 15 routers (6 fixed in Wave 5) |
 | ML Pipeline | `backend/ml/` | 22 modules |
 | ETL Pipeline | `backend/etl/` | 17 modules |
 | React Pages | `frontend/web/src/pages/` | 15 pages |
 | Redux State | `frontend/web/src/store/` | 6 slices |
 | Docker Config | `infrastructure/` | 4 compose files |
 | Monitoring | `config/monitoring/` | Prometheus, Grafana |
+
+## Wave 5 Updates (2026-01-28)
+
+### Routing Architecture Fixes
+
+| Change | Files | Impact |
+|--------|-------|--------|
+| Double-prefix fix | 6 routers | Resolved 404 errors |
+| Added /ping endpoint | health.py | Better health checks |
+| Rate limiter TESTING mode | rate_limiter.py | Tests run without rate limiting |
+
+### Schema Alignment
+
+| Model | Field Change | Purpose |
+|-------|--------------|---------|
+| Watchlist | Added `is_public` | Privacy control |
+| Transaction | `trade_date` (not `executed_at`) | Correct field name |
+| Stock | `industry_id` FK | Proper foreign key |
+
+### Test Patterns Discovered
+
+- **Schema validation**: Always verify field names against `unified_models.py`
+- **Async fixtures**: Use sync `MagicMock` for Redis cache
+- **CSRF handling**: `testing_mode=True` disables CSRF in tests
 
 ## Performance-Critical Paths
 
@@ -57,4 +84,4 @@ Eliminated N+1 queries in recommendations generation:
 - `backend/tests/test_n1_query_fix.py` - Unit tests for batch queries
 - `backend/tests/benchmark_n1_query_fix.py` - Performance benchmarks
 
-**Last Updated**: 2026-01-27
+**Last Updated**: 2026-01-28 (Wave 5)

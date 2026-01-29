@@ -1,0 +1,175 @@
+# Codemap Diff Report - Wave 5 Completion
+# Generated: 2026-01-28
+
+================================================================================
+SUMMARY
+================================================================================
+
+Wave 5 Documentation Update: Comprehensive Refresh
+
+Previous Version: 2026-01-27 (Wave 4.5)
+Current Version:  2026-01-28 (Wave 5)
+
+Total Files Updated: 6 documentation files
+Total Files Created: 2 new files (ARCHITECTURE.md, this report)
+
+================================================================================
+CHANGE STATISTICS
+================================================================================
+
+| Category              | Before | After | Change    |
+|-----------------------|--------|-------|-----------|
+| Codemaps              | 4      | 5     | +1 (25%)  |
+| Documented routers    | 14     | 15    | +1 (7%)   |
+| Wave 5 fixes noted    | 0      | 17    | +17       |
+| Test patterns         | 0      | 4     | +4        |
+| Schema updates        | 0      | 4     | +4        |
+
+================================================================================
+FILES CREATED
+================================================================================
+
+1. /docs/CODEMAPS/ARCHITECTURE.md (NEW)
+   - System architecture overview
+   - API routing architecture with Wave 5 fixes
+   - Route map with 16+ endpoints documented
+   - Database model relationships
+   - Middleware stack execution order
+   - Security authentication flow
+   - Deployment container services
+
+2. /.reports/codemap-diff.txt (THIS FILE)
+   - Diff summary between versions
+   - Change statistics
+   - Obsolete docs identification
+
+================================================================================
+FILES UPDATED
+================================================================================
+
+1. /docs/CODEMAPS/README.md
+   - Added ARCHITECTURE.md link
+   - Updated router count (14 -> 15)
+   - Added Wave 5 updates section
+   - Added routing fixes table
+   - Added schema alignment table
+   - Added test patterns discovered
+
+2. /docs/CODEMAPS/BACKEND.md
+   - Updated Last Updated timestamp
+   - Added Wave 5 Fix column to router table
+   - Added thesis.py router
+   - Added routing pattern documentation
+   - 6 routers marked as fixed
+
+3. /docs/CONTRIB.md
+   - Added Wave 5 Testing Patterns section
+   - Added schema validation pattern
+   - Added fixture pattern for foreign keys
+   - Added async cache fixture pattern
+   - Added rate limiter testing instructions
+
+4. /docs/RUNBOOK.md
+   - Updated health check endpoints (added /ping)
+   - Added Wave 5 Routing Architecture section
+   - Added router double-prefix fix documentation
+   - Added rate limiter testing mode
+   - Added schema validation procedures
+   - Added link to Architecture codemaps
+   - Updated Last Updated timestamp
+
+================================================================================
+WAVE 5 SPECIFIC DOCUMENTATION
+================================================================================
+
+Routing Changes (6 routers):
+- auth.py: Removed prefix="/auth"
+- portfolio.py: Removed prefix="/portfolio"
+- admin.py: Removed prefix="/admin"
+- analysis.py: Removed prefix="/analysis"
+- recommendations.py: Removed prefix="/recommendations"
+- websocket.py: Removed prefix="/ws"
+
+New Endpoint:
+- GET /api/health/ping (simple health check)
+
+Middleware Changes:
+- Rate limiter: Added TESTING mode bypass
+
+Schema Changes:
+- Watchlist.is_public: Added (Boolean, default False)
+- Transaction.trade_date: Documented (was misnamed in tests)
+- Transaction.total_amount: Documented as required
+- Stock.industry_id: Documented as FK (not string)
+
+Test Pattern Documentation:
+1. Schema validation against unified_models.py
+2. Foreign key fixture pattern
+3. Async cache mock pattern (use sync MagicMock)
+4. Rate limiter bypass with TESTING=True
+
+================================================================================
+COMMITS REFERENCED
+================================================================================
+
+Wave 5 Commits:
+- 178a92e: fix: Resolve double-prefix routing causing 404 errors
+- 9e51bc9: fix: Resolve integration test schema mismatches and fixture issues
+- f12c6b2: fix: Skip rate limiting when TESTING=True
+
+Related Wave 4.5 Commits:
+- 26e0e8d: fix: Wave 4.5 Complete - All schema and model fixes
+- 1b0dfe8: fix: Wave 4.5 Steps 1-2 - Transaction and Stock model fixes
+- 57c92d7: docs: Add Wave 4.5 completion report
+
+================================================================================
+OBSOLETE DOCUMENTATION CHECK (>90 days)
+================================================================================
+
+No obsolete documentation found (all docs < 90 days old).
+
+Oldest documentation files:
+- All documentation was created/updated within the past 30 days
+- Wave-based documentation strategy keeps files current
+
+Recommendation: Continue wave-based documentation updates to maintain freshness.
+
+================================================================================
+FRESHNESS VERIFICATION
+================================================================================
+
+All codemaps verified against source code:
+
+| File              | Source Files Checked | Match |
+|-------------------|---------------------|-------|
+| ARCHITECTURE.md   | main_performance_optimized.py, unified_models.py | YES |
+| BACKEND.md        | backend/api/routers/*.py | YES |
+| README.md         | All codemaps | YES |
+
+Router count verification:
+- Source: 15 files in backend/api/routers/
+- Documented: 15 routers
+- Match: YES
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+1. COMPLETE: Architecture codemap created for Wave 5
+2. COMPLETE: Routing documentation updated with double-prefix fix
+3. COMPLETE: Test patterns documented in CONTRIB.md
+4. COMPLETE: Schema changes documented
+
+Next documentation update triggers:
+- Any new router additions
+- Database schema migrations
+- New middleware additions
+- Test framework changes
+
+================================================================================
+END OF REPORT
+================================================================================
+
+Report Generated: 2026-01-28 20:45:00 UTC
+Documentation Specialist: Claude Opus 4.5
+Wave: 5 (Integration Test Remediation)

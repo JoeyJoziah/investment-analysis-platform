@@ -2,22 +2,35 @@
 
 ## API Routers (`backend/api/routers/`)
 
-| Router | File | Purpose |
-|--------|------|---------|
-| admin | `admin.py` | Admin operations |
-| agents | `agents.py` | AI agent management |
-| analysis | `analysis.py` | Stock analysis endpoints |
-| auth | `auth.py` | Authentication (OAuth2/JWT) |
-| cache_management | `cache_management.py` | Cache control endpoints |
-| gdpr | `gdpr.py` | GDPR compliance (export/delete) |
-| health | `health.py` | Health check endpoints |
-| monitoring | `monitoring.py` | Metrics and monitoring |
-| portfolio | `portfolio.py` | Portfolio management |
-| recommendations | `recommendations.py` | AI recommendations |
-| stocks | `stocks.py` | Stock CRUD operations |
-| stocks_legacy | `stocks_legacy.py` | Legacy stock endpoints |
-| watchlist | `watchlist.py` | Watchlist operations |
-| websocket | `websocket.py` | Real-time WebSocket |
+**Wave 5 Update:** Double-prefix bug fixed in 6 routers. See Architecture codemap for details.
+
+| Router | File | Purpose | Wave 5 Fix |
+|--------|------|---------|------------|
+| admin | `admin.py` | Admin operations | Removed `prefix="/admin"` |
+| agents | `agents.py` | AI agent management | No change needed |
+| analysis | `analysis.py` | Stock analysis endpoints | Removed `prefix="/analysis"` |
+| auth | `auth.py` | Authentication (OAuth2/JWT) | Removed `prefix="/auth"` |
+| cache_management | `cache_management.py` | Cache control endpoints | No change needed |
+| gdpr | `gdpr.py` | GDPR compliance (export/delete) | No change needed |
+| health | `health.py` | Health check endpoints | Added `/ping` endpoint |
+| monitoring | `monitoring.py` | Metrics and monitoring | No change needed |
+| portfolio | `portfolio.py` | Portfolio management | Removed `prefix="/portfolio"` |
+| recommendations | `recommendations.py` | AI recommendations | Removed `prefix="/recommendations"` |
+| stocks | `stocks.py` | Stock CRUD operations | No change needed |
+| stocks_legacy | `stocks_legacy.py` | Legacy stock endpoints | No change needed |
+| thesis | `thesis.py` | Investment thesis | No change needed |
+| watchlist | `watchlist.py` | Watchlist operations | No change needed |
+| websocket | `websocket.py` | Real-time WebSocket | Removed `prefix="/ws"` |
+
+### Routing Pattern (Correct)
+
+```python
+# In router file (e.g., auth.py):
+router = APIRouter(tags=["authentication"])  # NO prefix here
+
+# In main.py:
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])  # Prefix here only
+```
 
 ## Key Code Paths
 
@@ -198,4 +211,4 @@ python -m backend.tests.benchmark_n1_query_fix
 | 50 | 51 | 2 | 25.5x |
 | 100 | 101 | 2 | 50.5x |
 
-**Last Updated**: 2026-01-26
+**Last Updated**: 2026-01-28 (Wave 5)

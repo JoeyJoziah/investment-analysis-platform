@@ -83,8 +83,12 @@ docker-compose logs --tail=100 backend
 # Check all services
 ./scripts/monitoring-health-check.sh
 
-# Check API health
-curl http://localhost:8000/api/health
+# Check API health (multiple endpoints)
+curl http://localhost:8000/api/health           # Basic health
+curl http://localhost:8000/api/health/ping      # Simple ping (Wave 5)
+curl http://localhost:8000/api/health/readiness # Service readiness
+curl http://localhost:8000/api/health/liveness  # K8s liveness probe
+curl http://localhost:8000/api/health/metrics   # System metrics
 
 # Check individual services
 docker-compose ps
@@ -598,9 +602,92 @@ done
 
 ---
 
+---
+
+## Wave 5 Routing Architecture (2026-01-28)
+
+### Router Double-Prefix Fix
+
+**Problem:** Routes like `/api/auth/auth/me` instead of `/api/auth/me`.
+
+**Root Cause:** Prefix defined in both router and `include_router()`.
+
+**Fix Applied to 6 Routers:**
+
+| Router | Before | After |
+|--------|--------|-------|
+| auth.py | `APIRouter(prefix="/auth")` | `APIRouter(tags=["authentication"])` |
+| portfolio.py | `APIRouter(prefix="/portfolio")` | `APIRouter(tags=["portfolio"])` |
+| admin.py | `APIRouter(prefix="/admin")` | `APIRouter(tags=["admin"])` |
+| analysis.py | `APIRouter(prefix="/analysis")` | `APIRouter(tags=["analysis"])` |
+| recommendations.py | `APIRouter(prefix="/recommendations")` | `APIRouter(tags=["recommendations"])` |
+| websocket.py | `APIRouter(prefix="/ws")` | `APIRouter(tags=["websocket"])` |
+
+**Verification:**
+
+```bash
+# Check route registration
+curl http://localhost:8000/api/auth/me -H "Authorization: Bearer $TOKEN"
+# Should return user info, not 404
+
+# Debug routes (development only)
+curl http://localhost:8000/docs
+# Check Swagger UI for correct route paths
+```
+
+### Rate Limiter Testing Mode
+
+**Fix:** Rate limiter now respects `TESTING=True` environment variable.
+
+```bash
+# Run tests without rate limiting
+TESTING=True pytest backend/tests/ -v
+
+# Verify in logs
+# Should see: "Rate limiting bypassed in TESTING mode"
+```
+
+---
+
+## Schema Validation Procedures
+
+### Verify Model Field Names
+
+Before writing test fixtures, verify field names:
+
+```bash
+# Check unified models
+grep -n "def\|Column\|class" backend/models/unified_models.py | head -100
+
+# Common field mappings to verify:
+# - Transaction: trade_date (NOT executed_at)
+# - Transaction: total_amount (REQUIRED)
+# - Stock: industry_id (FK, NOT industry string)
+# - Watchlist: is_public (Boolean)
+```
+
+### Test Data Validation
+
+```python
+# Quick validation script
+from backend.models.unified_models import Transaction, Stock, Watchlist
+
+# Check required fields
+for col in Transaction.__table__.columns:
+    if not col.nullable and col.default is None:
+        print(f"Required: {col.name}")
+```
+
+---
+
 ## Related Documentation
 
 - [Scripts Reference](./SCRIPTS_REFERENCE.md)
 - [Environment Variables](./ENVIRONMENT.md)
 - [Contributing Guide](./CONTRIB.md)
+- [Architecture Codemaps](./CODEMAPS/ARCHITECTURE.md)
 - [Production Deployment Guide](../PRODUCTION_DEPLOYMENT_GUIDE.md)
+
+---
+
+**Last Updated:** 2026-01-28 (Wave 5)

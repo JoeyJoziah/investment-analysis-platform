@@ -198,6 +198,9 @@ pytest --cov=backend --cov-report=html
 # Run specific test file
 pytest tests/test_recommendations.py
 
+# Run integration tests only
+pytest backend/tests/integration/ -v
+
 # Run E2E tests
 cd frontend/web && npm run test:e2e
 ```
@@ -211,6 +214,70 @@ tests/
 ├── e2e/           # End-to-end tests
 ├── fixtures/      # Test fixtures
 └── conftest.py    # Pytest configuration
+```
+
+### Wave 5 Testing Patterns (IMPORTANT)
+
+**Schema Validation Pattern:**
+
+Always verify field names match `backend/models/unified_models.py`:
+
+```python
+# WRONG: Using deprecated field names
+transaction = Transaction(
+    executed_at=datetime.utcnow(),  # Field doesn't exist!
+)
+
+# CORRECT: Use actual model field names
+transaction = Transaction(
+    trade_date=datetime.utcnow(),      # Correct field name
+    total_amount=Decimal("7505.00"),   # Required field
+)
+```
+
+**Fixture Pattern for Foreign Keys:**
+
+```python
+# WRONG: Using string for foreign key field
+stock = Stock(
+    sector_id=sector.id,
+    industry="Consumer Electronics",  # Should be industry_id FK
+)
+
+# CORRECT: Create related object and use FK
+industry = Industry(name="Consumer Electronics", sector_id=sector.id)
+db_session.add(industry)
+await db_session.commit()
+
+stock = Stock(
+    sector_id=sector.id,
+    industry_id=industry.id,  # Use FK reference
+)
+```
+
+**Async Cache Fixture Pattern:**
+
+```python
+# WRONG: Using AsyncMock for Redis client
+@pytest.fixture
+def mock_cache():
+    return AsyncMock()  # Causes issues with sync methods
+
+# CORRECT: Use sync MagicMock
+@pytest.fixture
+def mock_cache():
+    mock = MagicMock()
+    mock.ping.return_value = True
+    mock.get.return_value = None
+    return mock
+```
+
+**Rate Limiter in Tests:**
+
+Set `TESTING=True` environment variable to bypass rate limiting:
+
+```bash
+TESTING=True pytest backend/tests/integration/ -v
 ```
 
 ---
