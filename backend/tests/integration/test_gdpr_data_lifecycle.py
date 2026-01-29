@@ -145,8 +145,9 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
         transaction_type="buy",
         quantity=Decimal("50"),
         price=Decimal("150.00"),
+        total_amount=Decimal("7505.00"),  # (50 * 150.00) + 5.00 commission
         commission=Decimal("5.00"),
-        executed_at=datetime.utcnow()
+        trade_date=datetime.utcnow()
     )
     db_session.add(transaction)
     await db_session.commit()

@@ -200,6 +200,22 @@ async def technology_sector(db_session: AsyncSession):
     return sector
 
 
+@pytest_asyncio.fixture
+async def consumer_electronics_industry(db_session: AsyncSession, technology_sector):
+    """Provide Consumer Electronics industry for testing."""
+    from backend.models.unified_models import Industry
+
+    industry = Industry(
+        name="Consumer Electronics",
+        sector_id=technology_sector.id,
+        description="Consumer electronics industry"
+    )
+    db_session.add(industry)
+    await db_session.commit()
+    await db_session.refresh(industry)
+    return industry
+
+
 @pytest.fixture
 def auth_token(test_user):
     """Provide authentication token for testing."""

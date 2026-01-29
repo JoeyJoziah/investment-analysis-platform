@@ -25,7 +25,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest_asyncio.fixture
-async def sample_stock(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector):
+async def sample_stock(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector, consumer_electronics_industry):
     """Create a sample stock for testing."""
     stock = Stock(
         symbol="AAPL",
@@ -33,7 +33,7 @@ async def sample_stock(db_session: AsyncSession, nasdaq_exchange: Exchange, tech
         exchange_id=nasdaq_exchange.id,
         asset_type="stock",
         sector_id=technology_sector.id,
-        industry="Consumer Electronics",
+        industry_id=consumer_electronics_industry.id,
         market_cap=3000000000000,
         shares_outstanding=16000000000,
         country="US",
