@@ -151,7 +151,7 @@ async def test_analyze_stock_comprehensive_success(
         None,
     ):
         response = await async_client.post(
-            "/api/analysis/analyze",
+            "/api/v1/analysis/analyze",
             json={
                 "symbol": "AAPL",
                 "analysis_type": "comprehensive",
@@ -202,7 +202,7 @@ async def test_analyze_stock_technical_only(
         "backend.api.routers.analysis.model_manager", None,
     ):
         response = await async_client.post(
-            "/api/analysis/analyze",
+            "/api/v1/analysis/analyze",
             json={
                 "symbol": "AAPL",
                 "analysis_type": "technical",
@@ -228,7 +228,7 @@ async def test_analyze_stock_not_found(
     Requesting analysis for a symbol not in the database should return 404.
     """
     response = await async_client.post(
-        "/api/analysis/analyze",
+        "/api/v1/analysis/analyze",
         json={
             "symbol": "DOESNOTEXIST",
             "analysis_type": "quick",
@@ -252,7 +252,7 @@ async def test_analyze_stock_invalid_period(
     An invalid period value should trigger a 422 validation error.
     """
     response = await async_client.post(
-        "/api/analysis/analyze",
+        "/api/v1/analysis/analyze",
         json={
             "symbol": "AAPL",
             "analysis_type": "technical",
@@ -273,7 +273,7 @@ async def test_analyze_stock_invalid_analysis_type(
     An unrecognized analysis_type should trigger a 422 validation error.
     """
     response = await async_client.post(
-        "/api/analysis/analyze",
+        "/api/v1/analysis/analyze",
         json={
             "symbol": "AAPL",
             "analysis_type": "nonexistent_type",
@@ -305,7 +305,7 @@ async def test_analyze_stock_symbol_uppercased(
         "backend.api.routers.analysis.model_manager", None,
     ):
         response = await async_client.post(
-            "/api/analysis/analyze",
+            "/api/v1/analysis/analyze",
             json={
                 "symbol": "aapl",
                 "analysis_type": "technical",
@@ -341,7 +341,7 @@ async def test_analyze_stock_risk_metrics_with_price_data(
         "backend.api.routers.analysis.model_manager", None,
     ):
         response = await async_client.post(
-            "/api/analysis/analyze",
+            "/api/v1/analysis/analyze",
             json={
                 "symbol": "AAPL",
                 "analysis_type": "comprehensive",
@@ -375,7 +375,7 @@ async def test_compare_stocks_success(
     recommendations per symbol, and a correlation matrix.
     """
     response = await async_client.post(
-        "/api/analysis/compare",
+        "/api/v1/analysis/compare",
         json={
             "symbols": ["AAPL", "MSFT"],
             "analysis_type": "quick",
@@ -405,7 +405,7 @@ async def test_compare_stocks_requires_minimum_two_symbols(
     Comparison with fewer than 2 symbols should return 400.
     """
     response = await async_client.post(
-        "/api/analysis/compare",
+        "/api/v1/analysis/compare",
         json={
             "symbols": ["AAPL"],
             "analysis_type": "quick",
@@ -432,7 +432,7 @@ async def test_get_technical_indicators_all(
     available indicators.
     """
     response = await async_client.get(
-        "/api/analysis/indicators/AAPL",
+        "/api/v1/analysis/indicators/AAPL",
     )
     data = assert_success_response(response, expected_status=200)
     assert data["symbol"] == "AAPL"
@@ -453,7 +453,7 @@ async def test_get_technical_indicators_specific(
     Request only RSI and MACD; only those should appear in the response.
     """
     response = await async_client.get(
-        "/api/analysis/indicators/AAPL",
+        "/api/v1/analysis/indicators/AAPL",
         params={"indicators": ["rsi", "macd"]},
     )
     data = assert_success_response(response, expected_status=200)
@@ -475,7 +475,7 @@ async def test_get_technical_indicators_rsi_structure(
     oversold thresholds.
     """
     response = await async_client.get(
-        "/api/analysis/indicators/AAPL",
+        "/api/v1/analysis/indicators/AAPL",
         params={"indicators": ["rsi"]},
     )
     data = assert_success_response(response, expected_status=200)
@@ -499,7 +499,7 @@ async def test_get_sentiment_analysis_success(
     Sentiment endpoint should return a well-formed SentimentAnalysis structure.
     """
     response = await async_client.get(
-        "/api/analysis/sentiment/AAPL",
+        "/api/v1/analysis/sentiment/AAPL",
     )
     data = assert_success_response(response, expected_status=200)
     assert -1 <= data["overall_sentiment"] <= 1
@@ -520,7 +520,7 @@ async def test_get_sentiment_analysis_has_all_fields(
     SentimentAnalysis model.
     """
     response = await async_client.get(
-        "/api/analysis/sentiment/TSLA",
+        "/api/v1/analysis/sentiment/TSLA",
     )
     data = assert_success_response(response, expected_status=200)
     expected_fields = [
@@ -551,7 +551,7 @@ async def test_batch_analysis_empty_symbols_rejected(
     An empty symbols list should be rejected with a 422 validation error.
     """
     response = await async_client.post(
-        "/api/analysis/batch",
+        "/api/v1/analysis/batch",
         json={
             "symbols": [],
             "analysis_type": "quick",
@@ -574,7 +574,7 @@ async def test_all_analysis_endpoints_return_api_response_envelope(
     with 'success' and 'data' fields.
     """
     # Indicators endpoint (no db dependency)
-    indicator_resp = await async_client.get("/api/analysis/indicators/AAPL")
+    indicator_resp = await async_client.get("/api/v1/analysis/indicators/AAPL")
     assert indicator_resp.status_code == 200
     body = indicator_resp.json()
     assert "success" in body
@@ -582,7 +582,7 @@ async def test_all_analysis_endpoints_return_api_response_envelope(
     assert "data" in body
 
     # Sentiment endpoint (no db dependency)
-    sentiment_resp = await async_client.get("/api/analysis/sentiment/AAPL")
+    sentiment_resp = await async_client.get("/api/v1/analysis/sentiment/AAPL")
     assert sentiment_resp.status_code == 200
     body = sentiment_resp.json()
     assert "success" in body

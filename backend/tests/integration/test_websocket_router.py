@@ -33,7 +33,7 @@ from backend.api.routers.websocket import (
 # This avoids the heavy lifespan (database, redis, scheduler, ML models)
 # that the main app requires and that cannot run in the test environment.
 _ws_test_app = FastAPI()
-_ws_test_app.include_router(ws_router, prefix="/api/ws")
+_ws_test_app.include_router(ws_router, prefix="/api/v1/ws")
 
 
 pytestmark = pytest.mark.integration
@@ -465,7 +465,7 @@ class TestMarketDataEndpoint:
     def test_market_endpoint_sends_data(self):
         """The market endpoint should accept the connection and send JSON data."""
         with TestClient(_ws_test_app) as client:
-            with client.websocket_connect("/api/ws/market") as ws:
+            with client.websocket_connect("/api/v1/ws/market") as ws:
                 data = ws.receive_json()
 
                 assert data["type"] == "market_overview"
@@ -482,7 +482,7 @@ class TestMarketDataEndpoint:
     def test_market_endpoint_data_structure(self):
         """Each index in market data should have price, change, and change_percent."""
         with TestClient(_ws_test_app) as client:
-            with client.websocket_connect("/api/ws/market") as ws:
+            with client.websocket_connect("/api/v1/ws/market") as ws:
                 data = ws.receive_json()
 
                 for index_name in ("SPY", "QQQ", "DIA"):
@@ -499,7 +499,7 @@ class TestPortfolioStreamEndpoint:
     def test_portfolio_endpoint_sends_updates(self):
         """The portfolio endpoint should send portfolio update data for the given ID."""
         with TestClient(_ws_test_app) as client:
-            with client.websocket_connect("/api/ws/portfolio/test-portfolio-123") as ws:
+            with client.websocket_connect("/api/v1/ws/portfolio/test-portfolio-123") as ws:
                 data = ws.receive_json()
 
                 assert data["type"] == "portfolio_update"
@@ -515,7 +515,7 @@ class TestPortfolioStreamEndpoint:
     def test_portfolio_endpoint_positions_structure(self):
         """Each position in the portfolio update should contain required fields."""
         with TestClient(_ws_test_app) as client:
-            with client.websocket_connect("/api/ws/portfolio/pf-001") as ws:
+            with client.websocket_connect("/api/v1/ws/portfolio/pf-001") as ws:
                 data = ws.receive_json()
 
                 for position in data["positions"]:
@@ -535,7 +535,7 @@ class TestConnectionsEndpoint:
     def test_get_active_connections(self):
         """The connections endpoint should return current state of the manager."""
         with TestClient(_ws_test_app) as client:
-            response = client.get("/api/ws/connections")
+            response = client.get("/api/v1/ws/connections")
 
         assert response.status_code == 200
         data = response.json()

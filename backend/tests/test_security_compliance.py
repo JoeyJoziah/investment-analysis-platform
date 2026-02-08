@@ -913,10 +913,10 @@ class TestAPISecurityEndpoints:
         """Test that protected endpoints require authentication"""
         
         protected_endpoints = [
-            "/api/portfolio",
-            "/api/recommendations/generate",
-            "/api/admin/users",
-            "/api/analysis/custom"
+            "/api/v1/portfolio",
+            "/api/v1/recommendations/generate",
+            "/api/v1/admin/users",
+            "/api/v1/analysis/custom"
         ]
         
         for endpoint in protected_endpoints:
@@ -929,7 +929,7 @@ class TestAPISecurityEndpoints:
     def test_api_rate_limiting_integration(self, test_client):
         """Test API rate limiting integration"""
         
-        endpoint = "/api/stocks/AAPL"
+        endpoint = "/api/v1/stocks/AAPL"
         
         # Make requests up to limit
         responses = []
@@ -964,12 +964,12 @@ class TestAPISecurityEndpoints:
             # Test in different contexts
             
             # URL parameter
-            response = test_client.get(f"/api/stocks/{malicious_input}")
+            response = test_client.get(f"/api/v1/stocks/{malicious_input}")
             assert response.status_code in [400, 404], f"Should reject malicious input: {malicious_input}"
             
             # JSON body
             response = test_client.post(
-                "/api/analysis/custom",
+                "/api/v1/analysis/custom",
                 json={"ticker": malicious_input}
             )
             # Might be 400 (validation) or 401 (auth required)
@@ -980,7 +980,7 @@ class TestAPISecurityEndpoints:
         
         # Test preflight request
         response = test_client.options(
-            "/api/stocks",
+            "/api/v1/stocks",
             headers={
                 "Origin": "http://malicious-site.com",
                 "Access-Control-Request-Method": "GET"

@@ -76,7 +76,7 @@ class TestWebSocketConnection:
         # Use TestClient to get WebSocket connection
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 # Verify connection is established
@@ -90,7 +90,7 @@ class TestWebSocketConnection:
         with TestClient(app) as client:
             # Try to connect without token
             with pytest.raises(Exception):
-                with client.websocket_connect("/api/ws/prices") as websocket:
+                with client.websocket_connect("/api/v1/ws/prices") as websocket:
                     pass
 
     @pytest.mark.asyncio
@@ -99,7 +99,7 @@ class TestWebSocketConnection:
         with TestClient(app) as client:
             with pytest.raises(Exception):
                 with client.websocket_connect(
-                    "/api/ws/prices",
+                    "/api/v1/ws/prices",
                     headers={"Authorization": "Bearer invalid.token.here"},
                 ) as websocket:
                     pass
@@ -129,7 +129,7 @@ class TestWebSocketConnection:
         with TestClient(app) as client:
             with pytest.raises(Exception):
                 with client.websocket_connect(
-                    "/api/ws/prices",
+                    "/api/v1/ws/prices",
                     headers={"Authorization": f"Bearer {expired_token}"},
                 ) as websocket:
                     pass
@@ -153,7 +153,7 @@ class TestWebSocketConnection:
         with TestClient(app) as client:
             with pytest.raises(Exception):
                 with client.websocket_connect(
-                    "/api/ws/prices",
+                    "/api/v1/ws/prices",
                     headers={"Authorization": f"Bearer {tokens['access_token']}"},
                 ) as websocket:
                     pass
@@ -177,7 +177,7 @@ class TestPriceSubscription:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 # Receive connection confirmation
@@ -209,7 +209,7 @@ class TestPriceSubscription:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 # Skip connection message
@@ -245,7 +245,7 @@ class TestPriceSubscription:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()  # Connection message
@@ -274,7 +274,7 @@ class TestPriceSubscription:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -311,7 +311,7 @@ class TestPriceUpdateDelivery:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()  # Connection
@@ -360,7 +360,7 @@ class TestPriceUpdateDelivery:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -402,7 +402,7 @@ class TestPriceUpdateDelivery:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -445,7 +445,7 @@ class TestWebSocketReconnection:
         with TestClient(app) as client:
             # First connection
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 data = websocket.receive_json()
@@ -453,7 +453,7 @@ class TestWebSocketReconnection:
 
             # Second connection with same token
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 data = websocket.receive_json()
@@ -478,7 +478,7 @@ class TestWebSocketReconnection:
         with TestClient(app) as client:
             # First connection - subscribe to symbols
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()  # Connection message
@@ -491,7 +491,7 @@ class TestWebSocketReconnection:
 
             # Reconnect and resubscribe
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -521,7 +521,7 @@ class TestWebSocketReconnection:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -537,7 +537,7 @@ class TestWebSocketReconnection:
             # Resources should be cleaned up
             # Verify by attempting new connection which should succeed
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket2:
                 data = websocket2.receive_json()
@@ -562,7 +562,7 @@ class TestWebSocketErrorHandling:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -596,7 +596,7 @@ class TestWebSocketErrorHandling:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -625,7 +625,7 @@ class TestWebSocketErrorHandling:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()

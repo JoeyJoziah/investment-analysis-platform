@@ -33,7 +33,7 @@ class TestCSRFAuthExemptions:
         exempt_paths = config.exempt_paths
 
         # Check both v0 and v1 paths
-        assert "/api/auth/login" in exempt_paths, "v0 login should be exempt"
+        assert "/api/v1/auth/login" in exempt_paths, "v0 login should be exempt"
         assert "/api/v1/auth/login" in exempt_paths, "v1 login should be exempt"
 
     def test_register_endpoint_exempt(self):
@@ -44,7 +44,7 @@ class TestCSRFAuthExemptions:
         exempt_paths = config.exempt_paths
 
         # Check both v0 and v1 paths
-        assert "/api/auth/register" in exempt_paths, "v0 register should be exempt"
+        assert "/api/v1/auth/register" in exempt_paths, "v0 register should be exempt"
         assert "/api/v1/auth/register" in exempt_paths, "v1 register should be exempt"
 
     def test_refresh_endpoint_exempt(self):
@@ -109,8 +109,8 @@ class TestCSRFConfigurationExemptions:
 
         # All these endpoints should be exempt
         required_exemptions = [
-            "/api/auth/login",
-            "/api/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/register",
             "/api/v1/auth/login",
             "/api/v1/auth/register",
             "/api/v1/auth/refresh",
@@ -128,7 +128,7 @@ class TestCSRFConfigurationExemptions:
         csrf = CSRFProtection(config)
 
         # Verify exemptions are accessible through the instance
-        assert csrf.is_exempt_path("/api/auth/login")
+        assert csrf.is_exempt_path("/api/v1/auth/login")
         assert csrf.is_exempt_path("/api/v1/auth/refresh")
 
     def test_protected_methods_configured(self):

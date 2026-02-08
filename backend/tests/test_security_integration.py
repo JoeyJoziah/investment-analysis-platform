@@ -137,7 +137,7 @@ class TestSecurityIntegration:
                     "password": "secret"
                 }
                 
-                response = await async_client.post("/api/auth/token", data=login_data)
+                response = await async_client.post("/api/v1/auth/token", data=login_data)
                 
                 assert response.status_code == 200
                 token_data = response.json()
@@ -150,7 +150,7 @@ class TestSecurityIntegration:
                 
                 # Test authenticated request
                 headers = {"Authorization": f"Bearer {access_token}"}
-                response = await async_client.get("/api/auth/me", headers=headers)
+                response = await async_client.get("/api/v1/auth/me", headers=headers)
                 
                 # In real scenario, this would work with proper token validation
                 # Here we test the structure
@@ -194,7 +194,7 @@ class TestSecurityIntegration:
             # Make multiple rapid requests
             responses = []
             for i in range(10):  # Exceed rate limit
-                response = await async_client.post("/api/auth/token", data=login_data)
+                response = await async_client.post("/api/v1/auth/token", data=login_data)
                 responses.append(response)
             
             # Should eventually get rate limited
@@ -224,7 +224,7 @@ class TestSecurityIntegration:
         
         # Test on search endpoint
         for payload in sql_injection_payloads:
-            response = await async_client.get(f"/api/stocks/search?query={payload}")
+            response = await async_client.get(f"/api/v1/stocks/search?query={payload}")
             
             # Should not return 500 error (indicating SQL error)
             # Should handle injection attempt gracefully
@@ -259,7 +259,7 @@ class TestSecurityIntegration:
             }
             
             response = await async_client.post(
-                "/api/portfolio/create",
+                "/api/v1/portfolio/create",
                 headers=headers,
                 json=portfolio_data
             )
@@ -287,21 +287,21 @@ class TestSecurityIntegration:
         
         # Test accessing own resources
         headers1 = {"Authorization": f"Bearer {user1_token}"}
-        response = await async_client.get("/api/portfolio/user-1-portfolio", headers=headers1)
+        response = await async_client.get("/api/v1/portfolio/user-1-portfolio", headers=headers1)
         
         # Should allow access to own resources (or appropriate error)
         assert response.status_code in [200, 404, 401]  # Not 403 Forbidden
         
         # Test accessing other user's resources
         headers2 = {"Authorization": f"Bearer {user2_token}"}
-        response = await async_client.get("/api/portfolio/user-1-portfolio", headers=headers2)
+        response = await async_client.get("/api/v1/portfolio/user-1-portfolio", headers=headers2)
         
         # Should deny access to other user's resources
         assert response.status_code in [403, 404, 401]
         
         # Test admin access
         admin_headers = {"Authorization": f"Bearer {admin_token}"}
-        response = await async_client.get("/api/admin/users", headers=admin_headers)
+        response = await async_client.get("/api/v1/admin/users", headers=admin_headers)
         
         # Should allow admin access (or appropriate error)
         assert response.status_code in [200, 401]  # Not 403 if token is valid
@@ -362,7 +362,7 @@ class TestSecurityIntegration:
             )
             mock_get_user.return_value = mock_user
             
-            response = await async_client.get("/api/auth/me", headers=headers)
+            response = await async_client.get("/api/v1/auth/me", headers=headers)
             
             if response.status_code == 200:
                 user_data = response.json()
@@ -389,7 +389,7 @@ class TestSecurityIntegration:
             "Access-Control-Request-Headers": "Authorization"
         }
         
-        response = await async_client.options("/api/stocks/search", headers=headers)
+        response = await async_client.options("/api/v1/stocks/search", headers=headers)
         
         # Should handle CORS appropriately
         if response.status_code == 200:
@@ -440,7 +440,7 @@ class TestSecurityIntegration:
             "Authorization": "Bearer test_token"
         }
         
-        response = await async_client.get("/api/stocks/AAPL", headers=headers)
+        response = await async_client.get("/api/v1/stocks/AAPL", headers=headers)
         
         # Should handle version appropriately
         if response.status_code == 200:
@@ -460,7 +460,7 @@ class TestSecurityIntegration:
         with patch('backend.utils.audit_logger.log_security_event') as mock_audit:
             # Test failed authentication logging
             login_data = {"username": "nonexistent", "password": "wrong"}
-            response = await async_client.post("/api/auth/token", data=login_data)
+            response = await async_client.post("/api/v1/auth/token", data=login_data)
             
             if response.status_code == 401:
                 # Should log failed authentication attempt
@@ -475,7 +475,7 @@ class TestSecurityIntegration:
                     mock_verify.return_value = True
                     
                     login_data = {"username": "testuser", "password": "correct"}
-                    response = await async_client.post("/api/auth/token", data=login_data)
+                    response = await async_client.post("/api/v1/auth/token", data=login_data)
                     
                     # Should log successful authentication
                     # In production would verify audit logs
@@ -491,10 +491,10 @@ class TestSecurityIntegration:
         
         # Try to access admin endpoints
         admin_endpoints = [
-            "/api/admin/users",
-            "/api/admin/system/shutdown",
-            "/api/admin/cache/clear",
-            "/api/admin/database/backup"
+            "/api/v1/admin/users",
+            "/api/v1/admin/system/shutdown",
+            "/api/v1/admin/cache/clear",
+            "/api/v1/admin/database/backup"
         ]
         
         for endpoint in admin_endpoints:
@@ -510,7 +510,7 @@ class TestSecurityIntegration:
         }
         
         response = await async_client.post(
-            "/api/portfolio/999/update",
+            "/api/v1/portfolio/999/update",
             headers=headers,
             json=other_user_data
         )
@@ -527,7 +527,7 @@ class TestSecurityIntegration:
         with patch('backend.repositories.stock_repository.get_by_symbol') as mock_get:
             mock_get.side_effect = Exception("DETAIL: Key (id)=(1) violates unique constraint")
             
-            response = await async_client.get("/api/stocks/AAPL")
+            response = await async_client.get("/api/v1/stocks/AAPL")
             
             # Should not expose database details
             if response.status_code == 500:
@@ -544,7 +544,7 @@ class TestSecurityIntegration:
             mock_read.side_effect = FileNotFoundError("/etc/passwd not found")
             
             # Attempt to trigger file error
-            response = await async_client.get("/api/analysis/report/nonexistent")
+            response = await async_client.get("/api/v1/analysis/report/nonexistent")
             
             if response.status_code == 404:
                 error_data = response.json()

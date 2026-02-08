@@ -124,7 +124,7 @@ class TestAPIEndpointsIntegration:
                             mock_price_history.return_value = mock_price_data
 
                             response = await client.get(
-                                "/api/recommendations/daily",
+                                "/api/v1/recommendations/daily",
                                 headers={"Authorization": "Bearer test_token"}
                             )
 
@@ -194,7 +194,7 @@ class TestAPIEndpointsIntegration:
 
                                     # Test portfolio summary
                                     response = await client.get(
-                                        "/api/portfolio/summary",
+                                        "/api/v1/portfolio/summary",
                                         headers={"Authorization": "Bearer test_token"}
                                     )
 
@@ -238,7 +238,7 @@ class TestAPIEndpointsIntegration:
                     with patch('backend.repositories.stock_repository.get_by_symbol', return_value=mock_stocks[0]):
                         # Test stock search
                         response = await client.get(
-                            "/api/stocks/search?query=apple&limit=10",
+                            "/api/v1/stocks/search?query=apple&limit=10",
                             headers={"Authorization": "Bearer test_token"}
                         )
 
@@ -277,7 +277,7 @@ class TestAPIEndpointsIntegration:
                 with patch('backend.repositories.price_repository.get_price_history', return_value=mock_price_data):
                     with patch('backend.repositories.stock_repository.get_by_symbol', return_value=mock_stock):
                         response = await client.get(
-                            "/api/analysis/technical/AAPL",
+                            "/api/v1/analysis/technical/AAPL",
                             headers={"Authorization": "Bearer test_token"}
                         )
 
@@ -295,7 +295,7 @@ class TestAPIEndpointsIntegration:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 # Test 404 error for non-existent stock
                 response = await client.get(
-                    "/api/stocks/NONEXISTENT",
+                    "/api/v1/stocks/NONEXISTENT",
                     headers={"Authorization": "Bearer test_token"}
                 )
                 # Should be 404 or 401/403 if auth fails first
@@ -320,7 +320,7 @@ class TestAPIEndpointsIntegration:
                     tasks = []
                     for i in range(10):  # 10 concurrent requests
                         task = client.get(
-                            f"/api/stocks/search?query=apple&page={i}",
+                            f"/api/v1/stocks/search?query=apple&page={i}",
                             headers={"Authorization": "Bearer test_token"}
                         )
                         tasks.append(task)

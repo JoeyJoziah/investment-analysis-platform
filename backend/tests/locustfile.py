@@ -95,7 +95,7 @@ class DashboardTasks(TaskSet):
     def get_portfolio_summary(self):
         """Get portfolio summary"""
         with self.client.get(
-            "/api/portfolio/summary",
+            "/api/v1/portfolio/summary",
             catch_response=True
         ) as response:
             if response.status_code == 200:
@@ -127,7 +127,7 @@ class PortfolioTasks(TaskSet):
     def list_holdings(self):
         """List portfolio holdings"""
         with self.client.get(
-            "/api/portfolio/holdings",
+            "/api/v1/portfolio/holdings",
             catch_response=True
         ) as response:
             if response.status_code == 200:
@@ -153,7 +153,7 @@ class PortfolioTasks(TaskSet):
             ticker = random.choice(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'])
 
         with self.client.get(
-            f"/api/portfolio/holdings/{ticker}",
+            f"/api/v1/portfolio/holdings/{ticker}",
             catch_response=True
         ) as response:
             if response.status_code == 200:
@@ -167,7 +167,7 @@ class PortfolioTasks(TaskSet):
     def get_performance(self):
         """Get portfolio performance"""
         with self.client.get(
-            "/api/portfolio/performance",
+            "/api/v1/portfolio/performance",
             catch_response=True
         ) as response:
             if response.status_code == 200:
@@ -191,7 +191,7 @@ class RecommendationTasks(TaskSet):
         }
 
         with self.client.get(
-            "/api/recommendations",
+            "/api/v1/recommendations",
             params=params,
             catch_response=True
         ) as response:
@@ -208,7 +208,7 @@ class RecommendationTasks(TaskSet):
         ticker = random.choice(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'AMD'])
 
         with self.client.get(
-            f"/api/recommendations/{ticker}",
+            f"/api/v1/recommendations/{ticker}",
             catch_response=True
         ) as response:
             if response.status_code in [200, 404]:  # 404 is acceptable for missing recommendations
@@ -224,7 +224,7 @@ class RecommendationTasks(TaskSet):
         ticker = random.choice(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'])
 
         with self.client.get(
-            f"/api/analysis/{ticker}/ai",
+            f"/api/v1/analysis/{ticker}/ai",
             catch_response=True
         ) as response:
             if response.status_code in [200, 404]:
@@ -281,7 +281,7 @@ class AnalyticsTasks(TaskSet):
         ticker = random.choice(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'])
 
         with self.client.get(
-            f"/api/stocks/{ticker}/metrics",
+            f"/api/v1/stocks/{ticker}/metrics",
             catch_response=True
         ) as response:
             if response.status_code in [200, 404]:
@@ -298,7 +298,7 @@ class AnalyticsTasks(TaskSet):
         period = random.choice(['1M', '3M', '6M', '1Y'])
 
         with self.client.get(
-            f"/api/stocks/{ticker}/prices",
+            f"/api/v1/stocks/{ticker}/prices",
             params={'period': period},
             catch_response=True
         ) as response:

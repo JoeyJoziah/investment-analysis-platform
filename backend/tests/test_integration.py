@@ -250,7 +250,7 @@ class TestAPIVersioning:
         # Test header detection
         request = Mock()
         request.headers = {"X-API-Version": "v2"}
-        request.url.path = "/api/stocks"
+        request.url.path = "/api/v1/stocks"
         request.query_params = {}
         
         version = version_manager.get_version_from_request(request)
@@ -263,7 +263,7 @@ class TestAPIVersioning:
         assert version == APIVersion.V1
         
         # Test query parameter detection
-        request.url.path = "/api/stocks"
+        request.url.path = "/api/v1/stocks"
         request.query_params = {"version": "v3"}
         version = version_manager.get_version_from_request(request)
         assert version == APIVersion.V3

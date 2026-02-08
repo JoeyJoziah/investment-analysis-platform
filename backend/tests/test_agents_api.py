@@ -209,7 +209,7 @@ class TestAgentAnalysis:
     async def test_analyze_stock_success(self, test_client_with_engine, mock_enhanced_recommendation):
         """Test successful stock analysis with agents"""
         response = await test_client_with_engine.post(
-            "/api/agents/analyze",
+            "/api/v1/agents/analyze",
             json={
                 "ticker": "AAPL",
                 "force_agents": False,
@@ -246,7 +246,7 @@ class TestAgentAnalysis:
     async def test_analyze_stock_with_force_agents(self, test_client_with_engine):
         """Test stock analysis with forced agent usage"""
         response = await test_client_with_engine.post(
-            "/api/agents/analyze",
+            "/api/v1/agents/analyze",
             json={
                 "ticker": "TSLA",
                 "force_agents": True,
@@ -267,7 +267,7 @@ class TestAgentAnalysis:
         )
 
         response = await test_client_with_engine.post(
-            "/api/agents/analyze",
+            "/api/v1/agents/analyze",
             json={
                 "ticker": "AAPL",
                 "force_agents": True,
@@ -280,7 +280,7 @@ class TestAgentAnalysis:
     async def test_analyze_stock_invalid_input(self, test_client_with_engine):
         """Test analysis with invalid input"""
         response = await test_client_with_engine.post(
-            "/api/agents/analyze",
+            "/api/v1/agents/analyze",
             json={
                 "ticker": "",  # Empty ticker should fail validation
                 "force_agents": False
@@ -297,7 +297,7 @@ class TestAgentAnalysis:
         )
 
         response = await test_client_with_engine.post(
-            "/api/agents/analyze",
+            "/api/v1/agents/analyze",
             json={
                 "ticker": "AAPL",
                 "force_agents": False,
@@ -319,7 +319,7 @@ class TestBatchAnalysis:
     async def test_batch_analyze_success(self, test_client_with_engine):
         """Test successful batch analysis"""
         response = await test_client_with_engine.post(
-            "/api/agents/batch-analyze",
+            "/api/v1/agents/batch-analyze",
             json={
                 "tickers": ["AAPL", "GOOGL"],
                 "max_concurrent": 5,
@@ -350,7 +350,7 @@ class TestBatchAnalysis:
     async def test_batch_analyze_invalid_tickers(self, test_client_with_engine):
         """Test batch analysis with invalid ticker list"""
         response = await test_client_with_engine.post(
-            "/api/agents/batch-analyze",
+            "/api/v1/agents/batch-analyze",
             json={
                 "tickers": [],  # Empty list should fail validation
                 "max_concurrent": 5
@@ -366,7 +366,7 @@ class TestBatchAnalysis:
         tickers = [f"TICK{i}" for i in range(51)]
 
         response = await test_client_with_engine.post(
-            "/api/agents/batch-analyze",
+            "/api/v1/agents/batch-analyze",
             json={
                 "tickers": tickers,
                 "max_concurrent": 5
@@ -383,7 +383,7 @@ class TestBatchAnalysis:
         )
 
         response = await test_client_with_engine.post(
-            "/api/agents/batch-analyze",
+            "/api/v1/agents/batch-analyze",
             json={
                 "tickers": ["AAPL", "GOOGL"],
                 "max_concurrent": 5
@@ -403,7 +403,7 @@ class TestBudgetStatus:
 
     async def test_get_budget_status_success(self, test_client_with_engine):
         """Test successful budget status retrieval"""
-        response = await test_client_with_engine.get("/api/agents/budget-status")
+        response = await test_client_with_engine.get("/api/v1/agents/budget-status")
 
         data = assert_success_response(response, 200)
 
@@ -428,7 +428,7 @@ class TestBudgetStatus:
             side_effect=Exception("Budget service unavailable")
         )
 
-        response = await test_client_with_engine.get("/api/agents/budget-status")
+        response = await test_client_with_engine.get("/api/v1/agents/budget-status")
 
         assert_api_error_response(response, 500, "Failed to get budget status")
 
@@ -443,7 +443,7 @@ class TestAgentCapabilities:
 
     async def test_get_agent_capabilities_success(self, test_client_with_engine):
         """Test successful capabilities retrieval"""
-        response = await test_client_with_engine.get("/api/agents/capabilities")
+        response = await test_client_with_engine.get("/api/v1/agents/capabilities")
 
         data = assert_success_response(response, 200)
 
@@ -467,7 +467,7 @@ class TestAgentCapabilities:
             side_effect=Exception("Capabilities service unavailable")
         )
 
-        response = await test_client_with_engine.get("/api/agents/capabilities")
+        response = await test_client_with_engine.get("/api/v1/agents/capabilities")
 
         assert_api_error_response(response, 500, "Failed to get agent capabilities")
 
@@ -482,7 +482,7 @@ class TestEngineStatus:
 
     async def test_get_engine_status_success(self, test_client_with_engine):
         """Test successful engine status retrieval"""
-        response = await test_client_with_engine.get("/api/agents/status")
+        response = await test_client_with_engine.get("/api/v1/agents/status")
 
         data = assert_success_response(response, 200)
 
@@ -501,7 +501,7 @@ class TestAgentConnectivity:
 
     async def test_test_agent_connectivity_success(self, test_client_with_engine):
         """Test successful agent connectivity check"""
-        response = await test_client_with_engine.post("/api/agents/test-connectivity")
+        response = await test_client_with_engine.post("/api/v1/agents/test-connectivity")
 
         data = assert_success_response(response, 200)
 
@@ -527,7 +527,7 @@ class TestAnalysisMode:
     async def test_set_analysis_mode_success(self, test_client_with_engine):
         """Test successful analysis mode change"""
         response = await test_client_with_engine.post(
-            "/api/agents/set-analysis-mode?mode=traditional_only"
+            "/api/v1/agents/set-analysis-mode?mode=traditional_only"
         )
 
         data = assert_success_response(response, 200)
@@ -539,7 +539,7 @@ class TestAnalysisMode:
     async def test_set_analysis_mode_invalid(self, test_client_with_engine):
         """Test setting invalid analysis mode"""
         response = await test_client_with_engine.post(
-            "/api/agents/set-analysis-mode?mode=invalid_mode"
+            "/api/v1/agents/set-analysis-mode?mode=invalid_mode"
         )
 
         # Note: The route handler has a bug where HTTPException(400) is caught
@@ -557,7 +557,7 @@ class TestAgentSelectionStats:
 
     async def test_get_selection_stats_success(self, test_client_with_engine):
         """Test successful selection stats retrieval"""
-        response = await test_client_with_engine.get("/api/agents/selection-stats")
+        response = await test_client_with_engine.get("/api/v1/agents/selection-stats")
 
         data = assert_success_response(response, 200)
 

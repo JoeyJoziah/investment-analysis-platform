@@ -173,6 +173,40 @@ async def async_client(test_db_engine):
 
 
 @pytest_asyncio.fixture
+async def authenticated_client(test_db_engine, test_user):
+    """Provide async HTTP client with authentication bypass.
+
+    Unlike ``async_client``, this also overrides ``get_current_user`` so
+    endpoints that require auth work without Redis or a real users table.
+    Use this when tests pass ``auth_headers`` and the endpoint needs
+    a resolved ``current_user``.
+    """
+    TestSessionLocal = sessionmaker(
+        test_db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+
+    async def override_get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+            finally:
+                await session.rollback()
+
+    async def override_get_current_user():
+        return test_user
+
+    app.dependency_overrides[get_async_db_session] = override_get_async_db_session
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
 async def client(async_client):
     """Alias for async_client for backward compatibility."""
     return async_client
@@ -244,29 +278,33 @@ async def consumer_electronics_industry(db_session: AsyncSession, technology_sec
 
 @pytest.fixture
 def auth_token(test_user):
-    """Provide authentication token for testing."""
+    """Provide authentication token for testing.
+
+    Creates an RS256 JWT using the same RSA keys as the jwt_manager so
+    the token passes verification without Redis.
+    """
+    from backend.security.jwt_manager import get_jwt_manager
     from backend.security.security_config import SecurityConfig
-    import jwt
+    import jwt as pyjwt
     from datetime import datetime, timedelta, timezone
 
-    # Build minimal JWT payload
+    jwt_mgr = get_jwt_manager()
+
     expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     payload = {
-        "sub": str(test_user.id),
+        "sub": test_user.username,
+        "user_id": test_user.id,
         "username": test_user.username,
         "email": test_user.email,
         "exp": expire,
         "iat": datetime.now(timezone.utc),
-        "type": "access"
+        "type": "access",
+        "iss": SecurityConfig.JWT_ISSUER,
+        "aud": SecurityConfig.JWT_AUDIENCE,
+        "scopes": [],
     }
 
-    # Create token directly without Redis dependency
-    token = jwt.encode(
-        payload,
-        SecurityConfig.JWT_SECRET_KEY,
-        algorithm=SecurityConfig.JWT_ALGORITHM_FALLBACK
-    )
-
+    token = pyjwt.encode(payload, jwt_mgr.private_key, algorithm="RS256")
     return token
 
 

@@ -338,7 +338,7 @@ class TestEndToEndWorkflows:
                 'is_active': True
             }
             
-            response = await client.post("/api/stocks", json=stock_data)
+            response = await client.post("/api/v1/stocks", json=stock_data)
             assert response.status_code == 201
             created_stock = response.json()
             assert created_stock['ticker'] == 'AAPL'
@@ -356,14 +356,14 @@ class TestEndToEndWorkflows:
                 
                 mock_engine.return_value.analyze_stock.return_value = mock_rec
                 
-                response = await client.post(f"/api/analysis/{created_stock['id']}")
+                response = await client.post(f"/api/v1/analysis/{created_stock['id']}")
                 assert response.status_code == 200
                 analysis = response.json()
                 assert analysis['ticker'] == 'AAPL'
                 assert analysis['action'] == 'BUY'
             
             # Test recommendations endpoint
-            response = await client.get("/api/recommendations")
+            response = await client.get("/api/v1/recommendations")
             assert response.status_code == 200
             recommendations = response.json()
             assert isinstance(recommendations, list)

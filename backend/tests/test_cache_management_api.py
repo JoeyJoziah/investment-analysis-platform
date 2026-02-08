@@ -277,7 +277,7 @@ class TestCacheMetrics:
             mock_instance.get_current_metrics = AsyncMock(return_value=mock_cache_metrics)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
             data = assert_success_response(response)
 
             assert data['timestamp'] is not None
@@ -299,7 +299,7 @@ class TestCacheMetrics:
             mock_instance.get_historical_metrics = AsyncMock(return_value=mock_historical_metrics)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics", params={"include_historical": "true"})
+            response = await async_client.get("/api/v1/cache/metrics", params={"include_historical": "true"})
             data = assert_success_response(response)
 
             assert 'historical_data' in data
@@ -314,7 +314,7 @@ class TestCacheMetrics:
             mock_instance.get_current_metrics = AsyncMock(return_value=mock_cache_metrics)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
             data = assert_success_response(response)
 
             # Verify required fields
@@ -349,7 +349,7 @@ class TestCostAnalysis:
             mock_instance.get_cost_analysis = AsyncMock(return_value=mock_cost_analysis)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/cost-analysis")
+            response = await async_client.get("/api/v1/cache/cost-analysis")
             data = assert_success_response(response)
 
             assert data['current_daily_cost'] == 8.50
@@ -384,7 +384,7 @@ class TestCostAnalysis:
             mock_instance.get_cost_analysis = AsyncMock(return_value=cost_data)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/cost-analysis")
+            response = await async_client.get("/api/v1/cache/cost-analysis")
             data = assert_success_response(response)
 
             # Verify calculations
@@ -416,7 +416,7 @@ class TestCostAnalysis:
             mock_instance.get_cost_analysis = AsyncMock(return_value=cost_data)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/cost-analysis")
+            response = await async_client.get("/api/v1/cache/cost-analysis")
             data = assert_success_response(response)
 
             # Verify budget alert
@@ -439,7 +439,7 @@ class TestPerformanceReport:
             mock_instance.get_performance_report = AsyncMock(return_value=mock_performance_report)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/performance-report")
+            response = await async_client.get("/api/v1/cache/performance-report")
             data = assert_success_response(response)
 
             assert data['overall_hit_ratio'] == 0.85
@@ -456,7 +456,7 @@ class TestPerformanceReport:
             mock_instance.get_performance_report = AsyncMock(return_value=mock_performance_report)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/performance-report")
+            response = await async_client.get("/api/v1/cache/performance-report")
             data = assert_success_response(response)
 
             assert len(data['recommendations']) > 0
@@ -481,7 +481,7 @@ class TestPerformanceReport:
             mock_instance.get_performance_report = AsyncMock(return_value=mock_performance_report)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/performance-report")
+            response = await async_client.get("/api/v1/cache/performance-report")
             data = assert_success_response(response)
 
             assert 'trends' in data
@@ -511,7 +511,7 @@ class TestCacheOperations:
             mock_inv_instance = MagicMock()
             mock_inv.return_value = mock_inv_instance
 
-            response = await async_client.post("/api/cache/invalidate", params={"pattern": "*:quote:*"})
+            response = await async_client.post("/api/v1/cache/invalidate", params={"pattern": "*:quote:*"})
             data = assert_success_response(response)
 
             assert 'message' in data
@@ -533,7 +533,7 @@ class TestCacheOperations:
             mock_inv_instance.invalidate_by_symbol = AsyncMock()
             mock_inv.return_value = mock_inv_instance
 
-            response = await async_client.post("/api/cache/invalidate", params={"symbol": "AAPL"})
+            response = await async_client.post("/api/v1/cache/invalidate", params={"symbol": "AAPL"})
             data = assert_success_response(response)
 
             assert 'message' in data
@@ -558,7 +558,7 @@ class TestCacheOperations:
             mock_cache.return_value = mock_cache_instance
 
             response = await async_client.post(
-                "/api/cache/warm",
+                "/api/v1/cache/warm",
                 params={
                     "symbols": symbols,
                     "data_types": data_types
@@ -585,7 +585,7 @@ class TestCacheOperations:
             mock_inv_instance = MagicMock()
             mock_inv.return_value = mock_inv_instance
 
-            response = await async_client.post("/api/cache/invalidate", params={})
+            response = await async_client.post("/api/v1/cache/invalidate", params={})
 
             assert response.status_code == 400
 
@@ -626,7 +626,7 @@ class TestCacheHealth:
             mock_monitor_instance.metrics_history = list(range(1440))
             mock_monitor.return_value = mock_monitor_instance
 
-            response = await async_client.get("/api/cache/health")
+            response = await async_client.get("/api/v1/cache/health")
             data = assert_success_response(response)
 
             assert data['overall_status'] == 'healthy'
@@ -661,7 +661,7 @@ class TestCacheHealth:
             mock_monitor_instance.metrics_history = []
             mock_monitor.return_value = mock_monitor_instance
 
-            response = await async_client.get("/api/cache/health")
+            response = await async_client.get("/api/v1/cache/health")
             data = assert_success_response(response)
 
             # Overall status should be degraded due to cache manager failure
@@ -695,7 +695,7 @@ class TestCacheHealth:
             )
             mock_query.return_value = mock_query_instance
 
-            response = await async_client.get("/api/cache/statistics", params={})
+            response = await async_client.get("/api/v1/cache/statistics", params={})
             data = assert_success_response(response)
 
             # Verify cache layer statistics
@@ -747,7 +747,7 @@ class TestApiUsage:
             )
             mock_policy.return_value = mock_policy_instance
 
-            response = await async_client.get("/api/cache/api-usage")
+            response = await async_client.get("/api/v1/cache/api-usage")
             data = assert_success_response(response)
 
             assert 'timestamp' in data
@@ -771,7 +771,7 @@ class TestErrorHandling:
         with patch('backend.api.routers.cache_management.get_cache_monitor') as mock_monitor:
             mock_monitor.side_effect = Exception("Cache monitor unavailable")
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
             assert response.status_code == 500
 
     @pytest.mark.asyncio
@@ -780,7 +780,7 @@ class TestErrorHandling:
         with patch('backend.api.routers.cache_management.get_cache_monitor') as mock_monitor:
             mock_monitor.side_effect = Exception("Database connection failed")
 
-            response = await async_client.get("/api/cache/cost-analysis")
+            response = await async_client.get("/api/v1/cache/cost-analysis")
             assert response.status_code == 500
 
     @pytest.mark.asyncio
@@ -800,7 +800,7 @@ class TestErrorHandling:
             mock_cache.return_value = mock_cache_instance
 
             response = await async_client.post(
-                "/api/cache/warm",
+                "/api/v1/cache/warm",
                 params={"symbols": symbols, "data_types": data_types}
             )
             data = assert_success_response(response)
@@ -828,7 +828,7 @@ class TestApiResponseWrapper:
             mock_instance.get_current_metrics = AsyncMock(return_value=mock_cache_metrics)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
 
             # Verify wrapper structure
             json_data = response.json()
@@ -845,7 +845,7 @@ class TestApiResponseWrapper:
             mock_instance.get_cost_analysis = AsyncMock(return_value=mock_cost_analysis)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/cost-analysis")
+            response = await async_client.get("/api/v1/cache/cost-analysis")
 
             json_data = response.json()
             assert json_data['success'] is True
@@ -864,7 +864,7 @@ class TestApiResponseWrapper:
             mock_inv_instance = MagicMock()
             mock_inv.return_value = mock_inv_instance
 
-            response = await async_client.post("/api/cache/invalidate", params={"pattern": "*:quote:*"})
+            response = await async_client.post("/api/v1/cache/invalidate", params={"pattern": "*:quote:*"})
 
             json_data = response.json()
             assert json_data['success'] is True
@@ -896,7 +896,7 @@ class TestEdgeCases:
             mock_instance.get_current_metrics = AsyncMock(return_value=metrics_data)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
             data = assert_success_response(response)
 
             assert data['hit_ratio'] == 0.0
@@ -919,7 +919,7 @@ class TestEdgeCases:
             mock_instance.get_current_metrics = AsyncMock(return_value=metrics_data)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/metrics")
+            response = await async_client.get("/api/v1/cache/metrics")
             data = assert_success_response(response)
 
             assert data['hit_ratio'] == 1.0
@@ -943,7 +943,7 @@ class TestEdgeCases:
             mock_instance.get_performance_report = AsyncMock(return_value=report_data)
             mock_monitor.return_value = mock_instance
 
-            response = await async_client.get("/api/cache/performance-report")
+            response = await async_client.get("/api/v1/cache/performance-report")
             data = assert_success_response(response)
 
             assert len(data['recommendations']) == 0

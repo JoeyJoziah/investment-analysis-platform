@@ -57,7 +57,7 @@ from backend.security.advanced_rate_limiter import (
 
 def _make_request(
     ip: str = "203.0.113.50",
-    path: str = "/api/stocks",
+    path: str = "/api/v1/stocks",
     method: str = "GET",
     headers: Optional[dict] = None,
 ):
@@ -548,7 +548,7 @@ class TestThreatDetector:
         )
         ctx = RequestContext(
             client_info=client,
-            endpoint="/api/stocks",
+            endpoint="/api/v1/stocks",
             method="GET",
             timestamp=datetime.now(timezone.utc),
             request_size=256,
@@ -570,7 +570,7 @@ class TestThreatDetector:
         )
         ctx = RequestContext(
             client_info=client,
-            endpoint="/api/admin/users",
+            endpoint="/api/v1/admin/users",
             method="POST",
             timestamp=datetime.now(timezone.utc),
             request_size=2 * 1024 * 1024,  # 2MB body
@@ -611,7 +611,7 @@ class TestThreatDetector:
         requests = [
             RequestContext(
                 client_info=client,
-                endpoint="/api/stocks",
+                endpoint="/api/v1/stocks",
                 method="GET",
                 timestamp=base_time + timedelta(seconds=i),
             )
@@ -812,13 +812,13 @@ class TestMiddlewareRuleMatching:
     def test_auth_rule_matches_auth_path(self):
         mw = self._make_middleware()
         rule = mw.rules["auth_endpoints"]
-        request = _make_request(path="/api/auth/login")
+        request = _make_request(path="/api/v1/auth/login")
         assert mw._should_apply_rule(request, rule) is True
 
     def test_auth_rule_does_not_match_stocks_path(self):
         mw = self._make_middleware()
         rule = mw.rules["auth_endpoints"]
-        request = _make_request(path="/api/stocks/AAPL")
+        request = _make_request(path="/api/v1/stocks/AAPL")
         assert mw._should_apply_rule(request, rule) is False
 
     def test_global_rule_matches_any_path(self):

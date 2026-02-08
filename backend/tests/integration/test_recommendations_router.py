@@ -60,7 +60,7 @@ async def test_list_recommendations_returns_expected_structure(async_client: Asy
     GET /api/recommendations/list returns a list of recommendations
     with the standard ApiResponse wrapper and each item carrying required fields.
     """
-    response = await async_client.get("/api/recommendations/list")
+    response = await async_client.get("/api/v1/recommendations/list")
     data = _unwrap(response)
 
     assert isinstance(data, list)
@@ -90,7 +90,7 @@ async def test_sec_disclosure_present_on_recommendations(async_client: AsyncClie
     Each recommendation returned by /list must include an sec_disclosure
     object containing all SEC 2025 mandated fields.
     """
-    response = await async_client.get("/api/recommendations/list", params={"limit": 5})
+    response = await async_client.get("/api/v1/recommendations/list", params={"limit": 5})
     data = _unwrap(response)
 
     for rec in data:
@@ -124,7 +124,7 @@ async def test_risk_warning_matches_sec_standard(async_client: AsyncClient):
     The risk_warning field inside sec_disclosure must contain the
     exact SEC-mandated risk warning text defined in SEC_RISK_WARNING.
     """
-    response = await async_client.get("/api/recommendations/list", params={"limit": 1})
+    response = await async_client.get("/api/v1/recommendations/list", params={"limit": 1})
     data = _unwrap(response)
 
     disclosure = data[0]["sec_disclosure"]
@@ -141,7 +141,7 @@ async def test_methodology_disclosure_contains_model_metadata(async_client: Asyn
     The methodology_disclosure field must reference the model version and
     training date so investors can assess staleness and provenance.
     """
-    response = await async_client.get("/api/recommendations/list", params={"limit": 1})
+    response = await async_client.get("/api/v1/recommendations/list", params={"limit": 1})
     data = _unwrap(response)
 
     disclosure = data[0]["sec_disclosure"]
@@ -167,7 +167,7 @@ async def test_limitations_statement_present(async_client: AsyncClient):
     The limitations_statement in sec_disclosure must match the canonical
     SEC_LIMITATIONS_STATEMENT to inform users of analysis boundaries.
     """
-    response = await async_client.get("/api/recommendations/list", params={"limit": 1})
+    response = await async_client.get("/api/v1/recommendations/list", params={"limit": 1})
     data = _unwrap(response)
 
     disclosure = data[0]["sec_disclosure"]
@@ -183,7 +183,7 @@ async def test_list_respects_limit_parameter(async_client: AsyncClient):
     """
     The limit query parameter constrains the number of returned items.
     """
-    response = await async_client.get("/api/recommendations/list", params={"limit": 3})
+    response = await async_client.get("/api/v1/recommendations/list", params={"limit": 3})
     data = _unwrap(response)
     assert len(data) <= 3
 
@@ -194,7 +194,7 @@ async def test_list_rejects_limit_above_maximum(async_client: AsyncClient):
     Requesting limit > 100 should return a 422 validation error.
     """
     response = await async_client.get(
-        "/api/recommendations/list", params={"limit": 200}
+        "/api/v1/recommendations/list", params={"limit": 200}
     )
     assert response.status_code == 422
 
@@ -206,7 +206,7 @@ async def test_list_rejects_invalid_min_confidence(async_client: AsyncClient):
     should be rejected with a 422 validation error.
     """
     response = await async_client.get(
-        "/api/recommendations/list", params={"min_confidence": 1.5}
+        "/api/v1/recommendations/list", params={"min_confidence": 1.5}
     )
     assert response.status_code == 422
 
@@ -221,7 +221,7 @@ async def test_list_filters_by_recommendation_type(async_client: AsyncClient):
     When recommendation_type is specified, all returned items must match.
     """
     response = await async_client.get(
-        "/api/recommendations/list",
+        "/api/v1/recommendations/list",
         params={"recommendation_type": "buy", "limit": 50},
     )
     data = _unwrap(response)
@@ -240,7 +240,7 @@ async def test_list_filters_by_risk_level(async_client: AsyncClient):
     When risk_level is specified, all returned items must match.
     """
     response = await async_client.get(
-        "/api/recommendations/list",
+        "/api/v1/recommendations/list",
         params={"risk_level": "conservative", "limit": 50},
     )
     data = _unwrap(response)
@@ -260,7 +260,7 @@ async def test_get_recommendation_by_id(async_client: AsyncClient):
     with the matching ID and full SEC disclosure.
     """
     rec_id = "REC-TEST-001"
-    response = await async_client.get(f"/api/recommendations/{rec_id}")
+    response = await async_client.get(f"/api/v1/recommendations/{rec_id}")
     data = _unwrap(response)
 
     assert data["id"] == rec_id
@@ -283,7 +283,7 @@ async def test_advanced_filter_by_category_and_risk(async_client: AsyncClient):
         "risk_levels": ["moderate"],
     }
     response = await async_client.post(
-        "/api/recommendations/filter",
+        "/api/v1/recommendations/filter",
         json=filter_body,
         params={"limit": 50},
     )
@@ -301,7 +301,7 @@ async def test_advanced_filter_min_confidence(async_client: AsyncClient):
     """
     filter_body = {"min_confidence": 0.8}
     response = await async_client.post(
-        "/api/recommendations/filter", json=filter_body
+        "/api/v1/recommendations/filter", json=filter_body
     )
     data = _unwrap(response)
 
@@ -319,7 +319,7 @@ async def test_portfolio_recommendations(async_client: AsyncClient):
     Portfolio-specific endpoint returns recommendations together with
     rebalancing suggestions and diversification metrics.
     """
-    response = await async_client.get("/api/recommendations/portfolio/port-123")
+    response = await async_client.get("/api/v1/recommendations/portfolio/port-123")
     data = _unwrap(response)
 
     assert data["portfolio_id"] == "port-123"
@@ -346,7 +346,7 @@ async def test_performance_tracking_returns_metrics(async_client: AsyncClient):
     metrics including actual vs expected returns.
     """
     response = await async_client.get(
-        "/api/recommendations/performance/track", params={"days_back": 30}
+        "/api/v1/recommendations/performance/track", params={"days_back": 30}
     )
     data = _unwrap(response)
 
@@ -370,7 +370,7 @@ async def test_performance_tracking_filters_by_status(async_client: AsyncClient)
     When status is specified, only matching performance records are returned.
     """
     response = await async_client.get(
-        "/api/recommendations/performance/track",
+        "/api/v1/recommendations/performance/track",
         params={"status": "active"},
     )
     data = _unwrap(response)
@@ -396,7 +396,7 @@ async def test_update_alert_settings(async_client: AsyncClient):
         "categories": ["growth", "value"],
     }
     response = await async_client.post(
-        "/api/recommendations/alerts/settings", json=settings_body
+        "/api/v1/recommendations/alerts/settings", json=settings_body
     )
     data = _unwrap(response)
     assert data["status"] == "success"
@@ -412,7 +412,7 @@ async def test_alert_history_returns_sorted_alerts(async_client: AsyncClient):
     Alert history endpoint returns alerts sorted by timestamp descending.
     """
     response = await async_client.get(
-        "/api/recommendations/alerts/history", params={"days_back": 7}
+        "/api/v1/recommendations/alerts/history", params={"days_back": 7}
     )
     data = _unwrap(response)
 
@@ -435,7 +435,7 @@ async def test_backtest_strategy_returns_performance_summary(async_client: Async
     return metrics, trade statistics, and risk measures.
     """
     response = await async_client.post(
-        "/api/recommendations/backtest",
+        "/api/v1/recommendations/backtest",
         params={
             "strategy": "growth",
             "start_date": "2025-01-01",
@@ -463,7 +463,7 @@ async def test_backtest_rejects_invalid_strategy(async_client: AsyncClient):
     An invalid strategy enum value should produce a 422 validation error.
     """
     response = await async_client.post(
-        "/api/recommendations/backtest",
+        "/api/v1/recommendations/backtest",
         params={
             "strategy": "not_a_real_strategy",
             "start_date": "2025-01-01",
@@ -483,7 +483,7 @@ async def test_trending_recommendations(async_client: AsyncClient):
     Trending endpoint returns recommendations ranked by trending_score.
     """
     response = await async_client.get(
-        "/api/recommendations/trending", params={"timeframe": "24h"}
+        "/api/v1/recommendations/trending", params={"timeframe": "24h"}
     )
     data = _unwrap(response)
 
@@ -501,7 +501,7 @@ async def test_trending_rejects_invalid_timeframe(async_client: AsyncClient):
     An invalid timeframe value should produce a 422 validation error.
     """
     response = await async_client.get(
-        "/api/recommendations/trending", params={"timeframe": "99y"}
+        "/api/v1/recommendations/trending", params={"timeframe": "99y"}
     )
     assert response.status_code == 422
 
@@ -517,7 +517,7 @@ async def test_list_rejects_invalid_sort_by(async_client: AsyncClient):
     Other values should produce a 422.
     """
     response = await async_client.get(
-        "/api/recommendations/list", params={"sort_by": "hacked_field"}
+        "/api/v1/recommendations/list", params={"sort_by": "hacked_field"}
     )
     assert response.status_code == 422
 
@@ -573,7 +573,7 @@ async def test_daily_recommendations_requires_auth(async_client: AsyncClient):
     """
     GET /api/recommendations/daily without a valid token should return 401.
     """
-    response = await async_client.get("/api/recommendations/daily")
+    response = await async_client.get("/api/v1/recommendations/daily")
     assert response.status_code in (401, 403)
 
 
@@ -592,7 +592,7 @@ async def test_daily_recommendations_with_auth(
 
     try:
         response = await async_client.get(
-            "/api/recommendations/daily", headers=auth_headers
+            "/api/v1/recommendations/daily", headers=auth_headers
         )
         # The endpoint may fall back to mock data if DB has no stocks,
         # which is acceptable -- we validate the response structure.

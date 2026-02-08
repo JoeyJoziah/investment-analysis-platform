@@ -123,7 +123,7 @@ class TestConfigurationManagement:
         mock_admin_dependency
     ):
         """Test getting system configuration with masked API keys"""
-        response = await client.get("/api/admin/config")
+        response = await client.get("/api/v1/admin/config")
 
         data = assert_success_response(response)
 
@@ -147,7 +147,7 @@ class TestConfigurationManagement:
         mock_admin_dependency
     ):
         """Test getting specific configuration section"""
-        response = await client.get("/api/admin/config?section=database")
+        response = await client.get("/api/v1/admin/config?section=database")
 
         data = assert_success_response(response)
 
@@ -172,7 +172,7 @@ class TestConfigurationManagement:
         }
 
         response = await client.patch(
-            "/api/admin/config",
+            "/api/v1/admin/config",
             json=config_update
         )
 
@@ -207,7 +207,7 @@ class TestConfigurationManagement:
         }
 
         response = await client.patch(
-            "/api/admin/config",
+            "/api/v1/admin/config",
             json=config_update
         )
 
@@ -235,7 +235,7 @@ class TestConfigurationManagement:
         # Note: Current implementation doesn't validate section names
         # This test documents current behavior
         response = await client.patch(
-            "/api/admin/config",
+            "/api/v1/admin/config",
             json=config_update
         )
 
@@ -258,7 +258,7 @@ class TestUserManagement:
         mock_admin_dependency
     ):
         """Test listing all users with pagination"""
-        response = await client.get("/api/admin/users?limit=10&offset=0")
+        response = await client.get("/api/v1/admin/users?limit=10&offset=0")
 
         data = assert_success_response(response)
 
@@ -282,7 +282,7 @@ class TestUserManagement:
         mock_admin_dependency
     ):
         """Test listing users filtered by role"""
-        response = await client.get("/api/admin/users?role=admin")
+        response = await client.get("/api/v1/admin/users?role=admin")
 
         data = assert_success_response(response)
 
@@ -298,7 +298,7 @@ class TestUserManagement:
         mock_admin_dependency
     ):
         """Test listing users filtered by active status"""
-        response = await client.get("/api/admin/users?is_active=true")
+        response = await client.get("/api/v1/admin/users?is_active=true")
 
         data = assert_success_response(response)
 
@@ -315,7 +315,7 @@ class TestUserManagement:
     ):
         """Test getting specific user by ID"""
         user_id = "test-user-123"
-        response = await client.get(f"/api/admin/users/{user_id}")
+        response = await client.get(f"/api/v1/admin/users/{user_id}")
 
         data = assert_success_response(response)
 
@@ -342,7 +342,7 @@ class TestUserManagement:
         }
 
         response = await client.patch(
-            f"/api/admin/users/{user_id}",
+            f"/api/v1/admin/users/{user_id}",
             json=update_data
         )
 
@@ -360,7 +360,7 @@ class TestUserManagement:
     ):
         """Test deleting a user"""
         user_id = "test-user-to-delete"
-        response = await client.delete(f"/api/admin/users/{user_id}")
+        response = await client.delete(f"/api/v1/admin/users/{user_id}")
 
         data = assert_success_response(response)
 
@@ -377,7 +377,7 @@ class TestUserManagement:
         # Note: Current implementation doesn't validate user existence
         # This test documents current behavior
         user_id = "non-existent-user"
-        response = await client.delete(f"/api/admin/users/{user_id}")
+        response = await client.delete(f"/api/v1/admin/users/{user_id}")
 
         # Currently succeeds even for non-existent users
         data = assert_success_response(response)
@@ -398,7 +398,7 @@ class TestJobManagement:
         mock_admin_dependency
     ):
         """Test listing background jobs"""
-        response = await client.get("/api/admin/jobs")
+        response = await client.get("/api/v1/admin/jobs")
 
         data = assert_success_response(response)
 
@@ -420,7 +420,7 @@ class TestJobManagement:
         mock_admin_dependency
     ):
         """Test listing jobs filtered by status"""
-        response = await client.get("/api/admin/jobs?status=running")
+        response = await client.get("/api/v1/admin/jobs?status=running")
 
         data = assert_success_response(response)
 
@@ -437,7 +437,7 @@ class TestJobManagement:
     ):
         """Test canceling a running job"""
         job_id = "test-job-123"
-        response = await client.post(f"/api/admin/jobs/{job_id}/cancel")
+        response = await client.post(f"/api/v1/admin/jobs/{job_id}/cancel")
 
         data = assert_success_response(response)
 
@@ -452,7 +452,7 @@ class TestJobManagement:
     ):
         """Test retrying a failed job"""
         job_id = "failed-job-456"
-        response = await client.post(f"/api/admin/jobs/{job_id}/retry")
+        response = await client.post(f"/api/v1/admin/jobs/{job_id}/retry")
 
         data = assert_success_response(response)
 
@@ -481,7 +481,7 @@ class TestAgentCommand:
         }
 
         response = await client.post(
-            "/api/admin/command",
+            "/api/v1/admin/command",
             json=command_data
         )
 
@@ -508,7 +508,7 @@ class TestAgentCommand:
         }
 
         response = await client.post(
-            "/api/admin/command",
+            "/api/v1/admin/command",
             json=command_data
         )
 
@@ -530,7 +530,7 @@ class TestAgentCommand:
         }
 
         response = await client.post(
-            "/api/admin/command",
+            "/api/v1/admin/command",
             json=command_data
         )
 
@@ -551,7 +551,7 @@ class TestAdditionalEndpoints:
         mock_admin_dependency
     ):
         """Test system health endpoint"""
-        response = await client.get("/api/admin/health")
+        response = await client.get("/api/v1/admin/health")
 
         data = assert_success_response(response)
 
@@ -568,7 +568,7 @@ class TestAdditionalEndpoints:
         mock_admin_dependency
     ):
         """Test system metrics endpoint"""
-        response = await client.get("/api/admin/metrics")
+        response = await client.get("/api/v1/admin/metrics")
 
         data = assert_success_response(response)
 
@@ -585,7 +585,7 @@ class TestAdditionalEndpoints:
         mock_admin_dependency
     ):
         """Test API usage statistics endpoint"""
-        response = await client.get("/api/admin/analytics/api-usage?days_back=7")
+        response = await client.get("/api/v1/admin/analytics/api-usage?days_back=7")
 
         data = assert_success_response(response)
 
@@ -611,7 +611,7 @@ class TestAuthorization:
         client: AsyncClient
     ):
         """Test accessing admin endpoint without authentication"""
-        response = await client.get("/api/admin/health")
+        response = await client.get("/api/v1/admin/health")
 
         # Should return 401 Unauthorized
         assert response.status_code == 401
@@ -633,7 +633,7 @@ class TestAuthorization:
 
         app.dependency_overrides[check_admin_permission] = mock_check_admin
 
-        response = await client.get("/api/admin/health")
+        response = await client.get("/api/v1/admin/health")
 
         # Should return 403 Forbidden
         assert response.status_code == 403

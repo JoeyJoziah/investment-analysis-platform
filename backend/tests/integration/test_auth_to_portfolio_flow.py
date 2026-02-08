@@ -184,7 +184,7 @@ async def test_login_to_portfolio_access(
     """
     # Step 1: Login - Use form data for OAuth2 (not JSON)
     response = await async_client.post(
-        "/api/auth/token",
+        "/api/v1/auth/token",
         data={  # Form data, not JSON
             "username": premium_user.email,
             "password": "testpassword123"
@@ -198,7 +198,7 @@ async def test_login_to_portfolio_access(
     # Step 2: Access portfolio with token
     headers = {"Authorization": f"Bearer {access_token}"}
     response = await async_client.get(
-        f"/api/portfolio/{user_portfolio.id}",
+        f"/api/v1/portfolio/{user_portfolio.id}",
         headers=headers
     )
     assert response.status_code == 200
@@ -247,7 +247,7 @@ async def test_role_based_portfolio_limits(
 
     # Free user: Create portfolio
     response = await async_client.post(
-        "/api/portfolio",
+        "/api/v1/portfolio",
         headers=free_headers,
         json={
             "name": "Free User Portfolio",
@@ -262,7 +262,7 @@ async def test_role_based_portfolio_limits(
     positions_added = 0
     for symbol in list(sample_stocks.keys())[:10]:  # Try 10 positions
         response = await async_client.post(
-            f"/api/portfolio/{free_portfolio_id}/positions",
+            f"/api/v1/portfolio/{free_portfolio_id}/positions",
             headers=free_headers,
             json={
                 "stock_symbol": symbol,
@@ -281,7 +281,7 @@ async def test_role_based_portfolio_limits(
 
     # Premium user: Create portfolio
     response = await async_client.post(
-        "/api/portfolio",
+        "/api/v1/portfolio",
         headers=premium_headers,
         json={
             "name": "Premium User Portfolio",
@@ -296,7 +296,7 @@ async def test_role_based_portfolio_limits(
     premium_positions_added = 0
     for symbol in list(sample_stocks.keys())[:10]:
         response = await async_client.post(
-            f"/api/portfolio/{premium_portfolio_id}/positions",
+            f"/api/v1/portfolio/{premium_portfolio_id}/positions",
             headers=premium_headers,
             json={
                 "stock_symbol": symbol,
@@ -340,7 +340,7 @@ async def test_session_expiry_during_portfolio(
 
     # Try to access portfolio with expired token
     response = await async_client.get(
-        f"/api/portfolio/{user_portfolio.id}",
+        f"/api/v1/portfolio/{user_portfolio.id}",
         headers=expired_headers
     )
     assert response.status_code == 401
@@ -349,7 +349,7 @@ async def test_session_expiry_during_portfolio(
     refresh_token = create_refresh_token(data={"sub": str(premium_user.id)})
 
     response = await async_client.post(
-        "/api/auth/refresh",
+        "/api/v1/auth/refresh",
         json={"refresh_token": refresh_token}
     )
     assert response.status_code == 200
@@ -359,7 +359,7 @@ async def test_session_expiry_during_portfolio(
     # Use new token to access portfolio
     new_headers = {"Authorization": f"Bearer {new_tokens['access_token']}"}
     response = await async_client.get(
-        f"/api/portfolio/{user_portfolio.id}",
+        f"/api/v1/portfolio/{user_portfolio.id}",
         headers=new_headers
     )
     assert response.status_code == 200
@@ -396,7 +396,7 @@ async def test_concurrent_portfolio_updates(
     # Define concurrent update operations
     async def buy_stock(symbol: str, quantity: float, price: float):
         return await async_client.post(
-            f"/api/portfolio/{user_portfolio.id}/positions",
+            f"/api/v1/portfolio/{user_portfolio.id}/positions",
             headers=headers,
             json={
                 "stock_symbol": symbol,
@@ -419,7 +419,7 @@ async def test_concurrent_portfolio_updates(
 
     # Verify portfolio consistency
     response = await async_client.get(
-        f"/api/portfolio/{user_portfolio.id}",
+        f"/api/v1/portfolio/{user_portfolio.id}",
         headers=headers
     )
     assert response.status_code == 200
@@ -497,7 +497,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Request rebalancing
         response = await async_client.post(
-            f"/api/portfolio/{user_portfolio.id}/rebalance",
+            f"/api/v1/portfolio/{user_portfolio.id}/rebalance",
             headers=headers,
             json={"target_allocation": target_allocation}
         )
@@ -511,7 +511,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Execute rebalancing
         response = await async_client.post(
-            f"/api/portfolio/{user_portfolio.id}/rebalance/execute",
+            f"/api/v1/portfolio/{user_portfolio.id}/rebalance/execute",
             headers=headers,
             json={"rebalance_id": rebalance_data["data"]["id"]}
         )
@@ -519,7 +519,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Verify final allocation matches target (within tolerance)
         response = await async_client.get(
-            f"/api/portfolio/{user_portfolio.id}/allocation",
+            f"/api/v1/portfolio/{user_portfolio.id}/allocation",
             headers=headers
         )
         assert response.status_code == 200

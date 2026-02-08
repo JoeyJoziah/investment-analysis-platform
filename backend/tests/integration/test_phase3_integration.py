@@ -335,8 +335,8 @@ async def test_csrf_exempt_paths():
 
     # Verify exempt paths
     assert csrf.is_exempt_path("/api/health")
-    assert csrf.is_exempt_path("/api/auth/login")
-    assert csrf.is_exempt_path("/api/auth/register")
+    assert csrf.is_exempt_path("/api/v1/auth/login")
+    assert csrf.is_exempt_path("/api/v1/auth/register")
     assert csrf.is_exempt_path("/api/webhooks/stripe")
 
 
@@ -408,7 +408,7 @@ async def test_existing_portfolio_endpoints_work(async_client: AsyncClient):
     """
     # Without auth, should get 401 (not 500 or other error)
     # Use /api/portfolio/summary which is a valid endpoint
-    response = await async_client.get("/api/portfolio/summary")
+    response = await async_client.get("/api/v1/portfolio/summary")
 
     # Should be unauthorized, not broken
     assert response.status_code in [401, 403, 422]

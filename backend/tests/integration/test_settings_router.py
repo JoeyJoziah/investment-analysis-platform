@@ -81,14 +81,14 @@ class TestSettingsAuthenticationRequired:
     @pytest.mark.asyncio
     async def test_get_preferences_requires_auth(self, async_client: AsyncClient):
         """GET /api/settings/preferences returns 401 without a token."""
-        response = await async_client.get("/api/settings/preferences")
+        response = await async_client.get("/api/v1/settings/preferences")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_put_preferences_requires_auth(self, async_client: AsyncClient):
         """PUT /api/settings/preferences returns 401 without a token."""
         response = await async_client.put(
-            "/api/settings/preferences",
+            "/api/v1/settings/preferences",
             json=DEFAULT_PREFERENCES,
         )
         assert response.status_code == 401
@@ -96,14 +96,14 @@ class TestSettingsAuthenticationRequired:
     @pytest.mark.asyncio
     async def test_get_display_requires_auth(self, async_client: AsyncClient):
         """GET /api/settings/display returns 401 without a token."""
-        response = await async_client.get("/api/settings/display")
+        response = await async_client.get("/api/v1/settings/display")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_put_display_requires_auth(self, async_client: AsyncClient):
         """PUT /api/settings/display returns 401 without a token."""
         response = await async_client.put(
-            "/api/settings/display",
+            "/api/v1/settings/display",
             json=DEFAULT_DISPLAY,
         )
         assert response.status_code == 401
@@ -111,14 +111,14 @@ class TestSettingsAuthenticationRequired:
     @pytest.mark.asyncio
     async def test_get_trading_requires_auth(self, async_client: AsyncClient):
         """GET /api/settings/trading returns 401 without a token."""
-        response = await async_client.get("/api/settings/trading")
+        response = await async_client.get("/api/v1/settings/trading")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_put_trading_requires_auth(self, async_client: AsyncClient):
         """PUT /api/settings/trading returns 401 without a token."""
         response = await async_client.put(
-            "/api/settings/trading",
+            "/api/v1/settings/trading",
             json=DEFAULT_TRADING,
         )
         assert response.status_code == 401
@@ -126,14 +126,14 @@ class TestSettingsAuthenticationRequired:
     @pytest.mark.asyncio
     async def test_get_notifications_requires_auth(self, async_client: AsyncClient):
         """GET /api/settings/notifications returns 401 without a token."""
-        response = await async_client.get("/api/settings/notifications")
+        response = await async_client.get("/api/v1/settings/notifications")
         assert response.status_code == 401
 
     @pytest.mark.asyncio
     async def test_put_notifications_requires_auth(self, async_client: AsyncClient):
         """PUT /api/settings/notifications returns 401 without a token."""
         response = await async_client.put(
-            "/api/settings/notifications",
+            "/api/v1/settings/notifications",
             json=DEFAULT_NOTIFICATIONS,
         )
         assert response.status_code == 401
@@ -141,7 +141,7 @@ class TestSettingsAuthenticationRequired:
     @pytest.mark.asyncio
     async def test_reset_requires_auth(self, async_client: AsyncClient):
         """POST /api/settings/reset returns 401 without a token."""
-        response = await async_client.post("/api/settings/reset")
+        response = await async_client.post("/api/v1/settings/reset")
         assert response.status_code == 401
 
 
@@ -160,7 +160,7 @@ class TestGetPreferences:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 headers=auth_headers,
             )
             assert response.status_code == 200
@@ -175,7 +175,7 @@ class TestGetPreferences:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 headers=auth_headers,
             )
             body = response.json()
@@ -193,7 +193,7 @@ class TestGetPreferences:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 headers=auth_headers,
             )
             data = response.json()["data"]
@@ -216,7 +216,7 @@ class TestGetDisplaySettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/display",
+                "/api/v1/settings/display",
                 headers=auth_headers,
             )
             assert response.status_code == 200
@@ -240,7 +240,7 @@ class TestGetTradingSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/trading",
+                "/api/v1/settings/trading",
                 headers=auth_headers,
             )
             assert response.status_code == 200
@@ -264,7 +264,7 @@ class TestGetNotificationSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 headers=auth_headers,
             )
             assert response.status_code == 200
@@ -302,7 +302,7 @@ class TestUpdatePreferences:
                 "push_notifications": True,
             }
             response = await async_client.put(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 json=payload,
                 headers=auth_headers,
             )
@@ -327,7 +327,7 @@ class TestUpdatePreferences:
         try:
             payload = {"theme": "dark"}
             response = await async_client.put(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 json=payload,
                 headers=auth_headers,
             )
@@ -359,7 +359,7 @@ class TestUpdateDisplaySettings:
                 "compact_mode": True,
             }
             response = await async_client.put(
-                "/api/settings/display",
+                "/api/v1/settings/display",
                 json=payload,
                 headers=auth_headers,
             )
@@ -388,7 +388,7 @@ class TestUpdateTradingSettings:
                 "risk_tolerance": "aggressive",
             }
             response = await async_client.put(
-                "/api/settings/trading",
+                "/api/v1/settings/trading",
                 json=payload,
                 headers=auth_headers,
             )
@@ -418,7 +418,7 @@ class TestUpdateNotificationSettings:
                 "alert_threshold": 10.0,
             }
             response = await async_client.put(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 json=payload,
                 headers=auth_headers,
             )
@@ -452,7 +452,7 @@ class TestSettingsInputValidation:
                 "risk_tolerance": "moderate",
             }
             response = await async_client.put(
-                "/api/settings/trading",
+                "/api/v1/settings/trading",
                 json=payload,
                 headers=auth_headers,
             )
@@ -474,7 +474,7 @@ class TestSettingsInputValidation:
                 "risk_tolerance": "moderate",
             }
             response = await async_client.put(
-                "/api/settings/trading",
+                "/api/v1/settings/trading",
                 json=payload,
                 headers=auth_headers,
             )
@@ -497,7 +497,7 @@ class TestSettingsInputValidation:
                 "alert_threshold": 101.0,
             }
             response = await async_client.put(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 json=payload,
                 headers=auth_headers,
             )
@@ -520,7 +520,7 @@ class TestSettingsInputValidation:
                 "alert_threshold": -1.0,
             }
             response = await async_client.put(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 json=payload,
                 headers=auth_headers,
             )
@@ -536,7 +536,7 @@ class TestSettingsInputValidation:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.put(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 content=b"not valid json",
                 headers={**auth_headers, "Content-Type": "application/json"},
             )
@@ -561,7 +561,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             assert response.status_code == 200
@@ -577,7 +577,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             body = response.json()
@@ -600,7 +600,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             prefs = response.json()["data"]["preferences"]
@@ -620,7 +620,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             display = response.json()["data"]["display"]
@@ -637,7 +637,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             trading = response.json()["data"]["trading"]
@@ -654,7 +654,7 @@ class TestResetSettings:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.post(
-                "/api/settings/reset",
+                "/api/v1/settings/reset",
                 headers=auth_headers,
             )
             notifs = response.json()["data"]["notifications"]
@@ -673,10 +673,10 @@ class TestResponseFormatConsistency:
     """All settings endpoints must return the standard ApiResponse envelope."""
 
     SETTINGS_GET_ENDPOINTS = [
-        "/api/settings/preferences",
-        "/api/settings/display",
-        "/api/settings/trading",
-        "/api/settings/notifications",
+        "/api/v1/settings/preferences",
+        "/api/v1/settings/display",
+        "/api/v1/settings/trading",
+        "/api/v1/settings/notifications",
     ]
 
     @pytest.mark.asyncio
@@ -705,7 +705,7 @@ class TestResponseFormatConsistency:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.get(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 headers=auth_headers,
             )
             assert "application/json" in response.headers.get("content-type", "")
@@ -736,7 +736,7 @@ class TestSettingsEdgeCases:
                 "alert_threshold": 0.0,
             }
             response = await async_client.put(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 json=payload,
                 headers=auth_headers,
             )
@@ -760,7 +760,7 @@ class TestSettingsEdgeCases:
                 "alert_threshold": 100.0,
             }
             response = await async_client.put(
-                "/api/settings/notifications",
+                "/api/v1/settings/notifications",
                 json=payload,
                 headers=auth_headers,
             )
@@ -783,7 +783,7 @@ class TestSettingsEdgeCases:
                 "risk_tolerance": "moderate",
             }
             response = await async_client.put(
-                "/api/settings/trading",
+                "/api/v1/settings/trading",
                 json=payload,
                 headers=auth_headers,
             )
@@ -800,7 +800,7 @@ class TestSettingsEdgeCases:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.put(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 json={},
                 headers=auth_headers,
             )
@@ -823,7 +823,7 @@ class TestSettingsEdgeCases:
                 "nonexistent_field": "should_be_ignored",
             }
             response = await async_client.put(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 json=payload,
                 headers=auth_headers,
             )
@@ -842,7 +842,7 @@ class TestSettingsEdgeCases:
         app.dependency_overrides[get_current_user] = lambda: test_user
         try:
             response = await async_client.delete(
-                "/api/settings/preferences",
+                "/api/v1/settings/preferences",
                 headers=auth_headers,
             )
             assert response.status_code == 405

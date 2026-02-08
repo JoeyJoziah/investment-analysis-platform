@@ -126,7 +126,7 @@ class TestAPIRateLimiting:
 
         responses = []
         for i in range(100):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
             responses.append(response.status_code)
 
             # Stop if we hit rate limit
@@ -144,7 +144,7 @@ class TestAPIRateLimiting:
         """Test that 429 response includes Retry-After header"""
         # Make many requests to trigger rate limit
         for i in range(150):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
             if response.status_code == 429:
                 # Verify Retry-After header exists
                 assert "retry-after" in response.headers or "Retry-After" in response.headers
@@ -184,7 +184,7 @@ class TestAPIRateLimiting:
     def test_rate_limit_per_endpoint(self, authenticated_client):
         """Test rate limiting per endpoint"""
         # Different endpoints might have different limits
-        endpoints = ["/api/portfolio", "/api/stocks", "/api/analysis"]
+        endpoints = ["/api/v1/portfolio", "/api/v1/stocks", "/api/v1/analysis"]
 
         # Each endpoint should have independent rate limiting
         for endpoint in endpoints:
@@ -206,7 +206,7 @@ class TestDatabaseConnectionLoss:
             "backend.utils.database.get_db",
             side_effect=OperationalError("Connection refused", None, None),
         ):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
 
             # Should return 503 Service Unavailable or similar
             assert response.status_code in [500, 503]
@@ -220,7 +220,7 @@ class TestDatabaseConnectionLoss:
             "backend.utils.database.get_db",
             side_effect=TimeoutError("Query timeout"),
         ):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
 
             # Should return appropriate error
             assert response.status_code in [500, 503, 504]
@@ -234,7 +234,7 @@ class TestDatabaseConnectionLoss:
                 "QueuePool limit exceeded", None, None
             ),
         ):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
 
             # Should handle gracefully
             assert response.status_code in [500, 503]
@@ -288,11 +288,11 @@ class TestDatabaseConnectionLoss:
             "backend.utils.database.get_db",
             side_effect=OperationalError("Connection refused", None, None),
         ):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
             assert response.status_code in [500, 503]
 
         # After recovery, should succeed
-        response = authenticated_client.get("/api/portfolio")
+        response = authenticated_client.get("/api/v1/portfolio")
         assert response.status_code in [200, 401, 400]  # Normal response
 
 
@@ -466,7 +466,7 @@ class TestGracefulDegradation:
             "backend.utils.database.get_db",
             side_effect=OperationalError("Connection lost", None, None),
         ):
-            response = authenticated_client.get("/api/portfolio")
+            response = authenticated_client.get("/api/v1/portfolio")
 
             # Should either:
             # 1. Return 503 if no cache
@@ -493,7 +493,7 @@ class TestGracefulDegradation:
         """Test API returns partial response if some services fail"""
         # Example: Portfolio endpoint returns positions but not recommendations
 
-        response = authenticated_client.get("/api/portfolio")
+        response = authenticated_client.get("/api/v1/portfolio")
 
         # Should return data that's available
         assert response.status_code in [200, 206]  # 206 = Partial Content
@@ -517,7 +517,7 @@ class TestGracefulDegradation:
 
         with TestClient(app) as client:
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket:
                 websocket.receive_json()
@@ -528,7 +528,7 @@ class TestGracefulDegradation:
             # Server should clean up resources
             # Verify by creating new connection
             with client.websocket_connect(
-                "/api/ws/prices",
+                "/api/v1/ws/prices",
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             ) as websocket2:
                 data = websocket2.receive_json()
@@ -542,7 +542,7 @@ class TestGracefulDegradation:
         ):
             client = TestClient(app)
             response = client.get(
-                "/api/portfolio",
+                "/api/v1/portfolio",
                 headers={"Authorization": "Bearer invalid"},
             )
 
