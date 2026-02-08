@@ -6,7 +6,7 @@ Implements OAuth2, JWT, RBAC, and multi-factor authentication
 import os
 import jwt
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Any, Union
 from dataclasses import dataclass
 from enum import Enum
@@ -252,16 +252,16 @@ class JWTManager:
         secret_key = await self._get_secret_key()
         
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
             if token_type == TokenType.ACCESS:
-                expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+                expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
             elif token_type == TokenType.REFRESH:
-                expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+                expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
             elif token_type == TokenType.MFA:
-                expire = datetime.utcnow() + timedelta(minutes=self.mfa_token_expire_minutes)
+                expire = datetime.now(timezone.utc) + timedelta(minutes=self.mfa_token_expire_minutes)
             else:
-                expire = datetime.utcnow() + timedelta(hours=1)
+                expire = datetime.now(timezone.utc) + timedelta(hours=1)
         
         # Standard claims
         claims = {
@@ -270,7 +270,7 @@ class JWTManager:
             "role": role,
             "token_type": token_type.value,
             "exp": expire,
-            "iat": datetime.utcnow(),
+            "iat": datetime.now(timezone.utc),
             "jti": str(uuid.uuid4()),  # JWT ID for token tracking
             "iss": self.issuer,
             "aud": self.audience
@@ -407,7 +407,7 @@ class SessionManager:
         result = await redis.hset(
             session_key, 
             "last_activity", 
-            datetime.utcnow().isoformat()
+            datetime.now(timezone.utc).isoformat()
         )
         await redis.expire(session_key, self.session_timeout)
         
@@ -573,7 +573,7 @@ class EnhancedAuthManager:
             "full_name": registration.full_name,
             "role": registration.role.value,
             "mfa_secret": mfa_secret,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "is_active": True,
             "email_verified": False,
             "mfa_enabled": False
@@ -612,8 +612,8 @@ class EnhancedAuthManager:
             user_id=user_id,
             username=login_request.username,
             role=role,
-            created_at=datetime.utcnow(),
-            last_activity=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
+            last_activity=datetime.now(timezone.utc),
             ip_address=request.client.host,
             user_agent=request.headers.get("User-Agent", ""),
             status=SessionStatus.ACTIVE,

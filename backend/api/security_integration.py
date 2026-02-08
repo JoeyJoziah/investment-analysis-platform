@@ -108,10 +108,21 @@ def register_security_middleware(
             # Get CSRF secret key from environment or parameter
             secret_key = csrf_secret_key or os.getenv("CSRF_SECRET_KEY")
 
+            environment = os.getenv("ENVIRONMENT", "production").lower()
+            debug = os.getenv("DEBUG", "false").lower()
+            is_production = environment == "production" or debug == "false"
+            is_testing = os.getenv("TESTING", "false").lower() == "true"
+
             if not secret_key or len(secret_key) < 32:
+                if is_production and not is_testing:
+                    raise ValueError(
+                        "CSRF_SECRET_KEY environment variable is required in production "
+                        "and must be at least 32 characters. "
+                        "Generate one with: python3 -c 'import secrets; print(secrets.token_hex(32))'"
+                    )
                 logger.warning(
                     "CSRF_SECRET_KEY not set or too short. "
-                    "Using auto-generated key (not suitable for production with multiple workers)"
+                    "Using auto-generated key. This is acceptable for development/testing only."
                 )
 
             add_csrf_protection(
@@ -171,13 +182,27 @@ def validate_security_configuration() -> bool:
     config = get_security_middleware_config()
     errors = []
 
-    # Check CSRF secret key in production
+    # Check CSRF secret key
+    environment = os.getenv("ENVIRONMENT", "production").lower()
+    debug = os.getenv("DEBUG", "false").lower()
+    is_production = environment == "production" or debug == "false"
+    is_testing = os.getenv("TESTING", "false").lower() == "true"
+
     if config["csrf_enabled"]:
         secret_key = config["csrf_secret_key"]
         if not secret_key:
-            errors.append("CSRF_SECRET_KEY environment variable not set")
+            if is_production and not is_testing:
+                errors.append(
+                    "CSRF_SECRET_KEY environment variable is required in production. "
+                    "Generate one with: python3 -c 'import secrets; print(secrets.token_hex(32))'"
+                )
+            else:
+                logger.warning("CSRF_SECRET_KEY not set. Auto-generated key will be used for development/testing.")
         elif len(secret_key) < 32:
-            errors.append("CSRF_SECRET_KEY must be at least 32 characters")
+            if is_production and not is_testing:
+                errors.append("CSRF_SECRET_KEY must be at least 32 characters in production")
+            else:
+                logger.warning("CSRF_SECRET_KEY is shorter than 32 characters. Acceptable for development/testing only.")
 
     # Check size limits are reasonable
     if config["json_limit_mb"] < 0.1:

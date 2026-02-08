@@ -9,7 +9,7 @@ import base64
 import hashlib
 import secrets
 from typing import Any, Dict, List, Optional, Union, Tuple, BinaryIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from dataclasses import dataclass, asdict
 import asyncio
@@ -173,8 +173,8 @@ class KeyManager:
             key_id=key_id,
             key_type=key_type,
             algorithm=algorithm,
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=expires_in_days) if expires_in_days else None,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=expires_in_days) if expires_in_days else None,
             purpose=purpose
         )
         
@@ -389,7 +389,7 @@ class DataEncryption:
         else:
             raise ValueError(f"Unsupported encryption algorithm: {algorithm}")
         
-        metadata.encrypted_at = datetime.utcnow()
+        metadata.encrypted_at = datetime.now(timezone.utc)
         return encrypted_data, metadata
     
     def decrypt_data(self, encrypted_data: bytes, metadata: EncryptionMetadata) -> bytes:
@@ -700,9 +700,9 @@ class TLSManager:
         ).serial_number(
             x509.random_serial_number()
         ).not_valid_before(
-            datetime.utcnow()
+            datetime.now(timezone.utc)
         ).not_valid_after(
-            datetime.utcnow() + timedelta(days=validity_days)
+            datetime.now(timezone.utc) + timedelta(days=validity_days)
         ).add_extension(
             x509.SubjectAlternativeName([
                 x509.DNSName(hostname),

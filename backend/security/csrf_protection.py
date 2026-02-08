@@ -18,7 +18,7 @@ import hmac
 import logging
 import os
 from typing import Optional, List, Set, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from enum import Enum
 
@@ -74,17 +74,35 @@ class CSRFConfig:
                 "/api/health",
                 "/health",
                 "/metrics",
-                "/api/auth/login",
-                "/api/auth/register",
                 "/api/v1/auth/login",
                 "/api/v1/auth/register",
                 "/api/v1/auth/refresh",
             ]
 
         if self.secret_key is None:
-            # Generate a random secret key (should be set from environment)
-            self.secret_key = secrets.token_hex(32)
-            logger.warning("Using auto-generated CSRF secret key. Set CSRF_SECRET_KEY in production!")
+            env_secret = os.getenv("CSRF_SECRET_KEY")
+            if env_secret and len(env_secret) >= 32:
+                self.secret_key = env_secret
+            else:
+                # Determine if we are in a production environment
+                environment = os.getenv("ENVIRONMENT", "production").lower()
+                debug = os.getenv("DEBUG", "false").lower()
+                is_production = environment == "production" or debug == "false"
+                is_testing = os.getenv("TESTING", "false").lower() == "true"
+
+                if is_production and not is_testing:
+                    raise ValueError(
+                        "CSRF_SECRET_KEY environment variable is required in production. "
+                        "Set CSRF_SECRET_KEY to a random string of at least 32 characters. "
+                        "Example: export CSRF_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+                    )
+
+                # Allow auto-generated fallback in development/test environments
+                self.secret_key = secrets.token_hex(32)
+                logger.warning(
+                    "Using auto-generated CSRF secret key. "
+                    "This is acceptable for development/testing but not for production."
+                )
 
 
 class CSRFProtection:
@@ -227,7 +245,7 @@ class CSRFProtection:
             response: FastAPI response object
             token: CSRF token to set
         """
-        expires = datetime.utcnow() + timedelta(hours=self.config.token_expiry_hours)
+        expires = datetime.now(timezone.utc) + timedelta(hours=self.config.token_expiry_hours)
 
         response.set_cookie(
             key=self.config.cookie_name,

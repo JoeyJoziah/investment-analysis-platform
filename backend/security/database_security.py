@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.orm import sessionmaker
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -253,7 +253,7 @@ class DatabaseSecurityManager:
             @event.listens_for(engine, "before_cursor_execute")
             def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
                 """Log query execution"""
-                context._query_start_time = datetime.utcnow()
+                context._query_start_time = datetime.now(timezone.utc)
                 context._query_statement = statement
                 context._query_parameters = parameters
             
@@ -261,7 +261,7 @@ class DatabaseSecurityManager:
             def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
                 """Log query completion"""
                 try:
-                    end_time = datetime.utcnow()
+                    end_time = datetime.now(timezone.utc)
                     start_time = getattr(context, '_query_start_time', end_time)
                     duration_ms = (end_time - start_time).total_seconds() * 1000
                     
@@ -297,7 +297,7 @@ class DatabaseSecurityManager:
                 """Log database errors"""
                 try:
                     audit_entry = AuditLogEntry(
-                        timestamp=datetime.utcnow(),
+                        timestamp=datetime.now(timezone.utc),
                         event_type=AuditEventType.ERROR,
                         query=getattr(exception_context, 'statement', None),
                         success=False,
@@ -405,7 +405,7 @@ class DatabaseSecurityManager:
                 
                 # Log connection validation
                 audit_entry = AuditLogEntry(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     event_type=AuditEventType.CONNECTION,
                     query="CONNECTION_VALIDATION",
                     success=True
@@ -437,7 +437,7 @@ class DatabaseSecurityManager:
             
             # Log rotation event
             audit_entry = AuditLogEntry(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 event_type=AuditEventType.CONFIGURATION_CHANGE,
                 query="CREDENTIAL_ROTATION",
                 success=True,
@@ -513,7 +513,7 @@ class DatabaseSecurityManager:
         """Generate a security report based on audit logs"""
         try:
             # Get logs from the last 24 hours
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=1)
             
             logs = self.get_audit_logs(start_time, end_time)

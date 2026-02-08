@@ -9,7 +9,7 @@ import json
 import hashlib
 import secrets
 from typing import Any, Dict, List, Optional, Union, Callable, Pattern
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from dataclasses import dataclass
 import logging
@@ -435,7 +435,7 @@ class CSRFProtection:
     
     def generate_csrf_token(self, session_id: str) -> str:
         """Generate CSRF token for session"""
-        timestamp = str(int(datetime.utcnow().timestamp()))
+        timestamp = str(int(datetime.now(timezone.utc).timestamp()))
         
         # Create token with timestamp and session ID
         token_data = f"{session_id}:{timestamp}"
@@ -465,7 +465,7 @@ class CSRFProtection:
             
             # Verify timestamp is not expired
             token_time = int(timestamp)
-            current_time = int(datetime.utcnow().timestamp())
+            current_time = int(datetime.now(timezone.utc).timestamp())
             if current_time - token_time > self.token_timeout:
                 return False
             

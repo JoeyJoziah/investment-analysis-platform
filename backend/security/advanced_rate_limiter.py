@@ -10,7 +10,7 @@ import json
 from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass, asdict
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import redis.asyncio as aioredis
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -203,15 +203,25 @@ class ThreatDetector:
 
 class RateLimitStorage:
     """Redis-based storage for rate limiting data"""
-    
+
     def __init__(self, redis_url: str):
         self.redis_url = redis_url
         self._redis: Optional[aioredis.Redis] = None
-    
+        self._redis_unavailable_logged = False
+
     async def get_redis(self) -> aioredis.Redis:
         """Get Redis connection"""
         if not self._redis:
-            self._redis = aioredis.from_url(self.redis_url)
+            try:
+                self._redis = aioredis.from_url(self.redis_url)
+                # Test connection
+                await self._redis.ping()
+                self._redis_unavailable_logged = False
+            except Exception as e:
+                if not self._redis_unavailable_logged:
+                    logger.warning(f"Redis connection failed: {e}. Rate limiting will fall back to in-memory mode.")
+                    self._redis_unavailable_logged = True
+                raise
         return self._redis
     
     async def get_rate_limit_data(self, key: str) -> Optional[Dict]:
@@ -422,21 +432,25 @@ class AdaptiveRateLimiter:
         limits: Dict[str, int]
     ) -> Tuple[bool, Dict[str, Any]]:
         """Fixed window rate limiting"""
-        window = int(time.time() // limits["window"])
-        key = f"{rule.name}:{client_info.ip_address}:{window}"
-        
-        count = await self.storage.increment_counter(key, limits["window"])
-        
-        allowed = count <= limits["requests"]
-        remaining = max(0, limits["requests"] - count)
-        
-        return allowed, {
-            "strategy": "fixed_window",
-            "count": count,
-            "limit": limits["requests"],
-            "remaining": remaining,
-            "reset_time": (window + 1) * limits["window"]
-        }
+        try:
+            window = int(time.time() // limits["window"])
+            key = f"{rule.name}:{client_info.ip_address}:{window}"
+
+            count = await self.storage.increment_counter(key, limits["window"])
+
+            allowed = count <= limits["requests"]
+            remaining = max(0, limits["requests"] - count)
+
+            return allowed, {
+                "strategy": "fixed_window",
+                "count": count,
+                "limit": limits["requests"],
+                "remaining": remaining,
+                "reset_time": (window + 1) * limits["window"]
+            }
+        except Exception as e:
+            logger.warning(f"Fixed window rate limit check failed for {client_info.ip_address}: {e}. Allowing request.")
+            return True, {"strategy": "fixed_window", "redis_unavailable": True}
     
     async def _sliding_window_check(
         self,
@@ -445,24 +459,28 @@ class AdaptiveRateLimiter:
         limits: Dict[str, int]
     ) -> Tuple[bool, Dict[str, Any]]:
         """Sliding window rate limiting"""
-        key = f"{rule.name}:{client_info.ip_address}"
-        
-        count = await self.storage.get_sliding_window_count(key, limits["window"])
-        allowed = count < limits["requests"]
-        
-        if allowed:
-            await self.storage.add_sliding_window_request(key, limits["window"])
-            count += 1
-        
-        remaining = max(0, limits["requests"] - count)
-        
-        return allowed, {
-            "strategy": "sliding_window",
-            "count": count,
-            "limit": limits["requests"],
-            "remaining": remaining,
-            "window_size": limits["window"]
-        }
+        try:
+            key = f"{rule.name}:{client_info.ip_address}"
+
+            count = await self.storage.get_sliding_window_count(key, limits["window"])
+            allowed = count < limits["requests"]
+
+            if allowed:
+                await self.storage.add_sliding_window_request(key, limits["window"])
+                count += 1
+
+            remaining = max(0, limits["requests"] - count)
+
+            return allowed, {
+                "strategy": "sliding_window",
+                "count": count,
+                "limit": limits["requests"],
+                "remaining": remaining,
+                "window_size": limits["window"]
+            }
+        except Exception as e:
+            logger.warning(f"Sliding window rate limit check failed for {client_info.ip_address}: {e}. Allowing request.")
+            return True, {"strategy": "sliding_window", "redis_unavailable": True}
     
     async def _token_bucket_check(
         self,
@@ -471,41 +489,45 @@ class AdaptiveRateLimiter:
         limits: Dict[str, int]
     ) -> Tuple[bool, Dict[str, Any]]:
         """Token bucket rate limiting"""
-        key = f"{rule.name}:{client_info.ip_address}"
-        
-        bucket_data = await self.storage.get_rate_limit_data(key)
-        now = time.time()
-        
-        if not bucket_data:
-            bucket_data = {
-                "tokens": rule.burst_capacity or limits["requests"],
-                "last_refill": now
+        try:
+            key = f"{rule.name}:{client_info.ip_address}"
+
+            bucket_data = await self.storage.get_rate_limit_data(key)
+            now = time.time()
+
+            if not bucket_data:
+                bucket_data = {
+                    "tokens": rule.burst_capacity or limits["requests"],
+                    "last_refill": now
+                }
+            else:
+                # Refill tokens
+                time_passed = now - bucket_data["last_refill"]
+                refill_rate = rule.refill_rate or (limits["requests"] / limits["window"])
+                new_tokens = time_passed * refill_rate
+
+                bucket_data["tokens"] = min(
+                    rule.burst_capacity or limits["requests"],
+                    bucket_data["tokens"] + new_tokens
+                )
+                bucket_data["last_refill"] = now
+
+            # Check if token available
+            allowed = bucket_data["tokens"] >= 1
+            if allowed:
+                bucket_data["tokens"] -= 1
+
+            # Store updated bucket
+            await self.storage.set_rate_limit_data(key, bucket_data, limits["window"] * 2)
+
+            return allowed, {
+                "strategy": "token_bucket",
+                "tokens": bucket_data["tokens"],
+                "capacity": rule.burst_capacity or limits["requests"]
             }
-        else:
-            # Refill tokens
-            time_passed = now - bucket_data["last_refill"]
-            refill_rate = rule.refill_rate or (limits["requests"] / limits["window"])
-            new_tokens = time_passed * refill_rate
-            
-            bucket_data["tokens"] = min(
-                rule.burst_capacity or limits["requests"],
-                bucket_data["tokens"] + new_tokens
-            )
-            bucket_data["last_refill"] = now
-        
-        # Check if token available
-        allowed = bucket_data["tokens"] >= 1
-        if allowed:
-            bucket_data["tokens"] -= 1
-        
-        # Store updated bucket
-        await self.storage.set_rate_limit_data(key, bucket_data, limits["window"] * 2)
-        
-        return allowed, {
-            "strategy": "token_bucket",
-            "tokens": bucket_data["tokens"],
-            "capacity": rule.burst_capacity or limits["requests"]
-        }
+        except Exception as e:
+            logger.warning(f"Token bucket rate limit check failed for {client_info.ip_address}: {e}. Allowing request.")
+            return True, {"strategy": "token_bucket", "redis_unavailable": True}
     
     async def _leaky_bucket_check(
         self,
@@ -514,40 +536,44 @@ class AdaptiveRateLimiter:
         limits: Dict[str, int]
     ) -> Tuple[bool, Dict[str, Any]]:
         """Leaky bucket rate limiting"""
-        key = f"{rule.name}:{client_info.ip_address}"
-        
-        bucket_data = await self.storage.get_rate_limit_data(key)
-        now = time.time()
-        
-        if not bucket_data:
-            bucket_data = {
-                "queue_size": 0,
-                "last_leak": now
+        try:
+            key = f"{rule.name}:{client_info.ip_address}"
+
+            bucket_data = await self.storage.get_rate_limit_data(key)
+            now = time.time()
+
+            if not bucket_data:
+                bucket_data = {
+                    "queue_size": 0,
+                    "last_leak": now
+                }
+            else:
+                # Leak requests
+                time_passed = now - bucket_data["last_leak"]
+                leak_rate = limits["requests"] / limits["window"]
+                leaked = int(time_passed * leak_rate)
+
+                bucket_data["queue_size"] = max(0, bucket_data["queue_size"] - leaked)
+                bucket_data["last_leak"] = now
+
+            # Check if can accept request
+            capacity = rule.burst_capacity or limits["requests"]
+            allowed = bucket_data["queue_size"] < capacity
+
+            if allowed:
+                bucket_data["queue_size"] += 1
+
+            # Store updated bucket
+            await self.storage.set_rate_limit_data(key, bucket_data, limits["window"] * 2)
+
+            return allowed, {
+                "strategy": "leaky_bucket",
+                "queue_size": bucket_data["queue_size"],
+                "capacity": capacity
             }
-        else:
-            # Leak requests
-            time_passed = now - bucket_data["last_leak"]
-            leak_rate = limits["requests"] / limits["window"]
-            leaked = int(time_passed * leak_rate)
-            
-            bucket_data["queue_size"] = max(0, bucket_data["queue_size"] - leaked)
-            bucket_data["last_leak"] = now
-        
-        # Check if can accept request
-        capacity = rule.burst_capacity or limits["requests"]
-        allowed = bucket_data["queue_size"] < capacity
-        
-        if allowed:
-            bucket_data["queue_size"] += 1
-        
-        # Store updated bucket
-        await self.storage.set_rate_limit_data(key, bucket_data, limits["window"] * 2)
-        
-        return allowed, {
-            "strategy": "leaky_bucket",
-            "queue_size": bucket_data["queue_size"],
-            "capacity": capacity
-        }
+        except Exception as e:
+            logger.warning(f"Leaky bucket rate limit check failed for {client_info.ip_address}: {e}. Allowing request.")
+            return True, {"strategy": "leaky_bucket", "redis_unavailable": True}
     
     def _get_block_key(self, client_info: ClientInfo, rule: RateLimitRule) -> str:
         """Generate block key for client"""
@@ -617,7 +643,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         self.rules = {rule.name: rule for rule in rules}
         self.storage = RateLimitStorage(redis_url)
         self.rate_limiter = AdaptiveRateLimiter(self.storage)
-        
+        self._redis_health_logged = False
+
         # GeoIP database (optional)
         try:
             self.geoip_reader = geoip2.database.Reader('/usr/share/GeoIP/GeoLite2-Country.mmdb')
@@ -656,19 +683,26 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
                 client_info=client_info,
                 endpoint=request.url.path,
                 method=request.method,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 request_size=request_size
             )
             
             # Apply rate limiting rules
             for rule_name, rule in self.rules.items():
                 if self._should_apply_rule(request, rule):
-                    allowed, metadata = await self.rate_limiter.check_rate_limit(
-                        client_info, request_context, rule
-                    )
-                    
-                    if not allowed:
-                        return self._create_rate_limit_response(rule, metadata)
+                    try:
+                        allowed, metadata = await self.rate_limiter.check_rate_limit(
+                            client_info, request_context, rule
+                        )
+
+                        if not allowed:
+                            return self._create_rate_limit_response(rule, metadata)
+                    except Exception as rule_error:
+                        if "redis" in str(rule_error).lower():
+                            if not self._redis_health_logged:
+                                logger.warning(f"Rate limiting rule '{rule_name}' failed due to Redis unavailability: {rule_error}. Falling back to allow request.")
+                                self._redis_health_logged = True
+                        raise
             
             # Process request
             response = await call_next(request)
@@ -679,7 +713,11 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             return response
             
         except Exception as e:
-            logger.error(f"Rate limiting middleware error: {e}")
+            error_msg = str(e).lower()
+            if "redis" in error_msg or "connection" in error_msg:
+                logger.warning(f"Rate limiting unavailable (Redis issue): {e}. Allowing request without rate limiting.")
+            else:
+                logger.error(f"Rate limiting middleware error: {e}")
             return await call_next(request)
     
     async def _extract_client_info(self, request: Request) -> ClientInfo:
@@ -695,7 +733,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             client_info = ClientInfo(
                 ip_address=ip_address,
                 user_agent=user_agent,
-                first_seen=datetime.utcnow(),
+                first_seen=datetime.now(timezone.utc),
                 country=self._get_country(ip_address),
                 is_tor=self._is_tor_exit_node(ip_address),
                 is_vpn=False,  # Would integrate with VPN detection service
@@ -816,7 +854,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
                 "message": message,
                 "rule": rule.name,
                 "threat_level": metadata.get("threat_level", "unknown"),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             },
             headers=headers
         )

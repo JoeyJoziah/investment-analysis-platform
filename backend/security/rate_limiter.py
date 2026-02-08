@@ -15,7 +15,7 @@ import logging
 from typing import Dict, Optional, Any, List, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import redis
 import hashlib
 from fastapi import HTTPException, status, Request
@@ -149,9 +149,12 @@ class AdvancedRateLimiter:
         """Get Redis client for distributed rate limiting"""
         try:
             from backend.config.settings import settings
-            return redis.from_url(settings.REDIS_URL, decode_responses=True)
+            client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            # Test the connection
+            client.ping()
+            return client
         except Exception as e:
-            logger.warning(f"Redis not available for rate limiting: {e}")
+            logger.warning(f"Redis not available for rate limiting - falling back to in-memory mode: {e}")
             return None
     
     def _is_trusted_ip(self, ip: str) -> bool:
@@ -203,7 +206,7 @@ class AdvancedRateLimiter:
                 return RateLimitStatus(
                     allowed=True,
                     remaining=999999,
-                    reset_time=datetime.utcnow() + timedelta(hours=1)
+                    reset_time=datetime.now(timezone.utc) + timedelta(hours=1)
                 )
             
             # Get rate limit rule
@@ -213,7 +216,7 @@ class AdvancedRateLimiter:
                 return RateLimitStatus(
                     allowed=True,
                     remaining=999999,
-                    reset_time=datetime.utcnow() + timedelta(hours=1)
+                    reset_time=datetime.now(timezone.utc) + timedelta(hours=1)
                 )
             
             # Determine identifier (IP or user-based)
@@ -247,18 +250,22 @@ class AdvancedRateLimiter:
                 # Apply block if configured
                 if rule.block_duration_seconds > 0:
                     await self._apply_block(identifier, category, rule.block_duration_seconds)
-                    status.blocked_until = datetime.utcnow() + timedelta(seconds=rule.block_duration_seconds)
+                    status.blocked_until = datetime.now(timezone.utc) + timedelta(seconds=rule.block_duration_seconds)
                     status.retry_after_seconds = rule.block_duration_seconds
             
             return status
             
         except Exception as e:
-            logger.error(f"Error in rate limit check: {e}")
+            error_msg = str(e).lower()
+            if "redis" in error_msg or "connection" in error_msg:
+                logger.warning(f"Rate limit check failed due to Redis unavailability: {e}. Allowing request without rate limiting.")
+            else:
+                logger.error(f"Error in rate limit check: {e}")
             # Fail open - allow request if rate limiting fails
             return RateLimitStatus(
                 allowed=True,
                 remaining=0,
-                reset_time=datetime.utcnow() + timedelta(hours=1)
+                reset_time=datetime.now(timezone.utc) + timedelta(hours=1)
             )
     
     def _get_client_ip(self, request: Request) -> str:
@@ -284,7 +291,8 @@ class AdvancedRateLimiter:
     ) -> RateLimitStatus:
         """Check if identifier is currently blocked"""
         if not self.redis_client:
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            logger.warning(f"Block status check unavailable for {identifier} ({category.value}) - Redis not connected. Allowing request.")
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
         
         try:
             block_key = self._get_block_key(identifier, category)
@@ -294,8 +302,8 @@ class AdvancedRateLimiter:
                 block_info = json.loads(block_data)
                 blocked_until = datetime.fromisoformat(block_info["blocked_until"])
                 
-                if datetime.utcnow() < blocked_until:
-                    retry_after = int((blocked_until - datetime.utcnow()).total_seconds())
+                if datetime.now(timezone.utc) < blocked_until:
+                    retry_after = int((blocked_until - datetime.now(timezone.utc)).total_seconds())
                     return RateLimitStatus(
                         allowed=False,
                         remaining=0,
@@ -307,11 +315,11 @@ class AdvancedRateLimiter:
                     # Block expired, remove it
                     self.redis_client.delete(block_key)
             
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
             
         except Exception as e:
             logger.error(f"Error checking block status: {e}")
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
     
     async def _sliding_window_check(
         self,
@@ -321,7 +329,8 @@ class AdvancedRateLimiter:
     ) -> RateLimitStatus:
         """Implement sliding window rate limiting"""
         if not self.redis_client:
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            logger.warning(f"Sliding window rate limiting unavailable for {category.value} - Redis not connected. Allowing request.")
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
         
         try:
             now = time.time()
@@ -361,7 +370,7 @@ class AdvancedRateLimiter:
             
         except Exception as e:
             logger.error(f"Error in sliding window rate limit: {e}")
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
     
     async def _token_bucket_check(
         self,
@@ -371,7 +380,8 @@ class AdvancedRateLimiter:
     ) -> RateLimitStatus:
         """Implement token bucket rate limiting"""
         if not self.redis_client:
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            logger.warning(f"Token bucket rate limiting unavailable for {category.value} - Redis not connected. Allowing request.")
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
         
         try:
             now = time.time()
@@ -425,7 +435,7 @@ class AdvancedRateLimiter:
             
         except Exception as e:
             logger.error(f"Error in token bucket rate limit: {e}")
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
     
     async def _fixed_window_check(
         self,
@@ -435,7 +445,8 @@ class AdvancedRateLimiter:
     ) -> RateLimitStatus:
         """Implement fixed window rate limiting"""
         if not self.redis_client:
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            logger.warning(f"Fixed window rate limiting unavailable for {category.value} - Redis not connected. Allowing request.")
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
         
         try:
             now = time.time()
@@ -465,7 +476,7 @@ class AdvancedRateLimiter:
             
         except Exception as e:
             logger.error(f"Error in fixed window rate limit: {e}")
-            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.utcnow())
+            return RateLimitStatus(allowed=True, remaining=0, reset_time=datetime.now(timezone.utc))
     
     async def _record_violation(
         self,
@@ -477,11 +488,12 @@ class AdvancedRateLimiter:
     ):
         """Record a rate limit violation"""
         if not self.redis_client:
+            logger.warning(f"Rate limit violation recording unavailable for {ip} ({category.value}) - Redis not connected. Violation not persisted.")
             return
         
         try:
             violation = RateLimitViolation(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 ip_address=ip,
                 user_id=user_id,
                 category=category,
@@ -511,6 +523,7 @@ class AdvancedRateLimiter:
     async def _get_violation_count(self, ip: str) -> int:
         """Get violation count for IP in last 24 hours"""
         if not self.redis_client:
+            logger.debug(f"Violation count check unavailable for {ip} - Redis not connected. Returning 0.")
             return 0
         
         try:
@@ -518,7 +531,7 @@ class AdvancedRateLimiter:
             violations = self.redis_client.lrange(violation_key, 0, -1)
             
             # Count violations in last 24 hours
-            cutoff_time = datetime.utcnow() - timedelta(days=1)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(days=1)
             recent_violations = 0
             
             for violation_data in violations:
@@ -560,11 +573,12 @@ class AdvancedRateLimiter:
     ):
         """Apply a temporary block"""
         if not self.redis_client:
+            logger.warning(f"Rate limit block unavailable for {identifier} ({category.value}) - Redis not connected. Block not applied.")
             return
         
         try:
             block_key = self._get_block_key(identifier, category)
-            blocked_until = datetime.utcnow() + timedelta(seconds=duration_seconds)
+            blocked_until = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
             
             block_data = {
                 "blocked_until": blocked_until.isoformat(),

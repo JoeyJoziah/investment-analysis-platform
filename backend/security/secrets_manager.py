@@ -14,7 +14,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -101,7 +101,7 @@ class SecretsInventoryReport:
     expiring_soon: List[Dict[str, Any]]
     never_rotated: List[Dict[str, Any]]
     rotation_recommendations: List[Dict[str, Any]]
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert report to dictionary"""
@@ -291,11 +291,11 @@ class SecretsManager:
             # Create metadata
             expires_at = None
             if expires_in_days:
-                expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+                expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
             
             metadata = SecretMetadata(
                 secret_type=secret_type,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 expires_at=expires_at,
                 description=description
             )
@@ -354,7 +354,7 @@ class SecretsManager:
                 # Verify not expired
                 metadata = self._metadata_cache.get(secret_name)
                 if metadata and metadata.expires_at:
-                    if datetime.utcnow() > metadata.expires_at:
+                    if datetime.now(timezone.utc) > metadata.expires_at:
                         logger.warning(f"Secret '{secret_name}' has expired")
                         return None
                 
@@ -376,7 +376,7 @@ class SecretsManager:
             
             # Check expiration
             if metadata and metadata.expires_at:
-                if datetime.utcnow() > metadata.expires_at:
+                if datetime.now(timezone.utc) > metadata.expires_at:
                     logger.warning(f"Secret '{secret_name}' has expired")
                     return None
             
@@ -433,7 +433,7 @@ class SecretsManager:
                 return False
             
             # Update metadata
-            metadata.rotated_at = datetime.utcnow()
+            metadata.rotated_at = datetime.now(timezone.utc)
             metadata.rotation_count += 1
             
             # Store new value
@@ -525,7 +525,7 @@ class SecretsManager:
         Returns:
             Dictionary of matching secrets with their metadata
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         results = {}
 
         for name, entry in self._manifest.items():
@@ -550,7 +550,7 @@ class SecretsManager:
         Returns:
             Dictionary of stale secrets with their metadata
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         stale_threshold = timedelta(days=stale_threshold_days)
         results = {}
 
@@ -613,7 +613,7 @@ class SecretsManager:
         Returns:
             SecretsInventoryReport with inventory details and recommendations
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Count secrets by type
         secrets_by_type: Dict[str, int] = {}
@@ -720,7 +720,7 @@ class SecretsManager:
 
         export_data = {
             'export_metadata': {
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'export_version': '1.0',
                 'secrets_directory': str(self.secrets_dir)
             },

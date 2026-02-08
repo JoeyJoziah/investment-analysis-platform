@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import logging
 from pathlib import Path
@@ -186,7 +186,7 @@ class SecretsVault:
     def _log_audit_event(self, event_type: str, secret_id: str, user: str = "system", details: Optional[Dict] = None):
         """Log security audit event"""
         event = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_type": event_type,
             "secret_id": secret_id,
             "user": user,
@@ -240,8 +240,8 @@ class SecretsVault:
             metadata = SecretMetadata(
                 secret_id=secret_id,
                 secret_type=secret_type,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
                 rotation_policy=rotation_policy,
                 expires_at=expires_at,
                 tags=tags or {},
@@ -291,7 +291,7 @@ class SecretsVault:
         """
         try:
             # Check cache first
-            if secret_id in self._cache and self._cache_ttl.get(secret_id, datetime.min) > datetime.utcnow():
+            if secret_id in self._cache and self._cache_ttl.get(secret_id, datetime.min) > datetime.now(timezone.utc):
                 self._update_access_metadata(secret_id)
                 return self._cache[secret_id]
             
@@ -317,14 +317,14 @@ class SecretsVault:
                 return None
             
             # Check expiration
-            if metadata.expires_at and datetime.utcnow() > metadata.expires_at:
+            if metadata.expires_at and datetime.now(timezone.utc) > metadata.expires_at:
                 logger.warning(f"Secret {secret_id} has expired")
                 self._log_audit_event("SECRET_EXPIRED_ACCESS", secret_id, user)
                 return None
             
             # Cache the secret
             self._cache[secret_id] = secret_value
-            self._cache_ttl[secret_id] = datetime.utcnow() + timedelta(minutes=5)
+            self._cache_ttl[secret_id] = datetime.now(timezone.utc) + timedelta(minutes=5)
             
             # Update access metadata
             await self._update_access_metadata(secret_id)
@@ -346,7 +346,7 @@ class SecretsVault:
                 metadata_data = json.loads(await f.read())
             
             if secret_id in metadata_data:
-                metadata_data[secret_id]["last_accessed"] = datetime.utcnow().isoformat()
+                metadata_data[secret_id]["last_accessed"] = datetime.now(timezone.utc).isoformat()
                 metadata_data[secret_id]["access_count"] += 1
                 
                 async with aiofiles.open(self.metadata_file, 'w') as f:
@@ -468,7 +468,7 @@ class SecretsVault:
         if metadata.rotation_policy == RotationPolicy.NEVER:
             return False
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         age = now - metadata.updated_at
         
         rotation_intervals = {
@@ -500,9 +500,9 @@ class SecretsVault:
             backup_dir.mkdir(parents=True, exist_ok=True)
             
             # Copy vault files to backup location
-            shutil.copy2(self.secrets_file, backup_dir / f"secrets_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.vault")
-            shutil.copy2(self.metadata_file, backup_dir / f"metadata_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json")
-            shutil.copy2(self.audit_file, backup_dir / f"audit_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.log")
+            shutil.copy2(self.secrets_file, backup_dir / f"secrets_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.vault")
+            shutil.copy2(self.metadata_file, backup_dir / f"metadata_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json")
+            shutil.copy2(self.audit_file, backup_dir / f"audit_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.log")
             
             logger.info(f"Vault backed up to {backup_dir}")
             return True

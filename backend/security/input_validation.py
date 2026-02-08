@@ -8,7 +8,7 @@ import html
 import json
 import uuid
 from typing import Any, Dict, List, Optional, Union, Callable, Set
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 import validators
@@ -550,7 +550,7 @@ class ValidationMiddleware(BaseHTTPMiddleware):
                         content={
                             "error": "Validation failed",
                             "details": errors,
-                            "timestamp": datetime.utcnow().isoformat()
+                            "timestamp": datetime.now(timezone.utc).isoformat()
                         }
                     )
 

@@ -12,7 +12,7 @@ import os
 import json
 import jwt
 import redis
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List, Set, Any
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -175,9 +175,9 @@ class JWTManager:
         try:
             # Set expiration
             if expires_delta:
-                expire = datetime.utcnow() + expires_delta
+                expire = datetime.now(timezone.utc) + expires_delta
             else:
-                expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+                expire = datetime.now(timezone.utc) + timedelta(minutes=self.access_token_expire_minutes)
             
             # Create session ID if not provided
             if not claims.session_id:
@@ -196,7 +196,7 @@ class JWTManager:
                 "ip_address": claims.ip_address,
                 "user_agent": claims.user_agent,
                 "type": TokenType.ACCESS.value,
-                "iat": datetime.utcnow(),
+                "iat": datetime.now(timezone.utc),
                 "exp": expire,
                 "iss": self.issuer,
                 "aud": self.audience
@@ -217,7 +217,7 @@ class JWTManager:
                     "username": claims.username,
                     "ip_address": claims.ip_address,
                     "user_agent": claims.user_agent,
-                    "created_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
                     "expires_at": expire.isoformat()
                 }
                 self.redis_client.hset(session_key, mapping=session_data)
@@ -248,9 +248,9 @@ class JWTManager:
         try:
             # Set expiration
             if expires_delta:
-                expire = datetime.utcnow() + expires_delta
+                expire = datetime.now(timezone.utc) + expires_delta
             else:
-                expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+                expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
             
             # Build minimal payload for refresh token
             payload = {
@@ -258,7 +258,7 @@ class JWTManager:
                 "user_id": claims.user_id,
                 "session_id": claims.session_id,
                 "type": TokenType.REFRESH.value,
-                "iat": datetime.utcnow(),
+                "iat": datetime.now(timezone.utc),
                 "exp": expire,
                 "iss": self.issuer,
                 "aud": self.audience
@@ -350,7 +350,7 @@ class JWTManager:
             exp = unverified_payload.get("exp")
             if exp:
                 exp_time = datetime.fromtimestamp(exp)
-                ttl = int((exp_time - datetime.utcnow()).total_seconds())
+                ttl = int((exp_time - datetime.now(timezone.utc)).total_seconds())
                 if ttl <= 0:
                     # Token already expired, no need to blacklist
                     return True

@@ -8,7 +8,7 @@ TODO: Implement full session management functionality in future phase.
 import secrets
 import time
 from typing import Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class SessionManager:
@@ -23,8 +23,8 @@ class SessionManager:
         session_id = secrets.token_urlsafe(32)
         self._sessions[session_id] = {
             "user_id": user_id,
-            "created_at": datetime.utcnow(),
-            "last_activity": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "last_activity": datetime.now(timezone.utc),
             "metadata": metadata or {},
         }
         return session_id
@@ -38,7 +38,7 @@ class SessionManager:
         # Check expiration
         last_activity = session.get("last_activity")
         if isinstance(last_activity, datetime):
-            elapsed = (datetime.utcnow() - last_activity).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - last_activity).total_seconds()
             if elapsed > self._session_timeout:
                 self.destroy_session(session_id)
                 return False
@@ -55,7 +55,7 @@ class SessionManager:
         """Refresh session activity timestamp"""
         session = self._sessions.get(session_id)
         if session:
-            session["last_activity"] = datetime.utcnow()
+            session["last_activity"] = datetime.now(timezone.utc)
             return True
         return False
 
@@ -85,7 +85,7 @@ class SessionManager:
         for session_id, session in self._sessions.items():
             last_activity = session.get("last_activity")
             if isinstance(last_activity, datetime):
-                elapsed = (datetime.utcnow() - last_activity).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - last_activity).total_seconds()
                 if elapsed > self._session_timeout:
                     expired.append(session_id)
 

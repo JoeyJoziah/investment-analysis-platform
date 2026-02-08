@@ -267,7 +267,11 @@ async def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[
     return success_response(data={"message": "Successfully logged out"})
 
 @router.post("/refresh")
-async def refresh_token(current_user: User = Depends(get_current_user)) -> ApiResponse[Token]:
+async def refresh_token(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    _auth_limit = Depends(auth_rate_limit)
+) -> ApiResponse[Token]:
     """Refresh access token"""
     access_token = create_access_token(data={"sub": current_user.email})
     return success_response(data=Token(
