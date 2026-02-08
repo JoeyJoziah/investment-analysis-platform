@@ -144,8 +144,8 @@ class SecurityConfig:
     JWT_MFA_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_MFA_TOKEN_EXPIRE_MINUTES", "5"))
 
     # Reset token expiration (for password reset flows)
-    # Default: 1 hour - gives users time to complete reset
-    JWT_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_RESET_TOKEN_EXPIRE_MINUTES", "60"))
+    # Default: 15 minutes - balances security with user experience
+    JWT_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_RESET_TOKEN_EXPIRE_MINUTES", "15"))
 
     # Secret key for HS256 algorithm (fallback/legacy)
     # In production, this MUST be set via environment variable
