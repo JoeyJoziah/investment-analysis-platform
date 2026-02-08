@@ -1,399 +1,625 @@
-# Investment Analysis Platform - Installation Guide
-
-## 🚀 Quick Start
-
-### One-Line Installation
-```bash
-# Development environment
-python install_platform.py dev
-
-# Production environment
-python install_platform.py prod
-```
-
-### Prerequisites
-- Python 3.12+
-- 4GB RAM (8GB recommended for ML packages)
-- 5GB free disk space
-- Internet connection
-- Admin/sudo privileges (Linux/macOS)
-
-## 📋 Installation Components
-
-### 🏗️ System Dependencies (`install_system_deps.sh`)
-Installs native libraries and build tools:
-- Python development headers
-- C/C++ compilers and build tools
-- Cryptography libraries (OpenSSL, libffi)
-- XML processing libraries
-- Database client libraries (PostgreSQL)
-- Kafka client libraries
-- TA-Lib for technical analysis
-
-### 🐍 Python Dependencies (`install_dependencies.py`)
-Installs Python packages with:
-- Intelligent parallel installation
-- Automatic retry with exponential backoff
-- Wheel caching for faster installs
-- Cross-platform compatibility
-- Comprehensive error handling
-
-### 🎯 Platform Orchestrator (`install_platform.py`)
-Complete environment setup:
-- Coordinates system and Python installations
-- Environment-specific configurations
-- Post-installation validation
-- Comprehensive reporting
-
-## 🌍 Environment Types
-
-| Environment | Use Case | Components | Install Time | Size |
-|-------------|----------|------------|--------------|------|
-| `minimal` | Base functionality | Core framework only | ~2min | ~100MB |
-| `dev` | Development | Base + dev tools | ~5min | ~300MB |
-| `test` | CI/CD testing | Base + testing tools | ~5min | ~300MB |
-| `staging` | Pre-production | Full production stack | ~15min | ~3GB |
-| `prod` | Production | Full stack + optimizations | ~15min | ~3GB |
-
-## 🔧 Installation Methods
-
-### Method 1: Complete Platform Installation (Recommended)
-```bash
-# Install everything for your environment
-python install_platform.py prod --verbose
-```
-
-### Method 2: Step-by-Step Installation
-```bash
-# 1. Install system dependencies
-./install_system_deps.sh --verbose
-
-# 2. Install Python dependencies  
-python install_dependencies.py -r requirements/production.txt
-
-# 3. Validate installation
-python -c "import fastapi, torch, transformers; print('✅ Installation validated')"
-```
-
-### Method 3: Modular Installation
-```bash
-# Install specific components
-python install_dependencies.py -r requirements/base.txt
-python install_dependencies.py -r requirements/ml.txt
-python install_dependencies.py -r requirements/financial.txt
-```
-
-## 🎛️ Advanced Options
-
-### Performance Tuning
-```bash
-# Maximize parallel installation
-python install_platform.py prod --max-workers 8
-
-# Longer timeout for slow connections
-python install_platform.py prod --timeout 600
-
-# Use binary packages only (faster)
-python install_platform.py prod --prefer-binary
-```
-
-### Security Options
-```bash
-# Enable hash verification
-python install_platform.py prod --verify-hashes
-
-# Air-gapped installation (pre-downloaded wheels)
-python install_dependencies.py --air-gapped --wheel-dir ./wheels
-```
-
-### Development Options
-```bash
-# Dry run to see what would be installed
-python install_platform.py dev --dry-run
-
-# Continue despite failures
-python install_platform.py dev --force
-
-# Verbose output for debugging
-python install_platform.py dev --verbose
-```
-
-## 🐧 Platform-Specific Instructions
-
-### Ubuntu/Debian
-```bash
-# Update package cache
-sudo apt update
-
-# Install platform
-python install_platform.py prod
-```
-
-### CentOS/RHEL/Fedora
-```bash
-# Enable EPEL repository (CentOS/RHEL)
-sudo yum install epel-release
-
-# Install platform
-python install_platform.py prod
-```
-
-### macOS
-```bash
-# Install Homebrew if not present
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-# Install platform
-python install_platform.py prod
-```
-
-### Windows (WSL)
-```bash
-# Use Windows Subsystem for Linux
-wsl --install
-# Then follow Ubuntu instructions
-```
-
-## 🐳 Docker Installation
-
-### Development Container
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY . .
-RUN python install_platform.py dev
-EXPOSE 8000
-CMD ["./start.sh", "dev"]
-```
-
-### Production Container (Multi-stage)
-```dockerfile
-# Build stage
-FROM python:3.12-slim as builder
-WORKDIR /app
-COPY requirements/ ./requirements/
-COPY install_*.py install_*.sh ./
-RUN ./install_system_deps.sh --verbose
-RUN python install_dependencies.py -r requirements/production.txt
-
-# Runtime stage
-FROM python:3.12-slim
-WORKDIR /app
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY . .
-EXPOSE 8000
-CMD ["./start.sh", "prod"]
-```
-
-## ⚙️ CI/CD Integration
-
-### GitHub Actions
-```yaml
-name: Install Dependencies
-steps:
-  - uses: actions/checkout@v3
-  
-  - name: Set up Python
-    uses: actions/setup-python@v4
-    with:
-      python-version: '3.12'
-  
-  - name: Cache dependencies
-    uses: actions/cache@v3
-    with:
-      path: |
-        ~/.cache/pip
-        ./wheels
-      key: ${{ runner.os }}-deps-${{ hashFiles('requirements/*.txt') }}
-  
-  - name: Install platform
-    run: python install_platform.py test --max-workers 2
-```
-
-### GitLab CI
-```yaml
-install_deps:
-  stage: setup
-  script:
-    - python install_platform.py test
-  cache:
-    paths:
-      - wheels/
-      - ~/.cache/pip/
-  artifacts:
-    reports:
-      junit: test-results.xml
-```
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-#### 1. Permission Denied
-```bash
-# Make scripts executable
-chmod +x install_system_deps.sh install_platform.py
-
-# Check sudo access
-sudo -v
-```
-
-#### 2. Python Version Issues
-```bash
-# Check Python version
-python3 --version
-
-# Use specific Python version
-python3.12 install_platform.py dev
-```
-
-#### 3. System Dependencies Missing
-```bash
-# Install system deps separately
-./install_system_deps.sh --verbose --force
-
-# Check what's missing
-./install_system_deps.sh --dry-run
-```
-
-#### 4. Compilation Failures
-```bash
-# Install build tools
-sudo apt install build-essential python3-dev
-
-# Use pre-compiled packages
-python install_platform.py dev --prefer-binary
-```
-
-#### 5. Network/Timeout Issues
-```bash
-# Increase timeout
-python install_platform.py dev --timeout 900
-
-# Use different index
-python install_dependencies.py --index-url https://pypi.org/simple/
-```
-
-#### 6. Disk Space Issues
-```bash
-# Check available space
-df -h
-
-# Clean pip cache
-pip cache purge
-
-# Install minimal environment first
-python install_platform.py minimal
-```
-
-### Debug Mode
-```bash
-# Enable debug logging
-export PYTHONPATH=/path/to/project
-python install_platform.py dev --verbose 2>&1 | tee debug.log
-
-# Check installation logs
-tail -f platform_install.log
-tail -f installation.log
-tail -f system_deps_install.log
-```
-
-### Validation
-```bash
-# Test core imports
-python -c "import fastapi; print('FastAPI:', fastapi.__version__)"
-python -c "import pandas; print('Pandas:', pandas.__version__)"
-python -c "import torch; print('PyTorch:', torch.__version__)"
-
-# Run test suite
-pytest tests/ -v
-
-# Check service startup
-./start.sh dev
-curl http://localhost:8000/health
-```
-
-## 📊 Installation Monitoring
-
-### Real-time Progress
-```bash
-# Monitor installation in another terminal
-tail -f platform_install.log | grep -E "(INFO|ERROR|SUCCESS)"
-
-# Watch system resources
-watch -n 1 "free -h && df -h"
-
-# Monitor network usage
-iftop  # or nethogs
-```
-
-### Performance Metrics
-```bash
-# Time installation
-time python install_platform.py prod
-
-# Monitor with detailed stats
-/usr/bin/time -v python install_platform.py prod
-
-# Profile Python package installation
-python -m cProfile -o install.prof install_dependencies.py -r requirements/production.txt
-```
-
-## 🔄 Maintenance
-
-### Updating Dependencies
-```bash
-# Update requirements files
-pip-compile requirements/base.in
-pip-compile requirements/production.in
-
-# Reinstall with updates
-python install_platform.py prod --force
-```
-
-### Cleaning Up
-```bash
-# Remove installation artifacts
-rm -f *.log installation_*.json
-rm -rf wheels/ __pycache__/
-
-# Clean Python cache
-find . -type d -name "__pycache__" -delete
-find . -name "*.pyc" -delete
-```
-
-### Health Checks
-```bash
-# Verify all components
-python -c """
-import sys
-components = ['fastapi', 'pandas', 'torch', 'transformers', 'sqlalchemy']
-for comp in components:
-    try:
-        __import__(comp)
-        print(f'✅ {comp}')
-    except ImportError:
-        print(f'❌ {comp}')
-"""
-```
-
-## 📈 Performance Benchmarks
-
-### Installation Times (AWS c5.xlarge)
-| Environment | Packages | Time | Parallel | Sequential |
-|-------------|----------|------|----------|------------|
-| minimal | 15 | 1m 30s | 1m 30s | 2m 15s |
-| dev | 35 | 4m 15s | 4m 15s | 7m 30s |
-| prod | 130+ | 12m 30s | 12m 30s | 25m 45s |
-
-### Resource Usage
-| Phase | RAM Peak | Disk I/O | Network |
-|-------|----------|----------|----------|
-| System Deps | 200MB | Low | 50MB |
-| Python Base | 500MB | Medium | 100MB |
-| ML Packages | 4GB | High | 2GB |
-| Total | 4GB | | 2.2GB |
+# Installation Guide - Investment Analysis Platform
+
+**Last Updated**: 2026-01-29
+**Version**: 1.0.0
+**Platform**: macOS, Linux, Windows (WSL2)
+**Python**: 3.12+
+**Node.js**: 18+
 
 ---
 
-**Need help?** Check the installation logs and run with `--verbose` for detailed output. For complex issues, create a minimal reproduction case and check our troubleshooting guide.
+## Quick Start (5 Minutes)
+
+```bash
+# 1. Clone repository
+git clone https://github.com/yourusername/investment-analysis-platform.git
+cd investment-analysis-platform
+
+# 2. Run setup script (automated, interactive)
+./setup.sh
+
+# 3. Start development environment
+./start.sh dev
+
+# 4. Access the application
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:8000/docs
+# Grafana: http://localhost:3001
+```
+
+---
+
+## Prerequisites
+
+### System Requirements
+- **CPU**: 4+ cores recommended
+- **RAM**: 8GB minimum, 16GB recommended
+- **Disk**: 50GB free space (for Docker images and data)
+- **Network**: Internet connection (for API calls and dependencies)
+
+### Software Requirements
+
+#### macOS
+```bash
+# Install Homebrew (if not installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install required tools
+brew install python@3.12 node git docker docker-compose postgresql redis
+
+# Verify installations
+python3 --version  # Should be 3.12+
+node --version     # Should be 18+
+docker --version
+docker-compose --version
+```
+
+#### Linux (Ubuntu/Debian)
+```bash
+# Update package manager
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Install required tools
+sudo apt-get install -y \
+  python3.12 \
+  python3.12-venv \
+  python3-pip \
+  nodejs \
+  npm \
+  git \
+  docker.io \
+  docker-compose \
+  postgresql-client
+
+# Add user to docker group
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Verify installations
+python3.12 --version
+node --version
+docker --version
+```
+
+#### Windows (WSL2)
+```bash
+# Install WSL2 (Windows Store or PowerShell as Admin)
+wsl --install
+
+# In WSL2 terminal:
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# Install required tools
+sudo apt-get install -y \
+  python3.12 \
+  python3.12-venv \
+  python3-pip \
+  nodejs \
+  npm \
+  git \
+  docker.io
+
+# Add user to docker group
+sudo usermod -aG docker $USER
+```
+
+---
+
+## Detailed Installation Steps
+
+### Step 1: Clone Repository
+
+```bash
+# HTTPS (recommended for first time)
+git clone https://github.com/yourusername/investment-analysis-platform.git
+
+# OR SSH (if you have SSH key configured)
+git clone git@github.com:yourusername/investment-analysis-platform.git
+
+cd investment-analysis-platform
+```
+
+### Step 2: Environment Setup
+
+#### Option A: Automated Setup (Recommended)
+```bash
+# Run interactive setup script
+./setup.sh
+
+# This will:
+# ✓ Check prerequisites
+# ✓ Create .env file with secure credentials
+# ✓ Generate encryption keys
+# ✓ Setup database
+# ✓ Initialize Redis
+# ✓ Install Python dependencies
+# ✓ Install Node.js dependencies
+# ✓ Build Docker images
+# ✓ Verify all services
+```
+
+#### Option B: Manual Setup
+
+**2.1 Create Environment File**
+```bash
+# Copy template
+cp .env.example .env
+
+# Edit with your values
+nano .env  # or vim, code, etc.
+
+# Required values:
+# - SECRET_KEY (generate: python -c "import secrets; print(secrets.token_hex(32))")
+# - JWT_SECRET_KEY (same as above)
+# - FERNET_KEY (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+# - Financial API keys (Alpha Vantage, Finnhub, Polygon, NewsAPI)
+```
+
+**2.2 Python Environment**
+```bash
+# Create virtual environment
+python3.12 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # macOS/Linux
+# OR
+venv\Scripts\activate  # Windows
+
+# Upgrade pip
+pip install --upgrade pip
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Verify installation
+python -c "import fastapi; import sqlalchemy; print('✓ Core packages installed')"
+```
+
+**2.3 Node.js Dependencies**
+```bash
+# Install frontend dependencies
+cd frontend/web
+npm install
+
+# Verify installation
+npm --version
+node_modules/.bin/react-scripts --version
+
+cd ../..
+```
+
+**2.4 Database Setup**
+```bash
+# Docker PostgreSQL (if not using external database)
+docker run --name investment-db \
+  -e POSTGRES_DB=investment_db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=$DB_PASSWORD \
+  -p 5432:5432 \
+  -d postgres:15
+
+# Wait for database to start
+sleep 10
+
+# Initialize database
+python -m alembic upgrade head
+```
+
+**2.5 Redis Setup**
+```bash
+# Docker Redis
+docker run --name investment-redis \
+  -e REDIS_PASSWORD=$REDIS_PASSWORD \
+  -p 6379:6379 \
+  -d redis:7
+
+# Test connection
+redis-cli -p 6379 ping
+# Should output: PONG
+```
+
+### Step 3: Start Services
+
+#### Development Mode
+```bash
+# Using provided script (recommended)
+./start.sh dev
+
+# OR manually start each service
+
+# Terminal 1: Backend API
+source venv/bin/activate
+uvicorn backend.api.main:app --reload --port 8000
+
+# Terminal 2: Frontend
+cd frontend/web
+npm start  # Starts on http://localhost:3000
+
+# Terminal 3: Celery Worker (for background tasks)
+source venv/bin/activate
+celery -A backend.tasks.celery_app worker -l info
+
+# Terminal 4: Celery Beat (for scheduled tasks)
+celery -A backend.tasks.celery_app beat -l info
+```
+
+#### Production Mode
+```bash
+# Configure SSL first (if needed)
+./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
+
+# Start production environment
+./start.sh prod
+
+# This starts:
+# ✓ FastAPI with Gunicorn
+# ✓ React with Nginx
+# ✓ PostgreSQL
+# ✓ Redis
+# ✓ Celery Worker & Beat
+# ✓ Prometheus & Grafana
+# ✓ AlertManager
+```
+
+### Step 4: Verify Installation
+
+```bash
+# Check backend health
+curl http://localhost:8000/health
+
+# Check frontend
+open http://localhost:3000  # macOS
+xdg-open http://localhost:3000  # Linux
+start http://localhost:3000  # Windows
+
+# Check API documentation
+open http://localhost:8000/docs
+
+# Check database connection
+python -c "from backend.config.database import SessionLocal; \
+  session = SessionLocal(); \
+  result = session.execute('SELECT 1'); \
+  print('✓ Database connected')"
+
+# Check Redis connection
+redis-cli ping
+
+# Run test suite
+./start.sh test
+# Or manually:
+pytest backend/tests/ --cov=backend -v
+```
+
+---
+
+## Service URLs (Development)
+
+| Service | URL | Purpose | Username | Password |
+|---------|-----|---------|----------|----------|
+| Frontend | http://localhost:3000 | Web application | N/A | N/A |
+| API | http://localhost:8000 | REST API | N/A | N/A |
+| API Docs | http://localhost:8000/docs | Swagger UI | N/A | N/A |
+| ML Service | http://localhost:8001 | ML predictions | N/A | N/A |
+| Grafana | http://localhost:3001 | Dashboards | admin | admin |
+| Prometheus | http://localhost:9090 | Metrics | N/A | N/A |
+| PostgreSQL | localhost:5432 | Database | postgres | (from .env) |
+| Redis | localhost:6379 | Cache | (none) | (from .env) |
+
+---
+
+## Installation Troubleshooting
+
+### Python Version Issues
+
+**Problem**: `python3 --version` shows < 3.12
+```bash
+# Solution: Install Python 3.12
+# macOS
+brew install python@3.12
+python3.12 --version
+
+# Linux
+sudo apt-get install python3.12
+python3.12 --version
+
+# Windows
+# Download from python.org and install, or use WSL2
+```
+
+### Dependency Conflicts
+
+**Problem**: `pip install -r requirements.txt` fails
+```bash
+# Solution: Create fresh virtual environment
+rm -rf venv
+python3.12 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt --no-cache-dir
+```
+
+### Docker Issues
+
+**Problem**: Docker daemon not running
+```bash
+# Solution: Start Docker
+# macOS
+open -a Docker
+
+# Linux
+sudo systemctl start docker
+
+# Windows (WSL2)
+sudo service docker start
+```
+
+### Database Connection Issues
+
+**Problem**: PostgreSQL connection refused
+```bash
+# Solution: Check database is running
+docker ps | grep postgres
+
+# If not running, start it
+docker run --name investment-db \
+  -e POSTGRES_DB=investment_db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=$DB_PASSWORD \
+  -p 5432:5432 \
+  -d postgres:15
+```
+
+### Port Already in Use
+
+**Problem**: Address already in use (port 3000, 8000, etc.)
+```bash
+# Find process using port
+lsof -i :3000  # macOS/Linux
+netstat -ano | findstr :3000  # Windows
+
+# Kill process
+kill -9 <PID>  # macOS/Linux
+taskkill /PID <PID> /F  # Windows
+
+# OR use different port
+uvicorn backend.api.main:app --port 8001
+```
+
+### NPM Package Issues
+
+**Problem**: npm install fails
+```bash
+# Solution: Clear cache and reinstall
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+
+# OR use alternative registry
+npm install --registry https://registry.npmmirror.com
+```
+
+### Frontend Not Loading
+
+**Problem**: Blank page at localhost:3000
+```bash
+# Solution: Check console for errors
+# 1. Open browser DevTools (F12)
+# 2. Check Console tab for errors
+# 3. Check Network tab for failed requests
+
+# Restart frontend
+cd frontend/web
+npm start
+
+# Or rebuild from scratch
+rm -rf node_modules
+npm install
+npm start
+```
+
+---
+
+## API Keys & Credentials
+
+### Financial Data APIs
+
+#### Alpha Vantage
+1. Go to https://www.alphavantage.co/
+2. Click "GET FREE API KEY"
+3. Enter your email
+4. Check email and copy API key
+5. Add to `.env`: `ALPHA_VANTAGE_API_KEY=your_key`
+
+#### Finnhub
+1. Go to https://finnhub.io/register
+2. Create account
+3. Copy API key from dashboard
+4. Add to `.env`: `FINNHUB_API_KEY=your_key`
+
+#### Polygon.io
+1. Go to https://polygon.io/dashboard/signup
+2. Create account
+3. Copy API key from dashboard
+4. Add to `.env`: `POLYGON_API_KEY=your_key`
+
+#### NewsAPI
+1. Go to https://newsapi.org/register
+2. Create account
+3. Copy API key from dashboard
+4. Add to `.env`: `NEWS_API_KEY=your_key`
+
+### Optional AI APIs
+
+#### OpenAI (for ChatGPT features)
+1. Go to https://platform.openai.com/api-keys
+2. Create new API key
+3. Add to `.env`: `OPENAI_API_KEY=sk-...`
+
+#### Anthropic Claude (for advanced AI)
+1. Go to https://console.anthropic.com/
+2. Create new API key
+3. Add to `.env`: `ANTHROPIC_API_KEY=sk-ant-...`
+
+---
+
+## Docker Compose Setup
+
+Alternative to manual setup using Docker Compose:
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+
+# Full reset (removes volumes)
+docker-compose down -v
+```
+
+### docker-compose.yml Structure
+```yaml
+services:
+  postgres:        # Database
+  redis:           # Cache/Celery broker
+  backend:         # FastAPI application
+  frontend:        # React application
+  celery-worker:   # Background tasks
+  celery-beat:     # Scheduled tasks
+  prometheus:      # Metrics (production)
+  grafana:         # Dashboards (production)
+  alertmanager:    # Alerting (production)
+```
+
+---
+
+## Production Deployment
+
+### Pre-Deployment Checklist
+- [ ] All environment variables set
+- [ ] SSL/TLS certificates obtained
+- [ ] Database backed up
+- [ ] Security audit passed
+- [ ] Tests pass (100%)
+- [ ] Load testing completed
+- [ ] Monitoring configured
+- [ ] Incident response plan ready
+
+### Deployment Steps
+
+```bash
+# 1. Configure SSL/TLS
+./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
+
+# 2. Update environment variables for production
+# Edit .env and set:
+# - ENVIRONMENT=production
+# - DEBUG=false
+# - SESSION_COOKIE_SECURE=true
+# - FORCE_HTTPS=true
+
+# 3. Build Docker images
+docker-compose build --no-cache
+
+# 4. Start production environment
+./start.sh prod
+
+# 5. Monitor services
+docker-compose logs -f
+
+# 6. Verify health
+curl https://yourdomain.com/health
+```
+
+---
+
+## Maintenance & Updates
+
+### Regular Maintenance
+```bash
+# Update dependencies
+pip install -r requirements.txt --upgrade
+npm update
+
+# Database backups
+pg_dump -U postgres -d investment_db > backup.sql
+
+# Clear old logs
+find logs -name "*.log" -mtime +30 -delete
+
+# Update Docker images
+docker-compose pull
+docker-compose up -d
+```
+
+### Version Updates
+```bash
+# Check for updates
+git fetch origin
+git status
+
+# Pull latest changes
+git pull origin main
+
+# Run migrations
+python -m alembic upgrade head
+
+# Restart services
+./stop.sh
+./start.sh prod
+```
+
+---
+
+## Getting Help
+
+### Documentation
+- [README.md](../README.md) - Project overview
+- [CLAUDE.md](../CLAUDE.md) - Development guidelines
+- [docs/SECURITY.md](SECURITY.md) - Security guidelines
+- [docs/ENVIRONMENT.md](ENVIRONMENT.md) - Configuration reference
+
+### Support Channels
+- GitHub Issues: https://github.com/yourusername/investment-analysis-platform/issues
+- Discussions: https://github.com/yourusername/investment-analysis-platform/discussions
+- Email: support@yourdomain.com
+
+### Common Issues
+- See [Troubleshooting](#installation-troubleshooting) section above
+- Check Docker logs: `docker-compose logs -f`
+- Check application logs: `tail -f logs/app.log`
+
+---
+
+## Next Steps
+
+1. **Read Documentation**
+   - [README.md](../README.md) - Project overview
+   - [CLAUDE.md](../CLAUDE.md) - Development guidelines
+
+2. **Configure API Keys**
+   - Add financial data API keys to `.env`
+   - Test API connections
+
+3. **Run Tests**
+   - Backend: `pytest backend/tests/ --cov=backend`
+   - Frontend: `npm test`
+
+4. **Start Development**
+   - Create feature branch: `git checkout -b feature/your-feature`
+   - Write tests first (TDD)
+   - Submit pull request
+
+---
+
+*Installation Guide - Last Updated: 2026-01-29*
+*Version: 1.0.0*
+*Status: Production Ready*

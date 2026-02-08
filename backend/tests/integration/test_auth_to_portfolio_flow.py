@@ -13,11 +13,13 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.unified_models import (
+# Import from tables.py to match auth router
+from backend.models.tables import (
     User, UserSession, Portfolio, Position, Stock, Transaction,
-    Exchange, Sector,
     UserRoleEnum, OrderSideEnum, AssetTypeEnum
 )
+# Import models not in tables.py from unified_models
+from backend.models.unified_models import Exchange, Sector
 from backend.api.main import app
 from backend.auth.oauth2 import create_access_token, create_refresh_token
 from httpx import AsyncClient, ASGITransport
@@ -33,7 +35,7 @@ async def premium_user(db_session: AsyncSession):
         email="premium@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Premium User",
-        role=UserRoleEnum.PREMIUM_USER.value,
+        role=UserRoleEnum.PREMIUM_USER,  # Use enum directly, not .value
         is_active=True,
         is_verified=True,
         subscription_tier="premium",
@@ -52,7 +54,7 @@ async def free_user(db_session: AsyncSession):
         email="free@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Free User",
-        role=UserRoleEnum.FREE_USER.value,
+        role=UserRoleEnum.FREE_USER,  # Use enum directly, not .value
         is_active=True,
         is_verified=True,
         subscription_tier="free"
@@ -180,24 +182,23 @@ async def test_login_to_portfolio_access(
     Validates that users can authenticate and immediately access their
     portfolio data using the issued JWT token.
     """
-    # Step 1: Login
+    # Step 1: Login - Use form data for OAuth2 (not JSON)
     response = await async_client.post(
-        "/api/v1/auth/login",
-        json={
-            "email": premium_user.email,
+        "/api/auth/token",
+        data={  # Form data, not JSON
+            "username": premium_user.email,
             "password": "testpassword123"
         }
     )
     assert response.status_code == 200
     auth_data = response.json()
-    assert "access_token" in auth_data["data"]
-    assert "refresh_token" in auth_data["data"]
-    access_token = auth_data["data"]["access_token"]
+    assert "access_token" in auth_data
+    access_token = auth_data["access_token"]
 
     # Step 2: Access portfolio with token
     headers = {"Authorization": f"Bearer {access_token}"}
     response = await async_client.get(
-        f"/api/v1/portfolios/{user_portfolio.id}",
+        f"/api/portfolio/{user_portfolio.id}",
         headers=headers
     )
     assert response.status_code == 200
@@ -221,12 +222,24 @@ async def test_role_based_portfolio_limits(
     Validates that free users have portfolio size limits while premium
     users can create larger portfolios with more positions.
     """
-    # Create tokens
+    # Create tokens with complete user data
     premium_token = create_access_token(
-        data={"sub": str(premium_user.id), "role": "premium_user"}
+        data={
+            "sub": str(premium_user.id),
+            "user_id": premium_user.id,
+            "email": premium_user.email,
+            "username": premium_user.email,
+            "role": "premium_user"
+        }
     )
     free_token = create_access_token(
-        data={"sub": str(free_user.id), "role": "free_user"}
+        data={
+            "sub": str(free_user.id),
+            "user_id": free_user.id,
+            "email": free_user.email,
+            "username": free_user.email,
+            "role": "free_user"
+        }
     )
 
     premium_headers = {"Authorization": f"Bearer {premium_token}"}
@@ -234,7 +247,7 @@ async def test_role_based_portfolio_limits(
 
     # Free user: Create portfolio
     response = await async_client.post(
-        "/api/v1/portfolios",
+        "/api/portfolio",
         headers=free_headers,
         json={
             "name": "Free User Portfolio",
@@ -249,7 +262,7 @@ async def test_role_based_portfolio_limits(
     positions_added = 0
     for symbol in list(sample_stocks.keys())[:10]:  # Try 10 positions
         response = await async_client.post(
-            f"/api/v1/portfolios/{free_portfolio_id}/positions",
+            f"/api/portfolio/{free_portfolio_id}/positions",
             headers=free_headers,
             json={
                 "stock_symbol": symbol,
@@ -268,7 +281,7 @@ async def test_role_based_portfolio_limits(
 
     # Premium user: Create portfolio
     response = await async_client.post(
-        "/api/v1/portfolios",
+        "/api/portfolio",
         headers=premium_headers,
         json={
             "name": "Premium User Portfolio",
@@ -283,7 +296,7 @@ async def test_role_based_portfolio_limits(
     premium_positions_added = 0
     for symbol in list(sample_stocks.keys())[:10]:
         response = await async_client.post(
-            f"/api/v1/portfolios/{premium_portfolio_id}/positions",
+            f"/api/portfolio/{premium_portfolio_id}/positions",
             headers=premium_headers,
             json={
                 "stock_symbol": symbol,
@@ -311,9 +324,15 @@ async def test_session_expiry_during_portfolio(
     Validates that expired tokens are properly rejected and refresh tokens
     can be used to obtain new access tokens without re-authentication.
     """
-    # Create an expired access token
+    # Create an expired access token with complete user data
     expired_token = create_access_token(
-        data={"sub": str(premium_user.id)},
+        data={
+            "sub": str(premium_user.id),
+            "user_id": premium_user.id,
+            "email": premium_user.email,
+            "username": premium_user.email,
+            "role": "user"
+        },
         expires_delta=timedelta(minutes=-1)  # Already expired
     )
 
@@ -321,7 +340,7 @@ async def test_session_expiry_during_portfolio(
 
     # Try to access portfolio with expired token
     response = await async_client.get(
-        f"/api/v1/portfolios/{user_portfolio.id}",
+        f"/api/portfolio/{user_portfolio.id}",
         headers=expired_headers
     )
     assert response.status_code == 401
@@ -330,17 +349,17 @@ async def test_session_expiry_during_portfolio(
     refresh_token = create_refresh_token(data={"sub": str(premium_user.id)})
 
     response = await async_client.post(
-        "/api/v1/auth/refresh",
+        "/api/auth/refresh",
         json={"refresh_token": refresh_token}
     )
     assert response.status_code == 200
     new_tokens = response.json()
-    assert "access_token" in new_tokens["data"]
+    assert "access_token" in new_tokens
 
     # Use new token to access portfolio
-    new_headers = {"Authorization": f"Bearer {new_tokens['data']['access_token']}"}
+    new_headers = {"Authorization": f"Bearer {new_tokens['access_token']}"}
     response = await async_client.get(
-        f"/api/v1/portfolios/{user_portfolio.id}",
+        f"/api/portfolio/{user_portfolio.id}",
         headers=new_headers
     )
     assert response.status_code == 200
@@ -362,7 +381,13 @@ async def test_concurrent_portfolio_updates(
     """
     import asyncio
 
-    token = create_access_token(data={"sub": str(premium_user.id)})
+    token = create_access_token(data={
+        "sub": str(premium_user.id),
+        "user_id": premium_user.id,
+        "email": premium_user.email,
+        "username": premium_user.email,
+        "role": "user"
+    })
     headers = {"Authorization": f"Bearer {token}"}
 
     # Get initial cash balance
@@ -371,7 +396,7 @@ async def test_concurrent_portfolio_updates(
     # Define concurrent update operations
     async def buy_stock(symbol: str, quantity: float, price: float):
         return await async_client.post(
-            f"/api/v1/portfolios/{user_portfolio.id}/positions",
+            f"/api/portfolio/{user_portfolio.id}/positions",
             headers=headers,
             json={
                 "stock_symbol": symbol,
@@ -394,7 +419,7 @@ async def test_concurrent_portfolio_updates(
 
     # Verify portfolio consistency
     response = await async_client.get(
-        f"/api/v1/portfolios/{user_portfolio.id}",
+        f"/api/portfolio/{user_portfolio.id}",
         headers=headers
     )
     assert response.status_code == 200
@@ -428,7 +453,13 @@ async def test_portfolio_rebalancing_with_locks(
     Validates that portfolio rebalancing operations properly lock
     affected rows to prevent concurrent modifications during rebalance.
     """
-    token = create_access_token(data={"sub": str(premium_user.id)})
+    token = create_access_token(data={
+        "sub": str(premium_user.id),
+        "user_id": premium_user.id,
+        "email": premium_user.email,
+        "username": premium_user.email,
+        "role": "user"
+    })
     headers = {"Authorization": f"Bearer {token}"}
 
     # Add initial positions
@@ -466,7 +497,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Request rebalancing
         response = await async_client.post(
-            f"/api/v1/portfolios/{user_portfolio.id}/rebalance",
+            f"/api/portfolio/{user_portfolio.id}/rebalance",
             headers=headers,
             json={"target_allocation": target_allocation}
         )
@@ -480,7 +511,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Execute rebalancing
         response = await async_client.post(
-            f"/api/v1/portfolios/{user_portfolio.id}/rebalance/execute",
+            f"/api/portfolio/{user_portfolio.id}/rebalance/execute",
             headers=headers,
             json={"rebalance_id": rebalance_data["data"]["id"]}
         )
@@ -488,7 +519,7 @@ async def test_portfolio_rebalancing_with_locks(
 
         # Verify final allocation matches target (within tolerance)
         response = await async_client.get(
-            f"/api/v1/portfolios/{user_portfolio.id}/allocation",
+            f"/api/portfolio/{user_portfolio.id}/allocation",
             headers=headers
         )
         assert response.status_code == 200

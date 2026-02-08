@@ -1,8 +1,8 @@
 # Environment Variables Reference
 
-> Auto-generated from `.env.example`. Last updated: 2026-01-27
+> Auto-generated from `.env.example`. Last updated: 2026-01-29
 
-This document provides a comprehensive reference for all environment variables used in the investment-analysis-platform.
+This document provides a comprehensive reference for all environment variables used in the investment-analysis-platform. All values reflect Phase 3 completion and security hardening.
 
 ---
 

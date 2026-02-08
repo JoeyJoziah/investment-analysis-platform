@@ -265,13 +265,61 @@
       "phase_outputs": "Outputs from each phase",
       "agent_communications": "Inter-agent messages",
       "patterns_learned": "Extracted patterns",
-      "decisions_made": "Architectural and design decisions"
+      "decisions_made": "Architectural and design decisions",
+      "orchestration": "Swarm-workflow coordination and consensus state"
     },
     "persistence_strategy": {
       "on_phase_complete": true,
       "on_checkpoint": true,
       "on_session_end": true,
       "periodic_interval_ms": 300000
+    }
+  },
+
+  "hooks": {
+    "workflow_swarm_sync": {
+      "path": ".claude/hooks/workflow-swarm-sync.sh",
+      "enabled": true,
+      "triggers": {
+        "phase_start": true,
+        "phase_complete": true,
+        "phase_output": true
+      },
+      "description": "Syncs workflow phase transitions to swarm coordination state"
+    },
+    "swarm_consensus_sync": {
+      "path": ".claude/hooks/swarm-consensus-sync.sh",
+      "enabled": true,
+      "triggers": {
+        "consensus_required": true,
+        "consensus_decision": true,
+        "workflow_update": true
+      },
+      "description": "Syncs swarm consensus decisions back to workflow state"
+    }
+  },
+
+  "coordination": {
+    "bidirectional_sync": {
+      "enabled": true,
+      "sync_interval_ms": 5000,
+      "conflict_resolution": "workflow_precedence"
+    },
+    "consensus_protocol": {
+      "enabled": true,
+      "required_phases": ["design", "review", "integrate", "deploy"],
+      "approval_threshold": 1,
+      "timeout_ms": 300000
+    },
+    "audit_trail": {
+      "enabled": true,
+      "track_events": [
+        "phase_transition",
+        "consensus_decision",
+        "workflow_update",
+        "coordination_event"
+      ],
+      "retention_days": 90
     }
   },
 

@@ -99,6 +99,7 @@ def assert_api_error_response(response, expected_status, expected_error_substrin
 @pytest_asyncio.fixture(scope="function")
 async def test_db_engine():
     """Create test database engine."""
+    # Import from unified_models.py to include all tables (Exchange, Sector, Industry, etc.)
     from backend.models.unified_models import Base
 
     # Use in-memory SQLite for tests (safe default)
@@ -141,10 +142,32 @@ async def db_session(test_db_session_factory):
 
 
 @pytest_asyncio.fixture
-async def async_client():
-    """Provide async HTTP client for API testing."""
+async def async_client(test_db_engine):
+    """Provide async HTTP client for API testing with test database override."""
+    # Create test session factory
+    TestSessionLocal = sessionmaker(
+        test_db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+
+    # Override the database dependency to use test database
+    async def override_get_async_db_session() -> AsyncGenerator[AsyncSession, None]:
+        async with TestSessionLocal() as session:
+            try:
+                yield session
+            finally:
+                await session.rollback()
+
+    # Apply override
+    app.dependency_overrides[get_async_db_session] = override_get_async_db_session
+
+    # Create client
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         yield client
+
+    # Clean up override
+    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
@@ -250,7 +273,7 @@ def csrf_token():
     """Provide CSRF token for testing."""
     from backend.security.csrf_protection import CSRFProtection, CSRFConfig
 
-    csrf_config = CSRFConfig(enabled=True, testing_mode=True)
+    csrf_config = CSRFConfig(enabled=True)
     csrf_protection = CSRFProtection(csrf_config)
     token = csrf_protection.generate_token()
     return token

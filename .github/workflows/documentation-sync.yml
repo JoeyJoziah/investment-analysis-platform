@@ -1,0 +1,580 @@
+name: Documentation Synchronization
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'docs/**'
+      - '.claude/**/*.md'
+      - 'README.md'
+      - 'DOCUMENTATION_INDEX.md'
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force full synchronization'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+  NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+
+jobs:
+  detect-duplicates:
+    name: Detect Duplicate Documentation
+    runs-on: ubuntu-latest
+    outputs:
+      has_duplicates: ${{ steps.check.outputs.has_duplicates }}
+      duplicate_report: ${{ steps.check.outputs.report }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install --save-dev fast-glob@3.3.2 crypto-js@4.2.0
+
+      - name: Detect duplicate content
+        id: check
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+          const crypto = require('crypto-js');
+          const path = require('path');
+
+          async function detectDuplicates() {
+            const files = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md',
+              'README.md',
+              'DOCUMENTATION_INDEX.md'
+            ], {
+              ignore: ['**/node_modules/**', '**/.git/**']
+            });
+
+            const contentHashes = new Map();
+            const duplicates = [];
+            const similarContent = [];
+
+            for (const file of files) {
+              const content = fs.readFileSync(file, 'utf8');
+
+              // Normalize content (remove whitespace variations)
+              const normalized = content
+                .replace(/\s+/g, ' ')
+                .replace(/\n+/g, '\n')
+                .trim();
+
+              // Full content hash
+              const hash = crypto.SHA256(normalized).toString();
+
+              // Semantic hash (first 1000 chars for similarity)
+              const semanticContent = normalized.substring(0, 1000);
+              const semanticHash = crypto.SHA256(semanticContent).toString();
+
+              // Check exact duplicates
+              if (contentHashes.has(hash)) {
+                duplicates.push({
+                  type: 'exact',
+                  files: [contentHashes.get(hash), file],
+                  hash
+                });
+              } else {
+                contentHashes.set(hash, file);
+              }
+
+              // Check similar content
+              for (const [existingHash, existingFile] of contentHashes.entries()) {
+                if (existingHash !== hash) {
+                  const existingContent = fs.readFileSync(existingFile, 'utf8')
+                    .replace(/\s+/g, ' ')
+                    .replace(/\n+/g, '\n')
+                    .trim()
+                    .substring(0, 1000);
+
+                  const existingSemanticHash = crypto.SHA256(existingContent).toString();
+
+                  if (semanticHash === existingSemanticHash) {
+                    similarContent.push({
+                      type: 'similar',
+                      files: [existingFile, file]
+                    });
+                  }
+                }
+              }
+            }
+
+            const report = {
+              total_files: files.length,
+              exact_duplicates: duplicates.length,
+              similar_content: similarContent.length,
+              duplicates: duplicates.slice(0, 10),
+              similar: similarContent.slice(0, 10)
+            };
+
+            console.log('## Duplicate Detection Report');
+            console.log(`Total files scanned: ${report.total_files}`);
+            console.log(`Exact duplicates: ${report.exact_duplicates}`);
+            console.log(`Similar content: ${report.similar_content}`);
+
+            if (duplicates.length > 0) {
+              console.log('\n### Exact Duplicates:');
+              duplicates.slice(0, 10).forEach((dup, idx) => {
+                console.log(`${idx + 1}. ${dup.files.join(' <-> ')}`);
+              });
+            }
+
+            if (similarContent.length > 0) {
+              console.log('\n### Similar Content:');
+              similarContent.slice(0, 10).forEach((sim, idx) => {
+                console.log(`${idx + 1}. ${sim.files.join(' <-> ')}`);
+              });
+            }
+
+            const hasDuplicates = duplicates.length > 0 || similarContent.length > 0;
+
+            fs.writeFileSync(
+              process.env.GITHUB_OUTPUT,
+              `has_duplicates=${hasDuplicates}\nreport=${JSON.stringify(report)}\n`,
+              { flag: 'a' }
+            );
+
+            return hasDuplicates ? 1 : 0;
+          }
+
+          detectDuplicates().then(code => process.exit(code));
+          EOF
+
+  validate-links:
+    name: Validate Documentation Links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install markdown link checker
+        run: npm install -g markdown-link-check@3.12.1
+
+      - name: Check links in documentation
+        run: |
+          find docs .claude -name "*.md" -type f | while read file; do
+            echo "Checking links in $file"
+            markdown-link-check "$file" --config .github/markdown-link-check.json || true
+          done
+
+      - name: Validate internal references
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+          const path = require('path');
+
+          async function validateInternalLinks() {
+            const files = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md',
+              'README.md'
+            ]);
+
+            const allFiles = new Set(files.map(f => path.resolve(f)));
+            const brokenLinks = [];
+
+            for (const file of files) {
+              const content = fs.readFileSync(file, 'utf8');
+              const fileDir = path.dirname(file);
+
+              // Match relative markdown links
+              const linkRegex = /\[([^\]]+)\]\(([^)]+\.md[^)]*)\)/g;
+              let match;
+
+              while ((match = linkRegex.exec(content)) !== null) {
+                const linkPath = match[2].split('#')[0]; // Remove anchor
+
+                if (!linkPath.startsWith('http')) {
+                  const resolvedPath = path.resolve(fileDir, linkPath);
+
+                  if (!allFiles.has(resolvedPath) && !fs.existsSync(resolvedPath)) {
+                    brokenLinks.push({
+                      file,
+                      link: match[2],
+                      text: match[1]
+                    });
+                  }
+                }
+              }
+            }
+
+            if (brokenLinks.length > 0) {
+              console.log('## Broken Internal Links:');
+              brokenLinks.forEach((link, idx) => {
+                console.log(`${idx + 1}. ${link.file}: [${link.text}](${link.link})`);
+              });
+              process.exit(1);
+            } else {
+              console.log('All internal links are valid.');
+            }
+          }
+
+          validateInternalLinks();
+          EOF
+
+  check-versions:
+    name: Check Version Tags
+    runs-on: ubuntu-latest
+    outputs:
+      version_report: ${{ steps.version.outputs.report }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate version tags
+        id: version
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+
+          async function checkVersions() {
+            const files = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md'
+            ]);
+
+            const versionRegex = /Version:\s*(\d+\.\d+\.\d+)/i;
+            const dateRegex = /Last Updated:\s*(\d{4}-\d{2}-\d{2})/i;
+
+            const missing = {
+              version: [],
+              date: [],
+              outdated: []
+            };
+
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today - 30 * 24 * 60 * 60 * 1000);
+
+            for (const file of files) {
+              const content = fs.readFileSync(file, 'utf8');
+
+              const versionMatch = content.match(versionRegex);
+              const dateMatch = content.match(dateRegex);
+
+              if (!versionMatch) {
+                missing.version.push(file);
+              }
+
+              if (!dateMatch) {
+                missing.date.push(file);
+              } else {
+                const lastUpdate = new Date(dateMatch[1]);
+                if (lastUpdate < thirtyDaysAgo) {
+                  missing.outdated.push({
+                    file,
+                    lastUpdate: dateMatch[1]
+                  });
+                }
+              }
+            }
+
+            const report = {
+              total_files: files.length,
+              missing_version: missing.version.length,
+              missing_date: missing.date.length,
+              outdated: missing.outdated.length,
+              files: missing
+            };
+
+            console.log('## Version Tag Report');
+            console.log(`Total files: ${report.total_files}`);
+            console.log(`Missing version: ${report.missing_version}`);
+            console.log(`Missing date: ${report.missing_date}`);
+            console.log(`Outdated (30+ days): ${report.outdated}`);
+
+            fs.writeFileSync(
+              process.env.GITHUB_OUTPUT,
+              `report=${JSON.stringify(report)}\n`,
+              { flag: 'a' }
+            );
+
+            return missing.version.length > 0 || missing.date.length > 0 ? 1 : 0;
+          }
+
+          checkVersions();
+          EOF
+        continue-on-error: true
+
+  update-index:
+    name: Update Documentation Index
+    runs-on: ubuntu-latest
+    needs: [detect-duplicates, validate-links, check-versions]
+    if: github.event_name == 'push' || github.event.inputs.force_sync == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate documentation index
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+          const path = require('path');
+
+          async function generateIndex() {
+            const files = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md',
+              'README.md'
+            ], {
+              ignore: ['**/node_modules/**', 'DOCUMENTATION_INDEX.md']
+            });
+
+            const categories = {
+              'Getting Started': [],
+              'Architecture': [],
+              'API Documentation': [],
+              'Security': [],
+              'Testing': [],
+              'Deployment': [],
+              'Development': [],
+              'Claude Flow': [],
+              'Other': []
+            };
+
+            for (const file of files) {
+              const content = fs.readFileSync(file, 'utf8');
+              const firstLine = content.split('\n')[0];
+              const title = firstLine.replace(/^#+\s*/, '').trim() || path.basename(file, '.md');
+
+              const relativePath = file;
+
+              // Categorize
+              let category = 'Other';
+              if (file.includes('getting-started') || file === 'README.md') {
+                category = 'Getting Started';
+              } else if (file.includes('architecture') || file.includes('design')) {
+                category = 'Architecture';
+              } else if (file.includes('api') || file.includes('endpoints')) {
+                category = 'API Documentation';
+              } else if (file.includes('security')) {
+                category = 'Security';
+              } else if (file.includes('test')) {
+                category = 'Testing';
+              } else if (file.includes('deploy')) {
+                category = 'Deployment';
+              } else if (file.includes('.claude')) {
+                category = 'Claude Flow';
+              } else if (file.includes('docs/')) {
+                category = 'Development';
+              }
+
+              categories[category].push({ title, path: relativePath });
+            }
+
+            // Generate markdown
+            let index = `# Documentation Index\n\n`;
+            index += `**Last Updated:** ${new Date().toISOString().split('T')[0]}\n\n`;
+            index += `**Total Documents:** ${files.length}\n\n`;
+            index += `---\n\n`;
+
+            for (const [category, docs] of Object.entries(categories)) {
+              if (docs.length > 0) {
+                index += `## ${category}\n\n`;
+                docs.sort((a, b) => a.title.localeCompare(b.title));
+                docs.forEach(doc => {
+                  index += `- [${doc.title}](${doc.path})\n`;
+                });
+                index += `\n`;
+              }
+            }
+
+            index += `---\n\n`;
+            index += `*This index is automatically generated by the documentation-sync workflow.*\n`;
+
+            fs.writeFileSync('DOCUMENTATION_INDEX.md', index);
+            console.log('Documentation index updated successfully.');
+          }
+
+          generateIndex();
+          EOF
+
+      - name: Commit and push index updates
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          if git diff --quiet DOCUMENTATION_INDEX.md; then
+            echo "No changes to documentation index"
+          else
+            git add DOCUMENTATION_INDEX.md
+            git commit -m "docs: Update documentation index [skip ci]"
+            git push
+          fi
+
+  notion-sync:
+    name: Sync to Notion
+    runs-on: ubuntu-latest
+    needs: [update-index]
+    if: |
+      (github.event_name == 'push' || github.event.inputs.force_sync == 'true') &&
+      secrets.NOTION_API_KEY != ''
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Notion SDK
+        run: npm install @notionhq/client@2.2.15
+
+      - name: Sync documentation to Notion
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: |
+          node << 'EOF'
+          const { Client } = require('@notionhq/client');
+          const glob = require('fast-glob');
+          const fs = require('fs');
+          const path = require('path');
+
+          async function syncToNotion() {
+            if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
+              console.log('Notion credentials not configured. Skipping sync.');
+              return;
+            }
+
+            const notion = new Client({ auth: process.env.NOTION_API_KEY });
+            const databaseId = process.env.NOTION_DATABASE_ID;
+
+            const files = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md',
+              'README.md'
+            ], {
+              ignore: ['**/node_modules/**', 'DOCUMENTATION_INDEX.md']
+            });
+
+            console.log(`Syncing ${files.length} documents to Notion...`);
+
+            for (const file of files) {
+              try {
+                const content = fs.readFileSync(file, 'utf8');
+                const title = content.split('\n')[0].replace(/^#+\s*/, '').trim() || path.basename(file);
+
+                // Create or update page in Notion
+                await notion.pages.create({
+                  parent: { database_id: databaseId },
+                  properties: {
+                    Name: {
+                      title: [
+                        {
+                          text: {
+                            content: title
+                          }
+                        }
+                      ]
+                    },
+                    Path: {
+                      rich_text: [
+                        {
+                          text: {
+                            content: file
+                          }
+                        }
+                      ]
+                    },
+                    'Last Synced': {
+                      date: {
+                        start: new Date().toISOString()
+                      }
+                    }
+                  },
+                  children: [
+                    {
+                      object: 'block',
+                      type: 'code',
+                      code: {
+                        rich_text: [
+                          {
+                            type: 'text',
+                            text: {
+                              content: content.substring(0, 2000) // Notion limit
+                            }
+                          }
+                        ],
+                        language: 'markdown'
+                      }
+                    }
+                  ]
+                });
+
+                console.log(`✓ Synced: ${file}`);
+              } catch (error) {
+                console.error(`✗ Failed to sync ${file}:`, error.message);
+              }
+            }
+
+            console.log('Notion sync completed.');
+          }
+
+          syncToNotion().catch(console.error);
+          EOF
+
+  report-results:
+    name: Report Results
+    runs-on: ubuntu-latest
+    needs: [detect-duplicates, validate-links, check-versions, update-index]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Documentation Sync Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow:** ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Job Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Duplicate Detection: ${{ needs.detect-duplicates.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Link Validation: ${{ needs.validate-links.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version Check: ${{ needs.check-versions.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Index Update: ${{ needs.update-index.result }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.detect-duplicates.outputs.has_duplicates }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Duplicates detected!** Review the duplicate detection job for details." >> $GITHUB_STEP_SUMMARY
+          fi

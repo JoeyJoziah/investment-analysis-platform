@@ -19,7 +19,8 @@ load_dotenv()
 from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
     auth, health, admin, cache_management,
-    websocket, agents, gdpr, watchlist, thesis
+    websocket, agents, gdpr, watchlist, thesis,
+    news, settings
 )
 from backend.api.versioning import (
     V1DeprecationMiddleware,
@@ -196,6 +197,8 @@ app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
 app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
 app.include_router(watchlist.router, prefix="/api", tags=["watchlists"])
 app.include_router(thesis.router, prefix="/api/v1", tags=["investment-thesis"])
+app.include_router(news.router, prefix="/api/news", tags=["news"])
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(v1_migration_router)  # V1 migration monitoring endpoints
 
 

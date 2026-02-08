@@ -132,21 +132,41 @@ class AsyncDatabaseManager:
             # - High-frequency SELECT queries (stock prices, recommendations)
             # - Parameterized queries with different values
             # - API endpoints called repeatedly with pagination
-            connect_args = {
-                "server_settings": {
-                    "application_name": "investment_analysis_app",
-                    "jit": "off",  # Disable JIT for predictable performance
-                },
-                "command_timeout": 60,
-                "statement_cache_size": self.config.prepared_statement_cache_size,  # Enable prepared statement caching (default: 100)
-            }
+
+            # PostgreSQL-specific connect_args (asyncpg driver)
+            # SQLite (aiosqlite) doesn't support these parameters
+            is_postgresql = "postgresql" in self.config.url
+
+            if is_postgresql:
+                connect_args = {
+                    "server_settings": {
+                        "application_name": "investment_analysis_app",
+                        "jit": "off",  # Disable JIT for predictable performance
+                    },
+                    "command_timeout": 60,
+                    "statement_cache_size": self.config.prepared_statement_cache_size,  # Enable prepared statement caching (default: 100)
+                }
+            else:
+                # SQLite connect_args (aiosqlite driver)
+                connect_args = {
+                    "check_same_thread": False,  # Allow access from multiple threads
+                }
             
             # Choose pool class based on environment
             if settings.ENVIRONMENT == "testing":
                 poolclass = NullPool
             else:
                 poolclass = AsyncAdaptedQueuePool
-            
+
+            # Set appropriate isolation level based on database type
+            # PostgreSQL supports: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+            # SQLite supports: READ UNCOMMITTED, SERIALIZABLE, AUTOCOMMIT
+            if is_postgresql:
+                isolation_level = self.config.isolation_level.value
+            else:
+                # For SQLite, use SERIALIZABLE (closest to PostgreSQL's READ COMMITTED)
+                isolation_level = "SERIALIZABLE"
+
             self._engine = create_async_engine(
                 self.config.url,
                 poolclass=poolclass,
@@ -159,7 +179,7 @@ class AsyncDatabaseManager:
                 future=True,
                 query_cache_size=self.config.statement_cache_size,
                 connect_args=connect_args,
-                isolation_level=self.config.isolation_level.value
+                isolation_level=isolation_level
             )
             
             # Set up event listeners for monitoring

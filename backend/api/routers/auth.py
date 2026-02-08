@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -8,7 +9,7 @@ from passlib.context import CryptContext
 from typing import Optional, Dict, Any
 import os
 import logging
-from backend.utils.database import get_db_sync
+from backend.config.database import get_async_db_session
 from backend.models.tables import User
 from backend.config.settings import settings
 from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, rate_limit
@@ -64,16 +65,17 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def authenticate_user(db: Session, email: str, password: str):
+async def authenticate_user(db: AsyncSession, email: str, password: str):
     """Authenticate user against database"""
-    user = db.query(User).filter(User.email == email).first()
+    result = await db.execute(select(User).filter(User.email == email))
+    user = result.scalars().first()
     if not user:
         return False
     if not verify_password(password, user.hashed_password):
         return False
     return user
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db_sync)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_async_db_session)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -86,8 +88,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
-    user = db.query(User).filter(User.email == email).first()
+
+    result = await db.execute(select(User).filter(User.email == email))
+    user = result.scalars().first()
     if user is None:
         raise credentials_exception
     return user
@@ -137,12 +140,13 @@ async def registration_rate_limit(request: Request):
 async def register(
     user: UserCreate,
     request: Request,
-    db: Session = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_async_db_session),
     _rate_status = Depends(registration_rate_limit)
 ) -> ApiResponse[Token]:
     """Register a new user"""
     # Check if user exists
-    db_user = db.query(User).filter(User.email == user.email).first()
+    result = await db.execute(select(User).filter(User.email == user.email))
+    db_user = result.scalars().first()
     if db_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -161,8 +165,8 @@ async def register(
 
     try:
         db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+        await db.commit()
+        await db.refresh(db_user)
 
         # Create access token
         access_token = create_access_token(data={"sub": user.email})
@@ -174,7 +178,7 @@ async def register(
         ))
 
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         logger.error(f"Error registering user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -185,11 +189,11 @@ async def register(
 async def login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_async_db_session),
     _auth_limit = Depends(auth_rate_limit)
 ) -> ApiResponse[Token]:
     """Login endpoint for OAuth2"""
-    user = authenticate_user(db, form_data.username, form_data.password)
+    user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -199,9 +203,16 @@ async def login(
 
     # Update last login
     user.last_login = datetime.utcnow()
-    db.commit()
+    await db.commit()
 
-    access_token = create_access_token(data={"sub": user.email})
+    # Create token with proper fields for JWT manager
+    access_token = create_access_token(data={
+        "sub": str(user.id),  # User ID as subject (standard JWT claim)
+        "user_id": user.id,
+        "email": user.email,
+        "username": user.email,  # Use email as username
+        "role": "user"  # Default role
+    })
     return success_response(data=Token(
         access_token=access_token,
         token_type="bearer"
@@ -211,11 +222,11 @@ async def login(
 async def login_alt(
     user: UserLogin,
     request: Request,
-    db: Session = Depends(get_db_sync),
+    db: AsyncSession = Depends(get_async_db_session),
     _auth_limit = Depends(auth_rate_limit)
 ) -> ApiResponse[Token]:
     """Alternative login endpoint"""
-    db_user = authenticate_user(db, user.email, user.password)
+    db_user = await authenticate_user(db, user.email, user.password)
     if not db_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -224,9 +235,16 @@ async def login_alt(
 
     # Update last login
     db_user.last_login = datetime.utcnow()
-    db.commit()
+    await db.commit()
 
-    access_token = create_access_token(data={"sub": db_user.email})
+    # Create token with proper fields for JWT manager
+    access_token = create_access_token(data={
+        "sub": str(db_user.id),  # User ID as subject (standard JWT claim)
+        "user_id": db_user.id,
+        "email": db_user.email,
+        "username": db_user.email,  # Use email as username
+        "role": "user"  # Default role
+    })
     return success_response(data=Token(
         access_token=access_token,
         token_type="bearer"

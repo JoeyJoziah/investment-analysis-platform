@@ -9,6 +9,7 @@ Part of: Phase 3 Security Remediation
 
 import pytest
 import secrets
+import os
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
@@ -132,6 +133,11 @@ class TestCSRFMiddleware:
     """Test CSRF Middleware"""
 
     @pytest.fixture
+    def disable_testing_mode(self, monkeypatch):
+        """Disable TESTING mode for middleware tests"""
+        monkeypatch.setenv("TESTING", "False")
+
+    @pytest.fixture
     def app(self):
         """Create test FastAPI app"""
         app = FastAPI()
@@ -159,7 +165,7 @@ class TestCSRFMiddleware:
         return app
 
     @pytest.fixture
-    def client(self, app):
+    def client(self, app, disable_testing_mode):
         """Create test client with CSRF protection"""
         config = CSRFConfig(secret_key=secrets.token_hex(32))
         app.add_middleware(CSRFMiddleware, config=config)

@@ -1,0 +1,646 @@
+name: Documentation Validation (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.claude/**/*.md'
+      - 'README.md'
+      - 'DOCUMENTATION_INDEX.md'
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  analyze-changes:
+    name: Analyze Documentation Changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed_files: ${{ steps.changes.outputs.files }}
+      file_count: ${{ steps.changes.outputs.count }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed documentation files
+        id: changes
+        run: |
+          git fetch origin ${{ github.base_ref }}
+
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '\.(md)$' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "files=" >> $GITHUB_OUTPUT
+            echo "count=0" >> $GITHUB_OUTPUT
+            echo "No documentation files changed."
+          else
+            echo "files<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+            COUNT=$(echo "$CHANGED_FILES" | wc -l)
+            echo "count=$COUNT" >> $GITHUB_OUTPUT
+
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+          fi
+
+  duplicate-check:
+    name: Check for Duplicate Content
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.file_count > 0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --save-dev fast-glob@3.3.2 crypto-js@4.2.0
+
+      - name: Detect duplicates in changed files
+        id: duplicates
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+          const crypto = require('crypto-js');
+
+          async function checkDuplicates() {
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+            const allFiles = await glob([
+              'docs/**/*.md',
+              '.claude/**/*.md',
+              'README.md'
+            ]);
+
+            const duplicates = [];
+            const warnings = [];
+
+            for (const changedFile of changedFiles) {
+              if (!fs.existsSync(changedFile)) continue;
+
+              const changedContent = fs.readFileSync(changedFile, 'utf8')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+              const changedHash = crypto.SHA256(changedContent).toString();
+
+              for (const existingFile of allFiles) {
+                if (existingFile === changedFile) continue;
+
+                const existingContent = fs.readFileSync(existingFile, 'utf8')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+
+                const existingHash = crypto.SHA256(existingContent).toString();
+
+                // Exact duplicate
+                if (changedHash === existingHash) {
+                  duplicates.push({
+                    changed: changedFile,
+                    duplicate: existingFile,
+                    type: 'exact'
+                  });
+                } else {
+                  // Check similarity (first 500 chars)
+                  const changedPrefix = changedContent.substring(0, 500);
+                  const existingPrefix = existingContent.substring(0, 500);
+
+                  const similarity = calculateSimilarity(changedPrefix, existingPrefix);
+
+                  if (similarity > 0.8) {
+                    warnings.push({
+                      changed: changedFile,
+                      similar: existingFile,
+                      similarity: (similarity * 100).toFixed(1)
+                    });
+                  }
+                }
+              }
+            }
+
+            if (duplicates.length > 0 || warnings.length > 0) {
+              console.log('## Duplicate Content Detection\n');
+
+              if (duplicates.length > 0) {
+                console.log('### ❌ Exact Duplicates Found:\n');
+                duplicates.forEach((dup, idx) => {
+                  console.log(`${idx + 1}. **${dup.changed}** is identical to **${dup.duplicate}**`);
+                });
+                console.log('');
+              }
+
+              if (warnings.length > 0) {
+                console.log('### ⚠️ Similar Content Warning:\n');
+                warnings.forEach((warn, idx) => {
+                  console.log(`${idx + 1}. **${warn.changed}** is ${warn.similarity}% similar to **${warn.similar}**`);
+                });
+              }
+
+              fs.writeFileSync('duplicate-report.txt', JSON.stringify({ duplicates, warnings }, null, 2));
+
+              if (duplicates.length > 0) {
+                process.exit(1);
+              }
+            } else {
+              console.log('✅ No duplicate content detected.');
+            }
+          }
+
+          function calculateSimilarity(str1, str2) {
+            const longer = str1.length > str2.length ? str1 : str2;
+            const shorter = str1.length > str2.length ? str2 : str1;
+
+            if (longer.length === 0) return 1.0;
+
+            const editDistance = levenshtein(longer, shorter);
+            return (longer.length - editDistance) / longer.length;
+          }
+
+          function levenshtein(str1, str2) {
+            const matrix = [];
+
+            for (let i = 0; i <= str2.length; i++) {
+              matrix[i] = [i];
+            }
+
+            for (let j = 0; j <= str1.length; j++) {
+              matrix[0][j] = j;
+            }
+
+            for (let i = 1; i <= str2.length; i++) {
+              for (let j = 1; j <= str1.length; j++) {
+                if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+                  matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                  matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                  );
+                }
+              }
+            }
+
+            return matrix[str2.length][str1.length];
+          }
+
+          checkDuplicates();
+          EOF
+        env:
+          CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
+        continue-on-error: true
+
+      - name: Upload duplicate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: duplicate-report
+          path: duplicate-report.txt
+          if-no-files-found: ignore
+
+  link-validation:
+    name: Validate Links in Changed Files
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.file_count > 0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install link checker
+        run: npm install -g markdown-link-check@3.12.1
+
+      - name: Create link check config
+        run: |
+          cat > .github/markdown-link-check.json << 'EOL'
+          {
+            "ignorePatterns": [
+              {
+                "pattern": "^http://localhost"
+              },
+              {
+                "pattern": "^https://localhost"
+              }
+            ],
+            "replacementPatterns": [],
+            "httpHeaders": [
+              {
+                "urls": ["https://github.com"],
+                "headers": {
+                  "Accept-Encoding": "zstd, br, gzip, deflate"
+                }
+              }
+            ],
+            "timeout": "20s",
+            "retryOn429": true,
+            "retryCount": 3,
+            "fallbackRetryDelay": "30s",
+            "aliveStatusCodes": [200, 206, 301, 302, 307, 308]
+          }
+          EOL
+
+      - name: Check external links
+        run: |
+          echo "${{ needs.analyze-changes.outputs.changed_files }}" | while read file; do
+            if [ -f "$file" ]; then
+              echo "Checking links in $file"
+              markdown-link-check "$file" --config .github/markdown-link-check.json
+            fi
+          done
+
+      - name: Validate internal links
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const glob = require('fast-glob');
+
+          async function validateInternalLinks() {
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+            const allFiles = await glob(['docs/**/*.md', '.claude/**/*.md', 'README.md']);
+            const allFilesSet = new Set(allFiles.map(f => path.resolve(f)));
+
+            const errors = [];
+
+            for (const file of changedFiles) {
+              if (!fs.existsSync(file)) continue;
+
+              const content = fs.readFileSync(file, 'utf8');
+              const fileDir = path.dirname(file);
+
+              const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+              let match;
+
+              while ((match = linkRegex.exec(content)) !== null) {
+                const linkPath = match[2].split('#')[0];
+
+                if (!linkPath.startsWith('http') && linkPath.endsWith('.md')) {
+                  const resolvedPath = path.resolve(fileDir, linkPath);
+
+                  if (!allFilesSet.has(resolvedPath) && !fs.existsSync(resolvedPath)) {
+                    errors.push({
+                      file,
+                      link: match[2],
+                      text: match[1],
+                      resolved: resolvedPath
+                    });
+                  }
+                }
+              }
+            }
+
+            if (errors.length > 0) {
+              console.log('## ❌ Broken Internal Links:\n');
+              errors.forEach((error, idx) => {
+                console.log(`${idx + 1}. **${error.file}**`);
+                console.log(`   Link: [${error.text}](${error.link})`);
+                console.log(`   Resolved to: ${error.resolved}`);
+                console.log('');
+              });
+
+              fs.writeFileSync('link-errors.json', JSON.stringify(errors, null, 2));
+              process.exit(1);
+            } else {
+              console.log('✅ All internal links are valid.');
+            }
+          }
+
+          validateInternalLinks();
+          EOF
+        env:
+          CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
+
+  version-validation:
+    name: Validate Version Tags
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.file_count > 0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check version tags in changed files
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+
+          function validateVersionTags() {
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+
+            const versionRegex = /Version:\s*(\d+\.\d+\.\d+)/i;
+            const dateRegex = /Last Updated:\s*(\d{4}-\d{2}-\d{2})/i;
+
+            const errors = [];
+            const warnings = [];
+
+            for (const file of changedFiles) {
+              if (!fs.existsSync(file)) continue;
+
+              const content = fs.readFileSync(file, 'utf8');
+
+              const hasVersion = versionRegex.test(content);
+              const hasDate = dateRegex.test(content);
+
+              if (!hasVersion) {
+                errors.push({
+                  file,
+                  issue: 'Missing version tag',
+                  suggestion: 'Add "Version: X.Y.Z" in the file header'
+                });
+              }
+
+              if (!hasDate) {
+                errors.push({
+                  file,
+                  issue: 'Missing last updated date',
+                  suggestion: 'Add "Last Updated: YYYY-MM-DD" in the file header'
+                });
+              }
+
+              if (hasDate) {
+                const dateMatch = content.match(dateRegex);
+                const lastUpdate = new Date(dateMatch[1]);
+                const today = new Date();
+
+                if (lastUpdate > today) {
+                  warnings.push({
+                    file,
+                    issue: 'Future date in Last Updated field',
+                    date: dateMatch[1]
+                  });
+                }
+              }
+            }
+
+            if (errors.length > 0 || warnings.length > 0) {
+              if (errors.length > 0) {
+                console.log('## ❌ Version Tag Errors:\n');
+                errors.forEach((error, idx) => {
+                  console.log(`${idx + 1}. **${error.file}**`);
+                  console.log(`   Issue: ${error.issue}`);
+                  console.log(`   Suggestion: ${error.suggestion}`);
+                  console.log('');
+                });
+              }
+
+              if (warnings.length > 0) {
+                console.log('## ⚠️ Version Tag Warnings:\n');
+                warnings.forEach((warn, idx) => {
+                  console.log(`${idx + 1}. **${warn.file}**`);
+                  console.log(`   Issue: ${warn.issue} (${warn.date})`);
+                  console.log('');
+                });
+              }
+
+              if (errors.length > 0) {
+                process.exit(1);
+              }
+            } else {
+              console.log('✅ All version tags are valid.');
+            }
+          }
+
+          validateVersionTags();
+          EOF
+        env:
+          CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
+
+  index-check:
+    name: Check Documentation Index
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify DOCUMENTATION_INDEX.md is updated
+        run: |
+          node << 'EOF'
+          const glob = require('fast-glob');
+          const fs = require('fs');
+
+          async function checkIndex() {
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+
+            const hasNewDocs = changedFiles.some(file =>
+              file.startsWith('docs/') || file.startsWith('.claude/')
+            );
+
+            if (hasNewDocs) {
+              if (!changedFiles.includes('DOCUMENTATION_INDEX.md')) {
+                console.log('⚠️ Warning: Documentation files changed but DOCUMENTATION_INDEX.md was not updated.');
+                console.log('The index will be automatically updated on merge, but consider updating it manually.');
+              } else {
+                console.log('✅ DOCUMENTATION_INDEX.md updated.');
+              }
+            } else {
+              console.log('ℹ️ No new documentation files, index check skipped.');
+            }
+          }
+
+          checkIndex();
+          EOF
+        env:
+          CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
+
+  quality-checks:
+    name: Documentation Quality Checks
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    if: needs.analyze-changes.outputs.file_count > 0
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check documentation quality
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+
+          function checkQuality() {
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+
+            const issues = [];
+            const suggestions = [];
+
+            for (const file of changedFiles) {
+              if (!fs.existsSync(file)) continue;
+
+              const content = fs.readFileSync(file, 'utf8');
+              const lines = content.split('\n');
+
+              // Check for proper headers
+              if (!content.trim().startsWith('#')) {
+                issues.push({
+                  file,
+                  issue: 'Missing top-level heading'
+                });
+              }
+
+              // Check line length (warn if > 120 chars)
+              lines.forEach((line, idx) => {
+                if (line.length > 120 && !line.trim().startsWith('|') && !line.includes('```')) {
+                  suggestions.push({
+                    file,
+                    line: idx + 1,
+                    issue: `Long line (${line.length} chars)`
+                  });
+                }
+              });
+
+              // Check for TODO/FIXME
+              const todoMatches = content.match(/\b(TODO|FIXME|XXX)\b/gi);
+              if (todoMatches && todoMatches.length > 0) {
+                suggestions.push({
+                  file,
+                  issue: `Contains ${todoMatches.length} TODO/FIXME markers`
+                });
+              }
+
+              // Check for code blocks with language
+              const codeBlocks = content.match(/```(\w*)/g);
+              if (codeBlocks) {
+                const noLang = codeBlocks.filter(block => block === '```');
+                if (noLang.length > 0) {
+                  suggestions.push({
+                    file,
+                    issue: `${noLang.length} code blocks without language specified`
+                  });
+                }
+              }
+            }
+
+            if (issues.length > 0) {
+              console.log('## ⚠️ Quality Issues:\n');
+              issues.forEach((issue, idx) => {
+                console.log(`${idx + 1}. **${issue.file}**: ${issue.issue}`);
+              });
+              console.log('');
+            }
+
+            if (suggestions.length > 0) {
+              console.log('## 💡 Suggestions:\n');
+              suggestions.slice(0, 10).forEach((sugg, idx) => {
+                if (sugg.line) {
+                  console.log(`${idx + 1}. **${sugg.file}** (line ${sugg.line}): ${sugg.issue}`);
+                } else {
+                  console.log(`${idx + 1}. **${sugg.file}**: ${sugg.issue}`);
+                }
+              });
+            }
+
+            if (issues.length === 0) {
+              console.log('✅ Quality checks passed.');
+            }
+          }
+
+          checkQuality();
+          EOF
+        env:
+          CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
+        continue-on-error: true
+
+  pr-comment:
+    name: Post PR Comment
+    runs-on: ubuntu-latest
+    needs: [analyze-changes, duplicate-check, link-validation, version-validation, index-check, quality-checks]
+    if: always() && needs.analyze-changes.outputs.file_count > 0
+
+    steps:
+      - name: Generate PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              duplicates: '${{ needs.duplicate-check.result }}',
+              links: '${{ needs.link-validation.result }}',
+              versions: '${{ needs.version-validation.result }}',
+              index: '${{ needs.index-check.result }}',
+              quality: '${{ needs.quality-checks.result }}'
+            };
+
+            const fileCount = '${{ needs.analyze-changes.outputs.file_count }}';
+
+            let comment = '## 📚 Documentation Validation Results\n\n';
+            comment += `**Files Changed:** ${fileCount}\n\n`;
+            comment += '### Validation Status\n\n';
+
+            const statusEmoji = (result) => {
+              if (result === 'success') return '✅';
+              if (result === 'failure') return '❌';
+              return '⚠️';
+            };
+
+            comment += `${statusEmoji(results.duplicates)} **Duplicate Check:** ${results.duplicates}\n`;
+            comment += `${statusEmoji(results.links)} **Link Validation:** ${results.links}\n`;
+            comment += `${statusEmoji(results.versions)} **Version Tags:** ${results.versions}\n`;
+            comment += `${statusEmoji(results.index)} **Index Check:** ${results.index}\n`;
+            comment += `${statusEmoji(results.quality)} **Quality Checks:** ${results.quality}\n\n`;
+
+            const hasFailures = Object.values(results).some(r => r === 'failure');
+
+            if (hasFailures) {
+              comment += '---\n\n';
+              comment += '⚠️ **Action Required:** Please review the failed checks above and update your documentation accordingly.\n';
+            } else {
+              comment += '---\n\n';
+              comment += '✅ **All validation checks passed!** Your documentation changes look good.\n';
+            }
+
+            comment += '\n*Automated by documentation-validation workflow*';
+
+            // Post comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+  final-status:
+    name: Final Validation Status
+    runs-on: ubuntu-latest
+    needs: [duplicate-check, link-validation, version-validation]
+    if: always()
+
+    steps:
+      - name: Check overall status
+        run: |
+          DUPLICATE_STATUS="${{ needs.duplicate-check.result }}"
+          LINK_STATUS="${{ needs.link-validation.result }}"
+          VERSION_STATUS="${{ needs.version-validation.result }}"
+
+          echo "Duplicate Check: $DUPLICATE_STATUS"
+          echo "Link Validation: $LINK_STATUS"
+          echo "Version Validation: $VERSION_STATUS"
+
+          if [ "$DUPLICATE_STATUS" == "failure" ] || [ "$LINK_STATUS" == "failure" ] || [ "$VERSION_STATUS" == "failure" ]; then
+            echo "❌ Documentation validation failed"
+            exit 1
+          else
+            echo "✅ Documentation validation passed"
+            exit 0
+          fi

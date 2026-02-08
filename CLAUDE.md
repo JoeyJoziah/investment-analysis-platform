@@ -1,6 +1,42 @@
 # Claude Code Configuration - Claude Flow V3
 
-**Claude Flow V3 | Version 3.0.0-alpha.178 | Last Updated: 2026-01-27**
+**Claude Flow V3 | Version 3.0.0-alpha.178 | Last Updated: 2026-01-29**
+
+---
+
+## 🚨 MANDATORY CONTINUOUS LEARNING - ENFORCED
+
+**CRITICAL REQUIREMENT: Every task MUST use pre-task and post-task hooks.**
+
+```bash
+# BEFORE any task (MANDATORY):
+npx @claude-flow/cli@latest hooks pre-task --task-id "task-$(date +%s)" --description "[task]"
+
+# AFTER any task (MANDATORY):
+npx @claude-flow/cli@latest hooks post-task --task-id "$TASK_ID" --success true --store-results true
+```
+
+**Why This is Mandatory:**
+1. ✅ **75% cost reduction** - Intelligent model routing (Haiku for simple, Opus for complex)
+2. ✅ **150x-12,500x faster** - HNSW pattern search prevents repeating work
+3. ✅ **Self-optimizing** - System learns from every success and failure
+4. ✅ **Cross-session memory** - Knowledge persists across conversations
+5. ✅ **Prevents rework** - Never solve the same problem twice
+
+**Current Learning Status:**
+- Neural Patterns: 80+ stored
+- Trajectories: 88+ learning paths
+- Memory Database: .swarm/memory.db (HNSW-indexed)
+- Daemon: Running with 5 active workers
+
+**Skip at your own risk:** Without continuous learning, you'll:
+- ❌ Repeat solved problems
+- ❌ Miss 75% cost savings
+- ❌ Lose cross-session knowledge
+- ❌ Prevent system self-optimization
+- ❌ Waste time on duplicate work
+
+---
 
 ## 🚨 AUTOMATIC SWARM ORCHESTRATION
 
@@ -158,9 +194,37 @@ They're working in parallel. I'll synthesize their results when they complete.
 - Wait for agent results to arrive
 - Synthesize results when they return
 
-## 🧠 AUTO-LEARNING PROTOCOL
+## 🚨 MANDATORY CONTINUOUS LEARNING PROTOCOL (ENFORCED)
 
-### Before Starting Any Task
+**CRITICAL: Pre-task and post-task hooks are MANDATORY for EVERY task. Failure to use them prevents pattern learning and optimization.**
+
+### 🔴 BEFORE Starting ANY Task (MANDATORY)
+
+**ALWAYS run pre-task hook FIRST** - This is NOT optional:
+
+```bash
+# Generate unique task ID
+TASK_ID="task-$(date +%s)"
+
+# MANDATORY: Run pre-task hook for intelligent routing
+Bash("npx @claude-flow/cli@latest hooks pre-task --task-id '$TASK_ID' --description '[detailed task description]'")
+```
+
+**Pre-task hook provides:**
+1. ✅ **Intelligent agent routing** - Which agents to use
+2. ✅ **Model recommendations** - Haiku/Sonnet/Opus for cost optimization (75% savings)
+3. ✅ **Complexity estimation** - Time and cost predictions
+4. ✅ **Similar pattern search** - Check if this was solved before
+5. ✅ **Confidence scoring** - Success probability
+
+**Example pre-task output:**
+```
+Suggested Agents: tester (95% confidence)
+Model Recommendation: sonnet (35% complexity)
+Est. Duration: 10-30 min | Cost: $0.0030
+```
+
+### Additional Memory Searches (After pre-task)
 ```bash
 # 1. Search memory for relevant patterns from past successes
 Bash("npx @claude-flow/cli@latest memory search --query '[task keywords]' --namespace patterns")
@@ -172,7 +236,30 @@ Bash("npx @claude-flow/cli@latest memory search --query '[task type]' --namespac
 Bash("npx @claude-flow/cli@latest hooks route --task '[task description]'")
 ```
 
-### After Completing Any Task Successfully
+### 🟢 AFTER Completing ANY Task (MANDATORY)
+
+**ALWAYS run post-task hook** - This records success patterns:
+
+```bash
+# MANDATORY: Record task completion for continuous learning
+Bash("npx @claude-flow/cli@latest hooks post-task --task-id '$TASK_ID' --success true --store-results true")
+```
+
+**Post-task hook records:**
+1. ✅ **Success patterns** - What worked
+2. ✅ **Neural trajectories** - Learning path
+3. ✅ **Pattern confidence** - Success rate
+4. ✅ **Metrics tracking** - Performance data
+5. ✅ **Cross-session learning** - Persistent knowledge
+
+**Example post-task output:**
+```
+Task outcome recorded: SUCCESS
+Patterns Updated: 2 | New Patterns: 1
+Trajectory ID: traj-1769660000
+```
+
+### Additional Learning Steps (After post-task)
 ```bash
 # 1. Store successful pattern for future reference
 Bash("npx @claude-flow/cli@latest memory store --namespace patterns --key '[pattern-name]' --value '[what worked]'")
@@ -180,23 +267,100 @@ Bash("npx @claude-flow/cli@latest memory store --namespace patterns --key '[patt
 # 2. Train neural patterns on the successful approach
 Bash("npx @claude-flow/cli@latest hooks post-edit --file '[main-file]' --train-neural true")
 
-# 3. Record task completion with metrics
-Bash("npx @claude-flow/cli@latest hooks post-task --task-id '[id]' --success true --store-results true")
-
-# 4. Trigger optimization worker if performance-related
+# 3. Trigger optimization worker if performance-related
 Bash("npx @claude-flow/cli@latest hooks worker dispatch --trigger optimize")
 ```
 
+### 🎯 Complete Mandatory Workflow
+
+**EVERY task MUST follow this pattern:**
+
+```bash
+# 1. MANDATORY: Pre-task hook (routing + recommendations)
+TASK_ID="task-$(date +%s)"
+npx @claude-flow/cli@latest hooks pre-task --task-id "$TASK_ID" --description "Fix authentication bug"
+
+# 2. Use recommended agent and model from pre-task output
+Task({
+  prompt: "Fix authentication bug using recommended approach",
+  subagent_type: "tester",  // ← FROM PRE-TASK RECOMMENDATION
+  model: "sonnet",  // ← FROM PRE-TASK MODEL RECOMMENDATION
+  description: "Fix auth bug"
+})
+
+# 3. MANDATORY: Post-task hook (record success)
+npx @claude-flow/cli@latest hooks post-task --task-id "$TASK_ID" --success true --store-results true
+
+# 4. Store specific learnings
+npx @claude-flow/cli@latest memory store \
+  --namespace patterns \
+  --key "auth-bug-fix-$(date +%s)" \
+  --value "Fixed by validating token expiration before session check"
+```
+
+### 🔍 Continuous Learning Validation
+
+**Verify learning system is working:**
+
+```bash
+# Check if patterns are being stored
+npx @claude-flow/cli@latest neural patterns --list
+
+# View learning metrics
+npx @claude-flow/cli@latest hooks metrics --v3-dashboard
+
+# Check trajectory count (should grow with each task)
+npx @claude-flow/cli@latest memory list --namespace patterns
+
+# Verify daemon is capturing events
+npx @claude-flow/cli@latest daemon status
+```
+
+**Expected results:**
+- Neural patterns count increases after each task
+- Trajectories grow (88+ trajectories = learning is working)
+- Memory entries increase in patterns namespace
+- Daemon shows active workers processing
+
+### ⚠️ Learning System Failures
+
+**If pre-task/post-task hooks fail:**
+
+1. **Verify daemon is running:**
+   ```bash
+   npx @claude-flow/cli@latest daemon status
+   # If not running: npx @claude-flow/cli@latest daemon start
+   ```
+
+2. **Check memory database:**
+   ```bash
+   npx @claude-flow/cli@latest memory init --force --verbose
+   ```
+
+3. **Validate hooks are registered:**
+   ```bash
+   npx @claude-flow/cli@latest hooks list | grep -E "(pre-task|post-task)"
+   ```
+
+4. **Test learning pipeline:**
+   ```bash
+   # Test pre-task
+   npx @claude-flow/cli@latest hooks pre-task --task-id "test-$(date +%s)" --description "Test task"
+
+   # Test post-task
+   npx @claude-flow/cli@latest hooks post-task --task-id "test-123" --success true --store-results true
+   ```
+
 ### Continuous Improvement Triggers
 
-| Trigger | Worker | When to Use |
-|---------|--------|-------------|
-| After major refactor | `optimize` | Performance optimization |
-| After adding features | `testgaps` | Find missing test coverage |
-| After security changes | `audit` | Security analysis |
-| After API changes | `document` | Update documentation |
-| Every 5+ file changes | `map` | Update codebase map |
-| Complex debugging | `deepdive` | Deep code analysis |
+| Trigger | Worker | When to Use | Auto-Learning Action |
+|---------|--------|-------------|---------------------|
+| After major refactor | `optimize` | Performance optimization | Store optimization patterns |
+| After adding features | `testgaps` | Find missing test coverage | Record coverage strategies |
+| After security changes | `audit` | Security analysis | Store security patterns |
+| After API changes | `document` | Update documentation | Record API design patterns |
+| Every 5+ file changes | `map` | Update codebase map | Update architecture knowledge |
+| Complex debugging | `deepdive` | Deep code analysis | Store debugging techniques |
 
 ### Memory-Enhanced Development
 

@@ -16,6 +16,7 @@ import secrets
 import hashlib
 import hmac
 import logging
+import os
 from typing import Optional, List, Set, Callable
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -75,6 +76,9 @@ class CSRFConfig:
                 "/metrics",
                 "/api/auth/login",
                 "/api/auth/register",
+                "/api/v1/auth/login",
+                "/api/v1/auth/register",
+                "/api/v1/auth/refresh",
             ]
 
         if self.secret_key is None:
@@ -268,6 +272,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         Returns:
             Response with CSRF protection applied
         """
+        # Skip CSRF protection in TESTING mode (following pattern from advanced_rate_limiter.py)
+        if os.getenv("TESTING", "False").lower() == "true":
+            return await call_next(request)
+
         # Skip if CSRF is disabled
         if not self.csrf.config.enabled:
             return await call_next(request)

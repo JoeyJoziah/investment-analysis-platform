@@ -1,0 +1,75 @@
+{
+  "pattern_id": "db-driver-compatibility-v1",
+  "pattern_name": "Database Driver Compatibility Pattern",
+  "category": "configuration",
+  "subcategory": "database",
+  "success_score": 0.95,
+  "reusability_score": 0.92,
+  "extracted_from": "wave6-phase1-database-config-fix",
+  "date_learned": "2026-01-29",
+  "context": {
+    "problem": "SQLite and PostgreSQL drivers have incompatible connection parameters",
+    "scenario": "Multi-database support (production vs testing)",
+    "framework": "FastAPI + SQLAlchemy 2.0 + AsyncIO"
+  },
+  "pattern": {
+    "trigger_conditions": [
+      "Using different databases for testing vs production",
+      "SQLAlchemy async engine configuration",
+      "Driver-specific connection parameters",
+      "Error: 'server_settings' is an invalid keyword argument",
+      "Error: Invalid value for isolation_level"
+    ],
+    "detection_code": "is_postgresql = 'postgresql' in database_url",
+    "solution_template": {
+      "step1": "Detect database type from connection URL",
+      "step2": "Create conditional connect_args based on driver",
+      "step3": "Map isolation levels to supported values",
+      "step4": "Apply conditional config to engine creation"
+    },
+    "code_pattern": "if is_postgresql:\n    connect_args = {postgresql_specific}\nelse:\n    connect_args = {sqlite_specific}",
+    "isolation_level_mapping": {
+      "postgresql": "READ COMMITTED | REPEATABLE READ | SERIALIZABLE",
+      "sqlite": "SERIALIZABLE | READ UNCOMMITTED | AUTOCOMMIT",
+      "mapping_rule": "PostgreSQL READ COMMITTED → SQLite SERIALIZABLE"
+    }
+  },
+  "anti_patterns": [
+    "Hardcoding PostgreSQL-specific parameters for all databases",
+    "Ignoring driver differences between testing and production",
+    "Not checking database URL before applying driver-specific config",
+    "Using same isolation level for all database types"
+  ],
+  "applicable_to": [
+    "FastAPI applications with SQLAlchemy",
+    "Multi-database support (PostgreSQL + SQLite)",
+    "Async database engines",
+    "Testing environments using SQLite :memory:",
+    "Production environments using PostgreSQL"
+  ],
+  "related_patterns": [
+    "test-vs-production-config",
+    "driver-specific-parameters",
+    "isolation-level-mapping",
+    "conditional-configuration"
+  ],
+  "performance_metrics": {
+    "fix_time": "15 minutes",
+    "tests_fixed": "Enabled auth flow testing",
+    "complexity": "low",
+    "impact": "high - unblocked entire test suite"
+  },
+  "tags": [
+    "database",
+    "sqlalchemy",
+    "postgresql",
+    "sqlite",
+    "asyncpg",
+    "aiosqlite",
+    "testing",
+    "configuration",
+    "driver-compatibility",
+    "isolation-level",
+    "connect-args"
+  ]
+}

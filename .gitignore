@@ -5,8 +5,12 @@
 # ============================================================================
 .env
 .env.local
+.env.*.local
 .env.production
+.env.development
 .env.test
+.env.secure
+.env.airflow
 *.pem
 *.key
 *.crt
@@ -15,6 +19,13 @@ ssl/*
 !ssl/.gitkeep
 certbot-www/*
 !certbot-www/.gitkeep
+
+# Keep template files for reference
+!.env.example
+!.env.test.example
+!.env.production.example
+!.env.secure.template
+!.env.airflow.template
 
 # ============================================================================
 # PYTHON
@@ -166,3 +177,4 @@ env/
 .claude/evals/
 .claude/helpers/
 
+excalidraw/
