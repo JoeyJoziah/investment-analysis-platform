@@ -277,7 +277,28 @@ async def consumer_electronics_industry(db_session: AsyncSession, technology_sec
 
 
 @pytest.fixture
-def auth_token(test_user):
+def mock_redis():
+    """Mock Redis client for all tests."""
+    mock_redis_client = AsyncMock()
+    mock_redis_client.get = AsyncMock(return_value=None)
+    mock_redis_client.set = AsyncMock(return_value=True)
+    mock_redis_client.setex = AsyncMock(return_value=True)
+    mock_redis_client.delete = AsyncMock(return_value=1)
+    mock_redis_client.exists = AsyncMock(return_value=False)
+    mock_redis_client.hset = AsyncMock(return_value=1)
+    mock_redis_client.hgetall = AsyncMock(return_value={})
+    mock_redis_client.expire = AsyncMock(return_value=True)
+    mock_redis_client.keys = AsyncMock(return_value=[])
+    mock_redis_client.ping = AsyncMock(return_value=True)
+
+    with patch('redis.from_url', return_value=mock_redis_client):
+        with patch('redis.Redis.from_url', return_value=mock_redis_client):
+            with patch('redis.asyncio.from_url', return_value=mock_redis_client):
+                yield mock_redis_client
+
+
+@pytest.fixture
+def auth_token(test_user, mock_redis):
     """Provide authentication token for testing.
 
     Creates an RS256 JWT using the same RSA keys as the jwt_manager so
@@ -433,8 +454,8 @@ def mock_external_apis():
 
 
 @pytest.fixture(autouse=True)
-def setup_test_environment(monkeypatch):
-    """Setup test environment variables."""
+def setup_test_environment(monkeypatch, mock_redis):
+    """Setup test environment variables with Redis mocked."""
     test_settings = {
         "DEBUG": "True",
         "TESTING": "True",
@@ -446,7 +467,7 @@ def setup_test_environment(monkeypatch):
         "POLYGON_API_KEY": "test_polygon_key",
         "NEWS_API_KEY": "test_news_key"
     }
-    
+
     for key, value in test_settings.items():
         monkeypatch.setenv(key, value)
 

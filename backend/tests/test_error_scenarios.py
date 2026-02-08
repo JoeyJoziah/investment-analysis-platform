@@ -29,6 +29,28 @@ from backend.utils.circuit_breaker import CircuitBreaker, CircuitState
 logger = logging.getLogger(__name__)
 
 
+@pytest.fixture(autouse=True)
+def mock_redis_connection():
+    """Mock Redis connections for all tests in this module."""
+    mock_redis_client = MagicMock()
+    mock_redis_client.get = MagicMock(return_value=None)
+    mock_redis_client.set = MagicMock(return_value=True)
+    mock_redis_client.setex = MagicMock(return_value=True)
+    mock_redis_client.delete = MagicMock(return_value=1)
+    mock_redis_client.exists = MagicMock(return_value=False)
+    mock_redis_client.hset = MagicMock(return_value=1)
+    mock_redis_client.hgetall = MagicMock(return_value={})
+    mock_redis_client.expire = MagicMock(return_value=True)
+    mock_redis_client.keys = MagicMock(return_value=[])
+    mock_redis_client.ping = MagicMock(return_value=True)
+
+    with patch('redis.from_url', return_value=mock_redis_client):
+        with patch('redis.Redis.from_url', return_value=mock_redis_client):
+            with patch('backend.security.jwt_manager.redis.from_url', return_value=mock_redis_client):
+                with patch('redis.asyncio.from_url', return_value=AsyncMock()):
+                    yield mock_redis_client
+
+
 @pytest.fixture
 def test_user_data():
     """Test user fixture"""

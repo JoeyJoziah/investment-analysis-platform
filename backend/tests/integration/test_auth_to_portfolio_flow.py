@@ -9,23 +9,44 @@ import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import from tables.py to match auth router
 from backend.models.tables import (
-    User, UserSession, Portfolio, Position, Stock, Transaction,
+    User, UserSession, Portfolio, Position, Transaction,
     UserRoleEnum, OrderSideEnum, AssetTypeEnum
 )
-# Import models not in tables.py from unified_models
-from backend.models.unified_models import Exchange, Sector
+# Import models from unified_models (Stock uses exchange_id foreign key)
+from backend.models.unified_models import Exchange, Sector, Stock, Industry
 from backend.api.main import app
 from backend.auth.oauth2 import create_access_token, create_refresh_token
 from httpx import AsyncClient, ASGITransport
 
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(autouse=True)
+def mock_redis_for_auth():
+    """Mock Redis for all auth tests in this module."""
+    mock_redis_client = MagicMock()
+    mock_redis_client.get = MagicMock(return_value=None)
+    mock_redis_client.set = MagicMock(return_value=True)
+    mock_redis_client.setex = MagicMock(return_value=True)
+    mock_redis_client.delete = MagicMock(return_value=1)
+    mock_redis_client.exists = MagicMock(return_value=False)
+    mock_redis_client.hset = MagicMock(return_value=1)
+    mock_redis_client.hgetall = MagicMock(return_value={})
+    mock_redis_client.expire = MagicMock(return_value=True)
+    mock_redis_client.keys = MagicMock(return_value=[])
+    mock_redis_client.ping = MagicMock(return_value=True)
+
+    with patch('redis.from_url', return_value=mock_redis_client):
+        with patch('redis.Redis.from_url', return_value=mock_redis_client):
+            with patch('backend.security.jwt_manager.redis.from_url', return_value=mock_redis_client):
+                yield mock_redis_client
 
 
 @pytest_asyncio.fixture
@@ -132,15 +153,30 @@ async def technology_sector(db_session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector):
+async def consumer_electronics_industry(db_session: AsyncSession, technology_sector: Sector):
+    """Create Consumer Electronics industry for testing."""
+    industry = Industry(
+        name="Consumer Electronics",
+        sector_id=technology_sector.id,
+        description="Consumer electronics industry"
+    )
+    db_session.add(industry)
+    await db_session.commit()
+    await db_session.refresh(industry)
+    return industry
+
+
+@pytest_asyncio.fixture
+async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, technology_sector: Sector, consumer_electronics_industry: Industry):
     """Create sample stocks for portfolio testing."""
     stocks = [
         Stock(
             symbol="AAPL",
             name="Apple Inc.",
-            exchange_id=nasdaq_exchange.id,
+            exchange_id=nasdaq_exchange.id,  # Use exchange_id foreign key
             asset_type="stock",
-            sector_id=technology_sector.id,
+            sector_id=technology_sector.id,  # Use sector_id foreign key
+            industry_id=consumer_electronics_industry.id,
             is_active=True,
             is_tradable=True
         ),
@@ -150,6 +186,7 @@ async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, tec
             exchange_id=nasdaq_exchange.id,
             asset_type="stock",
             sector_id=technology_sector.id,
+            industry_id=consumer_electronics_industry.id,
             is_active=True,
             is_tradable=True
         ),
@@ -159,6 +196,7 @@ async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, tec
             exchange_id=nasdaq_exchange.id,
             asset_type="stock",
             sector_id=technology_sector.id,
+            industry_id=consumer_electronics_industry.id,
             is_active=True,
             is_tradable=True
         )
@@ -166,6 +204,9 @@ async def sample_stocks(db_session: AsyncSession, nasdaq_exchange: Exchange, tec
     for stock in stocks:
         db_session.add(stock)
     await db_session.commit()
+    # Refresh to get generated IDs
+    for stock in stocks:
+        await db_session.refresh(stock)
     return {stock.symbol: stock for stock in stocks}
 
 
