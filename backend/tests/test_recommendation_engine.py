@@ -4,7 +4,7 @@ Comprehensive tests for the recommendation engine
 
 import pytest
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import numpy as np
 import pandas as pd
 from unittest.mock import Mock, patch, AsyncMock
@@ -221,7 +221,7 @@ class TestRecommendationEngine:
         active_rec.entry_price = 150.0
         active_rec.stop_loss = 145.0
         active_rec.target_price = 160.0
-        active_rec.valid_until = datetime.utcnow() + timedelta(days=1)
+        active_rec.valid_until = datetime.now(timezone.utc) + timedelta(days=1)
         
         # Mock current data with price below stop loss
         with patch.object(

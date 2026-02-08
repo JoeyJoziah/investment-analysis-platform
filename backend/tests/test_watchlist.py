@@ -12,7 +12,7 @@ Tests cover:
 
 import pytest
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
@@ -88,8 +88,8 @@ def sample_watchlist(mock_user):
     watchlist.name = "My Test Watchlist"
     watchlist.description = "Test watchlist for unit tests"
     watchlist.is_public = False
-    watchlist.created_at = datetime.utcnow()
-    watchlist.updated_at = datetime.utcnow()
+    watchlist.created_at = datetime.now(timezone.utc)
+    watchlist.updated_at = datetime.now(timezone.utc)
     watchlist.items = []
     return watchlist
 
@@ -103,8 +103,8 @@ def sample_public_watchlist(mock_user_2):
     watchlist.name = "Public Watchlist"
     watchlist.description = "A public watchlist"
     watchlist.is_public = True
-    watchlist.created_at = datetime.utcnow()
-    watchlist.updated_at = datetime.utcnow()
+    watchlist.created_at = datetime.now(timezone.utc)
+    watchlist.updated_at = datetime.now(timezone.utc)
     watchlist.items = []
     return watchlist
 
@@ -147,7 +147,7 @@ def sample_watchlist_item(sample_watchlist, sample_stock):
     item.target_price = Decimal("200.00")
     item.notes = "Watching for entry point"
     item.alert_enabled = True
-    item.added_at = datetime.utcnow()
+    item.added_at = datetime.now(timezone.utc)
     item.stock = sample_stock
     return item
 
@@ -163,7 +163,7 @@ def sample_items_with_prices():
             "target_price": 200.00,
             "notes": "Watching for entry",
             "alert_enabled": True,
-            "added_at": datetime.utcnow(),
+            "added_at": datetime.now(timezone.utc),
             "symbol": "AAPL",
             "company_name": "Apple Inc.",
             "sector": "Technology",
@@ -180,7 +180,7 @@ def sample_items_with_prices():
             "target_price": 150.00,
             "notes": None,
             "alert_enabled": False,
-            "added_at": datetime.utcnow(),
+            "added_at": datetime.now(timezone.utc),
             "symbol": "GOOGL",
             "company_name": "Alphabet Inc.",
             "sector": "Technology",
@@ -1541,8 +1541,8 @@ class TestEdgeCasesAndErrorHandling:
         special_watchlist.name = "Tech Stocks - Q1'25 (FAANG+)"
         special_watchlist.description = "Test with special chars"
         special_watchlist.is_public = False
-        special_watchlist.created_at = datetime.utcnow()
-        special_watchlist.updated_at = datetime.utcnow()
+        special_watchlist.created_at = datetime.now(timezone.utc)
+        special_watchlist.updated_at = datetime.now(timezone.utc)
         special_watchlist.items = []
 
         with patch(

@@ -7,7 +7,7 @@ final investment recommendations, including caching, real-time data, and thesis 
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
@@ -177,7 +177,7 @@ async def test_stock_lookup_to_recommendation(
             fundamental_score=0.86,
             sentiment_score=0.75,
             is_active=True,
-            valid_until=datetime.utcnow() + timedelta(days=30)
+            valid_until=datetime.now(timezone.utc) + timedelta(days=30)
         )
 
         response = await async_client.post(
@@ -339,7 +339,7 @@ async def test_real_time_quote_to_alert(
             "price": 171.50,
             "change": 6.50,
             "change_percent": 3.94,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Trigger alert check

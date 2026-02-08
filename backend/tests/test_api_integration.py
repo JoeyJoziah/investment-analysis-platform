@@ -6,7 +6,7 @@ Tests all critical API endpoints with real-world scenarios and error conditions.
 import pytest
 import asyncio
 import json
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient, ASGITransport
@@ -31,7 +31,7 @@ class TestAPIEndpointsIntegration:
             username="testuser",
             email="test@example.com",
             is_active=True,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
     def get_mock_db_session(self):
@@ -89,8 +89,8 @@ class TestAPIEndpointsIntegration:
                         name="Test Portfolio",
                         cash_balance=10000,
                         strategy="balanced",
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc)
                     )
                 ]
 
@@ -147,8 +147,8 @@ class TestAPIEndpointsIntegration:
                     name="Test Portfolio",
                     cash_balance=50000.0,
                     strategy="balanced",
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
                 )
 
                 mock_positions = [
@@ -178,7 +178,7 @@ class TestAPIEndpointsIntegration:
                         total_amount=15000.0,
                         fees=10.0,
                         notes="Initial purchase",
-                        created_at=datetime.utcnow()
+                        created_at=datetime.now(timezone.utc)
                     )
                 ]
 
@@ -326,9 +326,9 @@ class TestAPIEndpointsIntegration:
                         tasks.append(task)
 
                     # Execute all requests concurrently
-                    start_time = datetime.utcnow()
+                    start_time = datetime.now(timezone.utc)
                     responses = await asyncio.gather(*tasks, return_exceptions=True)
-                    end_time = datetime.utcnow()
+                    end_time = datetime.now(timezone.utc)
 
                     # Verify performance
                     duration = (end_time - start_time).total_seconds()

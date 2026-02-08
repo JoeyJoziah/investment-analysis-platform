@@ -8,7 +8,7 @@ import pytest_asyncio
 import asyncio
 import json
 import os
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -85,7 +85,7 @@ class TestDatabaseIntegration:
             hashed_password="$2b$12$hashedpassword",
             is_active=True,
             is_verified=True,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
     @pytest.fixture
@@ -109,7 +109,7 @@ class TestDatabaseIntegration:
             description="Integration test portfolio",
             strategy="balanced",
             cash_balance=100000.00,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
 
     @pytest.mark.asyncio
@@ -150,7 +150,7 @@ class TestDatabaseIntegration:
             assert user_by_email.id == created_user.id
             
             # Test user update
-            updated_data = {"is_verified": True, "last_login": datetime.utcnow()}
+            updated_data = {"is_verified": True, "last_login": datetime.now(timezone.utc)}
             updated_user = await user_repository.update_user(
                 created_user.id,
                 updated_data,
@@ -304,7 +304,7 @@ class TestDatabaseIntegration:
                 quantity=100,
                 average_cost=150.00,
                 current_price=155.00,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             
             created_position = await portfolio_repository.create_position(
@@ -544,30 +544,30 @@ class TestDatabaseIntegration:
                     adjusted_close=base_price + np.random.uniform(-2, 2)
                 ))
             
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             await price_repository.bulk_create_prices(bulk_prices, session=db_session)
             await db_session.commit()
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             insert_duration = (end_time - start_time).total_seconds()
             assert insert_duration < 30.0, f"Bulk insert took {insert_duration}s, should be under 30s"
             
             # Test query performance
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             price_history = await price_repository.get_price_history(
                 symbol=created_stock.symbol,
                 start_date=date.today() - timedelta(days=90),
                 end_date=date.today(),
                 session=db_session
             )
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             query_duration = (end_time - start_time).total_seconds()
             assert query_duration < 5.0, f"Query took {query_duration}s, should be under 5s"
             assert len(price_history) > 0
             
             # Test aggregation performance
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             avg_volume = await db_session.execute(
                 text("""
                     SELECT AVG(volume) as avg_volume 
@@ -577,7 +577,7 @@ class TestDatabaseIntegration:
                 {"symbol": created_stock.symbol}
             )
             result = avg_volume.fetchone()
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             aggregation_duration = (end_time - start_time).total_seconds()
             assert aggregation_duration < 2.0, f"Aggregation took {aggregation_duration}s, should be under 2s"
@@ -775,7 +775,7 @@ class TestDatabaseIntegration:
             await db_session.commit()
             
             # Test indexed query performance (symbol + date range)
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             indexed_query_result = await db_session.execute(
                 text("""
                     EXPLAIN ANALYZE
@@ -791,7 +791,7 @@ class TestDatabaseIntegration:
                     "end_date": date.today()
                 }
             )
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             query_plan = indexed_query_result.fetchall()
             execution_time = (end_time - start_time).total_seconds()
@@ -803,7 +803,7 @@ class TestDatabaseIntegration:
             assert execution_time < 1.0, f"Indexed query took {execution_time}s, should be under 1s"
             
             # Test query without using index (full table scan)
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             unindexed_query_result = await db_session.execute(
                 text("""
                     SELECT COUNT(*) FROM price_data 
@@ -812,7 +812,7 @@ class TestDatabaseIntegration:
                 {"volume_threshold": 5000000}
             )
             result = unindexed_query_result.fetchone()
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             scan_time = (end_time - start_time).total_seconds()
             # Full table scan might be slower but should still complete quickly

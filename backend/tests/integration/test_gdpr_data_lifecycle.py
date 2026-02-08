@@ -7,7 +7,7 @@ data export, anonymization, deletion cascades, and audit trail compliance.
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 from unittest.mock import AsyncMock, patch
@@ -147,7 +147,7 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
         price=Decimal("150.00"),
         total_amount=Decimal("7505.00"),  # (50 * 150.00) + 5.00 commission
         commission=Decimal("5.00"),
-        trade_date=datetime.utcnow()
+        trade_date=datetime.now(timezone.utc)
     )
     db_session.add(transaction)
     await db_session.commit()
@@ -180,7 +180,7 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
         ip_address="192.168.1.1",
         user_agent="Mozilla/5.0",
         is_active=True,
-        expires_at=datetime.utcnow() + timedelta(hours=24)
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24)
     )
     db_session.add(session)
     await db_session.commit()
@@ -191,7 +191,7 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
         action="user_login",
         resource_type="user",
         resource_id=str(gdpr_test_user.id),
-        meta_data={"ip": "192.168.1.1", "timestamp": datetime.utcnow().isoformat()},
+        meta_data={"ip": "192.168.1.1", "timestamp": datetime.now(timezone.utc).isoformat()},
         ip_address="192.168.1.1"
     )
     db_session.add(audit_log)

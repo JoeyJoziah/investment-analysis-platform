@@ -16,7 +16,7 @@ Success Criteria:
 
 import pytest
 import pytest_asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +42,7 @@ def gdpr_user():
         hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
         is_active=True,
         is_verified=True,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
 
@@ -62,7 +62,7 @@ def export_result():
     return MagicMock(
         export_id="export_123",
         user_id=1,
-        export_date=datetime.utcnow(),
+        export_date=datetime.now(timezone.utc),
         categories=["profile", "thesis", "watchlist", "preferences"],
         record_counts={"profile": 1, "thesis": 5, "watchlist": 3, "preferences": 1},
         data={
@@ -555,7 +555,7 @@ class TestDataPortability:
             export_result_with_ip = MagicMock(
                 export_id="export_124",
                 user_id=1,
-                export_date=datetime.utcnow(),
+                export_date=datetime.now(timezone.utc),
                 categories=["profile", "consent_records"],
                 record_counts={"profile": 1, "consent_records": 5},
                 data={

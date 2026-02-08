@@ -7,7 +7,7 @@ and automated recommendation generation with confidence scoring.
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
@@ -374,7 +374,7 @@ async def test_recommendation_to_portfolio_action(
         fundamental_score=0.90,
         sentiment_score=0.82,
         is_active=True,
-        valid_until=datetime.utcnow() + timedelta(days=30)
+        valid_until=datetime.now(timezone.utc) + timedelta(days=30)
     )
     db_session.add(recommendation)
     await db_session.commit()

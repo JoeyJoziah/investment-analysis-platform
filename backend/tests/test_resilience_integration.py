@@ -6,7 +6,7 @@ Tests circuit breakers, fallback mechanisms, retry logic, and system recovery.
 import pytest
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
@@ -95,7 +95,7 @@ class TestCircuitBreakerIntegration:
         assert "Circuit breaker is OPEN" in str(exc_info.value)
         
         # Test automatic recovery after timeout
-        basic_circuit_breaker.last_failure_time = datetime.utcnow() - timedelta(seconds=15)
+        basic_circuit_breaker.last_failure_time = datetime.now(timezone.utc) - timedelta(seconds=15)
         
         # Should be in HALF_OPEN state after timeout
         result = await basic_circuit_breaker.call(lambda: "recovery_test")
@@ -412,12 +412,12 @@ class TestAPIClientResilience:
             # Simulate rate limiting responses
             mock_get.side_effect = [
                 MagicMock(status_code=429, headers={"Retry-After": "60"}),  # Rate limited
-                MagicMock(status_code=429, headers={"X-RateLimit-Reset": str(int(datetime.utcnow().timestamp()) + 30)}),
+                MagicMock(status_code=429, headers={"X-RateLimit-Reset": str(int(datetime.now(timezone.utc).timestamp()) + 30)}),
                 MagicMock(status_code=200, json=lambda: {"data": "after_backoff"})
             ]
             
             # Should handle rate limiting with backoff
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             with patch('asyncio.sleep') as mock_sleep:
                 response = await robust_api_client.get("/rate/limited")
@@ -560,9 +560,9 @@ class TestSystemResilience:
         graceful_shutdown_manager.register_service(slow_service)
         
         # Should handle timeout
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         await graceful_shutdown_manager.shutdown()
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         
         # Should not wait beyond force shutdown timeout
         duration = (end_time - start_time).total_seconds()
@@ -697,9 +697,9 @@ class TestEndToEndResilience:
         
         # Simulate complete system failure
         components = {
-            "database": {"status": "down", "last_seen": datetime.utcnow() - timedelta(minutes=5)},
-            "redis": {"status": "down", "last_seen": datetime.utcnow() - timedelta(minutes=3)},
-            "external_apis": {"status": "down", "last_seen": datetime.utcnow() - timedelta(minutes=2)}
+            "database": {"status": "down", "last_seen": datetime.now(timezone.utc) - timedelta(minutes=5)},
+            "redis": {"status": "down", "last_seen": datetime.now(timezone.utc) - timedelta(minutes=3)},
+            "external_apis": {"status": "down", "last_seen": datetime.now(timezone.utc) - timedelta(minutes=2)}
         }
         
         # Test system recovery sequence

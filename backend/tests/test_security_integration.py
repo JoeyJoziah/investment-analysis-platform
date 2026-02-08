@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock, Mock
 from httpx import AsyncClient, ASGITransport
@@ -43,8 +43,8 @@ class TestSecurityIntegration:
             hashed_password="$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",  # "secret"
             is_active=True,
             is_verified=True,
-            created_at=datetime.utcnow(),
-            last_login=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            last_login=datetime.now(timezone.utc)
         )
 
     @pytest.fixture

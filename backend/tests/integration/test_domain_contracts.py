@@ -17,7 +17,7 @@ Contract verification ensures:
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -129,8 +129,8 @@ def sample_prediction_dto():
         symbol="AAPL",
         model_id="xgboost_v1",
         model_name="XGBoost Classifier",
-        prediction_date=datetime.utcnow(),
-        target_date=datetime.utcnow() + timedelta(days=7),
+        prediction_date=datetime.now(timezone.utc),
+        target_date=datetime.now(timezone.utc) + timedelta(days=7),
         horizon=PredictionHorizon.WEEK_1,
         predicted_price=Decimal("175.00"),
         predicted_price_low=Decimal("170.00"),
@@ -149,8 +149,8 @@ def sample_recommendation_dto():
         recommendation_id="rec-12345",
         stock_id=1,
         symbol="AAPL",
-        created_at=datetime.utcnow(),
-        valid_until=datetime.utcnow() + timedelta(days=30),
+        created_at=datetime.now(timezone.utc),
+        valid_until=datetime.now(timezone.utc) + timedelta(days=30),
         action=RecommendationAction.BUY,
         confidence=0.85,
         priority=8,
@@ -738,7 +738,7 @@ class TestCrossDomainIntegration:
                 timeliness=90.0,
                 consistency=88.0,
                 issues=[],
-                assessed_at=datetime.utcnow()
+                assessed_at=datetime.now(timezone.utc)
             )
         )
 
@@ -788,7 +788,7 @@ class TestCrossDomainIntegration:
                 timeliness=90.0,
                 consistency=88.0,
                 issues=[],
-                assessed_at=datetime.utcnow()
+                assessed_at=datetime.now(timezone.utc)
             )
         )
 

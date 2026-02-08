@@ -7,7 +7,7 @@ and portfolio operations with proper authorization checks.
 
 import pytest
 import pytest_asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 from sqlalchemy import select
@@ -39,7 +39,7 @@ async def premium_user(db_session: AsyncSession):
         is_active=True,
         is_verified=True,
         subscription_tier="premium",
-        subscription_end_date=datetime.utcnow() + timedelta(days=365)
+        subscription_end_date=datetime.now(timezone.utc) + timedelta(days=365)
     )
     db_session.add(user)
     await db_session.commit()
@@ -75,8 +75,8 @@ async def user_session(db_session: AsyncSession, premium_user: User):
         ip_address="127.0.0.1",
         user_agent="pytest-client/1.0",
         is_active=True,
-        expires_at=datetime.utcnow() + timedelta(hours=24),
-        last_activity=datetime.utcnow()
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        last_activity=datetime.now(timezone.utc)
     )
     db_session.add(session)
     await db_session.commit()

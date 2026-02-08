@@ -15,7 +15,7 @@ Test Coverage:
 import pytest
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch, Mock
 from httpx import AsyncClient, ASGITransport
@@ -565,7 +565,7 @@ class TestMetricsIntegration:
                         dt = datetime.fromisoformat(timestamp_str)
 
                     # Should be recent (within 1 minute)
-                    time_diff = abs((datetime.utcnow() - dt.replace(tzinfo=None)).total_seconds())
+                    time_diff = abs((datetime.now(timezone.utc) - dt.replace(tzinfo=None)).total_seconds())
                     assert time_diff < 60, f"Timestamp too old: {time_diff} seconds"
                 except ValueError:
                     # May be in a different format, just check it's a string

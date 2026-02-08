@@ -14,7 +14,7 @@ Coverage target: >=80% for backend/api/routers/cache_management.py
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock, AsyncMock
 import json
 
@@ -29,7 +29,7 @@ from backend.tests.conftest import assert_success_response, assert_api_error_res
 def mock_cache_metrics():
     """Mock cache metrics data"""
     return {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'hit_ratio': 0.85,
         'total_requests': 10000,
         'api_calls_saved': 8500,
@@ -71,7 +71,7 @@ def mock_cache_metrics():
 def mock_historical_metrics():
     """Mock historical metrics (24h)"""
     metrics_list = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for i in range(24):
         timestamp = now - timedelta(hours=i)
         metrics_list.append({
@@ -107,7 +107,7 @@ def mock_cost_analysis():
 def mock_performance_report():
     """Mock performance report data"""
     return {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'overall_hit_ratio': 0.85,
         'total_requests': 10000,
         'api_calls_saved': 8500,
@@ -140,7 +140,7 @@ def mock_performance_report():
         ],
         'trends': {
             'last_7_days': [
-                {'date': (datetime.utcnow() - timedelta(days=i)).isoformat(), 'hit_ratio': 0.82 + (i * 0.001)}
+                {'date': (datetime.now(timezone.utc) - timedelta(days=i)).isoformat(), 'hit_ratio': 0.82 + (i * 0.001)}
                 for i in range(7)
             ],
             'direction': 'improving',
@@ -158,7 +158,7 @@ def mock_performance_report():
 def mock_cache_health():
     """Mock cache health status"""
     return {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'overall_status': 'healthy',
         'components': {
             'cache_manager': {
@@ -186,7 +186,7 @@ def mock_cache_health():
 def mock_cache_statistics():
     """Mock cache statistics"""
     return {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'cache_layer_statistics': {
             'l1': {
                 'hits': 4000,
@@ -236,7 +236,7 @@ def mock_cache_statistics():
 def mock_api_usage():
     """Mock API usage data"""
     return {
-        'timestamp': datetime.utcnow().isoformat(),
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'api_usage': {
             'alpha_vantage': {
                 'remaining_calls': 12,
@@ -883,7 +883,7 @@ class TestEdgeCases:
     async def test_zero_hit_ratio(self, async_client: AsyncClient):
         """Test metrics with zero hit ratio"""
         metrics_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'hit_ratio': 0.0,
             'total_requests': 0,
             'api_calls_saved': 0,
@@ -906,7 +906,7 @@ class TestEdgeCases:
     async def test_high_hit_ratio(self, async_client: AsyncClient):
         """Test metrics with maximum hit ratio"""
         metrics_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'hit_ratio': 1.0,
             'total_requests': 50000,
             'api_calls_saved': 50000,
@@ -929,7 +929,7 @@ class TestEdgeCases:
     async def test_empty_recommendations(self, async_client: AsyncClient):
         """Test performance report with no recommendations"""
         report_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'overall_hit_ratio': 0.95,
             'total_requests': 10000,
             'api_calls_saved': 9500,

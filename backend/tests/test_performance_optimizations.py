@@ -10,7 +10,7 @@ import time
 import gc
 import psutil
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from backend.utils.memory_manager import (
     MemoryManager, MemoryPressureLevel, GCStrategy, BoundedDict, BoundedList
@@ -345,7 +345,7 @@ class TestDynamicResourceManager:
         """Test resource optimization"""
         # Create mock high-pressure metrics
         high_pressure_metrics = ResourceMetrics(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             cpu_percent=95.0,
             memory_percent=90.0,
             cpu_count_logical=4,
@@ -483,7 +483,7 @@ class TestPerformanceProfiler:
                 MetricType.LATENCY,
                 "test_metric",
                 100 + i * 10,
-                datetime.utcnow()
+                datetime.now(timezone.utc)
             )
         
         report = profiler.generate_performance_report(time_range_minutes=60)
@@ -500,7 +500,7 @@ class TestPerformanceProfiler:
             MetricType.THROUGHPUT,
             "test_export_metric",
             50.0,
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
             tags={'test': 'true'},
             unit='rps'
         )

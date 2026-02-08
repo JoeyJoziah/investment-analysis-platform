@@ -7,7 +7,7 @@ import pytest
 import asyncio
 import json
 import random
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List, Optional, Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 from decimal import Decimal
@@ -49,8 +49,8 @@ class TestDataGenerator:
             is_verified=True,
             phone_number=fake.phone_number(),
             date_of_birth=fake.date_of_birth(minimum_age=18, maximum_age=80),
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 365)),
-            last_login=datetime.utcnow() - timedelta(hours=random.randint(1, 24)),
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 365)),
+            last_login=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, 24)),
             **kwargs
         )
     
@@ -117,7 +117,7 @@ class TestDataGenerator:
                 "bonds": random.uniform(0.05, 0.3),
                 "cash": random.uniform(0.05, 0.2)
             },
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 1095)),  # Up to 3 years ago
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 1095)),  # Up to 3 years ago
             **kwargs
         )
     
@@ -142,7 +142,7 @@ class TestDataGenerator:
             market_value=Decimal(quantity * current_price),
             unrealized_gain=Decimal(quantity * (current_price - avg_cost)),
             realized_gain=Decimal(random.uniform(-1000, 5000)),
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 365)),
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 365)),
             **kwargs
         )
     
@@ -220,7 +220,7 @@ class TestDataGenerator:
             total_amount=Decimal(total_amount),
             fees=Decimal(random.uniform(0, 10)) if selected_type in ["buy", "sell"] else Decimal(0),
             notes=fake.text(max_nb_chars=100),
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 365)),
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 365)),
             **kwargs
         )
 
@@ -237,7 +237,7 @@ class MockDataFactory:
             "email": f"test{user_id}@example.com",
             "is_active": True,
             "is_verified": True,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
         defaults.update(kwargs)
         return User(**defaults)
@@ -558,11 +558,11 @@ class PerformanceTimer:
         self.duration = None
     
     def __enter__(self):
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(timezone.utc)
         self.duration = (self.end_time - self.start_time).total_seconds()
         
         if self.max_duration and self.duration > self.max_duration:

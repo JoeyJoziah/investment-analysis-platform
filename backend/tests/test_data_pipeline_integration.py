@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 import asyncio
 import json
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,7 +70,7 @@ class TestDataPipelineIntegration:
                 "volume": 45123456,
                 "market_cap": 3000000000000,
                 "pe_ratio": 25.5,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             },
             "GOOGL": {
                 "price": 2850.50,
@@ -79,7 +79,7 @@ class TestDataPipelineIntegration:
                 "volume": 1234567,
                 "market_cap": 2000000000000,
                 "pe_ratio": 22.8,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
 
@@ -284,7 +284,7 @@ class TestDataPipelineIntegration:
                 "price": np.random.uniform(10, 500),
                 "change": np.random.uniform(-10, 10),
                 "volume": np.random.randint(100000, 10000000),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         
         with patch.object(data_pipeline, '_fetch_from_apis') as mock_fetch:
@@ -294,9 +294,9 @@ class TestDataPipelineIntegration:
                 mock_upsert.return_value = None
                 
                 # Measure processing time
-                start_time = datetime.utcnow()
+                start_time = datetime.now(timezone.utc)
                 result = await data_pipeline.process_batch(symbols, batch_size=100)
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
                 
                 processing_time = (end_time - start_time).total_seconds()
                 
@@ -327,7 +327,7 @@ class TestDataPipelineIntegration:
                 "price": 150.50,
                 "change": 2.15,
                 "volume": 1000000,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
         
@@ -386,7 +386,7 @@ class TestDataPipelineIntegration:
                 "AAPL": {
                     "price": 155.00,  # Price changed
                     "change": 3.00,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             }
             
@@ -476,8 +476,8 @@ class TestDataPipelineIntegration:
             
             # Mock streaming messages
             streaming_messages = [
-                {"symbol": "AAPL", "price": 154.25, "timestamp": datetime.utcnow().isoformat()},
-                {"symbol": "GOOGL", "price": 2850.50, "timestamp": datetime.utcnow().isoformat()},
+                {"symbol": "AAPL", "price": 154.25, "timestamp": datetime.now(timezone.utc).isoformat()},
+                {"symbol": "GOOGL", "price": 2850.50, "timestamp": datetime.now(timezone.utc).isoformat()},
             ]
             
             mock_consumer.subscribe = AsyncMock()

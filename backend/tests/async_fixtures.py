@@ -9,7 +9,7 @@ import pytest_asyncio
 from typing import AsyncGenerator, Generator, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import text
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import tempfile
 import os
 
@@ -442,7 +442,7 @@ async def mock_external_api():
             return {
                 'symbol': symbol,
                 'price': 100.0 + (self.call_count % 50),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
     
     return MockAPI()

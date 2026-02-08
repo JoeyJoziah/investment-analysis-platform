@@ -7,13 +7,15 @@ Provides shared fixtures, test utilities, and configuration for all test modules
 import os
 os.environ["TESTING"] = "True"
 os.environ["DEBUG"] = "True"
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+# Use sync-compatible URL so legacy sync engine (backend/utils/database.py) can initialise.
+# Async test fixtures use their own hardcoded sqlite+aiosqlite URL and override get_async_db_session.
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import pytest
 import pytest_asyncio
 import asyncio
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 from unittest.mock import patch, AsyncMock
 import logging
@@ -187,7 +189,7 @@ def test_user():
         full_name="Test User",
         is_active=True,
         is_verified=True,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
 
@@ -245,16 +247,16 @@ def auth_token(test_user):
     """Provide authentication token for testing."""
     from backend.security.security_config import SecurityConfig
     import jwt
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     # Build minimal JWT payload
-    expire = datetime.utcnow() + timedelta(minutes=15)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     payload = {
         "sub": str(test_user.id),
         "username": test_user.username,
         "email": test_user.email,
         "exp": expire,
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "type": "access"
     }
 
@@ -398,7 +400,7 @@ def setup_test_environment(monkeypatch):
     test_settings = {
         "DEBUG": "True",
         "TESTING": "True",
-        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "DATABASE_URL": "sqlite:///:memory:",
         "REDIS_URL": "redis://localhost:6379/1",
         "SECRET_KEY": "test-secret-key-for-testing-only",
         "ALPHA_VANTAGE_API_KEY": "test_alpha_vantage_key",
@@ -478,10 +480,10 @@ class TestMetrics:
         }
     
     def start_test_session(self):
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
     
     def end_test_session(self):
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(timezone.utc)
     
     def record_test_result(self, outcome: str):
         self.test_counts["total"] += 1
