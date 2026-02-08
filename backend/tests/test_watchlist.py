@@ -751,15 +751,16 @@ class TestWatchlistAPIEndpoints:
             from backend.api.routers.watchlist import get_user_watchlists
 
             # Execute
-            result = await get_user_watchlists(
+            response = await get_user_watchlists(
                 include_items=False,
                 db=mock_db_session,
                 current_user=mock_user
             )
 
-            # Verify
-            assert len(result) == 1
-            assert result[0].id == sample_watchlist.id
+            # Verify - unwrap ApiResponse
+            assert response.success is True
+            assert len(response.data) == 1
+            assert response.data[0].id == sample_watchlist.id
 
     @pytest.mark.asyncio
     async def test_create_watchlist_success(
@@ -780,14 +781,15 @@ class TestWatchlistAPIEndpoints:
             from backend.api.routers.watchlist import create_watchlist
 
             # Execute
-            result = await create_watchlist(
+            response = await create_watchlist(
                 watchlist_data=watchlist_data,
                 db=mock_db_session,
                 current_user=mock_user
             )
 
-            # Verify
-            assert result.id == sample_watchlist.id
+            # Verify - unwrap ApiResponse
+            assert response.success is True
+            assert response.data.id == sample_watchlist.id
             mock_repo.create_watchlist.assert_called_once()
 
     @pytest.mark.asyncio
@@ -841,15 +843,16 @@ class TestWatchlistAPIEndpoints:
                 from backend.api.routers.watchlist import get_watchlist
 
                 # Execute
-                result = await get_watchlist(
+                response = await get_watchlist(
                     watchlist_id=1,
                     db=mock_db_session,
                     current_user=mock_user
                 )
 
-                # Verify
-                assert result.id == sample_watchlist.id
-                assert len(result.items) == 2
+                # Verify - unwrap ApiResponse
+                assert response.success is True
+                assert response.data.id == sample_watchlist.id
+                assert len(response.data.items) == 2
 
     @pytest.mark.asyncio
     async def test_get_watchlist_not_found_raises_404(
@@ -1022,16 +1025,17 @@ class TestWatchlistItemEndpoints:
                     from backend.api.routers.watchlist import add_watchlist_item
 
                     # Execute
-                    result = await add_watchlist_item(
+                    response = await add_watchlist_item(
                         watchlist_id=1,
                         item_data=item_data,
                         db=mock_db_session,
                         current_user=mock_user
                     )
 
-                    # Verify
-                    assert result.symbol == "AAPL"
-                    assert result.target_price == 200.00
+                    # Verify - unwrap ApiResponse
+                    assert response.success is True
+                    assert response.data.symbol == "AAPL"
+                    assert response.data.target_price == 200.00
 
     @pytest.mark.asyncio
     async def test_add_item_stock_not_found_raises_404(
@@ -1145,7 +1149,7 @@ class TestWatchlistItemEndpoints:
                     from backend.api.routers.watchlist import update_watchlist_item
 
                     # Execute
-                    result = await update_watchlist_item(
+                    response = await update_watchlist_item(
                         watchlist_id=1,
                         item_id=1,
                         item_data=update_data,
@@ -1153,8 +1157,9 @@ class TestWatchlistItemEndpoints:
                         current_user=mock_user
                     )
 
-                    # Verify
-                    assert result.target_price == 250.00
+                    # Verify - unwrap ApiResponse
+                    assert response.success is True
+                    assert response.data.target_price == 250.00
 
     @pytest.mark.asyncio
     async def test_update_item_not_found_raises_404(
@@ -1277,14 +1282,15 @@ class TestConvenienceEndpoints:
                 from backend.api.routers.watchlist import add_to_default_watchlist
 
                 # Execute
-                result = await add_to_default_watchlist(
+                response = await add_to_default_watchlist(
                     symbol="aapl",  # lowercase to test uppercasing
                     db=mock_db_session,
                     current_user=mock_user
                 )
 
-                # Verify
-                assert result.symbol == "AAPL"
+                # Verify - unwrap ApiResponse
+                assert response.success is True
+                assert response.data.symbol == "AAPL"
 
     @pytest.mark.asyncio
     async def test_add_to_default_watchlist_stock_not_found(
@@ -1390,17 +1396,18 @@ class TestConvenienceEndpoints:
                 from backend.api.routers.watchlist import check_symbol_in_watchlists
 
                 # Execute
-                result = await check_symbol_in_watchlists(
+                response = await check_symbol_in_watchlists(
                     symbol="aapl",
                     db=mock_db_session,
                     current_user=mock_user
                 )
 
-                # Verify
-                assert result["symbol"] == "AAPL"
-                assert result["stock_id"] == sample_stock.id
-                assert result["is_watched"] is True
-                assert len(result["in_watchlists"]) == 1
+                # Verify - unwrap ApiResponse
+                assert response.success is True
+                assert response.data["symbol"] == "AAPL"
+                assert response.data["stock_id"] == sample_stock.id
+                assert response.data["is_watched"] is True
+                assert len(response.data["in_watchlists"]) == 1
 
     @pytest.mark.asyncio
     async def test_check_symbol_not_in_any_watchlist(
@@ -1421,16 +1428,17 @@ class TestConvenienceEndpoints:
                 from backend.api.routers.watchlist import check_symbol_in_watchlists
 
                 # Execute
-                result = await check_symbol_in_watchlists(
+                response = await check_symbol_in_watchlists(
                     symbol="AAPL",
                     db=mock_db_session,
                     current_user=mock_user
                 )
 
-                # Verify
-                assert result["symbol"] == "AAPL"
-                assert result["is_watched"] is False
-                assert len(result["in_watchlists"]) == 0
+                # Verify - unwrap ApiResponse
+                assert response.success is True
+                assert response.data["symbol"] == "AAPL"
+                assert response.data["is_watched"] is False
+                assert len(response.data["in_watchlists"]) == 0
 
 
 # ============================================================================
@@ -1553,14 +1561,15 @@ class TestEdgeCasesAndErrorHandling:
             from backend.api.routers.watchlist import create_watchlist
 
             # Execute
-            result = await create_watchlist(
+            response = await create_watchlist(
                 watchlist_data=watchlist_data,
                 db=mock_db_session,
                 current_user=mock_user
             )
 
-            # Verify
-            assert result.name == "Tech Stocks - Q1'25 (FAANG+)"
+            # Verify - unwrap ApiResponse
+            assert response.success is True
+            assert response.data.name == "Tech Stocks - Q1'25 (FAANG+)"
 
     @pytest.mark.asyncio
     async def test_empty_watchlist_operations(
@@ -1582,15 +1591,16 @@ class TestEdgeCasesAndErrorHandling:
                 from backend.api.routers.watchlist import get_watchlist
 
                 # Execute
-                result = await get_watchlist(
+                response = await get_watchlist(
                     watchlist_id=1,
                     db=mock_db_session,
                     current_user=mock_user
                 )
 
-                # Verify
-                assert len(result.items) == 0
-                assert result.item_count == 0
+                # Verify - unwrap ApiResponse
+                assert response.success is True
+                assert len(response.data.items) == 0
+                assert response.data.item_count == 0
 
     @pytest.mark.asyncio
     async def test_item_with_zero_target_price_clears_price(
@@ -1621,7 +1631,7 @@ class TestEdgeCasesAndErrorHandling:
                     from backend.api.routers.watchlist import update_watchlist_item
 
                     # Execute
-                    result = await update_watchlist_item(
+                    response = await update_watchlist_item(
                         watchlist_id=1,
                         item_id=1,
                         item_data=update_data,
@@ -1629,8 +1639,9 @@ class TestEdgeCasesAndErrorHandling:
                         current_user=mock_user
                     )
 
-                    # Verify
-                    assert result.target_price is None
+                    # Verify - unwrap ApiResponse
+                    assert response.success is True
+                    assert response.data.target_price is None
 
     @pytest.mark.asyncio
     async def test_internal_server_error_handling(
