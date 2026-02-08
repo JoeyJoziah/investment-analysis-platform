@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 import redis
+pytest.importorskip("testcontainers", reason="testcontainers not installed")
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 

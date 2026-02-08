@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 import asyncpg
 import pandas as pd
 import numpy as np
+pytest.importorskip("testcontainers", reason="testcontainers not installed")
 from testcontainers.postgres import PostgresContainer
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database

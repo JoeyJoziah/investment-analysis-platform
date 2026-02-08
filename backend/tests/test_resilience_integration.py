@@ -32,6 +32,7 @@ class NonRetryableError(Exception):
     """Error that should not be retried."""
     pass
 from backend.utils.graceful_shutdown import GracefulShutdownHandler as GracefulShutdownManager
+pytest.importorskip("psycopg2", reason="psycopg2 not installed")
 from backend.utils.disaster_recovery import DisasterRecoveryOrchestrator as DisasterRecoveryManager
 from backend.data_ingestion.robust_api_client import RobustAPIClient
 

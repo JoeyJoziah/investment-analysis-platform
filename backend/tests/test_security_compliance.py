@@ -19,6 +19,7 @@ import tempfile
 import os
 from cryptography.fernet import Fernet
 from sqlalchemy import text
+pytest.importorskip("requests_mock", reason="requests_mock not installed")
 import requests_mock
 import time
 

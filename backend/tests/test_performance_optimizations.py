@@ -12,6 +12,7 @@ import psutil
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta, timezone
 
+pytest.importorskip("objgraph", reason="objgraph not installed")
 from backend.utils.memory_manager import (
     MemoryManager, MemoryPressureLevel, GCStrategy, BoundedDict, BoundedList
 )

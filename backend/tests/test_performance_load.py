@@ -20,6 +20,7 @@ import aiohttp
 import resource
 import gc
 import sys
+pytest.importorskip("memory_profiler", reason="memory_profiler not installed")
 from memory_profiler import profile
 from dataclasses import dataclass
 import json

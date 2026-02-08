@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
 import numpy as np
 
+pytest.importorskip("celery", reason="celery not installed")
 from backend.tasks.data_pipeline import DataPipeline
 from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient

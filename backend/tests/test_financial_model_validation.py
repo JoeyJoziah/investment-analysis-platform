@@ -26,6 +26,7 @@ from backend.ml.backtesting import BacktestEngine, BacktestResult
 from backend.analytics.portfolio.modern_portfolio_theory import PortfolioOptimizer
 from backend.analytics.portfolio.black_litterman import BlackLittermanOptimizer
 from backend.analytics.fundamental.valuation.dcf_model import DCFModel
+pytest.importorskip("sqlparse", reason="sqlparse not installed")
 from backend.utils.validation import validate_financial_data
 
 
