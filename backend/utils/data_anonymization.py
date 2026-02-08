@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from faker import Faker
 
 from backend.config import settings
-from backend.utils.monitoring import metrics
+from backend.utils.monitoring import data_anonymization_operations
 
 # Initialize Faker for generating fake data
 fake = Faker()
@@ -64,7 +64,7 @@ class DataAnonymizer:
         self.anonymization_map[email] = anonymized
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="email"
         ).inc()
         
@@ -90,7 +90,7 @@ class DataAnonymizer:
         anonymized = fake.name()
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="name"
         ).inc()
         
@@ -119,7 +119,7 @@ class DataAnonymizer:
             anonymized = self._hash_value(ip_address)[:16]
             
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="ip_address"
         ).inc()
         
@@ -148,7 +148,7 @@ class DataAnonymizer:
             anonymized = 'X' * len(digits)
             
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="phone"
         ).inc()
         
@@ -177,7 +177,7 @@ class DataAnonymizer:
         anonymized = round(amount * noise_factor, precision)
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="financial"
         ).inc()
         
@@ -227,7 +227,7 @@ class DataAnonymizer:
         anon_lon = round(longitude, precision)
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="location"
         ).inc()
         
@@ -249,7 +249,7 @@ class DataAnonymizer:
         encrypted = fernet.encrypt(data.encode()).decode()
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="encryption"
         ).inc()
         
@@ -297,7 +297,7 @@ class DataAnonymizer:
         self.anonymization_map[identifier] = pseudonym
         
         # Track operation
-        metrics.data_anonymization_operations.labels(
+        data_anonymization_operations.labels(
             operation_type="pseudonymization"
         ).inc()
         

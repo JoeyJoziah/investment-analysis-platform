@@ -166,7 +166,6 @@ class TestDataExport:
     async def test_export_user_data_success(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result
     ):
         """Test successful data export with all user data"""
@@ -175,8 +174,7 @@ class TestDataExport:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export",
-                headers=gdpr_auth_headers
+                "/api/v1/users/me/data-export"
             )
 
         data = assert_success_response(response, expected_status=200)
@@ -206,7 +204,6 @@ class TestDataExport:
     async def test_export_user_data_rate_limited(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result
     ):
         """Test that data export is rate limited to 3/hour"""
@@ -218,8 +215,7 @@ class TestDataExport:
             # Make 3 successful requests
             for i in range(3):
                 response = await authenticated_client.get(
-                    "/api/v1/users/me/data-export",
-                    headers=gdpr_auth_headers
+                    "/api/v1/users/me/data-export"
                 )
                 # Note: rate limiting may not work perfectly in test environment
                 # This test verifies the endpoint structure supports rate limiting
@@ -227,8 +223,7 @@ class TestDataExport:
 
             # 4th request should be rate limited (429) or still work depending on rate limiter
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export",
-                headers=gdpr_auth_headers
+                "/api/v1/users/me/data-export"
             )
             # Accept both successful response and rate limit error
             assert response.status_code in [200, 429]
@@ -253,7 +248,6 @@ class TestDataDeletion:
     async def test_request_data_deletion_success(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         deletion_result
     ):
         """Test successful deletion request creation"""
@@ -264,8 +258,7 @@ class TestDataDeletion:
             response = await authenticated_client.post(
                 "/api/v1/users/me/delete-request",
                 json={"reason": "I want to delete my account"},
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -282,7 +275,6 @@ class TestDataDeletion:
     async def test_request_data_deletion_marks_for_deletion(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         deletion_result,
         deletion_processed_result
     ):
@@ -293,8 +285,7 @@ class TestDataDeletion:
             mock_request.return_value = deletion_result
             response = await authenticated_client.post(
                 "/api/v1/users/me/delete-request",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -307,8 +298,7 @@ class TestDataDeletion:
             mock_process.return_value = deletion_processed_result
             response = await authenticated_client.post(
                 f"/api/v1/users/me/delete-request/{data['request_id']}/process",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         processed_data = assert_success_response(response, expected_status=200)
         assert processed_data["status"] == "completed"
@@ -351,8 +341,7 @@ class TestConsentManagement:
                     "granted": True,
                     "legal_basis": "explicit_consent"
                 },
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -366,7 +355,6 @@ class TestConsentManagement:
     async def test_get_consent_preferences(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         consent_status
     ):
         """Test retrieving current consent preferences"""
@@ -376,8 +364,7 @@ class TestConsentManagement:
             mock_get.return_value = consent_status
             response = await authenticated_client.get(
                 "/api/v1/users/me/consent",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -424,7 +411,6 @@ class TestDataPortability:
     async def test_get_data_portability_format(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result
     ):
         """Test that data is returned in JSON export format"""
@@ -434,8 +420,7 @@ class TestDataPortability:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
                 "/api/v1/users/me/data-export/json",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -455,7 +440,6 @@ class TestDataPortability:
     async def test_data_portability_includes_all_data(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result
     ):
         """Test that export includes all user data categories"""
@@ -465,8 +449,7 @@ class TestDataPortability:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
                 "/api/v1/users/me/data-export",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -518,8 +501,7 @@ class TestDataPortability:
             mock_export.return_value = export_result_with_ip
             response = await authenticated_client.get(
                 "/api/v1/users/me/data-export",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         data = assert_success_response(response, expected_status=200)
 
@@ -543,7 +525,6 @@ class TestGDPRIntegration:
     async def test_complete_data_lifecycle(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result,
         consent_status,
         deletion_result
@@ -556,8 +537,7 @@ class TestGDPRIntegration:
             mock_export.return_value = export_result
             export_response = await authenticated_client.get(
                 "/api/v1/users/me/data-export",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         export_data = assert_success_response(export_response, expected_status=200)
         assert export_data["export_id"] == "export_123"
@@ -567,8 +547,7 @@ class TestGDPRIntegration:
             mock_consent.return_value = consent_status
             consent_response = await authenticated_client.get(
                 "/api/v1/users/me/consent",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         consent_data = assert_success_response(consent_response, expected_status=200)
         assert consent_data["user_id"] == 1
@@ -582,8 +561,7 @@ class TestGDPRIntegration:
                     "consent_type": "marketing",
                     "granted": False
                 },
-                headers=gdpr_auth_headers
-            )
+                    )
 
         update_data = assert_success_response(update_response, expected_status=200)
         assert update_data["granted"] is False
@@ -593,8 +571,7 @@ class TestGDPRIntegration:
             mock_delete.return_value = deletion_result
             delete_response = await authenticated_client.post(
                 "/api/v1/users/me/delete-request",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         delete_data = assert_success_response(delete_response, expected_status=200)
         assert delete_data["status"] == "pending"
@@ -611,7 +588,6 @@ class TestGDPRErrorHandling:
     async def test_export_invalid_categories(
         self,
         authenticated_client: AsyncClient,
-        gdpr_auth_headers: dict,
         export_result
     ):
         """Test export with invalid category parameter"""
@@ -621,8 +597,7 @@ class TestGDPRErrorHandling:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
                 "/api/v1/users/me/data-export?include_categories=invalid_category",
-                headers=gdpr_auth_headers
-            )
+                    )
 
             # Should either succeed with empty or handle gracefully
             assert response.status_code in [200, 422]
@@ -639,8 +614,7 @@ class TestGDPRErrorHandling:
                 "consent_type": "invalid_type",
                 "granted": True
             },
-            headers=gdpr_auth_headers
-        )
+            )
 
         # Should fail validation with 422 or 400
         assert response.status_code in [400, 422]
@@ -659,7 +633,6 @@ class TestGDPRErrorHandling:
         with patch.object(data_deletion, 'process_deletion', side_effect=mock_process_error):
             response = await authenticated_client.post(
                 "/api/v1/users/me/delete-request/nonexistent_id/process",
-                headers=gdpr_auth_headers
-            )
+                    )
 
         assert_api_error_response(response, 404, "not found")

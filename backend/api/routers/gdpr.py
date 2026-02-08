@@ -19,6 +19,7 @@ import logging
 
 from backend.config.database import get_async_db_session
 from backend.models.unified_models import User
+from backend.auth.oauth2 import get_current_user
 from backend.compliance.gdpr import (
     data_portability,
     data_deletion,
@@ -153,19 +154,6 @@ def get_client_ip(request: Request) -> Optional[str]:
     return None
 
 
-async def get_current_user_from_token(
-    request: Request,
-    db: AsyncSession = Depends(get_async_db_session)
-) -> User:
-    """
-    Get current user from authentication token.
-    This is a placeholder - integrate with your actual auth system.
-    """
-    # Import your actual auth dependency
-    from backend.api.routers.auth import get_current_user
-    return await get_current_user(request, db)
-
-
 # =============================================================================
 # Data Export Endpoints (GDPR Articles 15 & 20)
 # =============================================================================
@@ -188,6 +176,7 @@ async def get_current_user_from_token(
 async def export_user_data(
     request: Request,
     include_categories: Optional[List[str]] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DataExportFullResponse]:
     """
@@ -203,8 +192,6 @@ async def export_user_data(
     in a structured, commonly used and machine-readable format.
     """
     try:
-        # Get current user (integrate with your auth system)
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         logger.info(f"Data export requested for user {user_id}")
@@ -244,11 +231,11 @@ async def export_user_data(
 )
 async def export_user_data_json(
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
     """Export user data as JSON format"""
     try:
-        current_user = await get_current_user_from_token(request, db)
         result = await data_portability.export_user_data(
             user_id=current_user.id,
             session=db
@@ -282,6 +269,7 @@ async def export_user_data_json(
 async def request_deletion(
     request: Request,
     reason: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeleteRequestResponse]:
     """
@@ -295,7 +283,6 @@ async def request_deletion(
     anonymized rather than deleted to maintain audit trails.
     """
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         logger.info(f"Deletion request initiated for user {user_id}")
@@ -431,6 +418,7 @@ async def get_deletion_audit(
 )
 async def get_consent_status(
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentStatusResponse]:
     """
@@ -440,7 +428,6 @@ async def get_consent_status(
     analytics, and third-party sharing consents.
     """
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         logger.info(f"Consent status requested for user {user_id}")
@@ -484,11 +471,11 @@ async def get_consent_status(
 )
 async def get_consent_history(
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentHistoryResponse]:
     """Get complete consent history for the authenticated user"""
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         history = await consent_manager.get_consent_history(
@@ -522,6 +509,7 @@ async def get_consent_history(
 async def record_consent(
     consent_request: ConsentRequest,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentRecordResponse]:
     """
@@ -536,7 +524,6 @@ async def record_consent(
     - Timestamp of consent action
     """
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         logger.info(
@@ -612,6 +599,7 @@ async def withdraw_consent(
         "third_party_sharing", "profiling", "automated_decisions"
     ],
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentRecordResponse]:
     """
@@ -622,7 +610,6 @@ async def withdraw_consent(
     affect the lawfulness of processing based on consent before its withdrawal.
     """
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         logger.info(f"Withdrawing consent for user {user_id}: {consent_type}")
@@ -688,11 +675,11 @@ async def check_consent(
         "third_party_sharing", "profiling", "automated_decisions"
     ],
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
     """Check if user has valid consent for a specific purpose"""
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         consent_type_map = {
@@ -741,11 +728,11 @@ async def check_consent(
 )
 async def get_retention_report(
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[RetentionReportResponse]:
     """Generate a data retention report for the authenticated user"""
     try:
-        current_user = await get_current_user_from_token(request, db)
         user_id = current_user.id
 
         report = await retention_manager.get_retention_report(
