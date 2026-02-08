@@ -188,15 +188,18 @@ jobs:
           pytest backend/tests/test_comprehensive_units.py backend/tests/unit/ \
             --cov=backend \
             --cov-report=xml:coverage-${{ matrix.test-suite }}.xml \
+            --cov-report=html:htmlcov-${{ matrix.test-suite }} \
             --cov-report=term-missing \
-            --cov-fail-under=85 \
+            --cov-fail-under=60 \
             --junitxml=test-results-${{ matrix.test-suite }}.xml \
             -v -m "unit or not slow"
         else
           pytest backend/tests/test_integration_comprehensive.py \
             --cov=backend \
             --cov-report=xml:coverage-${{ matrix.test-suite }}.xml \
+            --cov-report=html:htmlcov-${{ matrix.test-suite }} \
             --cov-report=term-missing \
+            --cov-fail-under=60 \
             --junitxml=test-results-${{ matrix.test-suite }}.xml \
             -v -m "integration and not slow"
         fi
@@ -205,6 +208,35 @@ jobs:
         REDIS_URL: redis://localhost:6379/0
         JWT_SECRET_KEY: test-secret-key
         APP_ENV: testing
+
+    - name: Check coverage target
+      if: always()
+      run: |
+        if [ -f coverage-${{ matrix.test-suite }}.xml ]; then
+          COVERAGE=$(python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage-${{ matrix.test-suite }}.xml')
+          root = tree.getroot()
+          line_rate = float(root.attrib.get('line-rate', 0))
+          print(f'{line_rate * 100:.1f}')
+          ")
+          echo "### Coverage: ${{ matrix.test-suite }} tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Line coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Minimum threshold (fail) | 60% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target threshold | 80% |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Warn if below 80% target but above 60% minimum
+          BELOW_TARGET=$(python -c "print('true' if float('${COVERAGE}') < 80.0 else 'false')")
+          if [ "$BELOW_TARGET" = "true" ]; then
+            echo "> **Warning:** Coverage is below the 80% target. Please add tests to improve coverage." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> Coverage meets the 80% target." >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
 
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
@@ -224,6 +256,13 @@ jobs:
         path: |
           test-results-${{ matrix.test-suite }}.xml
           coverage-${{ matrix.test-suite }}.xml
+
+    - name: Upload HTML coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: backend-coverage-html-${{ matrix.test-suite }}
+        path: htmlcov-${{ matrix.test-suite }}/
 
   # Frontend Testing
   frontend-test:

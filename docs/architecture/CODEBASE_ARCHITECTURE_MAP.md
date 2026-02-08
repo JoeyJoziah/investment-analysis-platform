@@ -1,8 +1,8 @@
-# Investment Analysis Platform - Comprehensive Architecture Codemap
+# Investment Analysis Platform - Codebase Architecture Map
 
-**Generated:** 2026-01-29
-**Version:** 1.0.0
-**Purpose:** Complete codebase structure analysis and architectural documentation
+**Last Updated:** 2026-02-08
+**Version:** 2.0.0
+**Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings.
 
 ---
 
@@ -21,11 +21,11 @@
 
 ## Executive Summary
 
-The Investment Analysis Platform is a full-stack financial analytics application with:
-- **Backend**: FastAPI-based Python microservices with async PostgreSQL/SQLite
-- **Frontend**: React + TypeScript with Redux state management
-- **Architecture**: Layered domain-driven design with security-first middleware stack
-- **Key Features**: Real-time stock analysis, ML predictions, portfolio management, SEC-compliant recommendations
+The Investment Analysis Platform is a full-stack financial analytics application:
+- **Backend**: FastAPI (Python) with async PostgreSQL via SQLAlchemy + asyncpg, plus a legacy synchronous SQLAlchemy layer
+- **Frontend**: React + TypeScript with Redux Toolkit state management and Material UI
+- **Architecture**: Layered domain-driven design with an 11-layer security middleware stack
+- **Key Features**: Real-time stock analysis, ML predictions, portfolio management, investment thesis generation, background task scheduling
 
 ---
 
@@ -33,251 +33,349 @@ The Investment Analysis Platform is a full-stack financial analytics application
 
 ### 1. API Layer (`backend/api/`)
 
-#### Core Router Structure
+#### Application Entry Point (`backend/api/main.py`)
+
+The FastAPI app is created with a `lifespan` context manager that initializes, in order:
+1. Async database (`backend/config/database.py` -- `initialize_database()`)
+2. Legacy synchronous database (`backend/utils/database.py` -- `init_db()`)
+3. Basic cache, then comprehensive cache manager, intelligent caching, cache monitoring, and cache invalidation triggers
+4. Background task scheduler (`backend/tasks/scheduler.py`)
+5. WebSocket cleanup task
+6. ML model manager (optional; logs warning if unavailable)
+
+Additional middleware added after security stack:
+- `PrometheusMiddleware` -- Prometheus metrics collection
+- `CacheControlMiddleware` -- HTTP cache-control headers (excludes `/api/auth/`, `/api/admin/`, `/api/ws/`, `/api/metrics`)
+- `V1DeprecationMiddleware` -- V1 API deprecation warnings (disabled during testing)
+
+Standardized error handlers are registered via `backend/middleware/error_handler.py`.
+
+#### Router Files on Disk
 
 ```
 backend/api/routers/
-├── auth.py              # Authentication & JWT management
-├── stocks.py            # Stock data & market info
-├── portfolio.py         # Portfolio management
-├── recommendations.py   # ML-powered recommendations
-├── analysis.py          # Technical/fundamental analysis
-├── watchlist.py         # User watchlists
-├── agents.py            # Trading agents (TradingAgents module)
-├── thesis.py            # Investment thesis generation
-├── monitoring.py        # System health & metrics
-├── admin.py             # Admin operations
-├── health.py            # Health checks
-└── websocket.py         # Real-time updates
+├── admin.py              # Admin operations
+├── agents.py             # Trading agents
+├── analysis.py           # Technical/fundamental analysis
+├── auth.py               # Authentication & JWT management
+├── cache_management.py   # Cache admin endpoints
+├── gdpr.py               # GDPR data subject rights
+├── health.py             # Health checks
+├── monitoring.py         # System metrics (NOT mounted in main.py)
+├── news.py               # News endpoints
+├── portfolio.py          # Portfolio management
+├── recommendations.py    # ML-powered recommendations
+├── settings.py           # User settings
+├── stocks.py             # Stock data & market info
+├── stocks_legacy.py      # Legacy stock endpoints (NOT mounted in main.py)
+├── thesis.py             # Investment thesis generation
+├── watchlist.py          # User watchlists
+└── websocket.py          # Real-time WebSocket updates
 ```
 
-#### Key API Endpoints
+#### 17 Routers Mounted in `main.py`
 
-| Router | Endpoints | Purpose |
-|--------|-----------|---------|
-| **auth.py** | `/auth/register`, `/auth/token`, `/auth/login`, `/auth/me` | User authentication with rate limiting |
-| **stocks.py** | `/stocks`, `/stocks/search`, `/stocks/{symbol}/quote`, `/stocks/{symbol}/history` | Stock data with intelligent caching |
-| **portfolio.py** | `/portfolio/summary`, `/portfolio/{id}`, `/portfolio/{id}/positions` | Portfolio tracking with real-time prices |
-| **recommendations.py** | `/recommendations/daily`, `/recommendations/list` | ML-generated investment recommendations |
+The following 16 routers from `backend/api/routers/` plus 1 from `backend/api/versioning.py` are actually included:
 
-#### Authentication Flow
+| # | Router | Prefix (as mounted) | Tags | Notes |
+|---|--------|---------------------|------|-------|
+| 1 | `health.router` | `/api/health` | health | |
+| 2 | `auth.router` | `/api/auth` | authentication | |
+| 3 | `stocks.router` | `/api/stocks` | stocks | |
+| 4 | `analysis.router` | `/api/analysis` | analysis | |
+| 5 | `recommendations.router` | `/api/recommendations` | recommendations | |
+| 6 | `portfolio.router` | `/api/portfolio` | portfolio | |
+| 7 | `websocket.router` | `/api/ws` | websocket | |
+| 8 | `admin.router` | `/api/admin` | admin | |
+| 9 | `agents.router` | `/api/agents` | agents | |
+| 10 | `cache_management.router` | `/api/cache` | cache | |
+| 11 | `gdpr.router` | `/api/v1` | gdpr | Router has no internal prefix |
+| 12 | `watchlist.router` | `/api` | watchlists | Router defines internal prefix `/watchlists` -> effective `/api/watchlists` |
+| 13 | `thesis.router` | `/api/v1` | investment-thesis | Router defines internal prefix `/thesis` -> effective `/api/v1/thesis` |
+| 14 | `news.router` | `/api/news` | news | |
+| 15 | `settings.router` | `/api/settings` | settings | |
+| 16 | `v1_migration_router` | `/api/admin/v1-migration` | v1-migration, admin | From `backend/api/versioning.py` |
+| 17 | Root endpoint | `/` | -- | Returns API status JSON |
+
+Additional non-router endpoint: `GET /api/metrics` defined directly on the app, returns Prometheus metrics.
+
+**Not mounted:** `monitoring.py` (defines its own prefix `/api/monitoring` internally but is not imported or included in `main.py`). Also not mounted: `stocks_legacy.py`.
+
+### 2. Security Middleware Stack (`backend/security/`)
+
+#### Middleware Execution Order
+
+Defined in `add_comprehensive_security_middleware()` in `security_config.py`. In non-testing mode, the full stack is:
 
 ```
-1. User Login (POST /auth/login)
-   ↓
-2. JWT Token Generation (HS256/RS256)
-   - Access Token (30 min TTL)
-   - Refresh Token (7 days TTL)
-   ↓
-3. Token Validation (SecurityConfig)
-   - jwt_manager.py (RS256 with key pairs)
-   - Fallback: HS256 with JWT_SECRET_KEY
-   ↓
-4. Rate Limiting (RateLimitCategory.AUTHENTICATION)
-   - 5 attempts per 15 minutes
-   ↓
-5. Session Creation (User model)
+Request Flow (order of add_middleware calls):
+ 1. AuditMiddleware              -- Log all requests (skipped in testing)
+ 2. SecurityHeadersMiddleware    -- CSP, HSTS, X-Frame-Options, etc.
+ 3. RateLimitingMiddleware       -- Redis-backed rate limiting (skipped in testing)
+ 4. ValidationMiddleware         -- Input validation & sanitization (skipped in testing)
+ 5. InjectionPreventionMiddleware -- SQL/XSS/CSRF protection (skipped in testing)
+ 6. HTTPSRedirectMiddleware      -- Force HTTPS (production only, when FORCE_HTTPS=true)
+ 7. TrustedHostMiddleware        -- Allowed hosts whitelist
+ 8. GZipMiddleware               -- Response compression, min 1000 bytes (skipped in testing)
+ 9. CORSMiddleware               -- Cross-origin resource sharing
+10. SessionMiddleware            -- Session cookies (skipped in testing)
+11. IP Filter Middleware         -- Inline @app.middleware, IP allowlist/blocklist
 ```
 
-### 2. Security Layer (`backend/security/`)
+Note: Due to Starlette's middleware stack semantics, the actual request processing order is reversed -- item 11 (IP Filter) runs first on the request, and item 1 (Audit) runs last before the route handler. Responses traverse in the opposite direction.
 
-#### Security Middleware Stack (Execution Order)
+Several middleware layers are conditionally disabled during testing (when `TESTING=true` env var is set) to avoid `AsyncClient` compatibility issues.
+
+After the security stack, `main.py` adds:
+- `PrometheusMiddleware`
+- `CacheControlMiddleware`
+- `V1DeprecationMiddleware` (disabled in testing)
+
+#### Security Module Files
 
 ```
-Request Flow:
-1. AuditMiddleware           → Log all requests
-2. SecurityHeadersMiddleware → Add security headers (CSP, HSTS, X-Frame-Options)
-3. RateLimitingMiddleware    → Redis-based rate limiting
-4. ValidationMiddleware      → Input validation & sanitization
-5. InjectionPreventionMiddleware → SQL/XSS/CSRF protection
-6. HTTPSRedirectMiddleware   → Force HTTPS (production only)
-7. TrustedHostMiddleware     → Whitelist allowed hosts
-8. GZipMiddleware            → Response compression
-9. CORSMiddleware            → Cross-origin resource sharing
-10. SessionMiddleware        → Session management
-11. IP Filter Middleware     → IP allowlist/blocklist
+backend/security/
+├── advanced_rate_limiter.py     # Redis-backed rate limiting with rules
+├── audit_logging.py             # SEC-compliant audit trail (2555-day retention)
+├── code_analyzer.py             # Static code analysis
+├── crypto_utils.py              # Cryptographic utilities
+├── csrf_protection.py           # Token-based CSRF prevention
+├── data_encryption.py           # Data encryption at rest
+├── database_security.py         # Database security utilities
+├── enhanced_auth.py             # Enhanced authentication
+├── injection_prevention.py      # SQL/XSS/command injection prevention
+├── input_validation.py          # Request validation middleware
+├── jwt_manager.py               # RS256 JWT signing with key pairs
+├── password_manager.py          # Password hashing and policy
+├── rate_limiter.py              # Basic rate limiter (superseded by advanced)
+├── rbac.py                      # Role-based access control
+├── secrets_manager.py           # Encrypted secrets storage
+├── secrets_vault.py             # Secrets vault
+├── security_config.py           # Central config + middleware assembly
+├── security_headers.py          # Security headers middleware
+├── session_manager.py           # Session management
+├── sql_injection_prevention.py  # SQL injection patterns
+├── vulnerability_scanner.py     # Vulnerability scanning
+└── websocket_security.py        # WebSocket security
 ```
 
-#### Security Components
+#### JWT Configuration (Single Source of Truth in `SecurityConfig`)
 
-| Component | File | Purpose |
-|-----------|------|---------|
-| **Rate Limiting** | `advanced_rate_limiter.py` | Redis-backed rate limiting with categories |
-| **CSRF Protection** | `csrf_protection.py` | Token-based CSRF prevention |
-| **Input Validation** | `input_validation.py` | Request body/query validation |
-| **Injection Prevention** | `injection_prevention.py` | SQL injection, XSS, command injection prevention |
-| **JWT Management** | `jwt_manager.py` | RS256 token signing with key rotation |
-| **Secrets Management** | `secrets_manager.py` | Encrypted secrets storage |
-| **Audit Logging** | `audit_logging.py` | SEC-compliant audit trail (7-year retention) |
-
-#### Security Configuration (`security_config.py`)
-
-**JWT Settings (Single Source of Truth):**
 ```python
-JWT_ALGORITHM = "RS256"  # Primary (production)
-JWT_ALGORITHM_FALLBACK = "HS256"  # Legacy compatibility
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30
-JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")  # Fallback secret
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "RS256")     # Primary
+JWT_ALGORITHM_FALLBACK = "HS256"                         # Legacy compatibility
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 30                     # Access token TTL
+JWT_REFRESH_TOKEN_EXPIRE_DAYS = 7                        # Refresh token TTL
+JWT_MFA_TOKEN_EXPIRE_MINUTES = 5                         # MFA verification TTL
+JWT_RESET_TOKEN_EXPIRE_MINUTES = 15                      # Password reset TTL
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", <generated>) # HS256 fallback key
+JWT_ISSUER = "investment-analysis-app"
+JWT_AUDIENCE = "investment-analysis-users"
 ```
 
-**Rate Limiting Categories:**
-- AUTHENTICATION: 5 requests/15 min
-- REGISTRATION: 3 requests/hour
-- API: 100 requests/hour
-- DATA_INGESTION: 1000 requests/hour
+#### Rate Limiting
 
-**File Upload Security:**
-- MIME type validation with magic bytes
-- Extension allowlist: `.csv`, `.json`, `.pdf`, `.jpg`, `.png`, `.xlsx`
-- Max size: 10MB
-- Malware pattern scanning
+Default rate limit: `100/hour`. Strict rate limit: `10/minute`.
 
-### 3. Data Layer (`backend/models/`)
+Redis connectivity is validated at startup with exponential backoff retry (3 attempts, 1s/2s/4s delays). In production, Redis failure raises `RedisHealthCheckError`. In development/testing, falls back to in-memory storage.
 
-#### Database Models (`consolidated_models.py`)
+#### File Upload Security
 
-**Reference Data:**
-```python
-Exchange  → code, name, timezone, market_open/close
-Sector    → name, description
-Industry  → name, sector_id
-```
+- Max size: 10 MB
+- Extension allowlist: `.csv`, `.json`, `.pdf`, `.jpg`, `.jpeg`, `.png`, `.gif`, `.txt`, `.xls`, `.xlsx`
+- MIME type validation via magic bytes for binary files
+- Content structure validation for text files (JSON parse check, CSV delimiter check)
+- Malware pattern scanning (script tags, executable signatures, double-extension attacks)
 
-**Core Stock Data:**
-```python
-Stock             → ticker, name, exchange_id, sector_id, market_cap
-PriceHistory      → stock_id, date, open/high/low/close, volume, adjusted_close
-TechnicalIndicators → stock_id, date, RSI, MACD, SMA, Bollinger Bands
-Fundamentals      → stock_id, period_date, revenue, earnings, ratios
-```
+### 3. Database Layer
 
-**Analysis & ML:**
-```python
-NewsSentiment    → stock_id, headline, sentiment_score, published_at
-MLPrediction     → stock_id, model_name, predicted_price, actual_price
-Recommendation   → stock_id, action, confidence, target_price, reasoning
-```
+#### Async Database (`backend/config/database.py`)
 
-**Monitoring:**
-```python
-APIUsage    → provider, endpoint, calls_count, estimated_cost
-CostMetrics → date, provider, api_calls, estimated_cost
-```
+`AsyncDatabaseManager` class provides:
+- SQLAlchemy async engine with `asyncpg` driver for PostgreSQL
+- Connection pooling: `AsyncAdaptedQueuePool` (production/dev) or `NullPool` (testing)
+- Pool sizes: 50/100 (production), 20/40 (development), 5/10 (testing)
+- Prepared statement cache: 100 statements per connection
+- SQLAlchemy query cache: 1000 entries
+- Transaction isolation: `READ COMMITTED` (PostgreSQL), `SERIALIZABLE` (SQLite fallback)
+- Event listeners for connection monitoring (connect, checkout, checkin, invalidate)
+- Retry logic with exponential backoff for transient failures (serialization errors, deadlocks, disconnections)
+- Bulk insert with conflict handling (ignore/update/error strategies)
+- Health check endpoint querying `pg_prepared_statements` and `information_schema`
 
-#### Database Schema Relationships
+FastAPI dependency: `get_async_db_session()` yields an `AsyncSession`.
+
+#### Legacy Synchronous Database (`backend/utils/database.py`)
+
+Deprecated synchronous SQLAlchemy engine kept for backward compatibility:
+- `QueuePool` with pool_size=10, max_overflow=20
+- Emits `DeprecationWarning` when legacy functions are called
+- Re-exports async functions from `backend/config/database.py` for migration convenience
+
+Both are initialized during application startup (async first, then legacy).
+
+#### Models
 
 ```
-Exchange ─┬─→ Stock ─┬─→ PriceHistory
-          │          ├─→ TechnicalIndicators
-Sector ───┤          ├─→ Fundamentals
-          │          ├─→ NewsSentiment
-Industry ─┘          ├─→ MLPrediction
-                     └─→ Recommendation
+backend/models/
+├── api_response.py          # Pydantic response wrappers
+├── consolidated_models.py   # SQLAlchemy ORM models (main)
+├── database.py              # Database model utilities
+├── ml_models.py             # ML-specific models
+├── monitoring_schemas.py    # Monitoring Pydantic schemas
+├── schemas.py               # Request/response schemas
+├── tables.py                # Additional table definitions
+├── thesis.py                # Investment thesis models
+└── unified_models.py        # Unified Base for all models
 ```
 
 ### 4. Domain Contracts (`backend/domain/contracts/`)
 
-#### Contract Architecture
-
-```python
-DomainContract (ABC)
-├── domain_name: str
-├── version: str
-├── capabilities: List[str]
-├── health_check() → ContractResult
-└── validate_contract() → ContractResult
-
-ContractResult<T>
-├── success: bool
-├── data: Optional[T]
-├── error: Optional[ContractError]
-└── metadata: Dict[str, Any]
+```
+backend/domain/contracts/
+├── base.py                         # DomainContract ABC + ContractResult
+├── data_pipeline_contract.py       # ETL and data ingestion contract
+├── investment_analysis_contract.py # Analysis & recommendations contract
+├── market_data_contract.py         # Stock price & market data contract
+├── ml_contract.py                  # Machine learning predictions contract
+└── portfolio_contract.py           # Portfolio management contract
 ```
 
-**Available Contracts:**
-- `MarketDataContract`: Stock price & market data services
-- `PortfolioContract`: Portfolio management operations
-- `DataPipelineContract`: ETL and data ingestion
-- `MLContract`: Machine learning predictions
-- `InvestmentAnalysisContract`: Analysis & recommendations
-
-**Purpose:** Enforce consistent error handling and contract verification across domain boundaries.
-
-### 5. ETL & Data Ingestion (`backend/etl/`, `backend/data_ingestion/`)
-
-#### Data Sources
-
-```python
-AlphaVantageClient  → Company overviews, historical prices
-FinnhubClient       → Real-time quotes, company profiles
-PolygonClient       → Market data, aggregates
-SECEdgarClient      → SEC filings, fundamentals
-```
-
-#### ETL Pipeline
+### 5. Repositories (`backend/repositories/`)
 
 ```
-1. DataExtractor      → Fetch from APIs with rate limiting
-2. DataValidator      → Validate data quality & integrity
-3. DataTransformer    → Normalize, calculate derived fields
-4. DataLoader         → Bulk insert with conflict handling
-5. ETLOrchestrator    → Coordinate pipeline execution
+backend/repositories/
+├── base.py                     # Base repository class
+├── portfolio_repository.py     # Portfolio CRUD
+├── price_repository.py         # Price history queries
+├── recommendation_repository.py # Recommendation queries
+├── stock_repository.py         # Stock data queries
+├── thesis_repository.py        # Investment thesis CRUD
+├── user_repository.py          # User account CRUD
+└── watchlist_repository.py     # Watchlist CRUD
 ```
 
-**Key Features:**
-- Concurrent processing with asyncio
-- Intelligent caching (L1: 60s, L2: 5min, L3: 30min)
-- Cost tracking per API call
-- Retry logic with exponential backoff
+### 6. ETL & Data Ingestion
 
-### 6. ML & Analytics (`backend/ml/`, `backend/analytics/`)
+#### External Data Clients (`backend/data_ingestion/`)
 
-#### ML Components
+```
+backend/data_ingestion/
+├── alpha_vantage_client.py    # Company overviews, historical prices
+├── base_client.py             # Base HTTP client with retry logic
+├── finnhub_client.py          # Real-time quotes, company profiles
+├── market_scanner.py          # Market-wide scanning
+├── polygon_client.py          # Market data, aggregates
+├── robust_api_client.py       # Resilient API client wrapper
+├── sec_edgar_client.py        # SEC filings, fundamentals
+├── smart_data_fetcher.py      # Intelligent data routing
+└── stock_tiers.json           # Stock tier classifications
+```
+
+#### ETL Pipeline (`backend/etl/`)
+
+```
+backend/etl/
+├── concurrent_processor.py              # Async concurrent processing
+├── data_extractor.py                    # Primary data extractor
+├── data_extractor_unlimited.py          # Unlimited extraction variant
+├── data_loader.py                       # Bulk insert with conflict handling
+├── data_transformer.py                  # Normalization & derived fields
+├── data_validation_pipeline.py          # Data quality pipeline
+├── data_validator.py                    # Data integrity checks
+├── distributed_batch_processor.py       # Distributed batch processing
+├── etl_orchestrator.py                  # Pipeline coordination
+├── intelligent_cache_system.py          # ETL-level caching
+├── multi_source_extractor.py            # Multi-provider extraction
+├── rate_limiting.py                     # API rate limit management
+├── simple_unlimited_extractor.py        # Simplified unlimited extractor
+├── stock_universe_manager.py            # Stock universe maintenance
+├── unlimited_data_extractor.py          # Full universe extractor
+├── unlimited_extractor_with_fallbacks.py # Extractor with provider fallbacks
+└── web_scrapers.py                      # Web scraping utilities
+```
+
+### 7. ML & Analytics
+
+#### ML Components (`backend/ml/`)
 
 ```
 backend/ml/
-├── model_monitoring.py     # Track model performance
-├── ml_monitoring_server.py # Prometheus metrics
-├── backtesting.py          # Strategy backtesting
-├── training_pipeline.py    # Model training workflow
-└── models/ensemble/        # Ensemble classifiers
+├── backtesting.py               # Strategy backtesting engine
+├── cost_monitoring.py           # ML operation cost tracking
+├── dataset_hub.py               # Dataset management
+├── feature_store.py             # Feature engineering & storage
+├── gpu_utils.py                 # GPU detection & utilities
+├── hf_hub_client.py             # HuggingFace Hub integration
+├── minimal_training.py          # Lightweight training pipeline
+├── ml_api_server.py             # Standalone ML API server
+├── ml_monitoring_server.py      # Prometheus ML metrics
+├── ml_tables.py                 # ML database tables
+├── model_manager.py             # Model lifecycle management
+├── model_monitoring.py          # Model performance tracking
+├── model_versioning.py          # Model version control
+├── online_learning.py           # Online/incremental learning
+├── pipeline_optimization.py     # Pipeline performance tuning
+├── simple_training_pipeline.py  # Simple training workflow
+├── training_pipeline.py         # Full training pipeline
+├── data_prep/                   # Data preparation utilities
+├── models/ensemble/             # Ensemble model implementations
+├── pipeline/                    # ML pipeline components
+└── training/                    # Training utilities
 ```
 
-#### Analytics Engines
+#### Analytics Engines (`backend/analytics/`)
 
 ```
 backend/analytics/
-├── recommendation_engine_optimized.py  # ML-powered recommendations
-├── technical_analysis.py               # Technical indicators
-├── fundamental_analysis.py             # Fundamental metrics
-└── agents/                             # Agentic analysis
-    ├── hybrid_engine.py
-    ├── selective_orchestrator.py
-    └── enhancement_levels.py
+├── dividend_analyzer.py                    # Dividend analysis
+├── finbert_analyzer.py                     # FinBERT NLP sentiment
+├── fundamental_analysis.py                 # Fundamental metrics
+├── recommendation_engine.py                # Base recommendation engine
+├── recommendation_engine_optimized.py      # Optimized recommendation engine
+├── sentiment_analysis.py                   # Sentiment scoring
+├── technical_analysis.py                   # Technical indicators
+├── agents/                                 # Agentic analysis
+│   ├── cache_aware_agents.py              # Cache-integrated agents
+│   ├── enhancement_levels.py              # Analysis enhancement tiers
+│   ├── hybrid_engine.py                   # Multi-strategy engine
+│   └── selective_orchestrator.py          # Selective agent dispatch
+├── fundamental/                            # Fundamental analysis modules
+├── portfolio/                              # Portfolio analytics
+├── risk/                                   # Risk analysis modules
+└── statistical/                            # Statistical analysis
 ```
 
-### 7. Monitoring & Observability
+### 8. Background Tasks (`backend/tasks/`)
 
-#### Health Checks
-
-```python
-/health          → Basic liveness check
-/health/detailed → Component health status
-/metrics/usage   → API usage metrics
-/metrics/costs   → Cost tracking dashboard
+```
+backend/tasks/
+├── analysis_tasks.py          # Scheduled analysis jobs
+├── celery_app.py              # Celery configuration
+├── data_pipeline.py           # Data pipeline tasks
+├── data_tasks.py              # Data maintenance tasks
+├── maintenance_tasks.py       # System maintenance
+├── notification_tasks.py      # Alert/notification dispatch
+├── portfolio_tasks.py         # Portfolio rebalancing tasks
+├── scheduler.py               # APScheduler-based task scheduler
+└── stock_universe_fetcher.py  # Stock universe update task
 ```
 
-#### Audit Logging (`backend/security/audit_logging.py`)
+### 9. Middleware (`backend/middleware/`)
 
-**Logged Events:**
-- Authentication attempts (success/failure)
-- API access with user context
-- Security violations (blocked IPs, rate limits)
-- Data modifications
-- Admin operations
+```
+backend/middleware/
+├── error_handler.py          # Standardized exception handlers
+├── request_size_limiter.py   # Request body size limits
+└── security_headers.py       # Additional security headers
+```
 
-**Retention:** 2555 days (7 years) for SEC compliance
+### 10. Services (`backend/services/`)
+
+```
+backend/services/
+└── realtime_price_service.py  # Real-time price data service
+```
 
 ---
 
@@ -287,312 +385,201 @@ backend/analytics/
 
 ```
 frontend/web/src/
-├── components/          # Reusable UI components
-│   ├── Layout/          # App layout wrapper
-│   ├── cards/           # RecommendationCard, NewsCard
-│   ├── charts/          # StockChart, MarketHeatmap
-│   ├── NotificationPanel/
-│   ├── SearchModal/
-│   └── WebSocketIndicator/
-├── pages/               # Route components
-│   ├── Login.tsx
+├── App.tsx                     # Root component with routing
+├── index.tsx                   # Entry point
+├── components/                 # Reusable UI components
+│   ├── Layout/                 # App shell with sidebar & header
+│   ├── cards/                  # RecommendationCard, NewsCard, etc.
+│   ├── charts/                 # StockChart, MarketHeatmap, etc.
+│   ├── common/                 # Shared utility components
+│   ├── dashboard/              # Dashboard-specific components
+│   ├── monitoring/             # System monitoring widgets
+│   ├── panels/                 # Panel components
+│   ├── NotificationPanel/      # Real-time alerts & updates
+│   ├── SearchModal/            # Stock search with autocomplete
+│   ├── WebSocketIndicator/     # Connection status indicator
+│   ├── CorrelationMatrix.tsx   # Asset correlation visualization
+│   ├── EfficientFrontier.tsx   # Portfolio optimization chart
+│   ├── EnhancedDashboard.tsx   # Enhanced dashboard view
+│   └── RiskDecomposition.tsx   # Risk breakdown visualization
+├── pages/                      # Route components
+│   ├── Analysis.tsx
 │   ├── Alerts.tsx
+│   ├── Dashboard.tsx
+│   ├── Help.tsx
+│   ├── InvestmentThesis.tsx
+│   ├── Login.tsx
+│   ├── MarketOverview.tsx
+│   ├── Portfolio.tsx
+│   ├── Recommendations.tsx
 │   ├── Reports.tsx
 │   ├── Settings.tsx
-│   └── Help.tsx
-├── services/            # API integration
+│   └── Watchlist.tsx
+├── services/                   # API integration
 │   └── api.service.ts
-├── store/               # Redux state management
+├── store/                      # Redux Toolkit state management
 │   ├── index.ts
 │   └── slices/
 │       ├── appSlice.ts
 │       ├── dashboardSlice.ts
-│       ├── stockSlice.ts
+│       ├── marketSlice.ts
 │       ├── portfolioSlice.ts
 │       ├── recommendationsSlice.ts
-│       └── marketSlice.ts
-├── hooks/               # Custom React hooks
-│   ├── redux.ts
-│   └── usePerformance.ts
-├── theme/               # MUI theming
-│   ├── index.ts
-│   └── tokens.ts
-└── utils/               # Utilities
-    ├── accessibility.tsx
-    └── env.ts
+│       └── stockSlice.ts
+├── hooks/                      # Custom React hooks
+├── config/                     # App configuration
+├── design/                     # Design tokens/specs
+├── styles/                     # CSS/styling
+├── theme/                      # MUI theming
+├── types/                      # TypeScript type definitions
+└── utils/                      # Utilities (accessibility, env, etc.)
 ```
 
 ### 2. State Management (Redux Toolkit)
 
-#### Store Configuration (`store/index.ts`)
+Six slices manage application state:
+- `appSlice` -- Global app state (auth, navigation, notifications)
+- `dashboardSlice` -- Dashboard aggregates and summary data
+- `stockSlice` -- Selected stock, quotes, chart data, search results
+- `portfolioSlice` -- Portfolio positions, transactions, performance
+- `recommendationsSlice` -- ML-generated recommendations
+- `marketSlice` -- Market overview, sector performance
 
-```typescript
-configureStore({
-  reducer: {
-    app: appReducer,              // Global app state
-    dashboard: dashboardReducer,  // Dashboard data
-    recommendations: recommendationsReducer,
-    portfolio: portfolioReducer,
-    market: marketReducer,
-    stock: stockReducer
-  },
-  middleware: [
-    serializableCheck,  // Validate serializable state
-    thunk               // Async actions
-  ]
-})
-```
+### 3. Pages
 
-#### Stock Slice Example (`stockSlice.ts`)
+12 page components correspond to the main application routes:
 
-```typescript
-interface StockState {
-  selectedTicker: string | null
-  quote: StockQuote | null
-  chartData: StockChart | null
-  technicalIndicators: TechnicalIndicators | null
-  fundamentalData: FundamentalData | null
-  news: StockNews[]
-  searchResults: Stock[]
-  isLoading: boolean
-  error: string | null
-}
+| Page | Purpose |
+|------|---------|
+| Dashboard | Main overview with portfolio summary and market data |
+| Analysis | Technical and fundamental analysis tools |
+| Portfolio | Position tracking and management |
+| Recommendations | ML-generated investment recommendations |
+| MarketOverview | Broad market data and sector performance |
+| Watchlist | User stock watchlists |
+| InvestmentThesis | AI-generated investment thesis |
+| Alerts | Price and event alerts |
+| Reports | Generated reports and exports |
+| Settings | User preferences |
+| Login | Authentication |
+| Help | Documentation and support |
 
-// Async thunks
-fetchStockData(ticker)    → GET /stocks/{ticker}/quote
-fetchStockChart(ticker)   → GET /stocks/{ticker}/chart
-fetchOptionsChain(ticker) → GET /stocks/{ticker}/options
-searchStocks(query)       → GET /stocks/search
-```
-
-### 3. API Service Layer (`services/api.service.ts`)
-
-#### API Client Configuration
-
-```typescript
-const apiClient = axios.create({
-  baseURL: apiConfig.baseURL,
-  timeout: apiConfig.timeout,
-  headers: { 'Content-Type': 'application/json' }
-})
-
-// Request interceptor: Add JWT token
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
-// Response interceptor: Token refresh on 401
-apiClient.interceptors.response.use(
-  response => response,
-  async (error) => {
-    if (error.response?.status === 401) {
-      // Attempt token refresh
-      const refreshToken = localStorage.getItem('refresh_token')
-      const { access_token } = await refreshTokenAPI(refreshToken)
-      // Retry original request
-    }
-    if (error.response?.status === 429) {
-      // Handle rate limiting
-    }
-  }
-)
-```
-
-#### API Methods
-
-```typescript
-api.auth.login(credentials)      → POST /auth/login
-api.auth.getProfile()            → GET /auth/me
-api.stocks.getList(params)       → GET /stocks
-api.stocks.getDetail(ticker)     → GET /stocks/{ticker}
-api.analysis.getTechnical(ticker) → GET /analysis/technical/{ticker}
-api.recommendations.getActive()   → GET /recommendations/active
-api.portfolio.getPositions()      → GET /portfolio/positions
-api.news.getLatest()             → GET /news/latest
-api.metrics.getUsage()           → GET /metrics/usage
-```
-
-### 4. Component Architecture
-
-#### Key Components
-
-| Component | Purpose | State Dependencies |
-|-----------|---------|-------------------|
-| **Layout** | Main app wrapper with sidebar & header | `app` slice |
-| **StockChart** | Interactive price chart with indicators | `stock.chartData` |
-| **RecommendationCard** | Display ML recommendations | `recommendations` slice |
-| **MarketHeatmap** | Sector performance visualization | `market` slice |
-| **NotificationPanel** | Real-time alerts & updates | WebSocket connection |
-| **SearchModal** | Stock search with autocomplete | `stock.searchResults` |
+Tests exist for `Dashboard` and `Portfolio` pages (`Dashboard.test.tsx`, `Portfolio.test.tsx`).
 
 ---
 
 ## Integration Points
 
-### 1. Frontend ↔ Backend API Flow
+### 1. Frontend to Backend API Flow
 
 ```
 React Component
-    ↓ dispatch(fetchStockData('AAPL'))
-Redux Thunk
-    ↓ api.stocks.getDetail('AAPL')
-API Service
-    ↓ axios.get('/stocks/AAPL/quote')
+    | dispatch(asyncThunk)
+Redux Thunk (in slice)
+    | api.service.ts call
+Axios HTTP Client
+    | JWT Bearer token injected by request interceptor
+    | Token refresh on 401 via response interceptor
 FastAPI Backend
-    ↓ SecurityMiddleware stack
-    ↓ stocks.py router
-    ↓ stock_repository.get_by_symbol()
-Database (PostgreSQL)
-    ↓ Stock + PriceHistory tables
-Response Flow (reversed)
-    ↓ ApiResponse wrapper
-    ↓ JSON serialization
-Redux Store Update
-    ↓ Component re-render
+    | Security middleware stack (11 layers)
+    | Router handler
+    | Repository / Service layer
+    | AsyncSession (SQLAlchemy + asyncpg)
+PostgreSQL Database
+    | Response
+JSON serialization
+    | Redux store update
+    | Component re-render
 ```
 
-### 2. Authentication Flow
+### 2. WebSocket Connection
 
 ```
-1. User submits credentials
-   ↓
-2. Frontend: api.auth.login({ username, password })
-   ↓
-3. Backend: POST /auth/token
-   ↓
-4. Rate Limiter Check (5 attempts/15 min)
-   ↓
-5. Password Verification (bcrypt)
-   ↓
-6. JWT Token Generation
-   - Access Token (RS256, 30 min)
-   - Refresh Token (7 days)
-   ↓
-7. Token Storage (localStorage)
-   ↓
-8. Subsequent Requests:
-   - Authorization: Bearer <access_token>
-   - Middleware validates JWT signature
-   - Extract user_id from token claims
-   ↓
-9. Token Expiry:
-   - 401 response
-   - Auto refresh with refresh_token
-   - Retry original request
+/api/ws/stocks/{ticker}
+    | Price updates streamed to client
+    | WebSocketIndicator component shows connection status
+    | Cleanup task runs periodically to prune stale connections
 ```
 
-### 3. Real-Time Updates
+### 3. Data Caching Strategy
+
+Multi-tier caching implemented via `backend/utils/comprehensive_cache.py` and `backend/utils/intelligent_cache_policies.py`:
 
 ```
-WebSocket Connection
-    ↓
-/ws/stocks/{ticker}
-    ↓
-Price Updates (every 1-5 seconds)
-    ↓
-Redux Action: updateQuote()
-    ↓
-Component Re-render
+L1 Cache (60 seconds)   -- Real-time quotes, active trades
+L2 Cache (5 minutes)    -- Technical indicators, intraday data
+L3 Cache (30 minutes)   -- Fundamental data, company info
+Database Cache (1 day)  -- Historical prices, SEC filings
 ```
 
-### 4. Data Caching Strategy
+Cache monitoring dashboard available via `backend/utils/cache_monitoring.py`. Database-level cache invalidation triggers set up at startup.
 
-**Multi-Tier Caching:**
+### 4. API Versioning
 
-```
-L1 Cache (60 seconds)      → Real-time quotes, active trades
-L2 Cache (5 minutes)       → Technical indicators, intraday data
-L3 Cache (30 minutes)      → Fundamental data, company info
-Database Cache (1 day)     → Historical prices, SEC filings
-```
-
-**Implementation:**
-```python
-@api_cache(
-    data_type="real_time_quote",
-    ttl_override={'l1': 60, 'l2': 300, 'l3': 1800},
-    cost_tracking=True
-)
-async def get_real_time_quote(symbol: str):
-    # Try cache first, then external API
-```
+`backend/api/versioning.py` provides:
+- `V1DeprecationMiddleware` -- Detects V1 requests (via URL path, header, or query param), adds deprecation warnings, tracks usage, supports optional auto-redirect to V2
+- `v1_migration_router` -- Admin endpoints at `/api/admin/v1-migration/` for monitoring migration progress (`/metrics`, `/clients`, `/endpoint-mapping`, `/version-info`)
 
 ---
 
 ## Security Layer
 
-### 1. Security Headers
+### 1. Security Headers (from `SecurityConfig.SECURITY_HEADERS`)
 
 ```
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
 X-XSS-Protection: 1; mode=block
 Strict-Transport-Security: max-age=31536000; includeSubDomains
-Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' ws: wss:
 Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: geolocation=(), microphone=(), camera=()
+Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()
 ```
 
-### 2. CORS Configuration
+### 2. CORS Configuration (from `SecurityConfig`)
 
-**Allowed Origins:**
-- Development: `http://localhost:3000`, `http://127.0.0.1:3000`
-- Production: `https://investment-analysis.com`, `https://api.investment-analysis.com`
+**Always allowed:** `http://localhost:3000`, `https://investment-analysis.com`, `https://api.investment-analysis.com`
 
-**Allowed Methods:** GET, POST, PUT, DELETE, OPTIONS
-**Credentials:** Enabled
-**Exposed Headers:** X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID
+**Development additions:** `http://localhost:8000`, `http://127.0.0.1:3000`, `http://127.0.0.1:8000`, `http://localhost:3001`, `http://127.0.0.1:3001`
 
-### 3. Rate Limiting
+**Production:** Only `https://` origins are kept.
 
-**Redis-backed with fallback:**
-```python
-RateLimitCategory.AUTHENTICATION: "5/15minutes"
-RateLimitCategory.REGISTRATION: "3/hour"
-RateLimitCategory.API: "100/hour"
-RateLimitCategory.DATA_INGESTION: "1000/hour"
-```
+Allowed Methods: `GET, POST, PUT, DELETE, OPTIONS`
+Allowed Headers: `Authorization, Content-Type, X-Requested-With, X-API-Key`
+Exposed Headers: `X-RateLimit-Remaining, X-RateLimit-Reset, X-Request-ID`
+Credentials: Enabled
 
-**Headers:**
-```
-X-RateLimit-Remaining: 98
-X-RateLimit-Reset: 1706548800
-Retry-After: 60  # seconds (on 429)
-```
+### 3. Trusted Hosts
 
-### 4. Input Validation & Sanitization
+`localhost`, `127.0.0.1`, `testserver`, `investment-analysis.com`, `api.investment-analysis.com`
 
-```python
-ValidationMiddleware:
-  - Max request body size: 1MB
-  - JSON schema validation
-  - Query parameter sanitization
-  - Path parameter validation
+### 4. Session Configuration
 
-InjectionPreventionMiddleware:
-  - SQL injection patterns
-  - XSS pattern detection
-  - Command injection prevention
-  - LDAP injection blocking
-```
+- Secret key: env var `SESSION_SECRET_KEY` or generated `token_urlsafe(32)`
+- Max age: 3600 seconds (1 hour)
+- SameSite: `strict` in production, `lax` otherwise
+- HTTPS-only: Only when `FORCE_HTTPS=true` and in production
 
-### 5. CSRF Protection
+### 5. Password Policy (from `SecurityConfig`)
 
-**Token-based double submit:**
-```python
-1. Generate CSRF token (32 bytes, URL-safe)
-2. Store in session cookie (httponly, secure, samesite=strict)
-3. Return in X-CSRF-Token header
-4. Validate on state-changing requests (POST, PUT, DELETE)
-```
+- Minimum length: 12 characters
+- Required: uppercase, lowercase, digits, special characters
+- Max age: 90 days
+
+### 6. Redis Health Check
+
+`RedisHealthChecker` class with:
+- Exponential backoff retry: 3 attempts at 1s, 2s, 4s delays
+- Connection timeout: 5 seconds
+- URL masking for safe logging
+- Latency measurement
+- Redis version detection
 
 ---
 
 ## Database Schema
 
-### Core Tables
+### Core Tables (from `consolidated_models.py`)
 
 ```sql
 -- Reference Data
@@ -622,38 +609,19 @@ positions (id, portfolio_id, stock_id, quantity, average_cost, realized_gain)
 transactions (id, portfolio_id, stock_id, type, quantity, price, timestamp)
 ```
 
-### Key Indexes
+### Entity Relationships
 
-```sql
--- Performance-critical indexes
-CREATE INDEX idx_stock_ticker ON stocks(ticker);
-CREATE INDEX idx_price_stock_date ON price_history(stock_id, date DESC);
-CREATE INDEX idx_recommendation_active ON recommendations(is_active, created_at DESC);
-CREATE UNIQUE INDEX uq_stock_price_date ON price_history(stock_id, date);
-
--- Composite indexes for common queries
-CREATE INDEX idx_stock_exchange_sector ON stocks(exchange_id, sector_id);
-CREATE INDEX idx_sentiment_stock_date ON news_sentiment(stock_id, published_at DESC);
-CREATE INDEX idx_api_usage_provider_time ON api_usage(provider, timestamp DESC);
 ```
+Exchange --+-- Stock --+-- PriceHistory
+           |           +-- TechnicalIndicators
+Sector ----+           +-- Fundamentals
+           |           +-- NewsSentiment
+Industry --+           +-- MLPrediction
+                       +-- Recommendation
 
-### Data Integrity Constraints
-
-```sql
--- Price validation
-CHECK (high >= low)
-CHECK (high >= open AND high >= close)
-CHECK (low <= open AND low <= close)
-CHECK (open > 0 AND close > 0)
-CHECK (volume >= 0)
-
--- Recommendation constraints
-CHECK (confidence >= 0 AND confidence <= 1)
-CHECK (priority >= 1 AND priority <= 10)
-
--- Portfolio constraints
-CHECK (quantity > 0)
-CHECK (average_cost > 0)
+User --+-- Portfolio --+-- Position --+-- Stock
+       |               +-- Transaction
+       +-- Watchlist
 ```
 
 ---
@@ -662,108 +630,33 @@ CHECK (average_cost > 0)
 
 ### 1. Repository Pattern
 
-**Purpose:** Abstract data access layer, enable testing, centralize queries
+Seven repositories abstract data access:
+- `StockRepository`, `PriceRepository`, `PortfolioRepository`
+- `RecommendationRepository`, `UserRepository`, `WatchlistRepository`, `ThesisRepository`
 
-```python
-class StockRepository:
-    async def get_by_symbol(self, symbol: str, session: AsyncSession) -> Stock
-    async def get_multi(self, filters: List[FilterCriteria], ...) -> List[Stock]
-    async def search_stocks(self, query: str, limit: int, ...) -> List[Stock]
-    async def get_top_performers(self, timeframe: str, ...) -> List[Dict]
+All use async sessions from `AsyncDatabaseManager`.
 
-class PortfolioRepository:
-    async def get_user_portfolios(self, user_id: int, ...) -> List[Portfolio]
-    async def get_portfolio_positions(self, portfolio_id: int, ...) -> List[Position]
-    async def create_default_portfolio(self, user_id: int, ...) -> Portfolio
-```
+### 2. Domain Contracts
 
-### 2. Async/Await Pattern
+Five contracts enforce cross-domain boundaries:
+- `MarketDataContract`, `PortfolioContract`, `DataPipelineContract`, `MLContract`, `InvestmentAnalysisContract`
 
-**All I/O operations are asynchronous:**
-```python
-# Database
-async with get_async_db_session() as session:
-    stock = await stock_repository.get_by_symbol("AAPL", session)
+Each returns `ContractResult<T>` with structured error handling.
 
-# External APIs
-async def fetch_company_overview(symbol: str):
-    return await alpha_vantage_client.get_company_overview(symbol)
+### 3. Dual Database Strategy
 
-# Concurrent execution
-stocks, prices, news = await asyncio.gather(
-    get_stocks(),
-    get_prices(),
-    get_news()
-)
-```
+- **Primary (async):** `AsyncDatabaseManager` in `backend/config/database.py` using `sqlalchemy[asyncio]` + `asyncpg`
+- **Legacy (sync):** Synchronous engine in `backend/utils/database.py` using `QueuePool`, deprecated but retained for backward compatibility
 
-### 3. Dependency Injection (FastAPI)
+Both initialize during app startup. Migration path documented in `backend/utils/database.py` docstring.
 
-```python
-@router.get("/stocks/{symbol}")
-async def get_stock_detail(
-    symbol: str = Path(...),
-    db: AsyncSession = Depends(get_async_db_session),  # Injected
-    current_user: User = Depends(get_current_user)     # Injected
-):
-    stock = await stock_repository.get_by_symbol(symbol, db)
-    return success_response(data=stock)
-```
+### 4. Middleware Chain
 
-### 4. Middleware Chain Pattern
+Security middleware is assembled in `add_comprehensive_security_middleware()` as a single composable function. Individual middleware components are independently testable. Several are conditionally disabled during testing.
 
-**Security middleware executes in order:**
-```python
-def add_comprehensive_security_middleware(app: FastAPI):
-    app.add_middleware(AuditMiddleware)           # 1. Log all requests
-    app.add_middleware(SecurityHeadersMiddleware)  # 2. Security headers
-    app.add_middleware(RateLimitingMiddleware)    # 3. Rate limiting
-    app.add_middleware(ValidationMiddleware)      # 4. Input validation
-    app.add_middleware(InjectionPreventionMiddleware)  # 5. Injection prevention
-    # ... continued
-```
+### 5. Background Task Scheduling
 
-### 5. Result/Error Wrapping Pattern
-
-**Consistent API responses:**
-```python
-@dataclass
-class ApiResponse[T]:
-    success: bool
-    data: Optional[T]
-    error: Optional[str]
-    metadata: Dict[str, Any]
-
-# Usage
-return success_response(data=stock_list)
-return error_response(message="Stock not found", status_code=404)
-```
-
-### 6. Caching Decorator Pattern
-
-```python
-@cache_stock_data(ttl_hours=0.01)  # 30 seconds for real-time data
-@cache_with_ttl(ttl=3600)          # 1 hour for analysis results
-@api_cache(data_type="db_query", ttl_override={'l1': 60, 'l2': 300})
-async def expensive_operation():
-    # Cached automatically
-```
-
-### 7. Domain Contracts Pattern
-
-**Cross-domain communication with validation:**
-```python
-class MarketDataContract(DomainContract):
-    async def get_stock_price(self, symbol: str) -> ContractResult[float]:
-        try:
-            price = await fetch_price(symbol)
-            return ContractResult.ok(price)
-        except Exception as e:
-            return ContractResult.fail(
-                ContractErrorCode.SERVICE_UNAVAILABLE,
-                f"Failed to fetch price: {e}"
-            )
-```
+`backend/tasks/scheduler.py` manages periodic tasks. A separate Celery configuration exists in `backend/tasks/celery_app.py` for distributed task execution. Task categories: analysis, data pipeline, maintenance, notifications, portfolio rebalancing, stock universe fetching.
 
 ---
 
@@ -772,306 +665,69 @@ class MarketDataContract(DomainContract):
 ### Backend Dependency Graph
 
 ```
-FastAPI Application
-    ├── api/ (routers)
-    │   ├── auth.py
-    │   │   ├── security/jwt_manager.py
-    │   │   ├── security/rate_limiter.py
-    │   │   └── models/tables.py (User)
-    │   ├── stocks.py
-    │   │   ├── repositories/stock_repository.py
-    │   │   ├── data_ingestion/alpha_vantage_client.py
-    │   │   └── utils/api_cache_decorators.py
-    │   ├── recommendations.py
-    │   │   ├── ml/recommendation_engine.py
-    │   │   ├── analytics/agents/
-    │   │   └── repositories/recommendation_repository.py
-    │   └── portfolio.py
-    │       ├── repositories/portfolio_repository.py
-    │       └── services/realtime_price_service.py
-    ├── security/ (middleware)
-    │   ├── security_config.py
-    │   ├── advanced_rate_limiter.py → redis
-    │   ├── input_validation.py
-    │   └── audit_logging.py → database
-    ├── domain/contracts/ (DDD)
-    │   ├── base.py
-    │   ├── market_data_contract.py
-    │   └── portfolio_contract.py
-    ├── repositories/
-    │   ├── stock_repository.py → models/
-    │   ├── portfolio_repository.py → models/
-    │   └── price_repository.py → models/
-    ├── models/
-    │   ├── consolidated_models.py (SQLAlchemy)
-    │   └── api_response.py (Pydantic)
-    └── config/
-        ├── database.py (AsyncDatabaseManager)
-        └── settings.py (environment config)
+FastAPI Application (main.py)
++-- api/routers/ (17 routers)
+|   +-- auth.py --> security/jwt_manager.py, security/security_config.py, models/tables.py
+|   +-- stocks.py --> repositories/stock_repository.py, data_ingestion/, utils/api_cache_decorators.py
+|   +-- recommendations.py --> analytics/recommendation_engine_optimized.py, repositories/
+|   +-- portfolio.py --> repositories/portfolio_repository.py, services/realtime_price_service.py
+|   +-- agents.py --> analytics/agents/
+|   +-- thesis.py --> repositories/thesis_repository.py
+|   +-- news.py, settings.py, watchlist.py, gdpr.py, admin.py, health.py, cache_management.py
+|   +-- websocket.py (WebSocket connections)
+|
++-- security/ (middleware + utilities)
+|   +-- security_config.py (assembles middleware stack)
+|   +-- advanced_rate_limiter.py --> redis
+|   +-- audit_logging.py --> database
+|   +-- jwt_manager.py, csrf_protection.py, input_validation.py, injection_prevention.py
+|
++-- config/
+|   +-- database.py (AsyncDatabaseManager, primary)
+|   +-- settings.py (environment configuration)
+|
++-- utils/database.py (legacy sync engine, deprecated)
+|
++-- domain/contracts/ (5 contracts)
++-- repositories/ (7 repositories) --> models/
++-- models/ (SQLAlchemy ORM + Pydantic schemas)
++-- analytics/ (engines + agents)
++-- ml/ (training, monitoring, inference)
++-- etl/ (extraction, transformation, loading)
++-- data_ingestion/ (external API clients)
++-- tasks/ (scheduler + Celery tasks)
++-- middleware/ (error handling, request limits)
++-- services/ (realtime price service)
 ```
 
 ### Frontend Dependency Graph
 
 ```
-React Application
-    ├── App.tsx
-    │   └── store/index.ts (Redux store)
-    ├── components/
-    │   ├── Layout/
-    │   │   └── store/slices/appSlice.ts
-    │   ├── charts/StockChart.tsx
-    │   │   └── store/slices/stockSlice.ts
-    │   └── cards/RecommendationCard.tsx
-    │       └── store/slices/recommendationsSlice.ts
-    ├── services/
-    │   └── api.service.ts
-    │       ├── axios
-    │       └── config/api.config.ts
-    ├── store/
-    │   ├── index.ts
-    │   └── slices/
-    │       ├── stockSlice.ts → services/api.service.ts
-    │       ├── portfolioSlice.ts → services/api.service.ts
-    │       └── recommendationsSlice.ts → services/api.service.ts
-    └── hooks/
-        ├── redux.ts (useAppSelector, useAppDispatch)
-        └── usePerformance.ts
+React Application (App.tsx)
++-- store/index.ts (Redux store, 6 slices)
++-- pages/ (12 page components)
++-- components/ (Layout, charts, cards, panels, common, monitoring)
++-- services/api.service.ts (Axios client with interceptors)
++-- hooks/ (custom React hooks)
++-- theme/ (MUI theming)
++-- types/ (TypeScript definitions)
++-- config/, design/, styles/, utils/
 ```
-
-### External Dependencies
-
-**Backend:**
-- `fastapi` - Web framework
-- `sqlalchemy[asyncio]` - ORM with async support
-- `asyncpg` - PostgreSQL async driver
-- `redis` - Rate limiting & caching
-- `pydantic` - Data validation
-- `jose[cryptography]` - JWT handling
-- `passlib[bcrypt]` - Password hashing
-- `axios` - HTTP client (for external APIs)
-
-**Frontend:**
-- `react` - UI framework
-- `@reduxjs/toolkit` - State management
-- `axios` - HTTP client
-- `@mui/material` - UI components
-- `recharts` - Charting library
-- `react-router-dom` - Routing
 
 ---
 
 ## Key Architectural Decisions
 
-### 1. Why Async/Await Everywhere?
-- **I/O Bound:** Financial applications spend most time waiting for database/API responses
-- **Concurrency:** Handle thousands of concurrent portfolio calculations efficiently
-- **Performance:** 10-100x better throughput vs synchronous code
-
-### 2. Why Repository Pattern?
-- **Testability:** Easy to mock data layer in tests
-- **Flexibility:** Swap PostgreSQL for TimescaleDB without changing business logic
-- **Centralization:** All SQL queries in one place, easier to optimize
-
-### 3. Why Domain Contracts?
-- **Isolation:** Domains can evolve independently
-- **Resilience:** Graceful degradation when services fail
-- **Clarity:** Explicit interfaces between modules
-
-### 4. Why Redis for Rate Limiting?
-- **Distributed:** Works across multiple server instances
-- **Fast:** <1ms operations
-- **Atomic:** TTL and increment operations are atomic
-
-### 5. Why JWT (RS256)?
-- **Stateless:** No session storage needed
-- **Scalable:** Works across multiple servers
-- **Secure:** Asymmetric keys prevent token forgery
+1. **Async-first database access** -- Financial apps are I/O bound; async SQLAlchemy + asyncpg gives high concurrency without threads.
+2. **Dual database engines** -- Legacy sync engine retained to avoid breaking existing code during migration; deprecated with warnings.
+3. **Repository pattern** -- Centralizes SQL, enables testing via mocks, allows future database swaps.
+4. **Domain contracts** -- Explicit boundaries between market data, portfolio, ML, and analysis domains.
+5. **Redis for rate limiting** -- Distributed, atomic, sub-millisecond operations; in-memory fallback for development.
+6. **RS256 JWT** -- Asymmetric keys prevent token forgery; HS256 fallback for legacy compatibility.
+7. **Conditional middleware in testing** -- Several middleware layers skip during tests to avoid `AsyncClient` stream compatibility issues.
 
 ---
 
-## Performance Optimizations
-
-### 1. Database Query Optimization
-
-**Prepared Statements (10-15% faster):**
-```python
-# Configured in database.py
-statement_cache_size = 100  # asyncpg cache
-```
-
-**Bulk Operations:**
-```python
-# N+1 query prevention
-await price_repository.get_bulk_price_history(
-    symbols=['AAPL', 'GOOGL', 'MSFT'],  # Single query
-    start_date=start, end_date=end
-)
-# Instead of: for symbol in symbols: await get_history(symbol)
-```
-
-### 2. Multi-Tier Caching
-
-**Cache Hit Rates:**
-- L1 (60s): 85% hit rate for quotes
-- L2 (5min): 70% hit rate for indicators
-- L3 (30min): 95% hit rate for fundamentals
-
-**Cost Savings:**
-- 75% reduction in external API calls
-- $500/month → $125/month in API costs
-
-### 3. Intelligent Model Routing (Claude Flow V3)
-
-**3-Tier Routing:**
-1. **Agent Booster** (<1ms): Simple transforms (var→const, add types)
-2. **Haiku** (~500ms): Bug fixes, low complexity
-3. **Sonnet/Opus** (2-5s): Architecture, security
-
-**Result:** 75% cost reduction, 352x faster for Tier 1 tasks
-
----
-
-## Security Best Practices
-
-### 1. Input Validation
-- All user inputs validated with Pydantic schemas
-- Query parameters sanitized
-- File uploads validated (MIME type + magic bytes)
-
-### 2. SQL Injection Prevention
-- Parameterized queries only (SQLAlchemy ORM)
-- No string concatenation in queries
-- Input sanitization middleware
-
-### 3. XSS Prevention
-- Content-Security-Policy header
-- HTML sanitization on output
-- React's built-in XSS protection
-
-### 4. CSRF Protection
-- Double-submit cookie pattern
-- Token validation on state-changing requests
-- SameSite=Strict cookies
-
-### 5. Rate Limiting
-- Per-user and per-IP limits
-- Exponential backoff
-- 429 Too Many Requests with Retry-After header
-
-### 6. Audit Logging
-- All authentication attempts logged
-- Security violations tracked
-- 7-year retention (SEC compliance)
-
----
-
-## API Response Formats
-
-### Success Response
-
-```json
-{
-  "success": true,
-  "data": {
-    "symbol": "AAPL",
-    "price": 175.43,
-    "change": 2.15,
-    "changePercent": 1.24
-  },
-  "metadata": {
-    "timestamp": "2026-01-29T10:30:00Z",
-    "source": "realtime_api"
-  }
-}
-```
-
-### Error Response
-
-```json
-{
-  "success": false,
-  "error": "Stock symbol 'INVALID' not found",
-  "code": "NOT_FOUND",
-  "details": {
-    "symbol": "INVALID",
-    "suggestions": ["AAPL", "GOOGL"]
-  }
-}
-```
-
-### Paginated Response
-
-```json
-{
-  "success": true,
-  "data": [...],
-  "pagination": {
-    "total": 250,
-    "page": 1,
-    "per_page": 50,
-    "total_pages": 5
-  }
-}
-```
-
----
-
-## Testing Strategy
-
-### Backend Tests
-- **Unit Tests:** Repository methods, utilities
-- **Integration Tests:** API endpoints with test database
-- **Security Tests:** Auth flow, rate limiting, CSRF protection
-- **Load Tests:** Concurrent user simulation
-
-### Frontend Tests
-- **Component Tests:** React Testing Library
-- **Integration Tests:** Redux store interactions
-- **E2E Tests:** Playwright for critical user flows
-
----
-
-## Deployment Architecture
-
-```
-Internet
-    ↓
-Load Balancer (HTTPS)
-    ↓
-FastAPI Servers (3+ instances)
-    ├── Security Middleware Stack
-    ├── API Routers
-    └── Background Workers
-    ↓
-Database Layer
-    ├── PostgreSQL (Primary)
-    ├── PostgreSQL (Read Replicas)
-    └── Redis (Cache/Rate Limiting)
-    ↓
-External Services
-    ├── Alpha Vantage API
-    ├── Finnhub API
-    ├── SEC EDGAR
-    └── Polygon.io
-```
-
----
-
-## Conclusion
-
-This codemap provides a comprehensive overview of the Investment Analysis Platform architecture. Key takeaways:
-
-1. **Layered Architecture:** Clear separation between API, business logic, data access, and security
-2. **Async-First Design:** All I/O operations are asynchronous for optimal performance
-3. **Security-First:** Multiple layers of defense (middleware, validation, rate limiting, audit logging)
-4. **Domain-Driven Design:** Domain contracts enforce consistency across modules
-5. **Performance Optimized:** Multi-tier caching, prepared statements, bulk operations
-6. **Production-Ready:** Comprehensive error handling, monitoring, and SEC compliance
-
-For implementation questions, refer to specific module documentation in each directory.
-
----
-
-**Document Version:** 1.0.0
-**Last Updated:** 2026-01-29
-**Maintained By:** Development Team
+**Document Version:** 2.0.0
+**Last Updated:** 2026-02-08
+**Generated From:** Code inspection of actual source files

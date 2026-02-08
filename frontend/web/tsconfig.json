@@ -10,9 +10,17 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+
+    // TYPE SAFETY (GitHub Issue #91 - TypeScript Strict Mode Audit)
+    // Status: ⚠️ STRICT MODE DISABLED
+    // Audit Date: 2026-02-08
+    // Findings: 31 errors across 10 files when strict mode enabled
+    // Effort to Fix: ~3.25 hours (including testing)
+    // Next Steps: See docs/TYPESCRIPT_STRICT_MODE_AUDIT.md for detailed remediation plan
+    "strict": false,                // TODO: Enable after fixing 31 type errors (see audit report)
+    "noUnusedLocals": false,        // TODO: Enable after strict mode is working
+    "noUnusedParameters": false,    // TODO: Enable after strict mode is working
+
     "noFallthroughCasesInSwitch": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
