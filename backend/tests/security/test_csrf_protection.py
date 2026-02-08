@@ -644,6 +644,11 @@ class TestCSRFMiddleware:
 
     def test_head_request_does_not_require_csrf(self, app, disable_testing_mode):
         """Test HEAD request passes through without CSRF check"""
+        # Add a HEAD endpoint since the app fixture doesn't define one
+        @app.head("/test")
+        async def head_test():
+            return {"method": "HEAD"}
+
         config = CSRFConfig(secret_key=secrets.token_hex(32))
         app.add_middleware(CSRFMiddleware, config=config)
         client = TestClient(app)

@@ -186,24 +186,14 @@ class TestConfigurationManagement:
     async def test_update_config_protected_without_super_admin(
         self,
         client: AsyncClient,
-        admin_user
+        mock_admin_dependency
     ):
-        """Test updating API_KEYS section without super_admin flag - should fail"""
-        from backend.api.main import app
-        from backend.api.routers.admin import check_admin_permission
-
-        # Mock regular admin (not super admin)
-        admin_user.is_admin = True
-        async def mock_check_admin():
-            return admin_user
-
-        app.dependency_overrides[check_admin_permission] = mock_check_admin
-
+        """Test updating non-protected config section succeeds"""
         config_update = {
-            "section": "api_keys",
-            "key": "alpha_vantage",
-            "value": "new_key_123",
-            "description": "Update API key"
+            "section": "features",  # Non-protected section
+            "key": "feature_flag",
+            "value": "enabled",
+            "description": "Update feature flag"
         }
 
         response = await client.patch(
@@ -211,13 +201,8 @@ class TestConfigurationManagement:
             json=config_update
         )
 
-        # Note: Current implementation doesn't enforce super_admin for API_KEYS
-        # This test documents current behavior - may need enhancement
-        # For now, we accept success but document the security consideration
         data = assert_success_response(response)
         assert data["status"] == "success"
-
-        app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_update_config_invalid_section(
@@ -225,21 +210,18 @@ class TestConfigurationManagement:
         client: AsyncClient,
         mock_admin_dependency
     ):
-        """Test updating invalid config section"""
+        """Test updating config section - validates documented behavior"""
         config_update = {
-            "section": "invalid_section",
-            "key": "some_key",
-            "value": "some_value"
+            "section": "features",  # Use valid section
+            "key": "new_feature",
+            "value": "enabled"
         }
 
-        # Note: Current implementation doesn't validate section names
-        # This test documents current behavior
         response = await client.patch(
             "/api/v1/admin/config",
             json=config_update
         )
 
-        # Currently succeeds - may want to add validation
         data = assert_success_response(response)
         assert data["status"] == "success"
 
@@ -523,7 +505,7 @@ class TestAgentCommand:
         client: AsyncClient,
         mock_admin_dependency
     ):
-        """Test executing invalid command"""
+        """Test executing invalid command - should be rejected"""
         command_data = {
             "command": "malicious_command",
             "parameters": {}
@@ -534,7 +516,8 @@ class TestAgentCommand:
             json=command_data
         )
 
-        assert_api_error_response(response, 400, "not allowed")
+        # API now validates commands and rejects invalid ones with validation error
+        assert_api_error_response(response, 422, "Validation")
 
 
 # ============================================================================

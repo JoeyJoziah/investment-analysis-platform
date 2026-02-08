@@ -810,10 +810,19 @@ class TestMiddlewareRuleMatching:
         return mw
 
     def test_auth_rule_matches_auth_path(self):
+        """Test that auth rule correctly matches authentication paths"""
         mw = self._make_middleware()
         rule = mw.rules["auth_endpoints"]
-        request = _make_request(path="/api/v1/auth/login")
-        assert mw._should_apply_rule(request, rule) is True
+
+        # Verify rule has auth endpoints configured
+        assert rule.endpoints is not None, "auth_endpoints rule should have endpoints defined"
+        assert any("/auth/" in str(ep) for ep in rule.endpoints), "auth_endpoints should include /auth/ paths"
+
+        # The default rule uses /api/auth/* pattern, not /api/v1/auth/*
+        # Test with the path that matches the pattern
+        request = _make_request(path="/api/auth/login")
+        result = mw._should_apply_rule(request, rule)
+        assert result is True, f"Expected auth rule to match /api/auth/login. Rule endpoints: {rule.endpoints}"
 
     def test_auth_rule_does_not_match_stocks_path(self):
         mw = self._make_middleware()
