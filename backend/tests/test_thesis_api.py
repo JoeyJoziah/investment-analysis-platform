@@ -80,7 +80,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_create_thesis_success(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_stock: Stock
     ):
@@ -100,7 +100,7 @@ class TestInvestmentThesisAPI:
             "content": "# Full Thesis Document\n\nDetailed analysis..."
         }
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/thesis/",
             json=thesis_data,
             headers=auth_headers
@@ -119,7 +119,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_create_thesis_missing_required_fields(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_stock: Stock
     ):
@@ -129,7 +129,7 @@ class TestInvestmentThesisAPI:
             # Missing investment_objective and time_horizon
         }
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/thesis/",
             json=thesis_data,
             headers=auth_headers
@@ -140,7 +140,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_create_thesis_invalid_stock_id(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict
     ):
         """Test thesis creation with non-existent stock"""
@@ -150,7 +150,7 @@ class TestInvestmentThesisAPI:
             "time_horizon": "long-term"
         }
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/thesis/",
             json=thesis_data,
             headers=auth_headers
@@ -161,7 +161,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_create_duplicate_thesis(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
@@ -172,7 +172,7 @@ class TestInvestmentThesisAPI:
             "time_horizon": "short-term"
         }
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/thesis/",
             json=thesis_data,
             headers=auth_headers
@@ -183,12 +183,12 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_get_thesis_by_id(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
         """Test retrieving thesis by ID"""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/thesis/{test_thesis.id}",
             headers=auth_headers
         )
@@ -201,12 +201,12 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_get_thesis_by_stock_id(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
         """Test retrieving thesis by stock ID"""
-        response = await client.get(
+        response = await authenticated_client.get(
             f"/api/v1/thesis/stock/{test_thesis.stock_id}",
             headers=auth_headers
         )
@@ -218,11 +218,11 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_get_thesis_not_found(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict
     ):
         """Test retrieving non-existent thesis"""
-        response = await client.get(
+        response = await authenticated_client.get(
             "/api/v1/thesis/99999",
             headers=auth_headers
         )
@@ -232,12 +232,12 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_list_user_theses(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
         """Test listing all theses for a user"""
-        response = await client.get(
+        response = await authenticated_client.get(
             "/api/v1/thesis/",
             headers=auth_headers
         )
@@ -250,12 +250,12 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_list_theses_pagination(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
         """Test pagination in thesis listing"""
-        response = await client.get(
+        response = await authenticated_client.get(
             "/api/v1/thesis/?limit=10&offset=0",
             headers=auth_headers
         )
@@ -267,7 +267,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_update_thesis(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
@@ -278,7 +278,7 @@ class TestInvestmentThesisAPI:
             "content": "# Updated Content\n\nNew analysis..."
         }
 
-        response = await client.put(
+        response = await authenticated_client.put(
             f"/api/v1/thesis/{test_thesis.id}",
             json=update_data,
             headers=auth_headers
@@ -292,7 +292,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_update_thesis_not_owned(
         self,
-        client: AsyncClient,
+        async_client: AsyncClient,
         db_session: AsyncSession,
         test_thesis: InvestmentThesis,
         test_stock: Stock
@@ -318,7 +318,7 @@ class TestInvestmentThesisAPI:
             "investment_objective": "Hacked update"
         }
 
-        response = await client.put(
+        response = await async_client.put(
             f"/api/v1/thesis/{test_thesis.id}",
             json=update_data,
             headers=other_headers
@@ -330,12 +330,12 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_delete_thesis(
         self,
-        client: AsyncClient,
+        authenticated_client: AsyncClient,
         auth_headers: dict,
         test_thesis: InvestmentThesis
     ):
         """Test deleting a thesis"""
-        response = await client.delete(
+        response = await authenticated_client.delete(
             f"/api/v1/thesis/{test_thesis.id}",
             headers=auth_headers
         )
@@ -343,7 +343,7 @@ class TestInvestmentThesisAPI:
         assert response.status_code == 204
 
         # Verify thesis is deleted
-        get_response = await client.get(
+        get_response = await authenticated_client.get(
             f"/api/v1/thesis/{test_thesis.id}",
             headers=auth_headers
         )
@@ -352,7 +352,7 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_delete_thesis_not_owned(
         self,
-        client: AsyncClient,
+        async_client: AsyncClient,
         db_session: AsyncSession,
         test_thesis: InvestmentThesis
     ):
@@ -372,7 +372,7 @@ class TestInvestmentThesisAPI:
         other_token = create_access_token({"sub": str(other_user.id)})
         other_headers = {"Authorization": f"Bearer {other_token}"}
 
-        response = await client.delete(
+        response = await async_client.delete(
             f"/api/v1/thesis/{test_thesis.id}",
             headers=other_headers
         )
@@ -383,16 +383,16 @@ class TestInvestmentThesisAPI:
     @pytest.mark.asyncio
     async def test_thesis_requires_authentication(
         self,
-        client: AsyncClient,
+        async_client: AsyncClient,
         test_thesis: InvestmentThesis
     ):
         """Test that all endpoints require authentication"""
         # Test GET
-        response = await client.get(f"/api/v1/thesis/{test_thesis.id}")
+        response = await async_client.get(f"/api/v1/thesis/{test_thesis.id}")
         assert_api_error_response(response, 401)
 
         # Test POST
-        response = await client.post(
+        response = await async_client.post(
             "/api/v1/thesis/",
             json={
                 "stock_id": 1,
@@ -403,12 +403,12 @@ class TestInvestmentThesisAPI:
         assert_api_error_response(response, 401)
 
         # Test PUT
-        response = await client.put(
+        response = await async_client.put(
             f"/api/v1/thesis/{test_thesis.id}",
             json={"investment_objective": "test"}
         )
         assert_api_error_response(response, 401)
 
         # Test DELETE
-        response = await client.delete(f"/api/v1/thesis/{test_thesis.id}")
+        response = await async_client.delete(f"/api/v1/thesis/{test_thesis.id}")
         assert_api_error_response(response, 401)
