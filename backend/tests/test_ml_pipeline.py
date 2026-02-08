@@ -106,12 +106,21 @@ class TestDataPreparation:
         from backend.ml.data_prep import MLTrainingDataGenerator
 
         generator = MLTrainingDataGenerator()
-        result = generator.generate_labels(sample_stock_data)
 
-        # Check labels are present
+        # First calculate technical indicators to add 'returns' column
+        df_with_indicators = generator.calculate_technical_indicators(sample_stock_data)
+
+        # Then generate labels
+        result = generator.generate_labels(df_with_indicators)
+
+        # Check labels are present (using default horizons [1, 5, 10, 20])
         assert 'future_return_5d' in result.columns
         assert 'direction_5d' in result.columns
         assert 'future_return_1d' in result.columns
+
+        # Labels should be shifted (last rows will be NaN)
+        # But most values should be valid floats
+        assert result['future_return_5d'].notna().sum() > 0
 
     def test_processed_data_exists(self):
         """Test that processed training data exists."""
