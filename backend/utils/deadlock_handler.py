@@ -8,7 +8,7 @@ import logging
 from typing import Callable, Any, Optional, Dict, List, TypeVar, Awaitable
 from functools import wraps
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import random
 import asyncpg
@@ -74,7 +74,7 @@ class CircuitBreaker:
         if self.state == CircuitBreakerState.OPEN:
             # Check if recovery timeout has passed
             if (self.last_failure_time and 
-                datetime.utcnow() - self.last_failure_time >= timedelta(seconds=self.config.recovery_timeout)):
+                datetime.now(timezone.utc) - self.last_failure_time >= timedelta(seconds=self.config.recovery_timeout)):
                 self.state = CircuitBreakerState.HALF_OPEN
                 self.success_count = 0
                 logger.info("Circuit breaker transitioning to HALF_OPEN")
@@ -101,10 +101,10 @@ class CircuitBreaker:
     def record_failure(self, error: Exception):
         """Record failed operation"""
         self.failure_count += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = datetime.now(timezone.utc)
         self.metrics.failed_retries += 1
         self.metrics.last_error = str(error)
-        self.metrics.last_retry_at = datetime.utcnow()
+        self.metrics.last_retry_at = datetime.now(timezone.utc)
         
         if self.state == CircuitBreakerState.HALF_OPEN:
             self.state = CircuitBreakerState.OPEN

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, P
 from fastapi import status
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from enum import Enum
 import asyncio
 import random
@@ -883,7 +883,7 @@ async def analyze_stock(
 
         return success_response(data=AnalysisResponse(
             symbol=symbol,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             analysis_type=request.analysis_type,
             technical=technical,
             fundamental=fundamental,
@@ -895,8 +895,8 @@ async def analyze_stock(
             confidence=confidence,
             key_insights=insights,
             warnings=["High volatility detected in recent price action"] if risk_metrics and risk_metrics.overall_risk_score > 60 else None,
-            next_earnings_date=datetime.utcnow().date() + timedelta(days=random.randint(10, 90)),  # Would fetch from earnings calendar
-            last_updated=datetime.utcnow()
+            next_earnings_date=datetime.now(timezone.utc).date() + timedelta(days=random.randint(10, 90)),  # Would fetch from earnings calendar
+            last_updated=datetime.now(timezone.utc)
         ))
         
     except HTTPException:
@@ -1031,7 +1031,7 @@ async def get_technical_indicators(
 
     return success_response(data={
         "symbol": symbol.upper(),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "indicators": result
     })
 
@@ -1063,7 +1063,7 @@ async def cache_analysis_results(symbol: str, score: float, analysis_data: Dict[
             "symbol": symbol,
             "score": score,
             "analysis_data": analysis_data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         # In production, this would:

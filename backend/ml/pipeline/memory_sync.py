@@ -8,7 +8,7 @@ import json
 import sqlite3
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
@@ -131,7 +131,7 @@ class ClaudeFlowMemoryAdapter:
             if cursor.fetchone()[0] == 0:
                 await self.store(
                     key=f"_namespace_meta_{namespace}",
-                    value={"description": description, "created": datetime.utcnow().isoformat()},
+                    value={"description": description, "created": datetime.now(timezone.utc).isoformat()},
                     namespace=namespace
                 )
 
@@ -157,7 +157,7 @@ class ClaudeFlowMemoryAdapter:
             metadata_str = json.dumps(metadata) if metadata else None
 
             # Generate unique ID
-            entry_id = f"entry_{int(datetime.utcnow().timestamp() * 1000)}_{hashlib.md5(key.encode()).hexdigest()[:8]}"
+            entry_id = f"entry_{int(datetime.now(timezone.utc).timestamp() * 1000)}_{hashlib.md5(key.encode()).hexdigest()[:8]}"
 
             # Insert or update
             cursor.execute("""
@@ -171,8 +171,8 @@ class ClaudeFlowMemoryAdapter:
                 namespace,
                 metadata_str,
                 ttl,
-                datetime.utcnow().isoformat(),
-                datetime.utcnow().isoformat()
+                datetime.now(timezone.utc).isoformat(),
+                datetime.now(timezone.utc).isoformat()
             ))
 
             self._connection.commit()
@@ -276,7 +276,7 @@ class ClaudeFlowMemoryAdapter:
         # Enrich metadata
         enriched = {
             **model_metadata,
-            "synced_at": datetime.utcnow().isoformat(),
+            "synced_at": datetime.now(timezone.utc).isoformat(),
             "source": "ml_pipeline",
             "sync_version": "1.0"
         }
@@ -331,7 +331,7 @@ class ClaudeFlowMemoryAdapter:
 
     async def sync_registry_to_memory(self) -> SyncResult:
         """Sync entire model registry to Claude Flow memory"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         synced = 0
         failed = 0
         errors = []
@@ -362,7 +362,7 @@ class ClaudeFlowMemoryAdapter:
                     failed += 1
                     errors.append(f"Failed to sync {model_name}")
 
-            duration = (datetime.utcnow() - start_time).total_seconds() * 1000
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             return SyncResult(
                 success=failed == 0,
@@ -380,13 +380,13 @@ class ClaudeFlowMemoryAdapter:
                 entries_synced=synced,
                 entries_failed=failed + 1,
                 direction="to_memory",
-                duration_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
+                duration_ms=(datetime.now(timezone.utc) - start_time).total_seconds() * 1000,
                 errors=[str(e)]
             )
 
     async def sync_memory_to_registry(self) -> SyncResult:
         """Sync Claude Flow memory models back to registry"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         synced = 0
         failed = 0
         errors = []
@@ -428,7 +428,7 @@ class ClaudeFlowMemoryAdapter:
             with open(self.registry_path, 'w') as f:
                 json.dump(registry, f, indent=2)
 
-            duration = (datetime.utcnow() - start_time).total_seconds() * 1000
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             return SyncResult(
                 success=failed == 0,
@@ -446,7 +446,7 @@ class ClaudeFlowMemoryAdapter:
                 entries_synced=synced,
                 entries_failed=failed + 1,
                 direction="from_memory",
-                duration_ms=(datetime.utcnow() - start_time).total_seconds() * 1000,
+                duration_ms=(datetime.now(timezone.utc) - start_time).total_seconds() * 1000,
                 errors=[str(e)]
             )
 

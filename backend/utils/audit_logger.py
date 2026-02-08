@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -109,7 +109,7 @@ class AuditLogger:
             # Create audit entry
             audit_entry = {
                 "id": self._generate_audit_id(),
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
                 "action": action.value if isinstance(action, AuditAction) else action,
                 "user_id": user_id,
                 "resource_type": resource_type,
@@ -125,7 +125,7 @@ class AuditLogger:
             audit_entry["details"]["system_context"] = {
                 "environment": "production",  # Should come from settings
                 "version": "1.0.0",  # Should come from settings
-                "server_time": datetime.utcnow().isoformat()
+                "server_time": datetime.now(timezone.utc).isoformat()
             }
             
             # Log to database if session provided
@@ -422,7 +422,7 @@ class AuditLogger:
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat()
             },
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": {},
             "details": []
         }
@@ -471,7 +471,7 @@ class AuditLogger:
         # Store entry in local buffer for testing
         audit_entry = {
             "id": self._generate_audit_id(),
-            "timestamp": timestamp or datetime.utcnow(),
+            "timestamp": timestamp or datetime.now(timezone.utc),
             "action": action,
             "user_id": user_id,
             "details": details,
@@ -505,7 +505,7 @@ class AuditLogger:
         # Store entry in local buffer for testing
         audit_entry = {
             "id": self._generate_audit_id(),
-            "timestamp": timestamp or datetime.utcnow(),
+            "timestamp": timestamp or datetime.now(timezone.utc),
             "action": action,
             "user_id": None,
             "details": details,
@@ -535,12 +535,12 @@ class AuditLogger:
             List of audit log entries
         """
         from datetime import timedelta
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         return [
             entry for entry in self._local_buffer
             if entry.get("user_id") == user_id
-            and entry.get("timestamp", datetime.utcnow()) >= cutoff
+            and entry.get("timestamp", datetime.now(timezone.utc)) >= cutoff
         ]
 
     def get_system_audit_logs(
@@ -557,12 +557,12 @@ class AuditLogger:
             List of system audit log entries
         """
         from datetime import timedelta
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         return [
             entry for entry in self._local_buffer
             if entry.get("type") == "system_action"
-            and entry.get("timestamp", datetime.utcnow()) >= cutoff
+            and entry.get("timestamp", datetime.now(timezone.utc)) >= cutoff
         ]
 
 

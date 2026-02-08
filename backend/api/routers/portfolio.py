@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 import random
 import uuid
@@ -355,7 +355,7 @@ async def get_portfolios_summary(
                     strategy=PortfolioStrategy(portfolio.strategy) if portfolio.strategy else PortfolioStrategy.BALANCED,
                     risk_score=round(risk_score, 2),
                     created_at=portfolio.created_at,
-                    last_updated=portfolio.updated_at or datetime.utcnow()
+                    last_updated=portfolio.updated_at or datetime.now(timezone.utc)
                 ))
 
             except Exception as e:
@@ -376,7 +376,7 @@ async def get_portfolios_summary(
                     strategy=PortfolioStrategy.BALANCED,
                     risk_score=50.0,
                     created_at=portfolio.created_at,
-                    last_updated=datetime.utcnow()
+                    last_updated=datetime.now(timezone.utc)
                 ))
 
         logger.info(f"Successfully calculated {len(summaries)} portfolio summaries")
@@ -607,7 +607,7 @@ async def get_portfolio_detail(
             strategy=PortfolioStrategy(portfolio.strategy) if portfolio.strategy else PortfolioStrategy.BALANCED,
             risk_score=round(risk_score, 2),
             created_at=portfolio.created_at,
-            last_updated=portfolio.updated_at or datetime.utcnow(),
+            last_updated=portfolio.updated_at or datetime.now(timezone.utc),
             positions=positions,
             asset_allocation=asset_allocation,
             sector_allocation=sector_allocation,
@@ -677,7 +677,8 @@ async def calculate_real_performance_metrics(portfolio_id: int, positions: List[
 async def add_position(
     portfolio_id: str,
     request: AddPositionRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, Any]]:
     """Add a new position or add to existing position"""
     
@@ -696,7 +697,7 @@ async def add_position(
         total_amount=request.quantity * request.price,
         fees=random.uniform(0, 10),
         notes=request.notes,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     
     # Background task to update portfolio metrics
@@ -713,7 +714,8 @@ async def remove_position(
     portfolio_id: str,
     symbol: str,
     request: RemovePositionRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, Any]]:
     """Remove or reduce a position"""
     
@@ -738,7 +740,7 @@ async def remove_position(
         total_amount=quantity_to_sell * request.price,
         fees=random.uniform(0, 10),
         notes=f"Sold {'all' if request.sell_all else request.quantity} shares",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     
     # Background task to update portfolio metrics
@@ -768,7 +770,7 @@ async def get_transactions(
     symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA"]
     
     for i in range(100):
-        trans_date = datetime.utcnow() - timedelta(days=random.randint(0, 365))
+        trans_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 365))
         
         if start_date and trans_date.date() < start_date:
             continue
@@ -829,7 +831,7 @@ async def get_portfolio_performance(
     
     base_value = 100000
     for i in range(num_points):
-        date_point = datetime.utcnow() - timedelta(days=num_points - i)
+        date_point = datetime.now(timezone.utc) - timedelta(days=num_points - i)
         value = base_value * (1 + random.uniform(-0.02, 0.02))
         base_value = value
         
@@ -864,7 +866,10 @@ async def get_portfolio_performance(
     })
 
 @router.post("/{portfolio_id}/analyze")
-async def analyze_portfolio(portfolio_id: str) -> ApiResponse[PortfolioAnalysis]:
+async def analyze_portfolio(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user)
+) -> ApiResponse[PortfolioAnalysis]:
     """Perform comprehensive portfolio analysis"""
     
     return success_response(data=PortfolioAnalysis(
@@ -910,7 +915,8 @@ async def analyze_portfolio(portfolio_id: str) -> ApiResponse[PortfolioAnalysis]
 async def rebalance_portfolio(
     portfolio_id: str,
     request: RebalanceRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, Any]]:
     """Generate rebalancing recommendations"""
     
@@ -967,7 +973,7 @@ async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
             notes="Watching for entry point",
             alert_enabled=random.choice([True, False]),
             alert_conditions={"price_below": current_price * 0.95} if random.choice([True, False]) else None,
-            added_date=datetime.utcnow() - timedelta(days=random.randint(1, 30))
+            added_date=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
         ))
 
     return success_response(data=watchlist)
@@ -975,7 +981,8 @@ async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
 @router.post("/{portfolio_id}/watchlist")
 async def add_to_watchlist(
     portfolio_id: str,
-    item: WatchlistItem
+    item: WatchlistItem,
+    current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, str]]:
     """Add item to watchlist"""
     
@@ -988,7 +995,8 @@ async def add_to_watchlist(
 @router.put("/{portfolio_id}/settings")
 async def update_portfolio_settings(
     portfolio_id: str,
-    settings: PortfolioSettings
+    settings: PortfolioSettings,
+    current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, str]]:
     """Update portfolio settings"""
     

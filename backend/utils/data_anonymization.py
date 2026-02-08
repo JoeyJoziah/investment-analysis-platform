@@ -3,7 +3,7 @@
 import hashlib
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from cryptography.fernet import Fernet
@@ -416,14 +416,14 @@ class GDPRCompliance:
             Consent record ID
         """
         consent_id = hashlib.sha256(
-            f"{user_id}:{purpose}:{datetime.utcnow().isoformat()}".encode()
+            f"{user_id}:{purpose}:{datetime.now(timezone.utc).isoformat()}".encode()
         ).hexdigest()[:16]
         
         self.consent_records[consent_id] = {
             "user_id": user_id,
             "purpose": purpose,
             "granted": granted,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "ip_address": self.anonymizer.anonymize_ip(ip_address) if ip_address else None,
             "consent_id": consent_id
         }
@@ -467,7 +467,7 @@ class GDPRCompliance:
         # In a real implementation, this would gather data from all systems
         return {
             "user_id": user_id,
-            "export_date": datetime.utcnow().isoformat(),
+            "export_date": datetime.now(timezone.utc).isoformat(),
             "consent_records": [
                 record for record in self.consent_records.values()
                 if record["user_id"] == user_id
@@ -495,7 +495,7 @@ class GDPRCompliance:
         Returns:
             Whether data should be retained
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
         return data_date > cutoff_date
 
 

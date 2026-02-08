@@ -10,7 +10,7 @@ import threading
 import multiprocessing
 from typing import Dict, List, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 import numpy as np
@@ -413,7 +413,7 @@ class DynamicResourceManager:
             process_count = thread_count = file_descriptor_count = 0
         
         return ResourceMetrics(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             cpu_percent=cpu_percent,
             cpu_count_logical=cpu_count_logical,
             cpu_count_physical=cpu_count_physical,
@@ -481,7 +481,7 @@ class DynamicResourceManager:
         optimization_time = time.time() - optimization_start
         
         self.optimization_history.append({
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'metrics': metrics,
             'old_allocation': self.current_allocation,
             'new_allocation': new_allocation,
@@ -656,7 +656,7 @@ class DynamicResourceManager:
             if current_metrics:
                 # Adjust current metrics with predictions
                 predicted_metrics = ResourceMetrics(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     cpu_percent=min(100, cpu_prediction),
                     memory_percent=min(100, memory_prediction),
                     cpu_count_logical=current_metrics.cpu_count_logical,
@@ -701,7 +701,7 @@ class DynamicResourceManager:
         memory_efficiency = (self.current_allocation.memory_limit_mb / 1024) / max(avg_memory / 100 * self.system_limits['memory']['total_gb'], 0.1)
         
         performance_data = {
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'avg_cpu_percent': avg_cpu,
             'avg_memory_percent': avg_memory,
             'avg_disk_io_mb_s': avg_disk_io,

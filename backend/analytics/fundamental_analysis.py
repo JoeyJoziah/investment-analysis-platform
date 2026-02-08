@@ -6,7 +6,7 @@ Comprehensive financial analysis including DCF, peer comparison, and quality met
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import logging
 from scipy import stats
@@ -72,7 +72,7 @@ class FundamentalAnalysisEngine:
         """
         analysis = {
             'ticker': ticker,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'financial_metrics': self._calculate_financial_metrics(financials, market_data),
             'valuation_models': self._run_valuation_models(financials, market_data),
             'quality_score': self._calculate_quality_score(financials),

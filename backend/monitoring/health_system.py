@@ -7,7 +7,7 @@ import asyncio
 import logging
 import signal
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -359,7 +359,7 @@ class HealthMonitor:
                 )
                 
                 # Update check state
-                check.last_check = datetime.utcnow()
+                check.last_check = datetime.now(timezone.utc)
                 check.last_status = result["status"]
                 
                 if result["status"] in [HealthStatus.HEALTHY, HealthStatus.DEGRADED]:
@@ -406,7 +406,7 @@ class HealthMonitor:
         results = {}
         
         # Check cache first
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if hasattr(self, '_last_full_check'):
             if (now - self._last_full_check).total_seconds() < self.cache_ttl:
                 return self.health_cache.copy()
@@ -483,7 +483,7 @@ class HealthMonitor:
             status=overall_status,
             checks=check_results,
             uptime=uptime,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             version=self.version,
             environment=os.getenv("ENVIRONMENT", "unknown")
         )

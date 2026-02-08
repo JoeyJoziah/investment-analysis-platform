@@ -4,10 +4,11 @@ from sqlalchemy.orm import Session
 from typing import Dict, Optional, Any
 import psutil
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.utils.database import get_db_sync, engine
 from backend.utils.cache import get_redis_client
 from backend.models.api_response import ApiResponse, success_response
+from backend.security.advanced_rate_limiter import get_default_rate_limiting_rules
 
 router = APIRouter(tags=["health"])
 
@@ -16,7 +17,7 @@ async def health_check() -> ApiResponse[Dict[str, Any]]:
     """Basic health check endpoint"""
     return success_response(data={
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "1.0.0",
         "service": "investment-analysis-api"
     })
@@ -68,7 +69,7 @@ async def readiness_check() -> ApiResponse[Dict[str, Any]]:
     data = {
         "status": "ready" if all_ready else "not ready",
         "checks": checks,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
     if errors:
@@ -124,7 +125,7 @@ async def get_metrics() -> ApiResponse[Dict[str, Any]]:
                 "connections": len(psutil.net_connections())
             }
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
     if pool_stats:
@@ -140,7 +141,7 @@ async def liveness_check() -> ApiResponse[Dict[str, Any]]:
     """Kubernetes liveness probe endpoint"""
     return success_response(data={
         "status": "alive",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     })
 
 @router.get("/startup")
@@ -158,7 +159,7 @@ async def startup_check() -> ApiResponse[Dict[str, Any]]:
 
         return success_response(data={
             "status": "started",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
@@ -166,4 +167,42 @@ async def startup_check() -> ApiResponse[Dict[str, Any]]:
 @router.get("/ping")
 async def ping() -> ApiResponse[Dict[str, Any]]:
     """Simple ping endpoint for health checks"""
-    return success_response(data={"status": "pong", "timestamp": datetime.utcnow().isoformat()})
+    return success_response(data={"status": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
+
+@router.get("/rate-limiter")
+async def rate_limiter_health() -> ApiResponse[Dict[str, Any]]:
+    """Check rate limiter and Redis health"""
+    logger = logging.getLogger(__name__)
+
+    redis_status = {
+        "available": False,
+        "error": None
+    }
+
+    # Check Redis health for rate limiting
+    try:
+        redis_client = get_redis_client()
+        redis_client.ping()
+        redis_status["available"] = True
+        logger.info("Rate limiter Redis health check: PASS")
+    except Exception as e:
+        redis_status["error"] = str(e)
+        logger.warning(f"Rate limiter Redis health check FAILED: {e}")
+
+    # Check rate limiting rules are configured
+    try:
+        rules = get_default_rate_limiting_rules()
+        rules_configured = len(rules) > 0
+    except Exception as e:
+        logger.error(f"Could not load rate limiting rules: {e}")
+        rules_configured = False
+
+    status = {
+        "status": "healthy" if redis_status["available"] and rules_configured else "degraded",
+        "redis": redis_status,
+        "rules_configured": rules_configured,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "note": "Rate limiter will fall back to in-memory mode if Redis is unavailable"
+    }
+
+    return success_response(data=status)

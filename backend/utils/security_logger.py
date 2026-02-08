@@ -8,7 +8,7 @@ operations with proper sanitization and audit trail capabilities.
 import logging
 import json
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -92,7 +92,7 @@ class SecurityLogger:
     ) -> Dict[str, Any]:
         """Create structured log entry"""
         entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "event_type": event_type.value,
             "action": self._sanitize_value(action, 100),
             "user_id": user_id,

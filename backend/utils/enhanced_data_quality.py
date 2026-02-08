@@ -244,8 +244,8 @@ class EnhancedDataQualityChecker:
             # Fallback to UTC
             timezone_config.update({
                 'timezone': 'UTC',
-                'start_time': (datetime.utcnow() - timedelta(days=30)).strftime('%Y-%m-%d'),
-                'end_time': datetime.utcnow().strftime('%Y-%m-%d')
+                'start_time': (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%d'),
+                'end_time': datetime.now(timezone.utc).strftime('%Y-%m-%d')
             })
         
         return timezone_config

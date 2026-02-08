@@ -24,7 +24,7 @@ from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/thesis", tags=["investment-thesis"])
+router = APIRouter(tags=["investment-thesis"])
 
 
 # =======================

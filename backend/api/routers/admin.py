@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, Request
 from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 import random
 import uuid
@@ -266,7 +266,7 @@ async def get_system_health(current_user = Depends(check_admin_permission)) -> A
             "scheduler": ServiceStatus.RUNNING,
             "websocket": ServiceStatus.RUNNING
         },
-        last_check=datetime.utcnow()
+        last_check=datetime.now(timezone.utc)
     ))
 
 @router.get("/users")
@@ -288,8 +288,8 @@ async def list_users(
             role=random.choice(list(UserRole)),
             is_active=random.choice([True, False]),
             is_verified=random.choice([True, False]),
-            created_at=datetime.utcnow() - timedelta(days=random.randint(1, 365)),
-            last_login=datetime.utcnow() - timedelta(days=random.randint(0, 30)) if random.random() > 0.3 else None,
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 365)),
+            last_login=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 30)) if random.random() > 0.3 else None,
             subscription_tier=random.choice([None, "free", "basic", "premium", "enterprise"]),
             api_calls_today=random.randint(0, 1000),
             storage_used_mb=random.uniform(0, 1000)
@@ -328,8 +328,8 @@ async def get_user_details(
         role=UserRole.USER,
         is_active=True,
         is_verified=True,
-        created_at=datetime.utcnow() - timedelta(days=180),
-        last_login=datetime.utcnow() - timedelta(hours=2),
+        created_at=datetime.now(timezone.utc) - timedelta(days=180),
+        last_login=datetime.now(timezone.utc) - timedelta(hours=2),
         subscription_tier="premium",
         api_calls_today=150,
         storage_used_mb=250.5
@@ -436,7 +436,7 @@ async def get_api_usage_stats(
             p99_response_time=random.uniform(200, 2000),
             total_data_transferred=random.uniform(100, 10000),
             unique_users=random.randint(10, 500),
-            last_called=datetime.utcnow() - timedelta(minutes=random.randint(0, 60))
+            last_called=datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 60))
         ))
 
     return success_response(data=stats)
@@ -446,7 +446,7 @@ async def get_system_metrics(admin: bool = Depends(check_admin_permission)) -> A
     """Get detailed system metrics"""
 
     return success_response(data=SystemMetrics(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         cpu={
             "usage_percent": random.uniform(20, 80),
             "load_average_1m": random.uniform(0.5, 2.0),
@@ -512,7 +512,7 @@ async def list_background_jobs(
 
     for i in range(20):
         job_status = status or random.choice(list(JobStatus))
-        started = datetime.utcnow() - timedelta(minutes=random.randint(0, 120))
+        started = datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 120))
 
         jobs.append(BackgroundJob(
             id=str(uuid.uuid4()),
@@ -697,7 +697,7 @@ async def get_audit_logs(
     for i in range(200):
         log = AuditLog(
             id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow() - timedelta(minutes=random.randint(0, 10080)),
+            timestamp=datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 10080)),
             user_id=user_id or str(uuid.uuid4()),
             user_email=f"user{i % 20}@example.com",
             action=action or random.choice(actions),
@@ -743,8 +743,8 @@ async def list_announcements(
             message="System will be under maintenance on Sunday 2 AM - 4 AM EST",
             type="warning",
             active=True,
-            start_time=datetime.utcnow(),
-            end_time=datetime.utcnow() + timedelta(days=7)
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(days=7)
         ),
         Announcement(
             id=str(uuid.uuid4()),
@@ -752,7 +752,7 @@ async def list_announcements(
             message="Check out our new portfolio analytics dashboard!",
             type="info",
             active=True,
-            start_time=datetime.utcnow() - timedelta(days=2),
+            start_time=datetime.now(timezone.utc) - timedelta(days=2),
             end_time=None
         )
     ]

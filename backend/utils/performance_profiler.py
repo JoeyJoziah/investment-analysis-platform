@@ -14,7 +14,7 @@ import psutil
 import gc
 from typing import Dict, List, Optional, Any, Callable, Tuple
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 import numpy as np
@@ -252,7 +252,7 @@ class PerformanceProfiler:
     
     async def _collect_monitoring_metrics(self):
         """Collect performance metrics"""
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         # CPU metrics
         cpu_percent = psutil.cpu_percent(interval=None)
@@ -333,7 +333,7 @@ class PerformanceProfiler:
             # Detect anomaly (z-score > 3)
             if z_score > 3:
                 anomaly = {
-                    'timestamp': datetime.utcnow(),
+                    'timestamp': datetime.now(timezone.utc),
                     'metric_name': metric_name,
                     'z_score': z_score,
                     'recent_mean': recent_mean,
@@ -383,12 +383,12 @@ class PerformanceProfiler:
             tracemalloc.start(25)
             snapshot_start = None
         
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             yield
         finally:
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             if tracemalloc.is_tracing():
                 snapshot_end = tracemalloc.take_snapshot()
@@ -422,7 +422,7 @@ class PerformanceProfiler:
             return
         
         profiler = cProfile.Profile()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         profiler.enable()
         
@@ -430,7 +430,7 @@ class PerformanceProfiler:
             yield
         finally:
             profiler.disable()
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             
             # Analyze profiling data
             stats_stream = io.StringIO()
@@ -467,7 +467,7 @@ class PerformanceProfiler:
                     except Exception as e:
                         # Track errors
                         self._add_metric(MetricType.ERROR_RATE, f"{name}_errors", 1, 
-                                       datetime.utcnow(), tags={'function': name})
+                                       datetime.now(timezone.utc), tags={'function': name})
                         raise
                     finally:
                         end_time = time.perf_counter()
@@ -490,7 +490,7 @@ class PerformanceProfiler:
                             stats['memory_usage'] = stats['memory_usage'][-100:]
                         
                         # Add metrics
-                        timestamp = datetime.utcnow()
+                        timestamp = datetime.now(timezone.utc)
                         self._add_metric(MetricType.LATENCY, f"{name}_duration", execution_time, 
                                        timestamp, tags={'function': name}, unit='seconds')
                         self._add_metric(MetricType.RESOURCE_USAGE, f"{name}_memory_delta", memory_delta, 
@@ -509,7 +509,7 @@ class PerformanceProfiler:
                     except Exception as e:
                         # Track errors
                         self._add_metric(MetricType.ERROR_RATE, f"{name}_errors", 1, 
-                                       datetime.utcnow(), tags={'function': name})
+                                       datetime.now(timezone.utc), tags={'function': name})
                         raise
                     finally:
                         end_time = time.perf_counter()
@@ -532,7 +532,7 @@ class PerformanceProfiler:
                             stats['memory_usage'] = stats['memory_usage'][-100:]
                         
                         # Add metrics
-                        timestamp = datetime.utcnow()
+                        timestamp = datetime.now(timezone.utc)
                         self._add_metric(MetricType.LATENCY, f"{name}_duration", execution_time, 
                                        timestamp, tags={'function': name}, unit='seconds')
                         self._add_metric(MetricType.RESOURCE_USAGE, f"{name}_memory_delta", memory_delta, 
@@ -544,7 +544,7 @@ class PerformanceProfiler:
     
     def generate_performance_report(self, time_range_minutes: int = 60) -> Dict[str, Any]:
         """Generate comprehensive performance report"""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(minutes=time_range_minutes)
         
         # Filter metrics by time range
@@ -582,7 +582,7 @@ class PerformanceProfiler:
         
         # Compile report
         report = {
-            'report_generated': datetime.utcnow().isoformat(),
+            'report_generated': datetime.now(timezone.utc).isoformat(),
             'time_range_minutes': time_range_minutes,
             'total_metrics': len(relevant_metrics),
             'metric_statistics': metric_stats,
@@ -679,7 +679,7 @@ class PerformanceProfiler:
         
         # Check for anomalies
         recent_anomalies = [a for a in self.anomalies if 
-                           (datetime.utcnow() - a['timestamp']).total_seconds() < 3600]  # Last hour
+                           (datetime.now(timezone.utc) - a['timestamp']).total_seconds() < 3600]  # Last hour
         
         if len(recent_anomalies) > 5:
             recommendations.append(
@@ -706,7 +706,7 @@ class PerformanceProfiler:
     
     def export_metrics(self, format: str = 'json', time_range_minutes: int = 60) -> str:
         """Export metrics in various formats"""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(minutes=time_range_minutes)
         
         # Filter metrics by time range
@@ -717,7 +717,7 @@ class PerformanceProfiler:
         
         if format.lower() == 'json':
             data = {
-                'export_time': datetime.utcnow().isoformat(),
+                'export_time': datetime.now(timezone.utc).isoformat(),
                 'time_range_minutes': time_range_minutes,
                 'metrics': [metric.to_dict() for metric in relevant_metrics]
             }

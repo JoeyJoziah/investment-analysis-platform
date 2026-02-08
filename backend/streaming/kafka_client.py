@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional, ClassVar, Dict
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
@@ -294,7 +294,7 @@ class KafkaStreamProcessor:
         """Process and stream stock price data"""
         message = {
             "ticker": ticker,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "open": price_data.get("open"),
             "high": price_data.get("high"),
             "low": price_data.get("low"),
@@ -313,7 +313,7 @@ class KafkaStreamProcessor:
         """Process and stream news sentiment data"""
         message = {
             "ticker": ticker,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "headline": sentiment_data.get("headline"),
             "sentiment_score": sentiment_data.get("sentiment_score"),
             "confidence": sentiment_data.get("confidence"),
@@ -331,7 +331,7 @@ class KafkaStreamProcessor:
         """Send alert through Kafka"""
         message = {
             "alert_type": alert_type,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "severity": alert_data.get("severity", "info"),
             "title": alert_data.get("title"),
             "message": alert_data.get("message"),
@@ -349,7 +349,7 @@ class KafkaStreamProcessor:
         message = {
             "action": action,
             "user_id": user_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "ip_address": details.get("ip_address"),
             "user_agent": details.get("user_agent"),
             "details": details

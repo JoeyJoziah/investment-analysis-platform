@@ -4,7 +4,7 @@ Tracks service level agreements for different stock tiers
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from enum import Enum
 from dataclasses import dataclass, field
@@ -45,7 +45,7 @@ class SLATarget:
 @dataclass
 class SLAMeasurement:
     """Single SLA measurement"""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metric: SLAMetric = SLAMetric.DATA_FRESHNESS
     tier: StockPriority = StockPriority.MEDIUM
     ticker: Optional[str] = None
@@ -313,9 +313,9 @@ class SLATracker:
         if not time_window:
             time_window = timedelta(hours=24)
         
-        cutoff_time = datetime.utcnow() - time_window
+        cutoff_time = datetime.now(timezone.utc) - time_window
         status_report = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'time_window': str(time_window),
             'overall_compliance': 0.0,
             'tiers': {}
@@ -398,7 +398,7 @@ class SLATracker:
         Returns:
             Performance report
         """
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         performance = {
             'tier': tier.value,
@@ -483,9 +483,9 @@ class SLATracker:
             Violation report
         """
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=7)
+            start_date = datetime.now(timezone.utc) - timedelta(days=7)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
         
         report = {
             'period': {
@@ -589,7 +589,7 @@ class SLATracker:
         model = credit_model.get(tier, {'base_value': 100, 'violation_penalty': 2})
         
         # Get violations in period
-        cutoff = datetime.utcnow() - period
+        cutoff = datetime.now(timezone.utc) - period
         violations = []
         
         for metric in self.sla_targets.get(tier, {}).keys():
@@ -631,7 +631,7 @@ class SLATracker:
             Dashboard data
         """
         dashboard = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'summary': {},
             'tier_breakdown': {},
             'metric_trends': {},
@@ -666,7 +666,7 @@ class SLATracker:
         for metric in [SLAMetric.DATA_FRESHNESS, SLAMetric.API_LATENCY]:
             trend_data = []
             for hour_offset in range(168):  # 7 days
-                timestamp = datetime.utcnow() - timedelta(hours=hour_offset)
+                timestamp = datetime.now(timezone.utc) - timedelta(hours=hour_offset)
                 hour_key = timestamp.strftime('%Y-%m-%d %H:00')
                 
                 # Aggregate across all tiers
@@ -769,7 +769,7 @@ class SLATracker:
         value: float
     ):
         """Update performance history"""
-        hour_key = datetime.utcnow().strftime('%Y-%m-%d %H:00')
+        hour_key = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:00')
         history_key = f"{tier.value}:{metric.value}:{hour_key}"
         
         # Add to hourly aggregation

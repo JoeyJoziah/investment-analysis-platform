@@ -6,7 +6,7 @@ This is our primary source for fundamental data
 import asyncio
 import aiohttp
 from typing import Dict, Optional, List, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
@@ -195,7 +195,7 @@ class SECEdgarClient(BaseAPIClient):
                                 'quarterly_history': quarterly_values[:8]  # Last 8 quarters
                             }
                 
-                financials['timestamp'] = datetime.utcnow().isoformat()
+                financials['timestamp'] = datetime.now(timezone.utc).isoformat()
                 return financials
             
             return None
@@ -307,7 +307,7 @@ class SECEdgarClient(BaseAPIClient):
                 'accession_number': latest_filing['accession_number'],
                 'sections': sections,
                 'financial_data': financial_data,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         
         # Cache for 24 hours
@@ -507,5 +507,5 @@ class SECEdgarClient(BaseAPIClient):
             'ticker': ticker,
             'ratios': ratios,
             'source': 'SEC EDGAR',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }

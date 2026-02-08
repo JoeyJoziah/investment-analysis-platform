@@ -4,7 +4,7 @@ Base classes for ML Pipeline Framework
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Tuple, Union
 from enum import Enum
 import logging
@@ -138,7 +138,7 @@ class ModelArtifact:
     feature_columns_path: Optional[Path] = None
     
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     training_duration_seconds: float = 0
     training_samples: int = 0
     feature_count: int = 0
@@ -284,12 +284,12 @@ class ModelPipeline(ABC):
     
     async def execute(self) -> PipelineResult:
         """Execute the complete pipeline"""
-        pipeline_id = f"{self.config.name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        pipeline_id = f"{self.config.name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         self.result = PipelineResult(
             pipeline_id=pipeline_id,
             status=PipelineStatus.RUNNING,
-            start_time=datetime.utcnow()
+            start_time=datetime.now(timezone.utc)
         )
         
         context = {
@@ -321,7 +321,7 @@ class ModelPipeline(ABC):
             
             # Pipeline completed successfully
             self.result.status = PipelineStatus.COMPLETED
-            self.result.end_time = datetime.utcnow()
+            self.result.end_time = datetime.now(timezone.utc)
             
             # Extract model artifact if available
             if "model_artifact" in context:
@@ -338,7 +338,7 @@ class ModelPipeline(ABC):
             self.logger.error(f"Pipeline failed: {e}")
             self.result.status = PipelineStatus.FAILED
             self.result.error_message = str(e)
-            self.result.end_time = datetime.utcnow()
+            self.result.end_time = datetime.now(timezone.utc)
             
         finally:
             # Cleanup all steps

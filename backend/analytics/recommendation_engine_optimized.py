@@ -7,7 +7,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 import logging
 from enum import Enum
@@ -76,8 +76,8 @@ class StockRecommendation:
     catalysts: List[str] = field(default_factory=list)
     
     # Metadata
-    generated_at: datetime = field(default_factory=datetime.utcnow)
-    valid_until: datetime = field(default_factory=lambda: datetime.utcnow() + timedelta(days=1))
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    valid_until: datetime = field(default_factory=lambda: datetime.now(timezone.utc) + timedelta(days=1))
     
     # Position sizing
     recommended_allocation: float = 0.0  # Percentage of portfolio
@@ -283,7 +283,7 @@ class OptimizedRecommendationEngine:
         Generate daily recommendations with memory optimization
         """
         logger.info("Starting memory-optimized daily recommendation generation...")
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             # Step 1: Scan market for candidates with memory limits
@@ -317,9 +317,9 @@ class OptimizedRecommendationEngine:
             self._recommendation_history.extend(final_recommendations)
             
             # Record processing metrics
-            elapsed = (datetime.utcnow() - start_time).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
             self._processing_metrics.append({
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'processing_time_s': elapsed,
                 'candidates_processed': len(candidates),
                 'recommendations_generated': len(final_recommendations),
@@ -439,11 +439,11 @@ class OptimizedRecommendationEngine:
             return None
         
         # Set processing lock
-        self._processing_locks[ticker] = datetime.utcnow()
+        self._processing_locks[ticker] = datetime.now(timezone.utc)
         
         try:
             # Check cache first
-            cache_key = f"analysis_{ticker}_{datetime.utcnow().date()}"
+            cache_key = f"analysis_{ticker}_{datetime.now(timezone.utc).date()}"
             if cache_key in self._analysis_cache:
                 return self._analysis_cache[cache_key]
             
@@ -493,7 +493,7 @@ class OptimizedRecommendationEngine:
         """Fetch minimal required data to reduce memory usage"""
         
         # Check cache first
-        cache_key = f"stock_data_{ticker}_{datetime.utcnow().date()}"
+        cache_key = f"stock_data_{ticker}_{datetime.now(timezone.utc).date()}"
         if cache_key in self._stock_data_cache:
             return self._stock_data_cache[cache_key]
         

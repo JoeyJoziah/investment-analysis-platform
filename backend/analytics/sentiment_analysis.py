@@ -8,7 +8,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 import logging
 import re
@@ -157,7 +157,7 @@ class SentimentAnalysisEngine:
             },
             keywords=self._extract_keywords(text.lower()),
             sources_analyzed=1,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
 
     async def _analyze_with_lexicon(self, text: str, source: str) -> SentimentResult:
@@ -217,7 +217,7 @@ class SentimentAnalysisEngine:
                 },
                 keywords=keywords,
                 sources_analyzed=1,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
 
             return result
@@ -232,7 +232,7 @@ class SentimentAnalysisEngine:
                 breakdown={},
                 keywords=[],
                 sources_analyzed=0,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
     
     async def analyze_stock_sentiment(self, ticker: str, texts: List[str]) -> SentimentResult:
@@ -248,7 +248,7 @@ class SentimentAnalysisEngine:
                 breakdown={},
                 keywords=[],
                 sources_analyzed=0,
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
 
         # Try FinBERT batch processing for efficiency
@@ -308,7 +308,7 @@ class SentimentAnalysisEngine:
             },
             keywords=top_keywords,
             sources_analyzed=len(texts),
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
 
     async def _batch_analyze_finbert(
@@ -355,7 +355,7 @@ class SentimentAnalysisEngine:
             },
             keywords=keywords,
             sources_analyzed=len(texts),
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
 
     def _extract_keywords(self, text: str) -> List[str]:
@@ -410,7 +410,7 @@ class SentimentAnalysisEngine:
             breakdown={'source': 'news_placeholder'},
             keywords=[ticker.lower(), 'news'],
             sources_analyzed=0,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
     
     async def get_social_sentiment(self, ticker: str, limit: int = 50) -> SentimentResult:
@@ -426,7 +426,7 @@ class SentimentAnalysisEngine:
             breakdown={'source': 'social_placeholder'},
             keywords=[ticker.lower(), 'social'],
             sources_analyzed=0,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
     
     async def analyze_comprehensive_sentiment(self, ticker: str) -> Dict[str, Any]:
@@ -459,7 +459,7 @@ class SentimentAnalysisEngine:
                 },
                 'news_sentiment': news_sentiment.to_dict(),
                 'social_sentiment': social_sentiment.to_dict(),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'sources_analyzed': news_sentiment.sources_analyzed + social_sentiment.sources_analyzed
             }
             
@@ -473,6 +473,6 @@ class SentimentAnalysisEngine:
                     'confidence': 0.0
                 },
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'sources_analyzed': 0
             }

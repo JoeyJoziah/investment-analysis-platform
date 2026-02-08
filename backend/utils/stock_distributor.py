@@ -5,7 +5,7 @@ Optimizes distribution of stocks across processing resources
 
 import asyncio
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -40,7 +40,7 @@ class ProcessingNode:
     processing_speed: float = 1.0  # Relative speed
     specialization: List[str] = field(default_factory=list)  # e.g., ['tech', 'healthcare']
     geographic_region: str = ""
-    last_heartbeat: datetime = field(default_factory=datetime.utcnow)
+    last_heartbeat: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     error_rate: float = 0.0
     average_latency_ms: float = 0.0
     
@@ -60,7 +60,7 @@ class StockBatch:
     stocks: List[Dict[str, Any]]
     priority: StockPriority
     assigned_node: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     processing_started: Optional[datetime] = None
     processing_completed: Optional[datetime] = None
     retry_count: int = 0
@@ -643,7 +643,7 @@ class StockDistributor:
         for i in range(0, len(stocks), batch_size):
             batch_stocks = stocks[i:i + batch_size]
             batch = StockBatch(
-                batch_id=f"{priority.value}_{datetime.utcnow().timestamp()}_{i}",
+                batch_id=f"{priority.value}_{datetime.now(timezone.utc).timestamp()}_{i}",
                 stocks=batch_stocks,
                 priority=priority,
                 metadata={
@@ -769,7 +769,7 @@ class StockDistributor:
             if batch.assigned_node:
                 self.distribution_history[batch.assigned_node].append({
                     'batch_id': batch.batch_id,
-                    'timestamp': datetime.utcnow(),
+                    'timestamp': datetime.now(timezone.utc),
                     'stock_count': len(batch.stocks),
                     'priority': batch.priority.value
                 })

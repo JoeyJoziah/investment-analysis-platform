@@ -6,7 +6,7 @@ Implements 200+ technical indicators and pattern recognition
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 # import talib  # Not available, using simplified calculations
 from scipy import stats
 from scipy.signal import argrelextrema
@@ -37,7 +37,7 @@ class TechnicalAnalysisEngine:
         price_data = self._standardize_columns(price_data)
         
         analysis = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'data_points': len(price_data),
             'trend_indicators': self._calculate_trend_indicators(price_data),
             'momentum_indicators': self._calculate_momentum_indicators(price_data),

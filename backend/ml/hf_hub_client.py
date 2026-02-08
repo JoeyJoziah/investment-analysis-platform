@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 logger = logging.getLogger(__name__)
@@ -288,7 +288,7 @@ This is a private repository for internal use.
                 model_type=model_name,
                 local_path=str(local_dir),
                 hf_path=hf_path,
-                uploaded_at=datetime.utcnow().isoformat(),
+                uploaded_at=datetime.now(timezone.utc).isoformat(),
                 commit_hash=commit_hash
             )
 

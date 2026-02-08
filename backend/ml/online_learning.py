@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple, Callable, Union
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 import json
@@ -164,7 +164,7 @@ class SGDIncrementalLearner(IncrementalLearner):
             self.model.partial_fit(X_scaled, y)
         
         self.samples_processed += len(X)
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
         
         # Calculate performance metric (simple)
         predictions = self.model.predict(X_scaled)
@@ -251,7 +251,7 @@ class PyTorchIncrementalLearner(IncrementalLearner):
             batch_losses.append(loss.item())
         
         self.samples_processed += len(X)
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
         
         # Calculate performance
         with torch.no_grad():
@@ -305,7 +305,7 @@ class AdaptiveEnsembleWeighter:
             model_name="ensemble",
             weights=initial_weights.copy(),
             performance_history={name: deque(maxlen=performance_window) for name in models.keys()},
-            last_updated=datetime.utcnow(),
+            last_updated=datetime.now(timezone.utc),
             update_count=0,
             confidence_scores={name: 1.0 for name in models.keys()}
         )
@@ -379,7 +379,7 @@ class AdaptiveEnsembleWeighter:
             for model_name in self.weights.weights.keys():
                 self.weights.weights[model_name] /= total_weight
         
-        self.weights.last_updated = datetime.utcnow()
+        self.weights.last_updated = datetime.now(timezone.utc)
         self.weights.update_count += 1
         
         logger.info(f"Updated ensemble weights: {self.weights.weights}")
@@ -642,7 +642,7 @@ class OnlineLearningManager:
             return None
         
         try:
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             # Get baseline performance if possible
             performance_before = 0.0
@@ -660,7 +660,7 @@ class OnlineLearningManager:
             performance_after = learner.partial_fit(X, y)
             
             # Calculate metrics
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             computational_cost = (end_time - start_time).total_seconds() * 1000  # ms
             
             learning_metrics = LearningMetrics(
@@ -717,7 +717,7 @@ class OnlineLearningManager:
             
             # Create learning metrics
             learning_metrics = LearningMetrics(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 model_name=ensemble_name,
                 update_type="ensemble_weighting",
                 samples_processed=len(targets),
@@ -809,7 +809,7 @@ class OnlineLearningManager:
             'X': X,
             'y': y,
             'update_type': update_type,
-            'timestamp': datetime.utcnow()
+            'timestamp': datetime.now(timezone.utc)
         }
         
         await self.learning_queue.put(update_data)
@@ -824,7 +824,7 @@ class OnlineLearningManager:
             if learner.last_updated is None:
                 return True
             
-            time_since_update = datetime.utcnow() - learner.last_updated
+            time_since_update = datetime.now(timezone.utc) - learner.last_updated
             return time_since_update.total_seconds() > self.update_frequency_minutes * 60
         
         elif trigger == UpdateTrigger.PERFORMANCE_BASED:
@@ -857,7 +857,7 @@ class OnlineLearningManager:
         recent_metrics = [
             m for m in self.learning_metrics_history
             if m.model_name == model_name and 
-               (datetime.utcnow() - m.timestamp).days < 7
+               (datetime.now(timezone.utc) - m.timestamp).days < 7
         ]
         
         if recent_metrics:
@@ -885,7 +885,7 @@ class OnlineLearningManager:
         recent_metrics = [
             m for m in self.learning_metrics_history
             if m.model_name == learner.model_name and 
-               (datetime.utcnow() - m.timestamp).hours < 24
+               (datetime.now(timezone.utc) - m.timestamp).hours < 24
         ]
         
         if len(recent_metrics) < 3:
@@ -1022,7 +1022,7 @@ class OnlineLearningManager:
         """Get comprehensive learning dashboard"""
         
         dashboard = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'incremental_learners': {},
             'ensembles': {},
             'recent_metrics': {},

@@ -7,7 +7,7 @@ import aiohttp
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Any, List
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import backoff
 from aiohttp import ClientTimeout
 import json
@@ -124,11 +124,11 @@ class BaseAPIClient(ABC):
         if self.api_key:
             params = self._add_auth_params(params)
         
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             async with self.session.request(method, url, params=params) as response:
-                response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                 
                 # Record API usage
                 await cost_monitor.record_api_call(

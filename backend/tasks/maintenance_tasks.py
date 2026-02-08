@@ -3,7 +3,7 @@ Celery tasks for system maintenance and cleanup
 """
 from celery import shared_task
 from typing import Dict, Any, List
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import logging
 import os
 import subprocess
@@ -57,7 +57,7 @@ def cleanup_old_data() -> Dict[str, Any]:
                 results['errors'].append(f"Price history cleanup error: {e}")
             
             # Cleanup old news (keep 6 months)
-            news_cutoff = datetime.utcnow() - timedelta(days=180)
+            news_cutoff = datetime.now(timezone.utc) - timedelta(days=180)
             try:
                 deleted = db.query(News).filter(
                     News.published_at < news_cutoff
@@ -70,7 +70,7 @@ def cleanup_old_data() -> Dict[str, Any]:
             # Cleanup expired recommendations
             try:
                 deleted = db.query(Recommendation).filter(
-                    Recommendation.valid_until < datetime.utcnow(),
+                    Recommendation.valid_until < datetime.now(timezone.utc),
                     Recommendation.is_active == False
                 ).delete()
                 results['recommendations'] = deleted
@@ -90,7 +90,7 @@ def cleanup_old_data() -> Dict[str, Any]:
                 results['errors'].append(f"Portfolio performance cleanup error: {e}")
             
             # Cleanup old audit logs
-            audit_cutoff = datetime.utcnow() - timedelta(days=LOG_RETENTION_DAYS)
+            audit_cutoff = datetime.now(timezone.utc) - timedelta(days=LOG_RETENTION_DAYS)
             try:
                 deleted = db.query(AuditLog).filter(
                     AuditLog.created_at < audit_cutoff
@@ -203,7 +203,7 @@ def backup_database() -> Dict[str, Any]:
         Path(BACKUP_DIR).mkdir(parents=True, exist_ok=True)
         
         # Generate backup filename
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         backup_file = os.path.join(BACKUP_DIR, f'backup_{timestamp}.sql')
         
         # Database connection parameters
@@ -290,7 +290,7 @@ def check_system_health() -> Dict[str, Any]:
     """Check overall system health"""
     try:
         health_status = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'database': check_database_health(),
             'redis': check_redis_health(),
             'disk': check_disk_usage(),
@@ -348,8 +348,8 @@ def generate_system_reports() -> Dict[str, Any]:
     """Generate monthly system reports"""
     try:
         reports = {
-            'period': datetime.utcnow().strftime('%Y-%m'),
-            'generated_at': datetime.utcnow().isoformat(),
+            'period': datetime.now(timezone.utc).strftime('%Y-%m'),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
             'reports': []
         }
         
@@ -502,7 +502,7 @@ def cleanup_old_backups() -> int:
             return 0
         
         removed = 0
-        cutoff_date = datetime.utcnow() - timedelta(days=30)  # Keep 30 days of backups
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)  # Keep 30 days of backups
         
         for file in Path(BACKUP_DIR).glob('backup_*.sql.gz'):
             # Extract timestamp from filename
@@ -651,7 +651,7 @@ def store_system_metrics(metrics: Dict[str, Any]):
     try:
         with get_db_sync() as db:
             system_metric = SystemMetrics(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 metric_type='health_check',
                 metrics=metrics
             )
@@ -823,7 +823,7 @@ def warm_cache_for_market_open(self, top_n: int = 500) -> Dict[str, Any]:
             'duration_seconds': result.duration_seconds,
             'success_rate': result.success_rate,
             'errors': result.errors[:10] if result.errors else [],  # Limit errors
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'status': 'completed'
         }
 
@@ -872,7 +872,7 @@ async def _fetch_stock_data_for_warming(symbol: str) -> Dict[str, Any]:
     """
     stock_data = {
         'symbol': symbol,
-        'cached_at': datetime.utcnow().isoformat()
+        'cached_at': datetime.now(timezone.utc).isoformat()
     }
 
     try:
@@ -1074,7 +1074,7 @@ def refresh_hot_stocks_cache(symbols: List[str] = None) -> Dict[str, Any]:
             'refreshed': refreshed,
             'failed': failed,
             'errors': errors[:10],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:
@@ -1095,7 +1095,7 @@ def rotate_logs() -> Dict[str, Any]:
         for log_file in Path(log_dir).glob('*.log'):
             if log_file.stat().st_size > 100 * 1024 * 1024:  # 100MB
                 # Archive and compress
-                archive_name = f"{log_file}.{datetime.utcnow().strftime('%Y%m%d')}.gz"
+                archive_name = f"{log_file}.{datetime.now(timezone.utc).strftime('%Y%m%d')}.gz"
                 with open(log_file, 'rb') as f_in:
                     import gzip
                     with gzip.open(archive_name, 'wb') as f_out:

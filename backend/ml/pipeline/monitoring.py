@@ -4,7 +4,7 @@ Model Monitoring - Performance tracking, drift detection, and alerting
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 import numpy as np
@@ -243,7 +243,7 @@ class DriftDetector:
             logger.warning(f"Insufficient samples for drift detection: {len(current_data)}")
             return DriftReport(
                 drift_type=DriftType.DATA_DRIFT,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 is_drift_detected=False,
                 drift_score=0,
                 threshold=self.config["data_drift_threshold"]
@@ -287,7 +287,7 @@ class DriftDetector:
         
         return DriftReport(
             drift_type=DriftType.DATA_DRIFT,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             is_drift_detected=is_drift_detected,
             drift_score=overall_drift_score,
             threshold=self.config["data_drift_threshold"],
@@ -345,7 +345,7 @@ class DriftDetector:
         if n_windows < 2:
             return DriftReport(
                 drift_type=DriftType.CONCEPT_DRIFT,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 is_drift_detected=False,
                 drift_score=0,
                 threshold=self.config["concept_drift_threshold"]
@@ -382,7 +382,7 @@ class DriftDetector:
         
         return DriftReport(
             drift_type=DriftType.CONCEPT_DRIFT,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             is_drift_detected=is_drift_detected,
             drift_score=abs(slope),
             threshold=self.config["concept_drift_threshold"],
@@ -416,7 +416,7 @@ class DriftDetector:
         
         return DriftReport(
             drift_type=DriftType.PREDICTION_DRIFT,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             is_drift_detected=is_drift_detected,
             drift_score=statistic,
             threshold=self.config["prediction_drift_threshold"],
@@ -468,7 +468,7 @@ class ModelMonitor:
         self.monitored_models[model_name] = {
             "version": model_version,
             "endpoint": endpoint,
-            "registered_at": datetime.utcnow(),
+            "registered_at": datetime.now(timezone.utc),
             "status": "active"
         }
         
@@ -502,7 +502,7 @@ class ModelMonitor:
             metrics = PerformanceMetrics(
                 model_name=model_name,
                 model_version=self.monitored_models[model_name]["version"],
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 accuracy=metrics_data.get("accuracy"),
                 precision=metrics_data.get("precision"),
                 recall=metrics_data.get("recall"),
@@ -527,7 +527,7 @@ class ModelMonitor:
             return PerformanceMetrics(
                 model_name=model_name,
                 model_version="unknown",
-                timestamp=datetime.utcnow()
+                timestamp=datetime.now(timezone.utc)
             )
     
     async def _check_alerts(self, model_name: str, metrics: PerformanceMetrics):
@@ -583,7 +583,7 @@ class ModelMonitor:
         latest = recent_metrics[-1]
         
         # Calculate aggregated metrics over window
-        window_start = datetime.utcnow() - timedelta(seconds=self.config["metrics_aggregation_window"])
+        window_start = datetime.now(timezone.utc) - timedelta(seconds=self.config["metrics_aggregation_window"])
         window_metrics = [m for m in recent_metrics if m.timestamp >= window_start]
         
         if window_metrics:
@@ -623,7 +623,7 @@ class ModelMonitor:
         metrics = PerformanceMetrics(
             model_name="",
             model_version="",
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         
         if model_type == "classification":
@@ -676,11 +676,11 @@ class AlertManager:
     ) -> Alert:
         """Create and send an alert"""
         alert = Alert(
-            alert_id=f"alert_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{len(self.alerts)}",
+            alert_id=f"alert_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{len(self.alerts)}",
             severity=severity,
             title=title,
             message=message,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             **kwargs
         )
         
@@ -717,5 +717,5 @@ class AlertManager:
         for alert in self.alerts:
             if alert.alert_id == alert_id:
                 alert.resolved = True
-                alert.resolved_at = datetime.utcnow()
+                alert.resolved_at = datetime.now(timezone.utc)
                 break

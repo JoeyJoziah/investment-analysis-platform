@@ -7,7 +7,7 @@ multiple sources with intelligent caching and rate limit management.
 
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class SmartDataFetcher:
             "change": 0.0,
             "change_percent": 0.0,
             "volume": 0,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "source": "mock"
         }
         

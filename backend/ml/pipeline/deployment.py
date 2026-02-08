@@ -5,7 +5,7 @@ Model Deployment Pipeline - Handles model deployment, rollback, and A/B testing
 import logging
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 from pathlib import Path
@@ -124,7 +124,7 @@ class ABTestConfig:
     traffic_percentage_a: float = 50.0
     
     # Test duration
-    start_time: datetime = field(default_factory=datetime.utcnow)
+    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     duration_hours: int = 24
     
     # Success criteria
@@ -179,7 +179,7 @@ class ModelDeployer:
     
     async def deploy(self, config: DeploymentConfig) -> DeploymentStatus:
         """Deploy a model using specified strategy"""
-        deployment_id = f"deploy_{config.model_name}_{config.model_version}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        deployment_id = f"deploy_{config.model_name}_{config.model_version}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         deployment_status = DeploymentStatus(
             deployment_id=deployment_id,
@@ -188,7 +188,7 @@ class ModelDeployer:
             environment=config.environment,
             strategy=config.strategy,
             status="pending",
-            started_at=datetime.utcnow()
+            started_at=datetime.now(timezone.utc)
         )
         
         self.deployments[deployment_id] = deployment_status
@@ -215,7 +215,7 @@ class ModelDeployer:
             
             # Update deployment status
             deployment_status.status = "active"
-            deployment_status.completed_at = datetime.utcnow()
+            deployment_status.completed_at = datetime.now(timezone.utc)
             
             # Update model registry
             await self.registry.deploy_model(
@@ -239,7 +239,7 @@ class ModelDeployer:
             logger.error(f"Deployment {deployment_id} failed: {e}")
             deployment_status.status = "failed"
             deployment_status.errors.append(str(e))
-            deployment_status.completed_at = datetime.utcnow()
+            deployment_status.completed_at = datetime.now(timezone.utc)
             
             # Attempt rollback if configured
             if config.auto_rollback:
@@ -328,9 +328,9 @@ class ModelDeployer:
         
         # Monitor canary
         rollout_duration = timedelta(minutes=config.rollout_duration_minutes)
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
-        while datetime.utcnow() - start_time < rollout_duration:
+        while datetime.now(timezone.utc) - start_time < rollout_duration:
             # Check metrics
             metrics = await self.monitor.collect_metrics(
                 config.model_name,
@@ -345,7 +345,7 @@ class ModelDeployer:
             
             # Gradually increase traffic
             current_percentage = config.canary_percentage * (
-                (datetime.utcnow() - start_time).total_seconds() /
+                (datetime.now(timezone.utc) - start_time).total_seconds() /
                 rollout_duration.total_seconds()
             )
             
@@ -645,7 +645,7 @@ class ModelDeployer:
             await self._remove_single_deployment(endpoint)
         
         deployment.status = "rolled_back"
-        deployment.completed_at = datetime.utcnow()
+        deployment.completed_at = datetime.now(timezone.utc)
         
         return True
 
@@ -686,7 +686,7 @@ class RollbackManager:
         
         # Record rollback
         self.rollback_history.append({
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "model_name": model_name,
             "rolled_back_to": target_version,
             "reason": reason,
@@ -751,7 +751,7 @@ class ABTestManager:
     
     async def start_test(self, config: ABTestConfig) -> str:
         """Start an A/B test"""
-        test_id = f"ab_test_{config.test_name}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        test_id = f"ab_test_{config.test_name}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         self.active_tests[test_id] = config
         
@@ -828,7 +828,7 @@ class ABTestManager:
         config = self.active_tests[test_id]
         end_time = config.start_time + timedelta(hours=config.duration_hours)
         
-        while datetime.utcnow() < end_time:
+        while datetime.now(timezone.utc) < end_time:
             # Check if minimum samples reached
             result = self.test_results[test_id]
             

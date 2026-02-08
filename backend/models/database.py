@@ -8,7 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 Base = declarative_base()
@@ -75,7 +75,7 @@ class Stock(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_tradeable = Column(Boolean, default=True)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     exchange = relationship("Exchange", back_populates="stocks")
@@ -310,7 +310,7 @@ class Prediction(Base):
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     model_name = Column(String(100), nullable=False)
     model_version = Column(String(20))
-    prediction_date = Column(DateTime, default=datetime.utcnow)
+    prediction_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     target_date = Column(DateTime, nullable=False)
     
     # Predictions
@@ -349,7 +349,7 @@ class Recommendation(Base):
     id = Column(Integer, primary_key=True)
     recommendation_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     valid_until = Column(DateTime)
     
     # Recommendation
@@ -410,7 +410,7 @@ class APIUsage(Base):
     id = Column(Integer, primary_key=True)
     provider = Column(String(50), nullable=False)
     endpoint = Column(String(100))
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Usage metrics
     calls_count = Column(Integer, default=1)
@@ -444,7 +444,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     is_premium = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_login = Column(DateTime)
     
     # Preferences
@@ -472,7 +472,7 @@ class Portfolio(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String(100), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Portfolio metrics
     total_value = Column(Float, default=0.0)
@@ -533,7 +533,7 @@ class Watchlist(Base):
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     
     # Watchlist details
-    added_date = Column(DateTime, default=datetime.utcnow)
+    added_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     notes = Column(Text)
     alert_rules = Column(JSON)
     

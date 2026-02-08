@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple, List, Union
 from decimal import Decimal
 import redis.asyncio as aioredis
@@ -24,7 +24,7 @@ class LLMCostTracker:
         ticker: str = None
     ) -> None:
         """Track LLM usage with detailed metrics"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         date_key = now.strftime('%Y%m%d')
         month_key = now.strftime('%Y%m')
         
@@ -57,7 +57,7 @@ class LLMCostTracker:
         
     async def get_usage_stats(self, period: str = 'monthly') -> Dict:
         """Get usage statistics for specified period"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         if period == 'monthly':
             key = f"llm_usage:monthly:{now.strftime('%Y%m')}"
@@ -179,11 +179,11 @@ class LLMBudgetManager:
             raise BudgetExceededException(reason)
         
         # Create reservation
-        reservation_id = f"llm_reservation:{datetime.utcnow().isoformat()}:{analysis_type}"
+        reservation_id = f"llm_reservation:{datetime.now(timezone.utc).isoformat()}:{analysis_type}"
         reservation_data = {
             'analysis_type': analysis_type,
             'estimated_cost': estimated_cost,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'status': 'reserved'
         }
         
@@ -194,7 +194,7 @@ class LLMBudgetManager:
         )
         
         # Track reservation in hourly/daily counters
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hour_key = f"llm_reservations:hourly:{now.strftime('%Y%m%d%H')}"
         daily_key = f"llm_reservations:daily:{now.strftime('%Y%m%d')}"
         
@@ -247,13 +247,13 @@ class LLMBudgetManager:
     
     async def _get_monthly_usage(self) -> Decimal:
         """Get current month's LLM spending"""
-        month_key = f"llm_usage:monthly:{datetime.utcnow().strftime('%Y%m')}"
+        month_key = f"llm_usage:monthly:{datetime.now(timezone.utc).strftime('%Y%m')}"
         usage = await self.redis.hget(month_key, 'total_cost')
         return Decimal(str(usage.decode())) if usage else Decimal('0')
     
     async def _get_daily_usage(self) -> Decimal:
         """Get current day's LLM spending including reservations"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         date_key = now.strftime('%Y%m%d')
         
         # Actual usage
@@ -273,7 +273,7 @@ class LLMBudgetManager:
     
     async def _get_hourly_usage(self) -> Decimal:
         """Get current hour's LLM spending including reservations"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hour_key_actual = f"llm_usage:hourly:{now.strftime('%Y%m%d%H')}"
         hour_key_reserved = f"llm_reservations:hourly:{now.strftime('%Y%m%d%H')}"
         
@@ -414,7 +414,7 @@ class LLMCircuitBreaker:
     async def _record_failure(self):
         """Record a budget failure"""
         self.failure_count += 1
-        self.last_failure_time = datetime.utcnow()
+        self.last_failure_time = datetime.now(timezone.utc)
         
         if self.failure_count >= self.failure_threshold:
             self.state = 'OPEN'
@@ -425,5 +425,5 @@ class LLMCircuitBreaker:
         if self.last_failure_time is None:
             return True
         
-        time_since_failure = datetime.utcnow() - self.last_failure_time
+        time_since_failure = datetime.now(timezone.utc) - self.last_failure_time
         return time_since_failure.total_seconds() > self.recovery_timeout

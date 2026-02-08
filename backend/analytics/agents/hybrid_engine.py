@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from backend.analytics.recommendation_engine import RecommendationEngine, StockRecommendation
@@ -150,7 +150,7 @@ class HybridAnalysisEngine:
         Returns:
             Enhanced stock recommendation with potential agent insights
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         analysis_cost = 0.0
         agents_used = []
         agent_analysis = None
@@ -324,7 +324,7 @@ class HybridAnalysisEngine:
     ) -> EnhancedStockRecommendation:
         """Create enhanced recommendation combining traditional and agent analysis"""
         
-        analysis_duration = (datetime.utcnow() - start_time).total_seconds()
+        analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         
         # Convert traditional result to enhanced format
         enhanced_data = asdict(traditional_result)
@@ -401,7 +401,7 @@ class HybridAnalysisEngine:
         start_time: datetime
     ) -> EnhancedStockRecommendation:
         """Create fallback recommendation using only traditional analysis"""
-        analysis_duration = (datetime.utcnow() - start_time).total_seconds()
+        analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         
         enhanced_data = asdict(traditional_result)
         enhanced_data.update({
@@ -419,7 +419,7 @@ class HybridAnalysisEngine:
         start_time: datetime
     ) -> EnhancedStockRecommendation:
         """Create minimal recommendation when analysis fails"""
-        analysis_duration = (datetime.utcnow() - start_time).total_seconds()
+        analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         
         return EnhancedStockRecommendation(
             ticker=ticker,
@@ -436,7 +436,7 @@ class HybridAnalysisEngine:
     
     async def _update_stats(self, cost: float, start_time: datetime, used_agents: bool):
         """Update performance statistics"""
-        duration = (datetime.utcnow() - start_time).total_seconds()
+        duration = (datetime.now(timezone.utc) - start_time).total_seconds()
         
         self.stats['total_analyses'] += 1
         if used_agents:
@@ -476,7 +476,7 @@ class HybridAnalysisEngine:
                 except Exception as e:
                     logger.error(f"Batch analysis failed for {ticker}: {e}")
                     return ticker, self._create_error_recommendation(
-                        ticker, str(e), datetime.utcnow()
+                        ticker, str(e), datetime.now(timezone.utc)
                     )
         
         # Run analyses concurrently
@@ -507,7 +507,7 @@ class HybridAnalysisEngine:
             'budget_status': budget_status,
             'agent_capabilities': agent_capabilities,
             'circuit_breaker_state': self.circuit_breaker.state,
-            'uptime': datetime.utcnow().isoformat()
+            'uptime': datetime.now(timezone.utc).isoformat()
         }
     
     def set_analysis_mode(self, mode: AnalysisMode):

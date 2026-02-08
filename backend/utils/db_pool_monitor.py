@@ -5,7 +5,7 @@ Database Connection Pool Monitoring and Validation
 import logging
 import time
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Thread, Lock
 import psutil
 from sqlalchemy import text, create_engine, pool
@@ -90,7 +90,7 @@ class DatabasePoolMonitor:
                 # Monitor slow queries
                 self._monitor_slow_queries()
                 
-                self.metrics["last_check"] = datetime.utcnow().isoformat()
+                self.metrics["last_check"] = datetime.now(timezone.utc).isoformat()
                 
             except Exception as e:
                 logger.error(f"Error collecting pool metrics: {e}")
@@ -327,7 +327,7 @@ class DatabasePoolMonitor:
             "status": "healthy",
             "metrics": metrics,
             "validation": validation,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         # Determine overall health

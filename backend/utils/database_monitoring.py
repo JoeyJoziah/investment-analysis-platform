@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 import logging
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from contextlib import contextmanager
 
@@ -96,7 +96,7 @@ class DatabaseMonitor:
                     calls=int(row.calls),
                     avg_duration_ms=float(row.avg_duration_ms),
                     total_duration_ms=float(row.total_duration_ms),
-                    timestamp=datetime.utcnow()
+                    timestamp=datetime.now(timezone.utc)
                 )
                 slow_queries.append(slow_query)
             
@@ -216,7 +216,7 @@ class DatabaseMonitor:
                 'query': query,
                 'execution_time_ms': execution_time,
                 'explain_plan': explain_data,
-                'analyzed_at': datetime.utcnow().isoformat()
+                'analyzed_at': datetime.now(timezone.utc).isoformat()
             }
             
         except Exception as e:
@@ -224,7 +224,7 @@ class DatabaseMonitor:
             return {
                 'query': query,
                 'error': str(e),
-                'analyzed_at': datetime.utcnow().isoformat()
+                'analyzed_at': datetime.now(timezone.utc).isoformat()
             }
     
     def get_database_size_info(self) -> Dict[str, Any]:
@@ -395,7 +395,7 @@ class DatabaseMonitor:
                 warnings.append('Table has never been vacuumed')
             elif result.last_autovacuum:
                 last_vacuum = result.last_autovacuum
-                if last_vacuum < datetime.utcnow() - timedelta(days=7):
+                if last_vacuum < datetime.now(timezone.utc) - timedelta(days=7):
                     health_score -= 15
                     warnings.append('Table not vacuumed in over a week')
             
@@ -436,7 +436,7 @@ class DatabaseMonitor:
         
         try:
             report = {
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'database_size': self.get_database_size_info(),
                 'connection_stats': self.get_connection_statistics(),
                 'slow_queries': [

@@ -9,7 +9,7 @@ Usage: python scripts/validate_doc_health.py [--output FORMAT] [--strict]
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import sys
@@ -40,7 +40,7 @@ class DocumentationHealthValidator:
         }
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "checks": checks,
             "violations": self.violations,
             "metrics": self.metrics,

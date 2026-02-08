@@ -146,6 +146,10 @@ class AsyncDatabaseManager:
                     "command_timeout": 60,
                     "statement_cache_size": self.config.prepared_statement_cache_size,  # Enable prepared statement caching (default: 100)
                 }
+
+                # Enforce SSL in production for security
+                if settings.ENVIRONMENT == "production":
+                    connect_args["ssl"] = "require"
             else:
                 # SQLite connect_args (aiosqlite driver)
                 connect_args = {

@@ -7,7 +7,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, Any, List, Union
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import backoff
 import json
 
@@ -164,11 +164,11 @@ class RobustAPIClient(ABC):
         if self.api_key:
             params = self._add_auth_params(params)
         
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             async with self.session.request(method, url, params=params) as response:
-                response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                 
                 # Record API usage
                 await cost_monitor.record_api_call(
@@ -217,11 +217,11 @@ class RobustAPIClient(ABC):
         if self.api_key:
             params = self._add_auth_params(params)
         
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             response = requests.request(method, url, params=params, timeout=self.timeout)
-            response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             
             if response.status_code == 200:
                 logger.debug(f"Sync request successful: {self.provider_name}/{endpoint} ({response_time}ms)")
@@ -365,7 +365,7 @@ class RobustFinnhubClient(RobustAPIClient):
                 'low': response.get('l', 0),
                 'open': response.get('o', 0),
                 'previous_close': response.get('pc', 0),
-                'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.utcnow().isoformat()
+                'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.now(timezone.utc).isoformat()
             }
         return None
     
@@ -384,7 +384,7 @@ class RobustFinnhubClient(RobustAPIClient):
                 'low': response.get('l', 0),
                 'open': response.get('o', 0),
                 'previous_close': response.get('pc', 0),
-                'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.utcnow().isoformat()
+                'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.now(timezone.utc).isoformat()
             }
         return None
     
@@ -426,7 +426,7 @@ class RobustAlphaVantageClient(RobustAPIClient):
                 'price': float(quote_data.get('05. price', 0)),
                 'change': float(quote_data.get('09. change', 0)),
                 'change_percent': quote_data.get('10. change percent', '0%'),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         return None
     
@@ -445,7 +445,7 @@ class RobustAlphaVantageClient(RobustAPIClient):
                 'price': float(quote_data.get('05. price', 0)),
                 'change': float(quote_data.get('09. change', 0)),
                 'change_percent': quote_data.get('10. change percent', '0%'),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
         return None
     

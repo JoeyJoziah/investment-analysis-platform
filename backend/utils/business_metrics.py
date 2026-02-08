@@ -8,7 +8,7 @@ business metric thresholds are exceeded.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 import json
 
@@ -247,7 +247,7 @@ class BusinessMetricsTracker:
         """Generate daily business metrics report"""
         try:
             report = {
-                'date': datetime.utcnow().isoformat(),
+                'date': datetime.now(timezone.utc).isoformat(),
                 'budget_usage': {
                     'daily_cost': sum(self.api_call_costs.values()),
                     'monthly_projection': sum(self.api_call_costs.values()) * 30,

@@ -12,7 +12,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add backend to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -271,7 +271,7 @@ async def validate_database_security():
         from backend.security.database_security import AuditLogEntry, AuditEventType
         
         test_entry = AuditLogEntry(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             event_type=AuditEventType.QUERY,
             query="SELECT 1",
             success=True,

@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 
 import pandas as pd
@@ -317,7 +317,7 @@ This is a private repository for internal use.
             version_metadata = DatasetVersion(
                 version=version,
                 commit_hash="",  # Will be filled after push
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
                 total_samples=len(train_df) + len(val_df) + len(test_df),
                 stock_count=metadata.get('stocks_processed', 0),
                 feature_count=len(train_df.columns),

@@ -3,7 +3,7 @@ Celery tasks for analysis and ML predictions
 """
 from celery import shared_task, group
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import numpy as np
 import pandas as pd
 import logging
@@ -41,7 +41,7 @@ def analyze_stock(self, symbol: str, analysis_types: List[str] = None) -> Dict[s
         
         result = {
             'symbol': symbol,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'analysis': {}
         }
         
@@ -102,7 +102,7 @@ def analyze_stock(self, symbol: str, analysis_types: List[str] = None) -> Dict[s
                     # Get recent news
                     recent_news = db.query(News).filter(
                         News.stock_id == stock.id,
-                        News.published_at >= datetime.utcnow() - timedelta(days=7)
+                        News.published_at >= datetime.now(timezone.utc) - timedelta(days=7)
                     ).all()
                     
                     if recent_news:
@@ -175,7 +175,7 @@ def run_daily_analysis() -> Dict[str, Any]:
                 'stocks_analyzed': len(analysis_results),
                 'strong_buys': strong_buys,
                 'strong_sells': strong_sells,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
             
             # Store daily summary
@@ -323,7 +323,7 @@ def create_recommendation(symbol: str, analysis_result: Dict[str, Any]) -> bool:
                 fundamental_score=analysis_result.get('analysis', {}).get('fundamental', {}).get('score'),
                 sentiment_score=analysis_result.get('analysis', {}).get('sentiment', {}).get('score'),
                 is_active=True,
-                valid_until=datetime.utcnow() + timedelta(days=30)
+                valid_until=datetime.now(timezone.utc) + timedelta(days=30)
             )
             
             db.add(recommendation)
@@ -388,7 +388,7 @@ def track_recommendation_performance() -> Dict[str, Any]:
                         perf.actual_return = (current_price - perf.entry_price) / perf.entry_price
                         perf.max_return = (perf.highest_price - perf.entry_price) / perf.entry_price
                         perf.max_drawdown = (perf.lowest_price - perf.entry_price) / perf.entry_price
-                        perf.days_active = (datetime.utcnow() - rec.created_at).days
+                        perf.days_active = (datetime.now(timezone.utc) - rec.created_at).days
                         
                         # Check if targets hit
                         if rec.recommendation_type in ['buy', 'strong_buy']:
@@ -411,11 +411,11 @@ def track_recommendation_performance() -> Dict[str, Any]:
                                 closed += 1
                         
                         # Check if expired
-                        if datetime.utcnow() > rec.valid_until:
+                        if datetime.now(timezone.utc) > rec.valid_until:
                             rec.is_active = False
                             closed += 1
                         
-                        perf.last_updated = datetime.utcnow()
+                        perf.last_updated = datetime.now(timezone.utc)
                         updated += 1
                     
                 except Exception as e:

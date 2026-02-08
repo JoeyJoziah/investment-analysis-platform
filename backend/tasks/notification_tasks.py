@@ -3,7 +3,7 @@ Celery tasks for notifications and alerts
 """
 from celery import shared_task
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import logging
 import json
 import smtplib
@@ -320,7 +320,7 @@ def check_price_alerts() -> Dict[str, Any]:
                             
                             # Update alert
                             alert.triggered_count += 1
-                            alert.last_triggered = datetime.utcnow()
+                            alert.last_triggered = datetime.now(timezone.utc)
                             
                             # Send notification based on user preferences
                             user = db.query(User).filter(User.id == alert.user_id).first()
@@ -369,7 +369,7 @@ def send_alert_notification(
             message=message,
             current_price=current_price,
             condition=alert_type,
-            timestamp=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+            timestamp=datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
             action_url=f"https://app.example.com/stocks/{symbol}"
         )
         
@@ -742,7 +742,7 @@ def send_test_notification(email: str) -> bool:
             <h2>Test Notification</h2>
             <p>This is a test notification from the Investment Analysis Platform.</p>
             <p>If you received this email, your notifications are working correctly!</p>
-            <p>Time: """ + datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC') + """</p>
+            <p>Time: """ + datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') + """</p>
         </body>
         </html>
         """

@@ -5,7 +5,7 @@ Monitoring and Observability Endpoints
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.utils.grafana_client import grafana_client
 from backend.utils.auth import get_current_user
@@ -29,7 +29,7 @@ async def health_check() -> ApiResponse[HealthCheckResponse]:
     """Complete system health check"""
     return success_response(data=HealthCheckResponse(
         status="healthy",
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         services={
             "api": "healthy",
             "database": "healthy",  # Add actual DB check

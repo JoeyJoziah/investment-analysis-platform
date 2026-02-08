@@ -15,7 +15,7 @@ import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from threading import RLock
 from functools import wraps
@@ -520,7 +520,7 @@ class ComprehensiveCacheManager:
         """Set data in database cache"""
         try:
             serialized_data = self._serialize_data(data)
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
             
             async with get_async_db_session() as db:
                 await db.execute(

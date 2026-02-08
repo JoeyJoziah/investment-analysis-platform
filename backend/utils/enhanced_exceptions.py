@@ -4,7 +4,7 @@ and detailed error tracking for the integration layer.
 """
 
 from typing import Any, Dict, List, Optional, Type
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import traceback
 import sys
@@ -47,7 +47,7 @@ class BaseIntegrationException(Exception):
         self.message = message
         self.details = details or {}
         self.cause = cause
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
         self.traceback = self._capture_traceback()
     
     def _capture_traceback(self) -> str:
@@ -98,7 +98,7 @@ class RateLimitException(APIException):
         
         # Calculate retry_after
         if reset_time:
-            self.retry_after = max(0, (reset_time - datetime.utcnow()).total_seconds())
+            self.retry_after = max(0, (reset_time - datetime.now(timezone.utc)).total_seconds())
 
 
 class APITimeoutException(APIException):

@@ -24,7 +24,7 @@ Fallback Chain Strategy:
 import asyncio
 import logging
 from typing import Dict, List, Optional, Tuple, Any, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 import pandas as pd
 import numpy as np
@@ -130,7 +130,7 @@ class StockFundamentals:
     beta: Optional[float] = None
     dividend_yield: Optional[float] = None
     source: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class MarketScanner:
@@ -280,7 +280,7 @@ class MarketScanner:
         """Record successful API call for a provider."""
         health = self._provider_health.get(provider)
         if health:
-            health.last_success = datetime.utcnow()
+            health.last_success = datetime.now(timezone.utc)
             health.success_count += 1
             health.consecutive_failures = 0
 
@@ -288,7 +288,7 @@ class MarketScanner:
         """Record failed API call for a provider."""
         health = self._provider_health.get(provider)
         if health:
-            health.last_failure = datetime.utcnow()
+            health.last_failure = datetime.now(timezone.utc)
             health.failure_count += 1
             health.consecutive_failures += 1
 
@@ -350,7 +350,7 @@ class MarketScanner:
                 'name': info.get('longName') or info.get('shortName'),
                 'exchange': info.get('exchange'),
                 'currency': info.get('currency', 'USD'),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'source': 'yfinance'
             }
         except Exception as e:
@@ -415,7 +415,7 @@ class MarketScanner:
                 '200_day_average': info.get('twoHundredDayAverage'),
                 'analyst_target_price': info.get('targetMeanPrice'),
                 'analyst_recommendations': info.get('recommendationKey'),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'source': 'yfinance'
             }
         except Exception as e:
@@ -525,7 +525,7 @@ class MarketScanner:
                                     'previous_close': prev.get('c', 0),
                                     'change': day.get('c', 0) - prev.get('c', 0),
                                     'change_percent': ((day.get('c', 0) - prev.get('c', 0)) / prev.get('c', 1)) * 100 if prev.get('c') else 0,
-                                    'timestamp': datetime.utcnow().isoformat(),
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
                                     'source': 'polygon'
                                 }
 
@@ -594,7 +594,7 @@ class MarketScanner:
                                 'sector': facts.get('sic_description'),
                                 **facts.get('metrics', {}),
                                 **(ratios.get('ratios', {}) if ratios else {}),
-                                'timestamp': datetime.utcnow().isoformat(),
+                                'timestamp': datetime.now(timezone.utc).isoformat(),
                                 'source': 'sec_edgar'
                             }
 
@@ -610,7 +610,7 @@ class MarketScanner:
                                     'ticker': ticker,
                                     **(financials or {}),
                                     **(profile or {}),
-                                    'timestamp': datetime.utcnow().isoformat(),
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
                                     'source': 'finnhub'
                                 }
 
@@ -997,7 +997,7 @@ class MarketScanner:
             'quote': quote_data,
             'peer_data': None,  # Could be implemented
             'data_sources': self._get_data_sources(quote_data, fundamentals, news),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         # Cache for 5 minutes

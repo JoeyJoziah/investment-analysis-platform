@@ -7,7 +7,7 @@ import asyncio
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 import logging
 from enum import Enum
@@ -318,7 +318,7 @@ class RecommendationEngine:
                 text_data.append({
                     'text': f"{article.get('headline', '')} {article.get('summary', '')}",
                     'source': 'news',
-                    'timestamp': article.get('datetime', datetime.utcnow())
+                    'timestamp': article.get('datetime', datetime.now(timezone.utc))
                 })
         
         # Social media
@@ -327,7 +327,7 @@ class RecommendationEngine:
                 text_data.append({
                     'text': mention.get('text', ''),
                     'source': mention.get('platform', 'social'),
-                    'timestamp': mention.get('timestamp', datetime.utcnow())
+                    'timestamp': mention.get('timestamp', datetime.now(timezone.utc))
                 })
         
         # Analyst reports
@@ -336,7 +336,7 @@ class RecommendationEngine:
                 text_data.append({
                     'text': opinion.get('summary', ''),
                     'source': 'analyst',
-                    'timestamp': opinion.get('date', datetime.utcnow())
+                    'timestamp': opinion.get('date', datetime.now(timezone.utc))
                 })
         
         if not text_data:
@@ -611,8 +611,8 @@ class RecommendationEngine:
             risks=risks,
             opportunities=opportunities,
             catalysts=catalysts,
-            generated_at=datetime.utcnow(),
-            valid_until=datetime.utcnow() + timedelta(days=1),
+            generated_at=datetime.now(timezone.utc),
+            valid_until=datetime.now(timezone.utc) + timedelta(days=1),
             recommended_allocation=position_sizing['allocation'],
             max_position_size=position_sizing['max_size']
         )
@@ -951,7 +951,7 @@ class RecommendationEngine:
         # Earnings catalyst
         next_earnings = stock_data.get('next_earnings_date')
         if next_earnings:
-            days_to_earnings = (next_earnings - datetime.utcnow()).days
+            days_to_earnings = (next_earnings - datetime.now(timezone.utc)).days
             if 0 < days_to_earnings < 30:
                 catalysts.append(f"Earnings report in {days_to_earnings} days")
         
@@ -1210,7 +1210,7 @@ class RecommendationEngine:
                 })
             
             # Check if recommendation expired
-            elif datetime.utcnow() > rec.valid_until:
+            elif datetime.now(timezone.utc) > rec.valid_until:
                 alerts.append({
                     'type': 'recommendation_expired',
                     'ticker': rec.ticker,
@@ -1242,7 +1242,7 @@ class RecommendationEngine:
         
         if format == 'json':
             return {
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'recommendation_count': len(recommendations),
                 'recommendations': [rec.to_dict() for rec in recommendations],
                 'summary': self._generate_summary(recommendations)

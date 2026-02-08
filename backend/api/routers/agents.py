@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from backend.analytics.agents import HybridAnalysisEngine, AnalysisMode
 from backend.utils.auth import get_current_user, require_admin
@@ -417,7 +417,7 @@ async def test_agent_connectivity(
         return success_response(data=ConnectivityTestResponse(
             status="success",
             test_results=test_results,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat()
         ))
         
     except Exception as e:
@@ -451,7 +451,7 @@ async def set_analysis_mode(
         return success_response(data=AnalysisModeResponse(
             status="success",
             new_mode=mode,
-            timestamp=datetime.utcnow().isoformat()
+            timestamp=datetime.now(timezone.utc).isoformat()
         ))
         
     except ValueError as e:

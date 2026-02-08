@@ -13,7 +13,7 @@ import logging
 import os
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 import json
@@ -72,7 +72,7 @@ class TrainingSchedule:
     
     def get_next_run_time(self) -> datetime:
         """Calculate next scheduled run time"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         if self.frequency == ScheduleFrequency.HOURLY:
             return now + timedelta(hours=1)
@@ -302,7 +302,7 @@ class MLOrchestrator:
                 "pipeline": pipeline,
                 "pipeline_id": pipeline_id,
                 "trigger_type": trigger_type,
-                "submitted_at": datetime.utcnow()
+                "submitted_at": datetime.now(timezone.utc)
             })
             return pipeline_id
         
@@ -322,7 +322,7 @@ class MLOrchestrator:
         trigger_type: TriggerType
     ):
         """Execute a pipeline with monitoring and error handling"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             logger.info(f"Executing pipeline {pipeline_id}")
@@ -344,13 +344,13 @@ class MLOrchestrator:
                     metadata={
                         "trigger_type": trigger_type.value,
                         "pipeline_id": pipeline_id,
-                        "execution_time": (datetime.utcnow() - start_time).total_seconds()
+                        "execution_time": (datetime.now(timezone.utc) - start_time).total_seconds()
                     }
                 )
                 
                 # Update last retraining time
                 model_name = result.model_artifact.name
-                self.last_retraining[model_name] = datetime.utcnow()
+                self.last_retraining[model_name] = datetime.now(timezone.utc)
                 
                 logger.info(f"Pipeline {pipeline_id} completed successfully")
             else:
@@ -367,7 +367,7 @@ class MLOrchestrator:
                 pipeline_id=pipeline_id,
                 status=PipelineStatus.FAILED,
                 start_time=start_time,
-                end_time=datetime.utcnow(),
+                end_time=datetime.now(timezone.utc),
                 error_message=str(e)
             )
             self.pipeline_history.append(result)
@@ -466,7 +466,7 @@ class MLOrchestrator:
             # Check cooldown period
             last_training = self.last_retraining.get(model_name)
             if last_training:
-                hours_since_training = (datetime.utcnow() - last_training).total_seconds() / 3600
+                hours_since_training = (datetime.now(timezone.utc) - last_training).total_seconds() / 3600
                 if hours_since_training < 24:  # Default 24 hour cooldown
                     continue
             
@@ -550,7 +550,7 @@ class MLOrchestrator:
                     self.performance_history[model_name].append(metrics)
                     
                     # Keep only recent history (last 7 days)
-                    cutoff_time = datetime.utcnow() - timedelta(days=7)
+                    cutoff_time = datetime.now(timezone.utc) - timedelta(days=7)
                     self.performance_history[model_name] = [
                         m for m in self.performance_history[model_name]
                         if m.timestamp > cutoff_time
@@ -600,7 +600,7 @@ class MLOrchestrator:
             for result in self.pipeline_history:
                 if result.pipeline_id == pipeline_id:
                     result.status = PipelineStatus.CANCELLED
-                    result.end_time = datetime.utcnow()
+                    result.end_time = datetime.now(timezone.utc)
                     break
             
             # Remove from active pipelines
@@ -673,11 +673,11 @@ class MLOrchestrator:
 
             # Store pre-task event
             await memory.store(
-                key=f"pre_task_{datetime.utcnow().timestamp()}",
+                key=f"pre_task_{datetime.now(timezone.utc).timestamp()}",
                 value={
                     "task": task_description,
                     "recommendation": recommendation,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 },
                 namespace="pipeline-state"
             )
@@ -711,7 +711,7 @@ class MLOrchestrator:
                 "task_id": task_id,
                 "success": success,
                 "result": result,
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             }
 
             if store_results:
@@ -761,12 +761,12 @@ class MLOrchestrator:
 
             # Record edit event
             await memory.store(
-                key=f"edit_{Path(file_path).name}_{datetime.utcnow().timestamp()}",
+                key=f"edit_{Path(file_path).name}_{datetime.now(timezone.utc).timestamp()}",
                 value={
                     "file": file_path,
                     "success": success,
                     "train_neural": train_neural,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 },
                 namespace="ml-patterns"
             )
@@ -798,7 +798,7 @@ class MLOrchestrator:
                 "model_type": result.get("model_type"),
                 "accuracy": result.get("metrics", {}).get("accuracy"),
                 "hyperparameters": result.get("hyperparameters"),
-                "extracted_at": datetime.utcnow().isoformat()
+                "extracted_at": datetime.now(timezone.utc).isoformat()
             }
 
             # Store pattern

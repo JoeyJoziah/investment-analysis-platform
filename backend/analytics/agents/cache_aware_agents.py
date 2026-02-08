@@ -4,7 +4,7 @@ import json
 import asyncio
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add TradingAgents to Python path
 # TradingAgents is located at backend/TradingAgents/
@@ -179,14 +179,14 @@ class CacheAwareTradingAgents(TradingAgentsGraph):
             await self._preload_data_for_analysis(ticker, context)
             
             # Run the analysis with token counting
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             logger.info(f"Starting {analysis_type} analysis for {ticker}")
             
             # Use original TradingAgents propagate method
             _, decision = self.propagate(ticker, date)
             
             # Estimate costs (in production, you'd get actual token usage from the LLM)
-            analysis_duration = (datetime.utcnow() - start_time).total_seconds()
+            analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             estimated_tokens = self._estimate_tokens_used(analysis_type, decision)
             estimated_cost = float(self.budget_manager.cost_estimates.get(analysis_type, 0.15))
             
@@ -315,7 +315,7 @@ class CacheAwareTradingAgents(TradingAgentsGraph):
     async def test_agent_connectivity(self) -> Dict[str, Any]:
         """Test that agents can connect to LLM providers"""
         test_results = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'llm_connectivity': {},
             'budget_status': {},
             'cache_status': {}
@@ -327,7 +327,7 @@ class CacheAwareTradingAgents(TradingAgentsGraph):
             test_results['budget_status'] = budget_status
             
             # Test cache connectivity
-            test_key = f"agent_test:{datetime.utcnow().timestamp()}"
+            test_key = f"agent_test:{datetime.now(timezone.utc).timestamp()}"
             await self.cache_manager.set(test_key, {'test': True}, 60)
             cached_value = await self.cache_manager.get(test_key)
             test_results['cache_status'] = {

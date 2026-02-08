@@ -917,7 +917,7 @@ class V1DeprecationMiddleware(BaseHTTPMiddleware):
 # =============================================================================
 
 v1_migration_router = APIRouter(
-    prefix="/api/admin/v1-migration",
+    prefix="/api/v1/admin/v1-migration",
     tags=["v1-migration", "admin"]
 )
 

@@ -4,7 +4,7 @@ Specialized async repository for user management operations.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from sqlalchemy import select, func, and_, or_, desc, asc, text
@@ -66,7 +66,7 @@ class UserRepository(AsyncCRUDRepository[User]):
             
             if user and user.hashed_password == password_hash and user.is_active:
                 # Update last login
-                user.last_login = datetime.utcnow()
+                user.last_login = datetime.now(timezone.utc)
                 user.failed_login_attempts = 0
                 user.locked_until = None
                 return user
@@ -96,7 +96,7 @@ class UserRepository(AsyncCRUDRepository[User]):
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
             
             if user.failed_login_attempts >= max_attempts:
-                user.locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=lockout_minutes)
                 logger.warning(f"Account locked for user {email} due to failed login attempts")
             
             return user
@@ -118,7 +118,7 @@ class UserRepository(AsyncCRUDRepository[User]):
         if not user or not user.locked_until:
             return False
         
-        return user.locked_until > datetime.utcnow()
+        return user.locked_until > datetime.now(timezone.utc)
     
     async def unlock_account(
         self,
@@ -162,7 +162,7 @@ class UserRepository(AsyncCRUDRepository[User]):
         session: Optional[AsyncSession] = None
     ) -> List[User]:
         """Get users who were active within specified days"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         filters = [
             FilterCriteria(field='is_active', operator='eq', value=True),
@@ -190,10 +190,10 @@ class UserRepository(AsyncCRUDRepository[User]):
                 func.count(User.id).filter(User.is_active == True).label('active_users'),
                 func.count(User.id).filter(User.is_verified == True).label('verified_users'),
                 func.count(User.id).filter(
-                    User.last_login >= (datetime.utcnow() - timedelta(days=30))
+                    User.last_login >= (datetime.now(timezone.utc) - timedelta(days=30))
                 ).label('active_last_30_days'),
                 func.count(User.id).filter(
-                    User.created_at >= (datetime.utcnow() - timedelta(days=30))
+                    User.created_at >= (datetime.now(timezone.utc) - timedelta(days=30))
                 ).label('new_last_30_days')
             )
             
@@ -305,7 +305,7 @@ class UserRepository(AsyncCRUDRepository[User]):
                 user_id,
                 {
                     'is_active': False,
-                    'updated_at': datetime.utcnow()
+                    'updated_at': datetime.now(timezone.utc)
                 },
                 session=session
             )

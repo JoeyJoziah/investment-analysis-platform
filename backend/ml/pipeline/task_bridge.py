@@ -8,7 +8,7 @@ import json
 import uuid
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -34,8 +34,8 @@ class UnifiedTask:
     # Common fields
     task_id: str
     status: TaskStatus
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Claude Code Task fields
     subject: Optional[str] = None
@@ -193,7 +193,7 @@ class TaskBridge:
                     }
                     for t in self.tasks.values()
                 ],
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }
 
             with open(self._state_file, 'w') as f:
@@ -264,7 +264,7 @@ class TaskBridge:
             # Update unified task
             task.celery_task_id = result.id
             task.status = TaskStatus.IN_PROGRESS
-            task.updated_at = datetime.utcnow()
+            task.updated_at = datetime.now(timezone.utc)
 
             # Track mapping
             self.celery_to_unified[result.id] = task.task_id
@@ -310,7 +310,7 @@ class TaskBridge:
         task.status = status_map.get(status, task.status)
         task.result = result
         task.error_message = error
-        task.updated_at = datetime.utcnow()
+        task.updated_at = datetime.now(timezone.utc)
 
         await self.save_state()
 

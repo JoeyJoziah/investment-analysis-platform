@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Any, Tuple, Callable
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 import json
@@ -153,7 +153,7 @@ class ModelPerformanceTracker:
         """Record model performance metrics"""
         
         metrics = PerformanceMetrics(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_name=model_name,
             model_version=model_version,
             sample_size=len(predictions),
@@ -222,7 +222,7 @@ class ModelPerformanceTracker:
             return pd.DataFrame()
         
         # Filter recent history
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         recent_metrics = [
             m for m in self.performance_history[model_name] 
             if m.timestamp >= cutoff_date
@@ -322,7 +322,7 @@ class ModelPerformanceTracker:
     def _save_performance_metrics(self, metrics: PerformanceMetrics):
         """Save individual performance metrics"""
         try:
-            metrics_file = self.storage_path / f"metrics_{metrics.model_name}_{datetime.utcnow().strftime('%Y%m%d')}.json"
+            metrics_file = self.storage_path / f"metrics_{metrics.model_name}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.json"
             
             # Append to daily file
             daily_metrics = []
@@ -364,7 +364,7 @@ class DriftDetector:
             'std': np.std(reference_data),
             'quantiles': np.percentile(reference_data, [5, 25, 50, 75, 95]),
             'histogram': np.histogram(reference_data, bins=50),
-            'updated_at': datetime.utcnow()
+            'updated_at': datetime.now(timezone.utc)
         }
     
     def detect_data_drift(self,
@@ -447,7 +447,7 @@ class DriftDetector:
         is_drift_detected = overall_drift_score > threshold
         
         return DriftDetectionResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_name=model_name,
             drift_type=DriftType.DATA_DRIFT,
             drift_score=overall_drift_score,
@@ -495,7 +495,7 @@ class DriftDetector:
         is_drift_detected = drift_score > threshold
         
         return DriftDetectionResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_name=model_name,
             drift_type=DriftType.PREDICTION_DRIFT,
             drift_score=drift_score,
@@ -633,7 +633,7 @@ class DriftDetector:
     def _create_empty_drift_result(self, model_name: str, drift_type: DriftType) -> DriftDetectionResult:
         """Create empty drift result when no reference data available"""
         return DriftDetectionResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_name=model_name,
             drift_type=drift_type,
             drift_score=0.0,
@@ -670,11 +670,11 @@ class AlertManager:
                     details: Dict[str, Any] = None) -> str:
         """Create a new alert"""
         
-        alert_id = f"{model_name}_{alert_type}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        alert_id = f"{model_name}_{alert_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         alert = ModelAlert(
             id=alert_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model_name=model_name,
             alert_type=alert_type,
             severity=severity,
@@ -702,7 +702,7 @@ class AlertManager:
             for alert in self.alerts:
                 if alert.id == alert_id:
                     alert.is_resolved = True
-                    alert.resolved_at = datetime.utcnow()
+                    alert.resolved_at = datetime.now(timezone.utc)
                     alert.resolution_notes = resolution_notes
                     
                     self._save_alert(alert)
@@ -819,7 +819,7 @@ class ModelMonitor:
         
         self.monitored_models[model_name] = {
             'version': model_version,
-            'registered_at': datetime.utcnow(),
+            'registered_at': datetime.now(timezone.utc),
             'last_monitored': None,
             'monitoring_config': config,
             'health_status': ModelHealth.UNKNOWN,
@@ -950,7 +950,7 @@ class ModelMonitor:
         # Update model health status
         health_status = self._assess_model_health(model_name, monitoring_results)
         model_info['health_status'] = health_status
-        model_info['last_monitored'] = datetime.utcnow()
+        model_info['last_monitored'] = datetime.now(timezone.utc)
         
         monitoring_results['health_status'] = health_status
         
@@ -1000,7 +1000,7 @@ class ModelMonitor:
                     
                     # Check if it's time to monitor this model
                     if model_info['last_monitored']:
-                        time_since_monitor = datetime.utcnow() - model_info['last_monitored']
+                        time_since_monitor = datetime.now(timezone.utc) - model_info['last_monitored']
                         if time_since_monitor.total_seconds() < self.monitoring_interval_hours * 3600:
                             continue
                     
@@ -1022,7 +1022,7 @@ class ModelMonitor:
         try:
             # Check for stale data
             if model_info['last_monitored']:
-                hours_since_update = (datetime.utcnow() - model_info['last_monitored']).total_seconds() / 3600
+                hours_since_update = (datetime.now(timezone.utc) - model_info['last_monitored']).total_seconds() / 3600
                 if hours_since_update > 24:  # No updates in 24 hours
                     self.alert_manager.create_alert(
                         model_name=model_name,
@@ -1044,7 +1044,7 @@ class ModelMonitor:
                 )
             
             # Update last monitored timestamp
-            model_info['last_monitored'] = datetime.utcnow()
+            model_info['last_monitored'] = datetime.now(timezone.utc)
             
         except Exception as e:
             logger.error(f"Error in automated check for {model_name}: {e}")
@@ -1053,7 +1053,7 @@ class ModelMonitor:
         """Get comprehensive model health dashboard"""
         
         dashboard = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'monitored_models_count': len(self.monitored_models),
             'models': {},
             'overall_health': {},
@@ -1097,7 +1097,7 @@ class ModelMonitor:
         dashboard['overall_health'] = dict(health_counts)
         
         # Recent alerts (last 24 hours)
-        recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         recent_alerts = [
             alert.to_dict() for alert in self.alerts 
             if alert.timestamp >= recent_cutoff
@@ -1118,7 +1118,7 @@ class ModelMonitor:
             'model_name': model_name,
             'model_version': model_info['version'],
             'report_period_days': days_back,
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(timezone.utc).isoformat(),
             'summary': {},
             'performance_analysis': {},
             'drift_analysis': {},
@@ -1141,7 +1141,7 @@ class ModelMonitor:
             }
         
         # Alert summary
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         period_alerts = [
             alert for alert in self.alert_manager.alerts 
             if alert.model_name == model_name and alert.timestamp >= cutoff_date

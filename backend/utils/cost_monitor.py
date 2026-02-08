@@ -3,7 +3,7 @@ Cost Monitoring System - Critical for staying under $50/month budget
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, List, Any
 import logging
 from collections import defaultdict
@@ -69,7 +69,7 @@ class CostMonitor:
             return True
         
         limits = self.api_limits[provider]
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         # Check per-minute limit
         if 'per_minute' in limits:
@@ -125,7 +125,7 @@ class CostMonitor:
     
     async def _update_usage_counters(self, provider: str):
         """Update real-time usage counters"""
-        current_date = datetime.utcnow().strftime('%Y%m%d')
+        current_date = datetime.now(timezone.utc).strftime('%Y%m%d')
         
         # Increment provider-specific counter
         provider_key = f"usage_count:{provider}:{current_date}"
@@ -143,7 +143,7 @@ class CostMonitor:
     
     async def _check_cost_thresholds(self):
         """Check if we're approaching cost thresholds"""
-        current_month = datetime.utcnow().strftime('%Y%m')
+        current_month = datetime.now(timezone.utc).strftime('%Y%m')
         
         # Get monthly usage
         monthly_usage = await self.get_monthly_usage()
@@ -165,7 +165,7 @@ class CostMonitor:
             await self.redis.lpush(
                 "cost_alerts",
                 json.dumps({
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
                     'level': 'warning',
                     'message': alert_message,
                     'details': alert_details
@@ -211,7 +211,7 @@ class CostMonitor:
     
     async def get_usage_report(self, db_session: AsyncSession) -> Dict:
         """Generate comprehensive usage report"""
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         # Daily usage
         daily_stmt = select(
@@ -269,7 +269,7 @@ class CostMonitor:
     async def _get_remaining_limits(self) -> Dict:
         """Get remaining API calls for each provider"""
         remaining = {}
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         
         for provider, limits in self.api_limits.items():
             provider_remaining = {}
@@ -290,7 +290,7 @@ class CostMonitor:
     
     async def get_monthly_usage(self) -> Dict:
         """Get current month's usage statistics"""
-        current_month = datetime.utcnow().strftime('%Y%m')
+        current_month = datetime.now(timezone.utc).strftime('%Y%m')
         
         # Get from cache first
         cached = await self.redis.get(f"monthly_usage:{current_month}")
@@ -462,7 +462,7 @@ class SmartDataFetcher:
             'ticker': ticker,
             'data_type': data_type,
             'provider': provider,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
 

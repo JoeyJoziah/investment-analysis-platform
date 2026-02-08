@@ -10,7 +10,7 @@ import hashlib
 import logging
 from typing import Dict, List, Optional, Any, Union, Callable, Tuple
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 import threading
@@ -277,7 +277,7 @@ class FeatureDriftDetector:
         
         return FeatureDriftMetrics(
             feature_name=feature_name,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             population_stability_index=psi,
             kolmogorov_smirnov_statistic=ks_stat,
             jensen_shannon_distance=js_distance,
@@ -486,8 +486,8 @@ class FeatureStore:
                     compute_mode=compute_mode,
                     status=FeatureStatus.DEVELOPMENT,
                     version=new_version,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
                     created_by=created_by,
                     dependencies=dependencies or [],
                     source_tables=[],
@@ -527,7 +527,7 @@ class FeatureStore:
             DataFrame with features as columns and entity_ids as index
         """
         if timestamp is None:
-            timestamp = datetime.utcnow()
+            timestamp = datetime.now(timezone.utc)
         
         logger.info(f"Computing {len(feature_names)} features for {len(entity_ids)} entities")
         
@@ -966,7 +966,7 @@ class FeatureStore:
         
         try:
             # Get historical feature values
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             reference_start = end_date - timedelta(days=reference_period_days + current_period_days)
             reference_end = end_date - timedelta(days=current_period_days)
             current_start = reference_end
@@ -1058,7 +1058,7 @@ class FeatureStore:
                     'null_percentage': np.random.uniform(0, 0.05),
                     'unique_values': np.random.randint(100, 1000),
                     'quality_score': np.random.uniform(0.8, 1.0),
-                    'last_updated': datetime.utcnow().isoformat(),
+                    'last_updated': datetime.now(timezone.utc).isoformat(),
                     'freshness_hours': np.random.uniform(0, 24)
                 }
                 
@@ -1106,7 +1106,7 @@ class FeatureStore:
     def _save_drift_metrics(self, drift_metrics: FeatureDriftMetrics):
         """Save drift metrics to storage"""
         try:
-            drift_file = self.storage_path / f"drift_{drift_metrics.feature_name}_{datetime.utcnow().strftime('%Y%m%d')}.json"
+            drift_file = self.storage_path / f"drift_{drift_metrics.feature_name}_{datetime.now(timezone.utc).strftime('%Y%m%d')}.json"
             
             with open(drift_file, 'w') as f:
                 json.dump(asdict(drift_metrics), f, default=str, indent=2)
@@ -1116,7 +1116,7 @@ class FeatureStore:
     
     def cleanup_old_features(self, days_to_keep: int = 90) -> int:
         """Clean up old feature data"""
-        cleanup_date = datetime.utcnow() - timedelta(days=days_to_keep)
+        cleanup_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
         cleaned_count = 0
         
         try:

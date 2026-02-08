@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any, Union, Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -905,7 +905,7 @@ class BacktestEngine:
         """Save comprehensive backtest report"""
         report = {
             'metadata': {
-                'generated_at': datetime.utcnow().isoformat(),
+                'generated_at': datetime.now(timezone.utc).isoformat(),
                 'backtest_period': {
                     'start_date': result.start_date.isoformat(),
                     'end_date': result.end_date.isoformat()

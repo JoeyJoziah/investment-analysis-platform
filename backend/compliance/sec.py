@@ -12,7 +12,7 @@ Implements SEC requirements for algorithmic investment recommendations:
 import logging
 import uuid
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field, asdict
 
@@ -144,7 +144,7 @@ class DataRetentionManager:
             return []
 
         retention_years = policy.get("years", 7)
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_years * 365)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_years * 365)
 
         # In production, this would be a database query
         # For testing, return cached or empty list
@@ -184,7 +184,7 @@ class DataRetentionManager:
             "data_type": data_type,
             "records_deleted": deleted_count,
             "action": action,
-            "cleanup_date": datetime.utcnow().isoformat()
+            "cleanup_date": datetime.now(timezone.utc).isoformat()
         }
 
     def _anonymize_records(self, data_type: str, records: List[Dict]) -> int:
@@ -236,7 +236,7 @@ class InvestmentAdviceDocumentation:
             stock=rationale.get("stock", "UNKNOWN"),
             recommendation=rationale.get("recommendation", "HOLD"),
             analyst_id=analyst_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             rationale=rationale,
             model_version=rationale.get("model_version", "1.0.0"),
             data_sources=rationale.get("data_sources", []),
@@ -347,7 +347,7 @@ class FiduciaryDutyChecker:
             "conflict_types": conflicts_detected,
             "conflict_details": conflict_details,
             "disclosure_required": len(conflicts_detected) > 0,
-            "checked_at": datetime.utcnow().isoformat()
+            "checked_at": datetime.now(timezone.utc).isoformat()
         }
 
     def requires_disclosure(self, recommendation: Dict[str, Any]) -> bool:
@@ -424,7 +424,7 @@ class FiduciaryDutyChecker:
                 "risk_level": recommendation_risk,
                 "stock": recommendation.get("stock")
             },
-            "analyzed_at": datetime.utcnow().isoformat()
+            "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
 
     def _check_objective_alignment(
@@ -490,7 +490,7 @@ class SECDisclosureGenerator:
     ) -> str:
         """Generate methodology disclosure statement"""
         if training_date is None:
-            training_date = datetime.utcnow().strftime("%Y-%m-%d")
+            training_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
         return SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
             algorithm_type=algorithm_type,

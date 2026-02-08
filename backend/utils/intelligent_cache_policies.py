@@ -8,7 +8,7 @@ cost-optimization algorithms for the investment platform.
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Any, Callable
 from collections import defaultdict
@@ -213,7 +213,7 @@ class IntelligentCachePolicyManager:
         access_history = self.access_patterns.get(f"{data_type}:{identifier}", [])
         recent_accesses = [
             access for access in access_history 
-            if access > datetime.utcnow() - timedelta(hours=24)
+            if access > datetime.now(timezone.utc) - timedelta(hours=24)
         ]
         
         # Warm if accessed frequently (more than 3 times in last 24 hours)
@@ -222,10 +222,10 @@ class IntelligentCachePolicyManager:
     def track_access(self, data_type: str, identifier: str):
         """Track data access for warming decisions"""
         key = f"{data_type}:{identifier}"
-        self.access_patterns[key].append(datetime.utcnow())
+        self.access_patterns[key].append(datetime.now(timezone.utc))
         
         # Keep only recent accesses (last 7 days)
-        cutoff = datetime.utcnow() - timedelta(days=7)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
         self.access_patterns[key] = [
             access for access in self.access_patterns[key] 
             if access > cutoff
@@ -233,7 +233,7 @@ class IntelligentCachePolicyManager:
     
     def track_api_usage(self, api_provider: str, data_type: str):
         """Track API usage for cost optimization"""
-        today = datetime.utcnow().strftime('%Y%m%d')
+        today = datetime.now(timezone.utc).strftime('%Y%m%d')
         if today not in self.api_usage_tracker[api_provider]:
             self.api_usage_tracker[api_provider][today] = 0
         
@@ -251,7 +251,7 @@ class IntelligentCachePolicyManager:
     
     def get_remaining_api_calls(self, api_provider: str) -> int:
         """Get remaining API calls for today"""
-        today = datetime.utcnow().strftime('%Y%m%d')
+        today = datetime.now(timezone.utc).strftime('%Y%m%d')
         used_calls = self.api_usage_tracker[api_provider].get(today, 0)
         
         # Find the most restrictive limit from all data types using this provider
@@ -406,7 +406,7 @@ class SmartCacheWarmer:
         """
         while True:
             try:
-                current_hour = datetime.utcnow().hour
+                current_hour = datetime.now(timezone.utc).hour
                 
                 # Pre-market warming (6 AM UTC)
                 if current_hour == 6:
@@ -414,7 +414,7 @@ class SmartCacheWarmer:
                     await self._warm_premarket_data()
                 
                 # Market open warming (2:30 PM UTC = 9:30 AM EST)
-                elif current_hour == 14 and datetime.utcnow().minute >= 30:
+                elif current_hour == 14 and datetime.now(timezone.utc).minute >= 30:
                     logger.info("Starting market open cache warming")
                     self.policy_manager.update_market_hours_status(True)
                     await self._warm_market_open_data()

@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 
@@ -212,12 +212,12 @@ class QueryCacheManager:
                 'total_requests': 0,
                 'cache_hits': 0,
                 'last_accessed': None,
-                'created_at': datetime.utcnow()
+                'created_at': datetime.now(timezone.utc)
             }
         
         stats = self.query_stats[cache_key]
         stats['total_requests'] += 1
-        stats['last_accessed'] = datetime.utcnow()
+        stats['last_accessed'] = datetime.now(timezone.utc)
         
         if cache_hit:
             stats['cache_hits'] += 1

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import uvicorn
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from typing import Optional
 from dotenv import load_dotenv
@@ -20,15 +20,15 @@ from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
     auth, health, admin, cache_management,
     websocket, agents, gdpr, watchlist, thesis,
-    news, settings
+    news,
 )
+from backend.api.routers import settings as settings_router
 from backend.api.versioning import (
     V1DeprecationMiddleware,
     v1_migration_router,
     v1_migration_metrics
 )
 from backend.utils.database import init_db, close_db
-from backend.config.database import initialize_database, cleanup_database
 from backend.utils.cache import init_cache
 from backend.utils.comprehensive_cache import get_cache_manager
 from backend.utils.intelligent_cache_policies import start_intelligent_caching
@@ -55,13 +55,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Investment Analysis Platform...")
     
-    # Initialize async database
-    await initialize_database()
-    logger.info("Async database initialized")
-    
-    # Initialize legacy database for backwards compatibility
+    # Initialize database (async engine + table creation + data seeding)
+    # Note: init_db() calls initialize_database() internally, so a separate
+    # initialize_database() call is not needed. The legacy sync engine
+    # (backend.utils.database.engine) is created at import time and requires
+    # no explicit init; it is still used by the health router and Celery tasks.
     await init_db()
-    logger.info("Legacy database initialized")
+    logger.info("Database initialized")
     
     # Initialize cache
     await init_cache()
@@ -114,13 +114,11 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Investment Analysis Platform...")
     
-    # Clean up async database
-    await cleanup_database()
-    logger.info("Async database cleaned up")
-    
-    # Clean up legacy database
+    # Clean up database connections (async engine + legacy sync engine)
+    # Note: close_db() calls cleanup_database() internally, so a separate
+    # cleanup_database() call is not needed.
     await close_db()
-    logger.info("Legacy database closed")
+    logger.info("Database connections closed")
     
     if 'scheduler' in locals():
         await scheduler.shutdown()
@@ -166,7 +164,7 @@ app.add_middleware(PrometheusMiddleware)
 app.add_middleware(
     CacheControlMiddleware,
     default_cache_control="public, max-age=300",
-    cache_excluded_paths=["/api/auth/", "/api/admin/", "/api/ws/", "/api/metrics"]
+    cache_excluded_paths=["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/v1/metrics"]
 )
 
 # Add V1 API deprecation middleware
@@ -183,23 +181,26 @@ if os.getenv("TESTING", "False").lower() != "true":
         strict_mode=False        # Set to True to immediately reject V1 requests
     )
 
-# Include routers
+# Include routers - all API routers use /api/v1/ prefix for consistency
+# Health/status endpoints stay outside versioned prefix
 app.include_router(health.router, prefix="/api/health", tags=["health"])
-app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
-app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
-app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
-app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
-app.include_router(websocket.router, prefix="/api/ws", tags=["websocket"])
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
-app.include_router(cache_management.router, prefix="/api/cache", tags=["cache"])
+
+# Versioned API routers
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
+app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
+app.include_router(recommendations.router, prefix="/api/v1/recommendations", tags=["recommendations"])
+app.include_router(portfolio.router, prefix="/api/v1/portfolio", tags=["portfolio"])
+app.include_router(websocket.router, prefix="/api/v1/ws", tags=["websocket"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+app.include_router(cache_management.router, prefix="/api/v1/cache", tags=["cache"])
 app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
-app.include_router(watchlist.router, prefix="/api", tags=["watchlists"])
-app.include_router(thesis.router, prefix="/api/v1", tags=["investment-thesis"])
-app.include_router(news.router, prefix="/api/news", tags=["news"])
-app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
-app.include_router(v1_migration_router)  # V1 migration monitoring endpoints
+app.include_router(watchlist.router, prefix="/api/v1/watchlists", tags=["watchlists"])
+app.include_router(thesis.router, prefix="/api/v1/thesis", tags=["investment-thesis"])
+app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
+app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["settings"])
+app.include_router(v1_migration_router)  # V1 migration monitoring endpoints (self-prefixed)
 
 
 @app.get("/")
@@ -211,11 +212,11 @@ async def root():
         "message": "Investment Analysis Platform API",
         "version": "1.0.0",
         "status": "operational",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
-@app.get("/api/metrics")
+@app.get("/api/v1/metrics")
 async def get_metrics():
     """
     Prometheus metrics endpoint

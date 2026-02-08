@@ -5,7 +5,7 @@ Enhanced with real data integration, comprehensive error handling, and performan
 
 from fastapi import APIRouter, Query, HTTPException, Depends, status, Path, BackgroundTasks
 from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -481,7 +481,7 @@ async def get_stock_quote(
                 change=change,
                 change_percent=change_percent,
                 volume=int(quote_data.get('volume', quote_data.get('v', 0))),
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
 
                 # Enhanced data
                 open=float(quote_data.get('open', quote_data.get('o'))) if quote_data.get('open') or quote_data.get('o') else None,
@@ -498,7 +498,7 @@ async def get_stock_quote(
 
                 # Meta data
                 data_source=data_source,
-                last_updated=datetime.utcnow(),
+                last_updated=datetime.now(timezone.utc),
                 is_real_time=True
             ))
         
@@ -548,7 +548,7 @@ async def get_stock_quote(
 
             # Meta data
             data_source="database",
-            last_updated=latest_price.updated_at or datetime.utcnow(),
+            last_updated=latest_price.updated_at or datetime.now(timezone.utc),
             is_real_time=False
         ))
         

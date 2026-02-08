@@ -7,7 +7,7 @@ including performance metrics, cost analysis, and cache operations.
 
 from fastapi import APIRouter, Query, HTTPException, Depends, status, Path
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 
 from backend.utils.cache_monitoring import get_cache_monitor
@@ -174,7 +174,7 @@ async def get_api_usage() -> ApiResponse[Dict[str, Any]]:
             }
         
         return success_response(data={
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'api_usage': usage_summary,
             'total_allocated_calls': sum(len(plan) for plan in allocation.values())
         })
@@ -230,7 +230,7 @@ async def invalidate_cache(
         return success_response(data={
             "message": f"Cache invalidation completed",
             "operations": invalidated_count,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
     except HTTPException:
@@ -277,7 +277,7 @@ async def warm_cache(
             "symbols": [s.upper() for s in symbols],
             "data_types": data_types,
             "total_tasks": len(warming_tasks),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -301,7 +301,7 @@ async def get_cache_health() -> ApiResponse[Dict[str, Any]]:
     """
     try:
         health_status = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_status": "healthy",
             "components": {}
         }
@@ -402,7 +402,7 @@ async def get_cache_statistics() -> ApiResponse[Dict[str, Any]]:
             l1_effectiveness = l2_effectiveness = l3_effectiveness = 0
 
         return success_response(data={
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "cache_layer_statistics": {
                 "l1": {
                     "hits": cache_stats['cache_metrics']['l1_hits'],

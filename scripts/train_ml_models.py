@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 import joblib
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 # Add backend to path
@@ -310,7 +310,7 @@ def main():
     
     # 8. Create model registry
     registry = {
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "model_versions": {
             "lstm": "1.0",
             "transformer": "1.0", 

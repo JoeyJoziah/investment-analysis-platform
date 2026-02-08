@@ -6,7 +6,7 @@ import json
 import logging
 import shutil
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
@@ -179,7 +179,7 @@ class ModelRegistryDB(Base):
     model_id = Column(String, primary_key=True)
     model_name = Column(String, nullable=False, index=True)
     version = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(String, default="system")
     
     # Paths
@@ -306,7 +306,7 @@ class ModelRegistry:
         # Generate model ID
         model_name = model_artifact.name
         model_version_str = model_artifact.version
-        model_id = f"{model_name}_{model_version_str}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        model_id = f"{model_name}_{model_version_str}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         
         # Create version directory
         version_path = self.models_path / model_name / model_version_str
@@ -324,7 +324,7 @@ class ModelRegistry:
             version=model_version_str,
             model_path=model_file,
             artifacts_path=version_path,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             created_by=metadata.get("created_by", "system"),
             description=metadata.get("description", ""),
             tags=metadata.get("tags", []),
@@ -507,7 +507,7 @@ class ModelRegistry:
             return False
         
         model_version.deployment_status = deployment_status
-        model_version.deployed_at = datetime.utcnow()
+        model_version.deployed_at = datetime.now(timezone.utc)
         model_version.deployment_endpoint = endpoint
         
         # Save changes
@@ -553,7 +553,7 @@ class ModelRegistry:
             return
         
         model_version.production_metrics.update(metrics)
-        model_version.last_inference_time = datetime.utcnow()
+        model_version.last_inference_time = datetime.now(timezone.utc)
         model_version.inference_count += metrics.get("batch_size", 1)
         
         # Save changes
@@ -624,7 +624,7 @@ class ModelRegistry:
     
     async def cleanup_old_models(self, days_to_keep: int = 90):
         """Archive old models not in production"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
         archived_count = 0
         
         for model_name, versions in self.models.items():

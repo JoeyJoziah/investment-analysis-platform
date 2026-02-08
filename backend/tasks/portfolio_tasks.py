@@ -3,7 +3,7 @@ Celery tasks for portfolio management and updates
 """
 from celery import shared_task
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from decimal import Decimal
 import logging
 import json
@@ -84,7 +84,7 @@ def update_portfolio_value(portfolio_id: int) -> Dict[str, Any]:
                 db.add(performance_record)
             
             # Update portfolio updated_at
-            portfolio.updated_at = datetime.utcnow()
+            portfolio.updated_at = datetime.now(timezone.utc)
             
             db.commit()
             
@@ -94,7 +94,7 @@ def update_portfolio_value(portfolio_id: int) -> Dict[str, Any]:
                 'cash_balance': float(portfolio.cash_balance),
                 'positions_value': float(total_positions_value),
                 'positions': position_updates,
-                'updated_at': datetime.utcnow().isoformat()
+                'updated_at': datetime.now(timezone.utc).isoformat()
             }
             
             # Cache the result
@@ -188,7 +188,7 @@ def execute_order(order_id: int) -> Dict[str, Any]:
             order.status = 'filled'
             order.filled_quantity = order.quantity
             order.average_fill_price = Decimal(str(execution_price))
-            order.filled_at = datetime.utcnow()
+            order.filled_at = datetime.now(timezone.utc)
             
             # Create transaction
             transaction = Transaction(
@@ -198,7 +198,7 @@ def execute_order(order_id: int) -> Dict[str, Any]:
                 quantity=order.quantity,
                 price=Decimal(str(execution_price)),
                 commission=order.commission,
-                executed_at=datetime.utcnow()
+                executed_at=datetime.now(timezone.utc)
             )
             db.add(transaction)
             
@@ -256,7 +256,7 @@ def execute_order(order_id: int) -> Dict[str, Any]:
                 'execution_price': execution_price,
                 'quantity': float(order.quantity),
                 'total_value': float(order.quantity * Decimal(str(execution_price))),
-                'executed_at': datetime.utcnow().isoformat()
+                'executed_at': datetime.now(timezone.utc).isoformat()
             }
             
     except Exception as e:

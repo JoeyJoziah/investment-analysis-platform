@@ -12,7 +12,7 @@ import threading
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple, Callable, Union
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 from collections import defaultdict, deque
@@ -129,7 +129,7 @@ class ModelArtifactManager:
             'model_name': model_name,
             'model_version': model_version,
             'format': model_format.value,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).isoformat(),
             'original_path': str(original_path),
             'original_size_mb': original_path.stat().st_size / (1024 * 1024),
             'optimized_versions': optimized_paths,
@@ -397,8 +397,8 @@ class InferenceCache:
                 cache_entry = self.cache[cache_key]
                 
                 # Check TTL
-                if datetime.utcnow() - cache_entry['timestamp'] < timedelta(seconds=self.ttl_seconds):
-                    self.access_times[cache_key] = datetime.utcnow()
+                if datetime.now(timezone.utc) - cache_entry['timestamp'] < timedelta(seconds=self.ttl_seconds):
+                    self.access_times[cache_key] = datetime.now(timezone.utc)
                     self.hits += 1
                     return cache_entry['data']
                 else:
@@ -454,9 +454,9 @@ class InferenceCache:
             
             self.cache[cache_key] = {
                 'data': data,
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(timezone.utc)
             }
-            self.access_times[cache_key] = datetime.utcnow()
+            self.access_times[cache_key] = datetime.now(timezone.utc)
     
     def _evict_lru(self):
         """Evict least recently used entry"""
@@ -600,8 +600,8 @@ class LoadBalancer:
             'max_connections': max_connections or self.config.max_connections_per_worker,
             'current_connections': 0,
             'is_healthy': True,
-            'last_health_check': datetime.utcnow(),
-            'registered_at': datetime.utcnow()
+            'last_health_check': datetime.now(timezone.utc),
+            'registered_at': datetime.now(timezone.utc)
         }
         
         # Initialize stats
@@ -685,7 +685,7 @@ class LoadBalancer:
         
         # Update stats
         stats['total_requests'] += 1
-        stats['last_request_time'] = datetime.utcnow()
+        stats['last_request_time'] = datetime.now(timezone.utc)
         
         if success:
             stats['successful_requests'] += 1
@@ -706,14 +706,14 @@ class LoadBalancer:
             
             # Update circuit breaker
             circuit_breaker['failure_count'] += 1
-            circuit_breaker['last_failure_time'] = datetime.utcnow()
+            circuit_breaker['last_failure_time'] = datetime.now(timezone.utc)
             
             if (circuit_breaker['failure_count'] >= self.config.circuit_breaker_threshold and 
                 circuit_breaker['state'] == 'closed'):
                 # Open circuit breaker
                 circuit_breaker['state'] = 'open'
                 circuit_breaker['next_attempt_time'] = (
-                    datetime.utcnow() + timedelta(seconds=60)  # 60 second timeout
+                    datetime.now(timezone.utc) + timedelta(seconds=60)  # 60 second timeout
                 )
                 logger.warning(f"Circuit breaker opened for worker {worker_id}")
     
@@ -749,12 +749,12 @@ class LoadBalancer:
                 for worker_id, worker_info in self.workers.items():
                     is_healthy = self._check_worker_health(worker_id, worker_info)
                     worker_info['is_healthy'] = is_healthy
-                    worker_info['last_health_check'] = datetime.utcnow()
+                    worker_info['last_health_check'] = datetime.now(timezone.utc)
                     
                     # Update circuit breaker state
                     circuit_breaker = self.circuit_breakers[worker_id]
                     if (circuit_breaker['state'] == 'open' and 
-                        datetime.utcnow() >= circuit_breaker['next_attempt_time']):
+                        datetime.now(timezone.utc) >= circuit_breaker['next_attempt_time']):
                         circuit_breaker['state'] = 'half_open'
                         logger.info(f"Circuit breaker half-open for worker {worker_id}")
                 
@@ -777,7 +777,7 @@ class LoadBalancer:
             
             # Check if worker has been responsive recently
             last_request = stats['last_request_time']
-            time_since_request = datetime.utcnow() - last_request
+            time_since_request = datetime.now(timezone.utc) - last_request
             
             if time_since_request.total_seconds() > 300:  # 5 minutes
                 return True  # No recent requests, can't determine health
@@ -905,7 +905,7 @@ class MLPipelineOptimizer:
                 
                 metrics = InferenceMetrics(
                     model_name=model_name,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     batch_size=len(input_data),
                     inference_time_ms=inference_time,
                     preprocessing_time_ms=0,
@@ -963,7 +963,7 @@ class MLPipelineOptimizer:
         # Create metrics
         metrics = InferenceMetrics(
             model_name=model_name,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             batch_size=len(input_data),
             inference_time_ms=inference_time,
             preprocessing_time_ms=preprocessing_time,
@@ -1146,7 +1146,7 @@ class MLPipelineOptimizer:
         """Get comprehensive optimization report"""
         
         report = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'optimization_strategies': self.optimization_strategies,
             'cache_stats': self.cache.get_stats() if self.cache else {},
             'load_balancer_stats': self.load_balancer.get_worker_stats() if self.load_balancer else {},

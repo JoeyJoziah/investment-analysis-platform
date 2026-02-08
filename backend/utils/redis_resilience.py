@@ -8,7 +8,7 @@ import logging
 import time
 from typing import Optional, Any, Dict, List, Callable, Union
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 import json
 import random
@@ -183,7 +183,7 @@ class RedisCircuitBreaker:
         self._breaker.reset()
         self._metrics['state_changes'].append({
             'state': 'reset',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
     
     def get_metrics(self) -> Dict[str, Any]:

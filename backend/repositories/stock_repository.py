@@ -4,7 +4,7 @@ Specialized async repository for stock-related operations with advanced querying
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
 
 from sqlalchemy import select, func, and_, or_, desc, asc, text
@@ -157,7 +157,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                 '1d': 1, '1w': 7, '1m': 30, '3m': 90, '6m': 180, '1y': 365
             }
             days = timeframe_days.get(timeframe, 1)
-            start_date = datetime.utcnow().date() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc).date() - timedelta(days=days)
             
             # Complex query to calculate performance
             subquery = select(
@@ -383,7 +383,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                     if stock:
                         await self.update(
                             stock.id,
-                            {'market_cap': market_cap, 'last_price_update': datetime.utcnow()},
+                            {'market_cap': market_cap, 'last_price_update': datetime.now(timezone.utc)},
                             session=session
                         )
                         updated_count += 1

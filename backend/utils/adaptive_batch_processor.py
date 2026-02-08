@@ -6,7 +6,7 @@ Dynamically adjusts batch sizes based on system performance and data characteris
 import asyncio
 import psutil
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -42,7 +42,7 @@ class BatchMetrics:
     items_per_second: float
     success_rate: float
     error_count: int = 0
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     @property
     def efficiency_score(self) -> float:
@@ -103,7 +103,7 @@ class AdaptiveBatchProcessor:
         
         # Adaptive parameters
         self.stable_performance_window = deque(maxlen=self.config.stability_window)
-        self.last_adjustment_time = datetime.utcnow()
+        self.last_adjustment_time = datetime.now(timezone.utc)
         self.adjustment_cooldown = timedelta(seconds=5)
         
     async def initialize(self):
@@ -601,7 +601,7 @@ class AdaptiveBatchProcessor:
         """Adjust batch size based on metrics"""
         
         # Check cooldown
-        if datetime.utcnow() - self.last_adjustment_time < self.adjustment_cooldown:
+        if datetime.now(timezone.utc) - self.last_adjustment_time < self.adjustment_cooldown:
             return
         
         # Add to stability window
@@ -650,7 +650,7 @@ class AdaptiveBatchProcessor:
                 int(self.current_batch_size * 0.9)
             )
         
-        self.last_adjustment_time = datetime.utcnow()
+        self.last_adjustment_time = datetime.now(timezone.utc)
     
     def _generate_test_sizes(self) -> List[int]:
         """Generate test batch sizes for optimization"""

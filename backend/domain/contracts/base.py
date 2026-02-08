@@ -7,7 +7,7 @@ ensuring consistent error handling, result wrapping, and contract verification.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 import logging
@@ -43,7 +43,7 @@ class ContractError:
     code: ContractErrorCode
     message: str
     details: Optional[Dict[str, Any]] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     source_domain: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:

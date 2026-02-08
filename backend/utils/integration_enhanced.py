@@ -5,7 +5,7 @@ specific exception handling, and comprehensive monitoring.
 
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 from enum import Enum
 from contextlib import asynccontextmanager
@@ -367,7 +367,7 @@ class EnhancedUnifiedDataIngestion:
                 results = await self._fetch_tier_data_enhanced(
                     tier, symbols, data_types, force_refresh, logger
                 )
-                self._last_tier_update[tier] = datetime.utcnow()
+                self._last_tier_update[tier] = datetime.now(timezone.utc)
                 
             except RateLimitException as e:
                 logger.warning(
@@ -474,7 +474,7 @@ class EnhancedUnifiedDataIngestion:
         # Add date partition for time-series data
         date_partition = None
         if data_type in ['price', 'technical']:
-            date_partition = datetime.utcnow().date()
+            date_partition = datetime.now(timezone.utc).date()
         
         return cache_key_gen.generate_key(
             namespace=namespace,
@@ -531,7 +531,7 @@ class EnhancedUnifiedDataIngestion:
                     continue
                 
                 task = APITask(
-                    id=f"{symbol}_{data_type}_{provider}_{datetime.utcnow().timestamp()}",
+                    id=f"{symbol}_{data_type}_{provider}_{datetime.now(timezone.utc).timestamp()}",
                     provider=provider,
                     endpoint=self._get_endpoint(provider, data_type),
                     params=self._build_params(symbol, data_type, provider),
@@ -715,7 +715,7 @@ class EnhancedUnifiedDataIngestion:
                         dq_metrics.record_data_staleness(
                             symbol=symbol,
                             data_type=data_type,
-                            last_update=datetime.utcnow() - timedelta(days=1)
+                            last_update=datetime.now(timezone.utc) - timedelta(days=1)
                         )
                     else:
                         # Record cache miss
@@ -794,7 +794,7 @@ class EnhancedUnifiedDataIngestion:
         last_update = self._last_tier_update[tier]
         update_frequency = self.tier_update_frequencies[tier]
         
-        return (datetime.utcnow() - last_update).total_seconds() >= update_frequency
+        return (datetime.now(timezone.utc) - last_update).total_seconds() >= update_frequency
     
     def _group_symbols_by_tier(self, symbols: List[str]) -> Dict[StockTier, List[str]]:
         """Group symbols by their tier."""
@@ -918,7 +918,7 @@ class EnhancedUnifiedDataIngestion:
             if '_stale' in data:
                 return data['_stale']
             if '_timestamp' in data:
-                data_age = (datetime.utcnow() - datetime.fromisoformat(data['_timestamp'])).total_seconds()
+                data_age = (datetime.now(timezone.utc) - datetime.fromisoformat(data['_timestamp'])).total_seconds()
                 return data_age > 86400  # Consider stale after 1 day
         return False
     

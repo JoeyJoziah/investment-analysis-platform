@@ -8,7 +8,7 @@ import logging
 import sys
 import uuid
 from contextvars import ContextVar
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import structlog
@@ -54,7 +54,7 @@ class ServiceContextProcessor:
             'service': self.service_name,
             'environment': self.environment,
             'version': self.version,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
         })
         return event_dict
 

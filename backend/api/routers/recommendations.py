@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 import random
 import asyncio
@@ -185,7 +185,7 @@ class DailyRecommendations(BaseModel):
         description="SEC-required global risk warning applicable to all recommendations"
     )
     data_as_of: str = Field(
-        default_factory=lambda: datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'),
+        default_factory=lambda: datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
         description="Timestamp indicating when data was collected for these recommendations"
     )
     recommendation_model_version: str = Field(
@@ -264,9 +264,9 @@ def generate_sec_disclosure(
     # Default data sources if not provided
     if data_sources is None:
         data_sources = [
-            f"Alpha Vantage API (delayed 15 min) - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Finnhub Market Data - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Historical price data (EOD) - {datetime.utcnow().strftime('%Y-%m-%d')}",
+            f"Alpha Vantage API (delayed 15 min) - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Finnhub Market Data - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Historical price data (EOD) - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
             f"Financial statements (quarterly) - Last updated Q4 2025",
         ]
 
@@ -464,8 +464,8 @@ async def generate_ml_powered_recommendations(
                 sec_disclosure = generate_sec_disclosure(
                     algorithm_type="ML-powered quantitative analysis",
                     data_sources=[
-                        f"Price history database - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
-                        f"Stock fundamentals - {datetime.utcnow().strftime('%Y-%m-%d')}",
+                        f"Price history database - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+                        f"Stock fundamentals - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
                         f"ML prediction model v{RECOMMENDATION_MODEL_VERSION}",
                     ],
                     confidence_score=confidence_score
@@ -478,7 +478,7 @@ async def generate_ml_powered_recommendations(
 
                 # Create recommendation with SEC disclosure
                 recommendation = RecommendationDetail(
-                    id=f"ML-{stock.symbol}-{int(datetime.utcnow().timestamp())}",
+                    id=f"ML-{stock.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
                     symbol=stock.symbol,
                     company_name=stock.name,
                     recommendation_type=recommendation_type,
@@ -489,8 +489,8 @@ async def generate_ml_powered_recommendations(
                     expected_return=round(expected_return, 4),
                     time_horizon=TimeHorizon.MEDIUM_TERM,
                     risk_level=risk_level or RiskLevel.MODERATE,
-                    created_at=datetime.utcnow(),
-                    valid_until=datetime.utcnow() + timedelta(days=7),
+                    created_at=datetime.now(timezone.utc),
+                    valid_until=datetime.now(timezone.utc) + timedelta(days=7),
                     reasoning="ML-powered analysis based on price patterns, volume trends, and market conditions",
                     key_factors=[
                         f"ML confidence: {confidence_score:.1%}",
@@ -613,9 +613,9 @@ def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
     sec_disclosure = generate_sec_disclosure(
         algorithm_type="quantitative technical and fundamental",
         data_sources=[
-            f"Market data feed - {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Market data feed - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
             f"Financial statements - Q4 2025",
-            f"Analyst consensus data - {datetime.utcnow().strftime('%Y-%m-%d')}",
+            f"Analyst consensus data - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
         ],
         confidence_score=confidence_score
     )
@@ -632,8 +632,8 @@ def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
         expected_return=round((target_price - current_price) / current_price, 4),
         time_horizon=random.choice(list(TimeHorizon)),
         risk_level=random.choice(list(RiskLevel)),
-        created_at=datetime.utcnow(),
-        valid_until=datetime.utcnow() + timedelta(days=random.randint(7, 90)),
+        created_at=datetime.now(timezone.utc),
+        valid_until=datetime.now(timezone.utc) + timedelta(days=random.randint(7, 90)),
         reasoning="Based on strong technical indicators and improving fundamentals",
         key_factors=[
             "Strong earnings growth",
@@ -984,7 +984,7 @@ async def get_alert_history(
     
     alerts = []
     for i in range(10):
-        alert_date = datetime.utcnow() - timedelta(days=random.randint(0, days_back))
+        alert_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, days_back))
         alerts.append({
             "id": f"ALERT-{1000 + i}",
             "timestamp": alert_date.isoformat(),

@@ -5,7 +5,7 @@ Orchestrates rate limiting, caching, parallel processing, and cost monitoring.
 
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from enum import Enum
 import hashlib
@@ -274,7 +274,7 @@ class UnifiedDataIngestion:
                 tier_results = await self._fetch_tier_data(
                     tier, tier_symbols, data_types, force_refresh
                 )
-                self._last_tier_update[tier] = datetime.utcnow()
+                self._last_tier_update[tier] = datetime.now(timezone.utc)
             
             results.update(tier_results)
         
@@ -298,7 +298,7 @@ class UnifiedDataIngestion:
         last_update = self._last_tier_update[tier]
         update_frequency = self.tier_update_frequencies[tier]
         
-        return (datetime.utcnow() - last_update).total_seconds() >= update_frequency
+        return (datetime.now(timezone.utc) - last_update).total_seconds() >= update_frequency
     
     async def _fetch_tier_data(
         self,
@@ -345,7 +345,7 @@ class UnifiedDataIngestion:
                         continue
                     
                     task = APITask(
-                        id=f"{symbol}_{data_type}_{provider}_{datetime.utcnow().timestamp()}",
+                        id=f"{symbol}_{data_type}_{provider}_{datetime.now(timezone.utc).timestamp()}",
                         provider=provider,
                         endpoint=self._get_endpoint(provider, data_type),
                         params=self._build_params(symbol, data_type, provider),
@@ -445,7 +445,7 @@ class UnifiedDataIngestion:
     
     def _build_cache_key(self, symbol: str, data_type: str) -> str:
         """Build cache key for symbol and data type."""
-        date_str = datetime.utcnow().strftime('%Y%m%d')
+        date_str = datetime.now(timezone.utc).strftime('%Y%m%d')
         tier = self.get_stock_tier(symbol)
         
         # Include tier in cache key for different TTLs

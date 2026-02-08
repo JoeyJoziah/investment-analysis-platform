@@ -4,7 +4,7 @@ Specialized async repository for investment recommendation operations.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
 
 from sqlalchemy import select, func, and_, or_, desc, asc, text
@@ -36,7 +36,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         """Get all active recommendations"""
         filters = [
             FilterCriteria(field='is_active', operator='eq', value=True),
-            FilterCriteria(field='valid_until', operator='gt', value=datetime.utcnow())
+            FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc))
         ]
         
         pagination = PaginationParams(limit=limit) if limit else None
@@ -67,7 +67,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                 query = query.where(
                     and_(
                         Recommendation.is_active == True,
-                        Recommendation.valid_until > datetime.utcnow()
+                        Recommendation.valid_until > datetime.now(timezone.utc)
                     )
                 )
             
@@ -101,7 +101,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         if active_only:
             filters.extend([
                 FilterCriteria(field='is_active', operator='eq', value=True),
-                FilterCriteria(field='valid_until', operator='gt', value=datetime.utcnow())
+                FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc))
             ])
         
         pagination = PaginationParams(limit=limit) if limit else None
@@ -124,7 +124,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         """Get top recommendations by confidence score"""
         filters = [
             FilterCriteria(field='is_active', operator='eq', value=True),
-            FilterCriteria(field='valid_until', operator='gt', value=datetime.utcnow()),
+            FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc)),
             FilterCriteria(field='confidence_score', operator='gte', value=min_confidence)
         ]
         
@@ -154,7 +154,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
             ).where(
                 and_(
                     Recommendation.is_active == True,
-                    Recommendation.valid_until > datetime.utcnow()
+                    Recommendation.valid_until > datetime.now(timezone.utc)
                 )
             ).group_by(Recommendation.recommendation_type)
             
@@ -167,7 +167,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                 func.count(Recommendation.id).filter(
                     and_(
                         Recommendation.is_active == True,
-                        Recommendation.valid_until > datetime.utcnow()
+                        Recommendation.valid_until > datetime.now(timezone.utc)
                     )
                 ).label('active_recommendations'),
                 func.avg(Recommendation.confidence_score).label('avg_confidence'),
@@ -176,7 +176,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                 ).filter(
                     and_(
                         Recommendation.is_active == True,
-                        Recommendation.valid_until > datetime.utcnow()
+                        Recommendation.valid_until > datetime.now(timezone.utc)
                     )
                 ).label('avg_active_confidence')
             )
@@ -205,7 +205,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
     ) -> int:
         """Expire old recommendations that are past their valid_until date"""
         if not cutoff_date:
-            cutoff_date = datetime.utcnow()
+            cutoff_date = datetime.now(timezone.utc)
         
         async def _expire_old(session: AsyncSession) -> int:
             from sqlalchemy import update
@@ -321,7 +321,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                 if recommendation.stop_loss and current_price <= recommendation.stop_loss:
                     performance.stop_loss_hit = True
             
-            performance.last_updated = datetime.utcnow()
+            performance.last_updated = datetime.now(timezone.utc)
             
             return performance
         
@@ -338,7 +338,7 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
     ) -> Dict[str, Any]:
         """Get recommendation performance analytics"""
         async def _get_analytics(session: AsyncSession) -> Dict[str, Any]:
-            cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
             
             # Performance statistics
             perf_query = select(

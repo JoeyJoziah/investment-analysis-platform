@@ -13,7 +13,7 @@ import logging
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import joblib
 from pathlib import Path
 
@@ -593,14 +593,14 @@ class ModelSavingStep(PipelineStep):
                 
                 # Create model artifact
                 model_artifact = ModelArtifact(
-                    model_id=f"{config.name}_{config.version}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                    model_id=f"{config.name}_{config.version}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
                     name=config.name,
                     version=config.version,
                     model_type=config.model_type,
                     model_path=model_path,
                     preprocessor_path=preprocessor_path,
                     feature_columns_path=feature_columns_path,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                     training_samples=context.get("data_splits", {}).get("X_train", []).shape[0] if "data_splits" in context else 0,
                     feature_count=len(context["artifacts"].get("selected_features", [])),
                     metrics=context["evaluation_results"].get(best_model_type, {}),

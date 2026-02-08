@@ -3,7 +3,7 @@
 import asyncio
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
@@ -518,7 +518,7 @@ class HealthStatus:
         """Convert to dictionary"""
         return {
             "status": self.overall_status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "components": {
                 "database": self.database,
                 "redis": self.redis,

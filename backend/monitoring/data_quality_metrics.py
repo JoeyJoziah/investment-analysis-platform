@@ -4,7 +4,7 @@ Exports data quality checks, validation results, and anomaly detection metrics.
 """
 
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 from prometheus_client import (
     Counter, Gauge, Histogram, Summary,
@@ -246,7 +246,7 @@ class DataQualityMetricsCollector:
             self.quality_history[symbol] = []
         
         self.quality_history[symbol].append({
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'score': score,
             'issues': len(issues)
         })
@@ -261,7 +261,7 @@ class DataQualityMetricsCollector:
         last_update: datetime
     ):
         """Record data staleness metrics."""
-        staleness = (datetime.utcnow() - last_update).total_seconds()
+        staleness = (datetime.now(timezone.utc) - last_update).total_seconds()
         
         data_staleness_seconds.labels(
             symbol=symbol,
@@ -508,7 +508,7 @@ class DataQualityMetricsCollector:
         if symbol not in self.quality_history:
             return {'status': 'no_data'}
         
-        cutoff_time = datetime.utcnow() - timedelta(hours=window_hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=window_hours)
         recent_checks = [
             check for check in self.quality_history[symbol]
             if check['timestamp'] > cutoff_time

@@ -32,7 +32,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # arbitrary code execution vulnerabilities
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Set, Tuple, Any
 from sqlalchemy import create_engine, text, func
@@ -509,7 +509,7 @@ class EnhancedBackgroundLoader:
                 sector=sector,
                 industry=industry,
                 is_active=True,
-                last_updated=datetime.utcnow()
+                last_updated=datetime.now(timezone.utc)
             ))
         
         # Add more tickers from different sectors to reach 6000+
@@ -759,7 +759,7 @@ class EnhancedBackgroundLoader:
                     "industry_id": industry_id,
                     "market_cap": stock_info.market_cap,
                     "is_active": stock_info.is_active,
-                    "last_updated": datetime.utcnow()
+                    "last_updated": datetime.now(timezone.utc)
                 })
                 
                 session.commit()

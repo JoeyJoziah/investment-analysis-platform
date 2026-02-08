@@ -10,7 +10,7 @@ import hashlib
 import logging
 from typing import Dict, Any, Optional, List, Tuple, Union
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 import shutil
@@ -404,7 +404,7 @@ class ModelVersionManager:
                     version=version,
                     model_type=model_type,
                     stage=ModelStage.DEVELOPMENT,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                     created_by=created_by,
                     description=description,
                     tags=tags or [],
@@ -655,8 +655,8 @@ class ModelVersionManager:
                 champion_version=f"{model_name}:{champion_version}",
                 challenger_version=f"{model_name}:{challenger_version}",
                 traffic_split=traffic_split,
-                start_date=datetime.utcnow(),
-                end_date=datetime.utcnow() + timedelta(days=duration_days),
+                start_date=datetime.now(timezone.utc),
+                end_date=datetime.now(timezone.utc) + timedelta(days=duration_days),
                 success_metrics=success_metrics or ['accuracy', 'directional_accuracy'],
                 minimum_sample_size=1000
             )
@@ -679,7 +679,7 @@ class ModelVersionManager:
         test_config = self.ab_tests[test_name]
         
         # Check if test is active
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now < test_config.start_date or now > test_config.end_date:
             return test_config.champion_version
         
@@ -687,7 +687,7 @@ class ModelVersionManager:
         if user_id:
             hash_value = hash(f"{test_name}:{user_id}") % 100
         else:
-            hash_value = hash(str(datetime.utcnow().timestamp())) % 100
+            hash_value = hash(str(datetime.now(timezone.utc).timestamp())) % 100
         
         if hash_value < test_config.traffic_split:
             return test_config.challenger_version
@@ -865,7 +865,7 @@ class ModelVersionManager:
                 stats['storage_usage_mb'] += version_obj.model_size / (1024 * 1024)
                 
                 # Recent activity
-                if version_obj.created_at > datetime.utcnow() - timedelta(days=7):
+                if version_obj.created_at > datetime.now(timezone.utc) - timedelta(days=7):
                     stats['recent_activity'].append({
                         'model_name': model_name,
                         'version': version,
@@ -874,7 +874,7 @@ class ModelVersionManager:
                     })
         
         # Active A/B tests
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         for test in self.ab_tests.values():
             if test.start_date <= now <= test.end_date and test.status == 'active':
                 stats['active_ab_tests'] += 1

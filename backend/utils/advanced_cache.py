@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import redis.asyncio as redis
@@ -239,7 +239,7 @@ class MultiLevelCache:
             entry = self.l1_cache[key]
             
             # Check expiry
-            if datetime.utcnow() > entry.created_at + timedelta(seconds=entry.ttl):
+            if datetime.now(timezone.utc) > entry.created_at + timedelta(seconds=entry.ttl):
                 # Expired, remove
                 self.l1_current_memory -= entry.size_bytes
                 del self.l1_cache[key]
@@ -263,7 +263,7 @@ class MultiLevelCache:
             entry = CacheEntry(
                 key=key,
                 value=value,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
                 ttl=ttl,
                 size_bytes=size_bytes
             )

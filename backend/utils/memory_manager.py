@@ -11,7 +11,7 @@ import sys
 import threading
 from typing import Dict, List, Optional, Any, Callable, Tuple, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 from collections import defaultdict, deque
@@ -52,7 +52,7 @@ class MemoryMetrics:
     process_memory_percent: float
     gc_counts: Dict[int, int]
     pressure_level: MemoryPressureLevel
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     @property
     def memory_efficiency(self) -> float:
@@ -247,7 +247,7 @@ class MemoryManager:
     
     async def emergency_cleanup(self):
         """Emergency memory cleanup"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         # Force garbage collection
         collected = await self._force_gc_all_generations()
@@ -267,7 +267,7 @@ class MemoryManager:
         # Run custom cleanup tasks
         await self._run_cleanup_tasks()
         
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
         logger.info(f"Emergency cleanup completed in {elapsed:.2f}s, collected {collected} objects")
     
     async def aggressive_cleanup(self):
@@ -410,7 +410,7 @@ class MemoryManager:
                                     size_mb=size_mb,
                                     growth_rate=growth_rate,
                                     is_potential_leak=True,
-                                    last_seen=datetime.utcnow(),
+                                    last_seen=datetime.now(timezone.utc),
                                     stack_trace=stat.traceback.format()[0] if stat.traceback else None
                                 )
                 else:

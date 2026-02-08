@@ -6,7 +6,7 @@ Provides financial news and sentiment analysis endpoints.
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from backend.config.database import get_async_db_session
@@ -77,7 +77,7 @@ async def get_latest_news(
                 description="Latest market developments and analysis",
                 url="https://example.com/news",
                 source="Reuters",
-                published_at=datetime.utcnow() - timedelta(hours=i),
+                published_at=datetime.now(timezone.utc) - timedelta(hours=i),
                 sentiment="neutral",
                 sentiment_score=0.0,
                 related_symbols=symbol_list[:1] if symbol_list else ["SPY"],

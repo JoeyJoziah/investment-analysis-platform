@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 from collections import defaultdict
@@ -232,7 +232,7 @@ class MLCostTracker:
         
         # Create usage record
         usage_record = ResourceUsage(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             resource_type=resource_type,
             usage_amount=usage_amount,
             unit=unit,
@@ -286,7 +286,7 @@ class MLCostTracker:
     def get_current_month_cost(self) -> float:
         """Get total cost for current month"""
         
-        current_month = datetime.utcnow().strftime('%Y-%m')
+        current_month = datetime.now(timezone.utc).strftime('%Y-%m')
         
         with self.lock:
             month_cost = sum(
@@ -299,7 +299,7 @@ class MLCostTracker:
     def get_projected_monthly_cost(self) -> float:
         """Project monthly cost based on current usage"""
         
-        current_date = datetime.utcnow()
+        current_date = datetime.now(timezone.utc)
         days_in_month = self._get_days_in_current_month()
         days_elapsed = current_date.day
         
@@ -316,7 +316,7 @@ class MLCostTracker:
     def _get_days_in_current_month(self) -> int:
         """Get number of days in current month"""
         
-        current_date = datetime.utcnow()
+        current_date = datetime.now(timezone.utc)
         if current_date.month == 12:
             next_month = datetime(current_date.year + 1, 1, 1)
         else:
@@ -361,7 +361,7 @@ class MLCostTracker:
         recommendations = self._generate_cost_recommendations(utilization_percent)
         
         alert = CostAlert(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             alert_type=alert_type,
             severity=severity,
             current_cost=current_cost,
@@ -465,7 +465,7 @@ class MLCostTracker:
     def get_cost_breakdown(self, days_back: int = 30) -> Dict[str, Any]:
         """Get detailed cost breakdown"""
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         with self.lock:
             recent_records = [
@@ -635,7 +635,7 @@ class MLCostTracker:
         utilization = (projected_cost / self.monthly_budget * 100) if self.monthly_budget > 0 else 0
         
         # Recent usage (last 24 hours)
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         recent_usage = sum(
             record.total_cost for record in self.usage_records
             if record.timestamp >= cutoff
@@ -752,14 +752,14 @@ def track_ml_cost(resource_type: ResourceType, operation: str):
     
     def decorator(func):
         def wrapper(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             cost_tracker = get_ml_cost_tracker()
             
             try:
                 result = func(*args, **kwargs)
                 
                 # Calculate usage based on operation time
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
                 duration_hours = (end_time - start_time).total_seconds() / 3600
                 
                 # Record usage
@@ -779,7 +779,7 @@ def track_ml_cost(resource_type: ResourceType, operation: str):
                 
             except Exception as e:
                 # Record failed operation
-                end_time = datetime.utcnow()
+                end_time = datetime.now(timezone.utc)
                 duration_hours = (end_time - start_time).total_seconds() / 3600
                 
                 cost_tracker.record_usage(

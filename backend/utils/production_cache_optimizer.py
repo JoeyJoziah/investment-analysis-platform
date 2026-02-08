@@ -9,7 +9,7 @@ import json
 import logging
 import hashlib
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union, Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -230,7 +230,7 @@ class ProductionCacheOptimizer:
         policy = self.cache_policies.get(cache_type, self.cache_policies['stock_prices'])
         
         ttl = ttl_override or policy.ttl_seconds
-        expiry_time = datetime.utcnow() + timedelta(seconds=ttl)
+        expiry_time = datetime.now(timezone.utc) + timedelta(seconds=ttl)
         
         success_count = 0
         
@@ -255,7 +255,7 @@ class ProductionCacheOptimizer:
         
         if layer == CacheLayer.MEMORY:
             cache_entry = self._memory_cache.get(key)
-            if cache_entry and cache_entry[1] > datetime.utcnow():
+            if cache_entry and cache_entry[1] > datetime.now(timezone.utc):
                 # Update access count for LRU
                 self._memory_cache[key] = (cache_entry[0], cache_entry[1], cache_entry[2] + 1)
                 return cache_entry[0]
@@ -301,7 +301,7 @@ class ProductionCacheOptimizer:
         elif layer == CacheLayer.REDIS:
             try:
                 serialized_data = self._serialize_data(data, policy.compression)
-                ttl_seconds = int((expiry_time - datetime.utcnow()).total_seconds())
+                ttl_seconds = int((expiry_time - datetime.now(timezone.utc)).total_seconds())
                 
                 await self.redis_client.setex(
                     f"cache:{key}", 
@@ -315,7 +315,7 @@ class ProductionCacheOptimizer:
                     mapping={
                         "type": layer.value,
                         "size": len(serialized_data),
-                        "created": datetime.utcnow().isoformat(),
+                        "created": datetime.now(timezone.utc).isoformat(),
                         "cost_weight": policy.cost_weight
                     }
                 )
@@ -363,7 +363,7 @@ class ProductionCacheOptimizer:
         for i in range(current_index):
             higher_layer = policy.layers[i]
             try:
-                expiry_time = datetime.utcnow() + timedelta(seconds=policy.ttl_seconds)
+                expiry_time = datetime.now(timezone.utc) + timedelta(seconds=policy.ttl_seconds)
                 await self._set_in_layer(key, data, higher_layer, policy, expiry_time)
             except Exception as e:
                 logger.warning(f"Cache promotion error to {higher_layer}: {e}")
@@ -423,7 +423,7 @@ class ProductionCacheOptimizer:
                 # Clean memory cache
                 expired_keys = [
                     key for key, (_, expiry, _) in self._memory_cache.items()
-                    if expiry <= datetime.utcnow()
+                    if expiry <= datetime.now(timezone.utc)
                 ]
                 
                 for key in expired_keys:

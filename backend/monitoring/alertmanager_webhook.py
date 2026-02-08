@@ -18,7 +18,7 @@ import os
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -154,7 +154,7 @@ class BusinessAlert:
     metric_value: Optional[float] = None
     threshold_value: Optional[float] = None
     state: AlertState = AlertState.FIRING
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     fingerprint: Optional[str] = None
 
     def __post_init__(self):
@@ -286,7 +286,7 @@ class AlertRateLimiter:
     def should_allow_alert(self, alert: BusinessAlert) -> bool:
         """Check if alert should be allowed based on rate limiting rules."""
         alert_key = f"{alert.alert_name}:{alert.fingerprint}"
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check cooldown period
         cooldown_seconds = self.config.alert_cooldowns.get(
@@ -332,14 +332,14 @@ class AlertRateLimiter:
     def record_alert(self, alert: BusinessAlert):
         """Record that an alert was sent."""
         alert_key = f"{alert.alert_name}:{alert.fingerprint}"
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         self._last_alert_times[alert_key] = now
         self._alert_counts[alert.alert_name].append(now)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get rate limiter statistics."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
 
         hourly_counts = {}
@@ -592,7 +592,7 @@ class AlertManagerWebhook:
 
             payload = {
                 'event': 'business_alert',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
                 'alert': {
                     'name': alert.alert_name,
                     'severity': alert.severity.value,

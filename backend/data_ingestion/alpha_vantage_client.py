@@ -4,7 +4,7 @@ Alpha Vantage API Client - Free tier: 25 API requests per day
 
 import asyncio
 from typing import Dict, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import json
 
@@ -77,7 +77,7 @@ class AlphaVantageClient(BaseAPIClient):
                     'open': float(quote_data.get('02. open', 0)),
                     'high': float(quote_data.get('03. high', 0)),
                     'low': float(quote_data.get('04. low', 0)),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -124,7 +124,7 @@ class AlphaVantageClient(BaseAPIClient):
                 return {
                     'symbol': symbol,
                     'prices': sorted(prices, key=lambda x: x['date'], reverse=True),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -183,7 +183,7 @@ class AlphaVantageClient(BaseAPIClient):
                     'shares_outstanding': int(response.get('SharesOutstanding', 0) or 0),
                     'dividend_date': response.get('DividendDate'),
                     'ex_dividend_date': response.get('ExDividendDate'),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -250,7 +250,7 @@ class AlphaVantageClient(BaseAPIClient):
                         'indicator': indicator,
                         'interval': interval,
                         'values': sorted(values, key=lambda x: x['date'], reverse=True),
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(timezone.utc).isoformat()
                     }
             return None
         
@@ -269,7 +269,7 @@ class AlphaVantageClient(BaseAPIClient):
         redis = await get_redis()
         
         # Check how many API calls we've made today
-        today = datetime.utcnow().strftime('%Y%m%d')
+        today = datetime.now(timezone.utc).strftime('%Y%m%d')
         daily_key = f"api_usage:alpha_vantage:daily:{today}"
         daily_count = int(await redis.get(daily_key) or 0)
         
@@ -322,7 +322,7 @@ class AlphaVantageClient(BaseAPIClient):
         Returns a plan of which API calls to make
         """
         redis = await get_redis()
-        today = datetime.utcnow().strftime('%Y%m%d')
+        today = datetime.now(timezone.utc).strftime('%Y%m%d')
         
         # Priority order for data freshness needs
         priorities = [

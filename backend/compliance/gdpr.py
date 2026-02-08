@@ -16,7 +16,7 @@ import csv
 import io
 import uuid
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -160,7 +160,7 @@ class GDPRDataPortability:
                 "export_metadata": {
                     "export_id": export_id,
                     "user_id": user_id,
-                    "export_date": datetime.utcnow().isoformat(),
+                    "export_date": datetime.now(timezone.utc).isoformat(),
                     "format_version": "2.0",
                     "gdpr_article": "Article 20 - Right to Data Portability",
                     "categories_exported": categories_to_export
@@ -198,7 +198,7 @@ class GDPRDataPortability:
             return DataExportResult(
                 export_id=export_id,
                 user_id=user_id,
-                export_date=datetime.utcnow(),
+                export_date=datetime.now(timezone.utc),
                 categories=categories_to_export,
                 record_counts=record_counts,
                 data=exported_data
@@ -683,7 +683,7 @@ class GDPRDataDeletion:
             request_id=request_id,
             user_id=user_id,
             status=DeletionStatus.PENDING,
-            request_date=datetime.utcnow()
+            request_date=datetime.now(timezone.utc)
         )
 
         self._pending_requests[request_id] = request
@@ -710,7 +710,7 @@ class GDPRDataDeletion:
                 "30 days as per GDPR requirements."
             ),
             "estimated_completion": (
-                datetime.utcnow() + timedelta(days=30)
+                datetime.now(timezone.utc) + timedelta(days=30)
             ).isoformat()
         }
 
@@ -775,7 +775,7 @@ class GDPRDataDeletion:
 
                 # Update request status
                 request.status = DeletionStatus.COMPLETED
-                request.completion_date = datetime.utcnow()
+                request.completion_date = datetime.now(timezone.utc)
                 request.deleted_records = deleted_records
                 request.retained_records = retained_records
                 request.anonymized_records = anonymized_records
@@ -1044,7 +1044,7 @@ class ConsentManager:
                     "consent_given": consent_given,
                     "legal_basis": legal_basis,
                     "version": "1.0",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             )
             session.add(audit_entry)
@@ -1200,7 +1200,7 @@ class DataRetentionManager:
 
         async def _enforce(session: AsyncSession) -> Dict[str, int]:
             # Clean up expired sessions
-            session_cutoff = datetime.utcnow() - timedelta(
+            session_cutoff = datetime.now(timezone.utc) - timedelta(
                 days=RETENTION_PERIODS[RetentionCategory.SESSION_DATA]
             )
             result = await session.execute(
@@ -1232,7 +1232,7 @@ class DataRetentionManager:
         async def _get_report(session: AsyncSession) -> Dict[str, Any]:
             report = {
                 "user_id": user_id,
-                "report_date": datetime.utcnow().isoformat(),
+                "report_date": datetime.now(timezone.utc).isoformat(),
                 "categories": {}
             }
 
@@ -1308,18 +1308,18 @@ class DataBreachNotification:
 
         breach_record = {
             "breach_id": breach_id,
-            "reported_at": datetime.utcnow().isoformat(),
+            "reported_at": datetime.now(timezone.utc).isoformat(),
             "breach_type": breach_details.get("breach_type", "unknown"),
             "affected_records": breach_details.get("affected_records", 0),
             "data_categories": breach_details.get("data_categories", []),
             "discovery_date": (
-                breach_details.get("discovery_date", datetime.utcnow()).isoformat()
+                breach_details.get("discovery_date", datetime.now(timezone.utc)).isoformat()
                 if isinstance(breach_details.get("discovery_date"), datetime)
                 else breach_details.get("discovery_date")
             ),
             "containment_measures": breach_details.get("containment_measures", ""),
             "notification_deadline": (
-                datetime.utcnow() + timedelta(hours=72)
+                datetime.now(timezone.utc) + timedelta(hours=72)
             ).isoformat(),
             "status": "reported"
         }
@@ -1385,7 +1385,7 @@ class DataBreachNotification:
                 "GDPR Article 33 - Supervisory Authority Notification"
             ),
             "breach_reference": breach_id,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "breach_description": (
                 f"Security incident of type '{breach['breach_type']}' "
                 f"discovered on {breach['discovery_date']}"

@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 import torch
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 logger = logging.getLogger(__name__)
@@ -189,7 +189,7 @@ class ModelManager:
                 if model_path.exists():
                     self.models[model_name] = config["loader"](model_path)
                     self.model_metadata[model_name] = {
-                        "loaded_at": datetime.utcnow(),
+                        "loaded_at": datetime.now(timezone.utc),
                         "path": str(model_path),
                         "size": model_path.stat().st_size,
                         "status": "loaded",
@@ -201,7 +201,7 @@ class ModelManager:
                     # Create fallback model
                     self.models[model_name] = config["fallback"]()
                     self.model_metadata[model_name] = {
-                        "loaded_at": datetime.utcnow(),
+                        "loaded_at": datetime.now(timezone.utc),
                         "status": "fallback",
                         "reason": "file_not_found"
                     }
@@ -210,7 +210,7 @@ class ModelManager:
                 # Create fallback model
                 self.models[model_name] = config["fallback"]()
                 self.model_metadata[model_name] = {
-                    "loaded_at": datetime.utcnow(),
+                    "loaded_at": datetime.now(timezone.utc),
                     "status": "fallback",
                     "error": str(e)
                 }

@@ -19,7 +19,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -72,7 +72,7 @@ def migrate_lstm_model(hf_client, models_dir: Path, version: str = "1.0.0") -> b
             metadata={
                 "model_type": "pytorch",
                 "architecture": "LSTM with attention",
-                "migrated_at": datetime.utcnow().isoformat(),
+                "migrated_at": datetime.now(timezone.utc).isoformat(),
                 "source": "local migration"
             }
         )
@@ -121,7 +121,7 @@ def migrate_xgboost_model(hf_client, models_dir: Path, version: str = "1.0.0") -
             metadata={
                 "model_type": "xgboost",
                 "task": "price_direction_prediction",
-                "migrated_at": datetime.utcnow().isoformat(),
+                "migrated_at": datetime.now(timezone.utc).isoformat(),
                 "source": "local migration"
             }
         )
@@ -178,7 +178,7 @@ def migrate_prophet_models(hf_client, models_dir: Path, version: str = "1.0.0") 
             metadata={
                 "model_type": "prophet",
                 "stock_count": len(model_files),
-                "migrated_at": datetime.utcnow().isoformat(),
+                "migrated_at": datetime.now(timezone.utc).isoformat(),
                 "source": "local migration"
             }
         )

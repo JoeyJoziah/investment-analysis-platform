@@ -5,7 +5,7 @@ Provides structured documentation for investment decisions and rationale.
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, DECIMAL
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.models.unified_models import Base
 
 
@@ -52,8 +52,8 @@ class InvestmentThesis(Base):
     version = Column(Integer, default=1, nullable=False, comment="Version number for tracking updates")
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     user = relationship("User", backref="investment_theses")

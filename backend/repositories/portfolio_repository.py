@@ -4,7 +4,7 @@ Specialized async repository for portfolio management operations.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import logging
 
@@ -148,7 +148,7 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
                 'positions_value': float(positions_value),
                 'total_value': float(total_value),
                 'positions': position_details,
-                'calculated_at': datetime.utcnow()
+                'calculated_at': datetime.now(timezone.utc)
             }
         
         if session:
@@ -252,12 +252,12 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
 
                     existing_position.quantity = new_quantity
                     existing_position.avg_cost_basis = new_average_cost
-                    existing_position.updated_at = datetime.utcnow()
+                    existing_position.updated_at = datetime.now(timezone.utc)
 
                 elif transaction_type == 'sell':
                     # Reduce position
                     existing_position.quantity -= quantity
-                    existing_position.updated_at = datetime.utcnow()
+                    existing_position.updated_at = datetime.now(timezone.utc)
 
                     # If quantity is zero or negative, remove position
                     if existing_position.quantity <= 0:
@@ -289,7 +289,7 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
                 transaction_type=OrderSideEnum.BUY if transaction_type == 'buy' else OrderSideEnum.SELL,
                 quantity=quantity,
                 price=price,
-                trade_date=datetime.utcnow(),
+                trade_date=datetime.now(timezone.utc),
                 total_amount=trade_amount
             )
             session.add(transaction)

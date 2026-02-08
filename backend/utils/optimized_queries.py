@@ -5,7 +5,7 @@ Optimized database queries to replace N+1 patterns with batch operations
 from sqlalchemy.orm import Session, joinedload, selectinload, contains_eager
 from sqlalchemy import and_, or_, func, select, text
 from typing import List, Dict, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from collections import defaultdict
 
@@ -82,7 +82,7 @@ class OptimizedQueryManager:
     def _get_latest_prices_batch(self, stock_ids: List[int], days_back: int) -> Dict[int, PriceHistory]:
         """Get latest price data for multiple stocks in a single query"""
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         # Use window function to get latest price per stock
         subquery = (
@@ -112,7 +112,7 @@ class OptimizedQueryManager:
     def _get_latest_technical_batch(self, stock_ids: List[int], days_back: int) -> Dict[int, TechnicalIndicators]:
         """Get latest technical indicators for multiple stocks in a single query"""
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         subquery = (
             self.db.query(
@@ -248,7 +248,7 @@ class OptimizedQueryManager:
     def _get_recent_sentiment_batch(self, stock_ids: List[int], days_back: int) -> Dict[int, List[NewsSentiment]]:
         """Get recent sentiment for multiple stocks"""
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         sentiment = (
             self.db.query(NewsSentiment)
@@ -411,7 +411,7 @@ class OptimizedQueryManager:
     def _get_sector_recent_recommendations(self, sector_ids: List[int], days_back: int = 30) -> Dict[int, List[Recommendation]]:
         """Get recent recommendations per sector"""
         
-        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
         
         recommendations = (
             self.db.query(Recommendation)

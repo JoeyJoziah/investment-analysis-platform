@@ -8,7 +8,7 @@ import asyncpg
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional, Any, Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
@@ -153,7 +153,7 @@ class AsyncDatabaseManager:
                     "exchange_id": exchange_id,
                     "is_active": stock_data.get("is_active", True),
                     "is_tradeable": stock_data.get("is_tradeable", True),
-                    "last_updated": datetime.utcnow()
+                    "last_updated": datetime.now(timezone.utc)
                 })
                 
                 stock_row = result.fetchone()

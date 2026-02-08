@@ -7,7 +7,7 @@ from typing import Generator, Optional, Dict, Any
 from contextlib import contextmanager
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, text, event, pool
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
@@ -356,7 +356,7 @@ async def check_database_health() -> Dict:
             'active_connections': active_connections,
             'database_size_bytes': db_size,
             'memory_usage_percent': memory_usage,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:
@@ -365,7 +365,7 @@ async def check_database_health() -> Dict:
             'status': 'unhealthy',
             'connected': False,
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
 

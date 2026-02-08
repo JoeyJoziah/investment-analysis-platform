@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, HTTPException, Depends
 from typing import List, Optional, Dict, Any
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -186,7 +186,7 @@ async def get_stock_quote(symbol: str) -> StockQuote:
         change=stock.current_price * (stock.change_percent / 100) if stock.current_price and stock.change_percent else 0,
         change_percent=stock.change_percent or 0,
         volume=stock.volume or 0,
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 @router.get("/{symbol}/history", response_model=List[PriceHistory])

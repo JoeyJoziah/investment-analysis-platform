@@ -7,7 +7,7 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional, Callable, Tuple, Union, Set
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import logging
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -1008,7 +1008,7 @@ class EnhancedParallelProcessor:
             self._throughput_history[provider] = []
         
         throughput_rps = task_count / elapsed_time if elapsed_time > 0 else 0
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
         
         self._throughput_history[provider].append((timestamp, throughput_rps))
         

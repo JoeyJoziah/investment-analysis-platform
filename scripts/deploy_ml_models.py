@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 import json
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 import subprocess
 
 # Add backend to path
@@ -254,7 +254,7 @@ class MLModelDeployer:
         
         manifest = {
             'deployment_info': {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'version': '1.0',
                 'deployer': 'ML Training Pipeline',
                 'environment': 'production'

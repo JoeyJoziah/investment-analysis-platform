@@ -5,7 +5,7 @@ Provides user-scoped watchlist management with stock tracking and price alerts.
 
 from fastapi import APIRouter, HTTPException, Depends, status, Path, Query
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -29,7 +29,7 @@ from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/watchlists", tags=["watchlists"])
+router = APIRouter(tags=["watchlists"])
 
 
 # =======================
@@ -381,7 +381,7 @@ async def update_watchlist(
             # Use repository update method if available, otherwise update directly
             for key, value in update_data.items():
                 setattr(watchlist, key, value)
-            watchlist.updated_at = datetime.utcnow()
+            watchlist.updated_at = datetime.now(timezone.utc)
             await db.flush()
             await db.refresh(watchlist)
 

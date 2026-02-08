@@ -57,7 +57,7 @@ class EnhancedConnectionManager:
             # Store connection info
             self.active_connections[client_id] = {
                 'websocket': websocket,
-                'connected_at': datetime.utcnow(),
+                'connected_at': datetime.now(timezone.utc),
                 'user_id': user.id if user else None,
                 'message_count': 0
             }
@@ -71,7 +71,7 @@ class EnhancedConnectionManager:
                 }
             
             # Initialize health tracking
-            self.connection_health[client_id] = datetime.utcnow()
+            self.connection_health[client_id] = datetime.now(timezone.utc)
             
             # Persist connection info to Redis if available
             if self.redis_client:
@@ -80,7 +80,7 @@ class EnhancedConnectionManager:
                         "websocket:connections",
                         client_id,
                         json.dumps({
-                            'connected_at': datetime.utcnow().isoformat(),
+                            'connected_at': datetime.now(timezone.utc).isoformat(),
                             'user_id': user.id if user else None
                         })
                     )
@@ -253,11 +253,11 @@ class EnhancedConnectionManager:
     
     async def update_health(self, client_id: str):
         """Update client health status"""
-        self.connection_health[client_id] = datetime.utcnow()
+        self.connection_health[client_id] = datetime.now(timezone.utc)
     
     async def cleanup_stale_connections(self, max_age_minutes: int = 30):
         """Clean up stale connections"""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
         stale_clients = []
         
         for client_id, last_heartbeat in self.connection_health.items():
@@ -393,7 +393,7 @@ async def market_data_stream_endpoint(websocket: WebSocket):
             # Send market overview data
             market_data = {
                 "type": "market_overview",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "indices": {
                     "SPY": {
                         "price": random.uniform(400, 450),
@@ -443,7 +443,7 @@ async def portfolio_stream(websocket: WebSocket, portfolio_id: str):
             portfolio_update = {
                 "type": "portfolio_update",
                 "portfolio_id": portfolio_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "total_value": random.uniform(90000, 110000),
                 "day_change": random.uniform(-2000, 2000),
                 "day_change_percent": random.uniform(-2, 2),
@@ -706,7 +706,7 @@ async def stream_price_updates(symbol: str):
                 "ask": random.uniform(51, 501),
                 "bid_size": random.randint(100, 1000),
                 "ask_size": random.randint(100, 1000),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
             
             # Send to all subscribers of this symbol
@@ -730,8 +730,8 @@ async def send_heartbeat(websocket: WebSocket, client_id: str):
             
             heartbeat = {
                 "type": MessageType.HEARTBEAT,
-                "timestamp": datetime.utcnow().isoformat(),
-                "server_time": datetime.utcnow().timestamp()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "server_time": datetime.now(timezone.utc).timestamp()
             }
             
             await websocket.send_json(heartbeat)
@@ -766,7 +766,7 @@ async def send_alert(client_id: str, alert: Dict[str, Any]):
     alert_message = {
         "type": MessageType.ALERT,
         "alert": alert,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
     await manager.send_personal_message(json.dumps(alert_message), client_id)
@@ -777,7 +777,7 @@ async def broadcast_news(news: Dict[str, Any]):
     news_message = {
         "type": MessageType.NEWS,
         "news": news,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
     await manager.broadcast(json.dumps(news_message))

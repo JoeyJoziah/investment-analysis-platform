@@ -8,7 +8,7 @@ import asyncio
 import logging
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -155,7 +155,7 @@ class CostOptimizedAutoScaler:
         """Get current resource metrics for a service"""
         try:
             # Check cache first
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if service_name in self.metrics_cache:
                 cached_metrics = self.metrics_cache[service_name]
                 if (now - cached_metrics.timestamp).total_seconds() < self.cache_ttl:
@@ -357,7 +357,7 @@ class CostOptimizedAutoScaler:
             
             # Check cooldown period
             if rule.last_scale_action:
-                cooldown_elapsed = (datetime.utcnow() - rule.last_scale_action).total_seconds()
+                cooldown_elapsed = (datetime.now(timezone.utc) - rule.last_scale_action).total_seconds()
                 if cooldown_elapsed < rule.cooldown_seconds:
                     logger.debug(f"Scaling action for {rule.service_name} is in cooldown. "
                                f"Remaining: {rule.cooldown_seconds - cooldown_elapsed:.0f}s")
@@ -402,7 +402,7 @@ class CostOptimizedAutoScaler:
             
             # Update rule state
             rule.current_replicas = target_replicas
-            rule.last_scale_action = datetime.utcnow()
+            rule.last_scale_action = datetime.now(timezone.utc)
             rule.consecutive_violations = 0
             
             # Update cost tracking

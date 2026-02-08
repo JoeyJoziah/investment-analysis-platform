@@ -6,7 +6,7 @@ Tracks data flow, transformations, and quality throughout the pipeline
 import uuid
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Set, Tuple
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -54,7 +54,7 @@ class LineageNode:
     """Represents a node in the data lineage graph"""
     node_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     operation: DataOperation = DataOperation.INGESTION
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Data identification
     data_source: str = ""
@@ -159,7 +159,7 @@ class DataLineageTracker:
             'root_node': root_node,
             'current_node': root_node,
             'nodes': [root_node],
-            'start_time': datetime.utcnow()
+            'start_time': datetime.now(timezone.utc)
         }
         
         # Add to graph
@@ -276,7 +276,7 @@ class DataLineageTracker:
             raise ValueError(f"Unknown trace ID: {trace_id}")
         
         trace = self.active_traces[trace_id]
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         duration = (end_time - trace['start_time']).total_seconds()
         
         # Calculate overall quality
@@ -839,7 +839,7 @@ class DataLineageTracker:
         
         # Check data retention compliance
         timestamp = datetime.fromisoformat(node_data.get('timestamp', ''))
-        age_days = (datetime.utcnow() - timestamp).days
+        age_days = (datetime.now(timezone.utc) - timestamp).days
         
         if age_days > 2555:  # 7 years for financial data
             issues.append(f"Data exceeds retention period ({age_days} days)")

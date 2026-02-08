@@ -4,7 +4,7 @@ Celery tasks for data ingestion and processing
 from celery import shared_task, group, chain
 from celery.exceptions import SoftTimeLimitExceeded
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import asyncio
 import logging
 import json
@@ -42,7 +42,7 @@ def fetch_stock_data(self, symbol: str, source: str = "all") -> Dict[str, Any]:
     try:
         result = {
             'symbol': symbol,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'data': {},
             'errors': []
         }
@@ -144,7 +144,7 @@ def fetch_all_market_data() -> Dict[str, Any]:
         results = {
             'high_priority': high_priority_group.apply_async().get(timeout=300),
             'medium_priority': medium_priority_group.apply_async().get(timeout=300),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'stocks_updated': len(high_priority[:20]) + len(medium_priority[:30])
         }
         
@@ -345,7 +345,7 @@ def store_price_data(symbol: str, data: Dict[str, Any]) -> bool:
                     db.add(price_record)
                 
                 # Update stock's last price update time
-                stock.last_price_update = datetime.utcnow()
+                stock.last_price_update = datetime.now(timezone.utc)
                 
                 db.commit()
                 logger.info(f"Price data stored for {symbol}")

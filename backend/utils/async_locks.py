@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Optional, Any, Set
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import weakref
 
@@ -80,7 +80,7 @@ class AsyncResourceLockManager:
     async def _cleanup_expired_locks(self):
         """Clean up expired locks"""
         async with self._main_lock:
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             expired_resources = []
             
             for resource_id, locks in self._locks.items():
@@ -199,7 +199,7 @@ class AsyncResourceLockManager:
         
         try:
             # Wait for lock availability
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             while True:
                 async with self._main_lock:
@@ -215,7 +215,7 @@ class AsyncResourceLockManager:
                         lock_info = LockInfo(
                             lock_type=lock_type,
                             resource_id=resource_id,
-                            acquired_at=datetime.utcnow(),
+                            acquired_at=datetime.now(timezone.utc),
                             task_id=task_id,
                             metadata=metadata
                         )
@@ -238,7 +238,7 @@ class AsyncResourceLockManager:
                         break
                 
                 # Check timeout
-                if datetime.utcnow() - start_time > timedelta(seconds=timeout):
+                if datetime.now(timezone.utc) - start_time > timedelta(seconds=timeout):
                     raise asyncio.TimeoutError(
                         f"Timeout waiting for {lock_type.value} lock on {resource_id}"
                     )

@@ -440,9 +440,9 @@ def train_models(**context):
             
             # Wait for completion (with timeout)
             max_wait = 3600  # 1 hour
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
-            while (datetime.utcnow() - start_time).total_seconds() < max_wait:
+            while (datetime.now(timezone.utc) - start_time).total_seconds() < max_wait:
                 status = orchestrator.get_status()
                 
                 # Check if our pipeline completed

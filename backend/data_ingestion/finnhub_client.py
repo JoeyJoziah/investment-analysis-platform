@@ -5,7 +5,7 @@ Best free tier for real-time data
 
 import asyncio
 from typing import Dict, Optional, List, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 import json
 
@@ -52,7 +52,7 @@ class FinnhubClient(BaseAPIClient):
                     'low': response.get('l', 0),
                     'open': response.get('o', 0),
                     'previous_close': response.get('pc', 0),
-                    'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.utcnow().isoformat()
+                    'timestamp': datetime.fromtimestamp(response.get('t', 0)).isoformat() if response.get('t') else datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -84,7 +84,7 @@ class FinnhubClient(BaseAPIClient):
                     'phone': response.get('phone'),
                     'weburl': response.get('weburl'),
                     'ticker': response.get('ticker'),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -103,9 +103,9 @@ class FinnhubClient(BaseAPIClient):
         resolution: 1, 5, 15, 30, 60, D, W, M
         """
         if not from_timestamp:
-            from_timestamp = int((datetime.utcnow() - timedelta(days=365)).timestamp())
+            from_timestamp = int((datetime.now(timezone.utc) - timedelta(days=365)).timestamp())
         if not to_timestamp:
-            to_timestamp = int(datetime.utcnow().timestamp())
+            to_timestamp = int(datetime.now(timezone.utc).timestamp())
         
         cache_key = f"finnhub:candles:{symbol}:{resolution}:{from_timestamp}:{to_timestamp}"
         
@@ -135,7 +135,7 @@ class FinnhubClient(BaseAPIClient):
                     'symbol': symbol,
                     'resolution': resolution,
                     'candles': candles,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -191,7 +191,7 @@ class FinnhubClient(BaseAPIClient):
                     '52_week_high_date': metrics.get('52WeekHighDate'),
                     '52_week_low_date': metrics.get('52WeekLowDate'),
                     'market_cap': metrics.get('marketCapitalization'),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -214,8 +214,8 @@ class FinnhubClient(BaseAPIClient):
                 # Company-specific news
                 params = {
                     'symbol': symbol,
-                    'from': (datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d'),
-                    'to': datetime.utcnow().strftime('%Y-%m-%d')
+                    'from': (datetime.now(timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d'),
+                    'to': datetime.now(timezone.utc).strftime('%Y-%m-%d')
                 }
                 endpoint = "company-news"
             else:
@@ -271,7 +271,7 @@ class FinnhubClient(BaseAPIClient):
                     'sector_average_bullish': response.get('sectorAverageBullishPercent', 0),
                     'sector_average_news_score': response.get('sectorAverageNewsScore', 0),
                     'company_news_score': response.get('companyNewsScore', 0),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -331,7 +331,7 @@ class FinnhubClient(BaseAPIClient):
                     'target_mean': response.get('targetMean', 0),
                     'target_median': response.get('targetMedian', 0),
                     'last_updated': response.get('lastUpdated'),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -351,9 +351,9 @@ class FinnhubClient(BaseAPIClient):
         Get technical indicator data
         """
         if not from_timestamp:
-            from_timestamp = int((datetime.utcnow() - timedelta(days=365)).timestamp())
+            from_timestamp = int((datetime.now(timezone.utc) - timedelta(days=365)).timestamp())
         if not to_timestamp:
-            to_timestamp = int(datetime.utcnow().timestamp())
+            to_timestamp = int(datetime.now(timezone.utc).timestamp())
         
         cache_key = f"finnhub:indicator:{symbol}:{indicator}:{resolution}"
         
@@ -377,7 +377,7 @@ class FinnhubClient(BaseAPIClient):
                     'indicator': indicator,
                     'resolution': resolution,
                     'values': response,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         
@@ -429,7 +429,7 @@ class FinnhubClient(BaseAPIClient):
                     'is_open': response.get('isOpen'),
                     'session': response.get('session'),
                     'holiday': response.get('holiday'),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             return None
         

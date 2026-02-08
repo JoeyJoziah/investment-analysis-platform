@@ -9,7 +9,7 @@ Implements data subject rights under GDPR:
 - Data Retention Reports
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Literal, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
@@ -314,7 +314,7 @@ async def request_deletion(
             estimated_completion=datetime.fromisoformat(
                 result["estimated_completion"]
             ) if result.get("estimated_completion") else None,
-            deletion_scheduled_at=datetime.utcnow(),
+            deletion_scheduled_at=datetime.now(timezone.utc),
             anonymization_complete=False,
             retained_for_compliance=[
                 "Transaction history (anonymized for SEC compliance - 7 years)",
@@ -581,7 +581,7 @@ async def record_consent(
             consent_id=consent_id,
             consent_type=consent_request.consent_type,
             granted=consent_request.granted,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             legal_basis=consent_request.legal_basis,
             ip_address=ip_address  # Already anonymized above
         ))
@@ -658,7 +658,7 @@ async def withdraw_consent(
             consent_id=consent_id,
             consent_type=consent_type,
             granted=False,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             legal_basis="consent_withdrawal",
             ip_address=data_anonymizer.anonymize_ip(ip_address) if ip_address else None
         ))
@@ -715,7 +715,7 @@ async def check_consent(
             "user_id": user_id,
             "consent_type": consent_type,
             "has_consent": has_consent,
-            "checked_at": datetime.utcnow().isoformat()
+            "checked_at": datetime.now(timezone.utc).isoformat()
         })
 
     except Exception as e:
@@ -795,7 +795,7 @@ async def enforce_retention_policies(
         return success_response(data={
             "status": "scheduled",
             "message": "Retention policy enforcement scheduled",
-            "scheduled_at": datetime.utcnow().isoformat()
+            "scheduled_at": datetime.now(timezone.utc).isoformat()
         })
 
     except Exception as e:

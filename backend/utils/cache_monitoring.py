@@ -10,7 +10,7 @@ import json
 import logging
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 import time
 
@@ -161,7 +161,7 @@ class CacheMonitor:
         efficiency_metrics = self._calculate_efficiency_metrics(cache_metrics, api_metrics)
         
         return {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'cache_performance': cache_metrics,
             'query_cache_performance': query_metrics,
             'api_usage': api_metrics,
@@ -184,7 +184,7 @@ class CacheMonitor:
             return []
         
         # Filter by time range
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
         filtered_metrics = [
             m for m in self.metrics_history 
             if m['timestamp'] > cutoff_time
@@ -295,7 +295,7 @@ class CacheMonitor:
                 # Create snapshot
                 cache_perf = metrics['cache_performance']['cache_metrics']
                 snapshot = CacheMetricsSnapshot(
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     l1_hits=cache_perf['l1_hits'],
                     l1_misses=cache_perf['l1_misses'],
                     l2_hits=cache_perf['l2_hits'],
@@ -375,7 +375,7 @@ class CacheMonitor:
                         'type': 'low_hit_ratio',
                         'severity': 'warning',
                         'message': f"Cache hit ratio is {latest['hit_ratio']:.2%}, below threshold of {self.alert_thresholds['low_hit_ratio']:.2%}",
-                        'timestamp': datetime.utcnow()
+                        'timestamp': datetime.now(timezone.utc)
                     })
                 
                 # Check API usage
@@ -387,7 +387,7 @@ class CacheMonitor:
                             'type': 'high_api_usage',
                             'severity': 'critical',
                             'message': f"{metrics.provider} API usage is at {usage_ratio:.2%} of daily limit",
-                            'timestamp': datetime.utcnow(),
+                            'timestamp': datetime.now(timezone.utc),
                             'provider': metrics.provider
                         })
                 
@@ -407,7 +407,7 @@ class CacheMonitor:
             try:
                 # Clean up database metrics older than 30 days
                 async with get_async_db_session() as db:
-                    cutoff_date = datetime.utcnow() - timedelta(days=30)
+                    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
                     await db.execute(
                         text("DELETE FROM cache_metrics WHERE created_at < :cutoff"),
                         {"cutoff": cutoff_date}
@@ -438,7 +438,7 @@ class CacheMonitor:
             monthly_calls = 0
             
             # Get usage from policy manager
-            today = datetime.utcnow().strftime('%Y%m%d')
+            today = datetime.now(timezone.utc).strftime('%Y%m%d')
             if provider in policy_manager.api_usage_tracker:
                 daily_calls = policy_manager.api_usage_tracker[provider].get(today, 0)
                 

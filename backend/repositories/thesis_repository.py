@@ -4,7 +4,7 @@ Specialized async repository for investment thesis operations with user-scoped a
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from sqlalchemy import select, and_, desc, func
@@ -229,7 +229,7 @@ class InvestmentThesisRepository(AsyncCRUDRepository[InvestmentThesis]):
 
             # Increment version on update
             thesis.version += 1
-            thesis.updated_at = datetime.utcnow()
+            thesis.updated_at = datetime.now(timezone.utc)
 
             # Apply updates
             for key, value in data.items():

@@ -8,7 +8,7 @@ with intelligent cache invalidation and cost optimization features.
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Union
 import hashlib
@@ -146,7 +146,7 @@ def api_cache(
                 
                 if source != 'miss':
                     # Add cache hit timestamp
-                    result.headers["X-Cache-Time"] = datetime.utcnow().isoformat()
+                    result.headers["X-Cache-Time"] = datetime.now(timezone.utc).isoformat()
                     
                     # Add TTL information
                     if source == 'l1':

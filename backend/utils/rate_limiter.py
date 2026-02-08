@@ -3,7 +3,7 @@
 import asyncio
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 import redis.asyncio as redis
@@ -307,7 +307,7 @@ class RateLimiter:
         cost: float = 0.0
     ):
         """Track API usage for cost monitoring"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Track in Redis if available
         if self.redis_client:
@@ -344,7 +344,7 @@ class RateLimiter:
     async def get_api_usage_stats(self, provider: str) -> APIUsageStats:
         """Get API usage statistics for a provider"""
         config = API_RATE_LIMITS.get(provider, {})
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Get usage counts
         if self.redis_client:

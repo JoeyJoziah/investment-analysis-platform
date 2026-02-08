@@ -16,7 +16,7 @@ import xgboost as xgb
 from prophet import Prophet
 import optuna
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import joblib
 import logging
 from dataclasses import dataclass
@@ -633,8 +633,8 @@ class ModelManager:
         return PredictionResult(
             ticker=ticker,
             model_name=model_name,
-            prediction_date=datetime.utcnow(),
-            target_date=datetime.utcnow() + timedelta(days=horizon),
+            prediction_date=datetime.now(timezone.utc),
+            target_date=datetime.now(timezone.utc) + timedelta(days=horizon),
             predicted_price=predicted_price,
             predicted_return=predicted_return,
             confidence_interval=confidence_interval,
@@ -702,8 +702,8 @@ class ModelManager:
         return PredictionResult(
             ticker=ticker,
             model_name=model_name,
-            prediction_date=datetime.utcnow(),
-            target_date=datetime.utcnow() + timedelta(days=horizon),
+            prediction_date=datetime.now(timezone.utc),
+            target_date=datetime.now(timezone.utc) + timedelta(days=horizon),
             predicted_price=predicted_price,
             predicted_return=predicted_return,
             confidence_interval=confidence_interval,
@@ -765,8 +765,8 @@ class ModelManager:
         return PredictionResult(
             ticker=ticker,
             model_name='prophet',
-            prediction_date=datetime.utcnow(),
-            target_date=datetime.utcnow() + timedelta(days=horizon),
+            prediction_date=datetime.now(timezone.utc),
+            target_date=datetime.now(timezone.utc) + timedelta(days=horizon),
             predicted_price=predicted_price,
             predicted_return=predicted_return,
             confidence_interval=confidence_interval,
@@ -811,8 +811,8 @@ class ModelManager:
             return PredictionResult(
                 ticker=ticker,
                 model_name='ensemble',
-                prediction_date=datetime.utcnow(),
-                target_date=datetime.utcnow() + timedelta(days=horizon),
+                prediction_date=datetime.now(timezone.utc),
+                target_date=datetime.now(timezone.utc) + timedelta(days=horizon),
                 predicted_price=current_price,
                 predicted_return=0.0,
                 confidence_interval=(current_price * 0.95, current_price * 1.05),
@@ -865,8 +865,8 @@ class ModelManager:
         return PredictionResult(
             ticker=ticker,
             model_name='ensemble',
-            prediction_date=datetime.utcnow(),
-            target_date=datetime.utcnow() + timedelta(days=horizon),
+            prediction_date=datetime.now(timezone.utc),
+            target_date=datetime.now(timezone.utc) + timedelta(days=horizon),
             predicted_price=ensemble_price,
             predicted_return=ensemble_return,
             confidence_interval=ensemble_confidence_interval,

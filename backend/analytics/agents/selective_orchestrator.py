@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from backend.analytics.recommendation_engine import StockRecommendation
@@ -310,7 +310,7 @@ class SelectiveAgentOrchestrator:
                     'selection_reason': reason,
                     'cost_incurred': cost,
                     'analysis_type': analysis_type,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).isoformat()
                 }
             }
             
