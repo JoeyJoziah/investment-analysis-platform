@@ -5,6 +5,7 @@ Enhanced with real data integration, comprehensive error handling, and performan
 
 from fastapi import APIRouter, Query, HTTPException, Depends, status, Path, BackgroundTasks
 from typing import List, Optional, Dict, Any
+from enum import Enum
 from datetime import date, datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,14 +15,16 @@ from decimal import Decimal
 
 from backend.config.database import get_async_db_session
 from backend.repositories import (
-    stock_repository, 
-    price_repository, 
-    FilterCriteria, 
-    PaginationParams, 
+    stock_repository,
+    price_repository,
+    FilterCriteria,
+    PaginationParams,
     SortParams,
     SortDirection
 )
-from backend.models.unified_models import Stock as StockModel, PriceHistory as PriceHistoryModel
+from backend.repositories.alert_repository import alert_repository
+from backend.models.unified_models import Stock as StockModel, PriceHistory as PriceHistoryModel, Alert as AlertModel, User
+from backend.auth.oauth2 import get_current_user
 from backend.data_ingestion.alpha_vantage_client import AlphaVantageClient
 from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
@@ -205,6 +208,62 @@ class StockSearchResponse(BaseModel):
     per_page: int
 
 
+class AlertConditionEnum(str, Enum):
+    """Supported price alert condition types."""
+    ABOVE = "above"
+    BELOW = "below"
+
+
+class CreateAlertRequest(BaseModel):
+    """Request body for creating a price threshold alert."""
+    symbol: str = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="Stock ticker symbol (e.g. AAPL)",
+        json_schema_extra={"example": "AAPL"}
+    )
+    condition: AlertConditionEnum = Field(
+        ...,
+        description="Trigger when price goes 'above' or 'below' the threshold"
+    )
+    threshold_price: float = Field(
+        ...,
+        gt=0,
+        description="Price threshold that triggers the alert",
+        json_schema_extra={"example": 150.00}
+    )
+    is_recurring: bool = Field(
+        False,
+        description="If true, alert stays active after triggering"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "symbol": "AAPL",
+                "condition": "above",
+                "threshold_price": 200.00,
+                "is_recurring": False
+            }
+        }
+
+
+class AlertResponse(BaseModel):
+    """Response model for a created price alert."""
+    alert_id: str = Field(..., description="Unique alert identifier (UUID)")
+    symbol: str
+    condition: str
+    threshold_price: float
+    is_active: bool
+    is_recurring: bool
+    status: str = Field("active", description="Current status of the alert")
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SectorSummaryResponse(BaseModel):
     """Sector summary statistics"""
     sector: str
@@ -292,24 +351,28 @@ async def get_stocks(
 @router.get("/search")
 @api_cache(data_type="db_query", ttl_override={'l1': 3600, 'l2': 14400, 'l3': 86400})
 async def search_stocks(
-    query: str = Query(..., min_length=1, description="Search query (symbol or company name)"),
-    limit: int = Query(50, le=100, description="Maximum number of results"),
+    q: str = Query(..., min_length=1, alias="q", description="Search term (ticker symbol or company name)"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of results"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[StockSearchResponse]:
     """
-    Search stocks by symbol or company name.
-    
-    - **query**: Search term (minimum 1 character)
-    - **limit**: Maximum number of results
+    Search stocks by ticker symbol or company name.
+
+    Uses case-insensitive pattern matching against the ticker symbol and
+    company name columns.  Results are ranked by relevance: exact symbol
+    matches first, then prefix matches, then substring matches, and finally
+    by descending market cap.
+
+    - **q**: Search term (minimum 1 character)
+    - **limit**: Maximum number of results (default 10, max 100)
     """
     try:
         stocks = await stock_repository.search_stocks(
-            query=query,
+            query=q,
             limit=limit,
             session=db
         )
 
-        # Get total count for pagination info
         total_count = len(stocks)
 
         return success_response(data=StockSearchResponse(
@@ -320,9 +383,90 @@ async def search_stocks(
         ))
 
     except Exception as e:
+        logger.error(f"Error searching stocks for q='{q}': {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error searching stocks: {str(e)}"
+        )
+
+
+@router.post("/alerts", status_code=status.HTTP_201_CREATED)
+async def create_price_alert(
+    alert_request: CreateAlertRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session)
+) -> ApiResponse[AlertResponse]:
+    """
+    Create a price threshold alert for a stock.
+
+    Requires authentication.  When the stock price crosses the given
+    threshold in the specified direction (above or below), the alert
+    will trigger.
+
+    - **symbol**: Stock ticker symbol (e.g. AAPL)
+    - **condition**: Direction -- ``above`` or ``below``
+    - **threshold_price**: The price level that triggers the alert
+    - **is_recurring**: If true the alert remains active after it fires
+    """
+    try:
+        symbol = alert_request.symbol.strip().upper()
+
+        # Validate symbol format
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'"
+            )
+
+        # Verify stock exists in the database
+        stock = await stock_repository.get_by_symbol(symbol, session=db)
+        if not stock:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Stock with symbol '{symbol}' not found"
+            )
+
+        # Build the condition JSON stored on the Alert model
+        condition_payload = {
+            "type": "price_threshold",
+            "condition": alert_request.condition.value,
+            "threshold_price": alert_request.threshold_price,
+        }
+
+        # Persist via the alert repository
+        alert = await alert_repository.create(
+            data={
+                "user_id": current_user.id,
+                "stock_id": stock.id,
+                "alert_type": "price_threshold",
+                "condition": condition_payload,
+                "is_active": True,
+                "is_recurring": alert_request.is_recurring,
+            },
+            session=db,
+        )
+
+        alert_resp = AlertResponse(
+            alert_id=alert.alert_id,
+            symbol=symbol,
+            condition=alert_request.condition.value,
+            threshold_price=alert_request.threshold_price,
+            is_active=alert.is_active,
+            is_recurring=alert.is_recurring,
+            status="active",
+            created_at=alert.created_at or datetime.now(timezone.utc),
+        )
+
+        return success_response(data=alert_resp)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating price alert for {alert_request.symbol}: {e}")
+        await handle_api_error(e, f"create price alert for {alert_request.symbol}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating price alert: {str(e)}"
         )
 
 

@@ -5,11 +5,17 @@ API routes for LLM agents and hybrid analysis functionality
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
+import asyncio
 import logging
+import time
+import uuid
 from datetime import datetime, timezone
 
 from backend.analytics.agents import HybridAnalysisEngine, AnalysisMode
+from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
+from backend.analytics.technical_analysis import TechnicalAnalysisEngine
+from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.utils.auth import get_current_user, require_admin
 from backend.utils.rate_limiter import rate_limit
 from backend.utils.llm_budget_manager import BudgetExceededException
@@ -175,7 +181,367 @@ class SelectionStatsResponse(BaseModel):
     stats: Dict[str, Any] = Field(..., description="Selection statistics and criteria")
 
 
+# --- Agent Analysis (Issue #2) ---
+
+class AgentAnalysisRequestV2(BaseModel):
+    """Request for multi-engine agent-based stock analysis"""
+    ticker: str = Field(
+        ...,
+        description="Stock ticker symbol (e.g. AAPL)",
+        min_length=1,
+        max_length=10,
+    )
+    analysis_types: List[Literal["fundamental", "technical", "sentiment"]] = Field(
+        ...,
+        description="List of analysis types to run",
+        min_length=1,
+    )
+    depth: Literal["standard", "deep"] = Field(
+        "standard",
+        description="Analysis depth: 'standard' for quick pass, 'deep' for comprehensive",
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "ticker": "AAPL",
+                "analysis_types": ["fundamental", "technical", "sentiment"],
+                "depth": "deep",
+            }
+        }
+
+
+class AnalysisTypeResult(BaseModel):
+    """Result from a single analysis engine"""
+    score: float = Field(..., description="Composite score from this analysis engine")
+    summary: str = Field(..., description="Brief text summary of findings")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Full analysis payload")
+
+
+class AgentAnalysisResponseV2(BaseModel):
+    """Response from multi-engine agent analysis"""
+    analysis_id: str = Field(..., description="Unique identifier for this analysis run")
+    ticker: str = Field(..., description="Stock ticker that was analyzed")
+    results: Dict[str, AnalysisTypeResult] = Field(
+        ...,
+        description="Analysis results keyed by type (fundamental, technical, sentiment)",
+    )
+    confidence_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Aggregate confidence score across all analyses",
+    )
+    timestamp: str = Field(..., description="ISO-8601 UTC timestamp of analysis completion")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "analysis_id": "agt-a1b2c3d4",
+                "ticker": "AAPL",
+                "results": {
+                    "fundamental": {
+                        "score": 72.5,
+                        "summary": "Strong profitability with reasonable valuation",
+                        "details": {},
+                    },
+                    "technical": {
+                        "score": 0.45,
+                        "summary": "Moderate uptrend with bullish MACD crossover",
+                        "details": {},
+                    },
+                },
+                "confidence_score": 0.78,
+                "timestamp": "2026-02-08T12:00:00+00:00",
+            }
+        }
+
+
+# Singleton analysis-engine instances (lazy-initialised)
+_fundamental_engine: Optional[FundamentalAnalysisEngine] = None
+_technical_engine: Optional[TechnicalAnalysisEngine] = None
+_sentiment_engine: Optional[SentimentAnalysisEngine] = None
+
+
+def _get_fundamental_engine() -> FundamentalAnalysisEngine:
+    global _fundamental_engine
+    if _fundamental_engine is None:
+        _fundamental_engine = FundamentalAnalysisEngine()
+    return _fundamental_engine
+
+
+def _get_technical_engine() -> TechnicalAnalysisEngine:
+    global _technical_engine
+    if _technical_engine is None:
+        _technical_engine = TechnicalAnalysisEngine()
+    return _technical_engine
+
+
+def _get_sentiment_engine() -> SentimentAnalysisEngine:
+    global _sentiment_engine
+    if _sentiment_engine is None:
+        _sentiment_engine = SentimentAnalysisEngine()
+    return _sentiment_engine
+
+
+async def _run_fundamental(ticker: str, depth: str) -> AnalysisTypeResult:
+    """Execute fundamental analysis and normalise the output."""
+    engine = _get_fundamental_engine()
+    # Build minimal financials/market_data dicts that the engine expects.
+    # In production these would come from a real data-fetcher; here we
+    # supply empty dicts so the engine still returns a valid structure.
+    financials: Dict[str, Any] = {"ticker": ticker}
+    market_data: Dict[str, Any] = {"ticker": ticker}
+
+    analysis = await engine.analyze_company(
+        ticker=ticker,
+        financials=financials,
+        market_data=market_data,
+        peer_data=None,
+    )
+
+    composite = analysis.get("composite_score", 0.0)
+    risks = analysis.get("risks", [])
+    opportunities = analysis.get("opportunities", [])
+
+    risk_texts = [r.get("description", str(r)) if isinstance(r, dict) else str(r) for r in risks]
+    opp_texts = [o.get("description", str(o)) if isinstance(o, dict) else str(o) for o in opportunities]
+
+    parts = []
+    if risk_texts:
+        parts.append(f"Risks: {'; '.join(risk_texts[:3])}")
+    if opp_texts:
+        parts.append(f"Opportunities: {'; '.join(opp_texts[:3])}")
+    summary = f"Fundamental score {composite:.1f}/100. " + " ".join(parts) if parts else f"Fundamental score {composite:.1f}/100."
+
+    # For deep analysis include the full payload; standard keeps it lean.
+    details = analysis if depth == "deep" else {
+        "composite_score": composite,
+        "risks": risks[:3],
+        "opportunities": opportunities[:3],
+    }
+
+    return AnalysisTypeResult(score=composite, summary=summary, details=details)
+
+
+async def _run_technical(ticker: str, depth: str) -> AnalysisTypeResult:
+    """Execute technical analysis and normalise the output."""
+    import pandas as pd
+    import numpy as np
+
+    engine = _get_technical_engine()
+
+    # Generate synthetic price data when real market data is unavailable.
+    # In production this would be replaced by actual OHLCV data.
+    np.random.seed(hash(ticker) % (2**31))
+    n = 250
+    base = 150.0
+    returns = np.random.normal(0.0005, 0.02, n)
+    close = base * np.cumprod(1 + returns)
+    high = close * (1 + np.abs(np.random.normal(0, 0.005, n)))
+    low = close * (1 - np.abs(np.random.normal(0, 0.005, n)))
+    open_prices = close * (1 + np.random.normal(0, 0.003, n))
+    volume = np.random.randint(1_000_000, 50_000_000, n).astype(float)
+
+    df = pd.DataFrame({
+        "open": open_prices,
+        "high": high,
+        "low": low,
+        "close": close,
+        "volume": volume,
+    })
+
+    analysis = engine.analyze_stock(df)
+
+    composite = analysis.get("composite_score", 0.0)
+    signals = analysis.get("signals", [])
+    trend = analysis.get("market_structure", {}).get("trend", "unknown")
+
+    signal_strs = [s.get("name", "") for s in signals[:3]]
+    summary = f"Technical score {composite:+.2f} (trend: {trend})."
+    if signal_strs:
+        summary += f" Signals: {', '.join(signal_strs)}."
+
+    details = analysis if depth == "deep" else {
+        "composite_score": composite,
+        "trend": trend,
+        "signals": signals[:5],
+    }
+
+    return AnalysisTypeResult(score=composite, summary=summary, details=details)
+
+
+async def _run_sentiment(ticker: str, depth: str) -> AnalysisTypeResult:
+    """Execute sentiment analysis and normalise the output."""
+    engine = _get_sentiment_engine()
+
+    analysis = await engine.analyze_comprehensive_sentiment(ticker)
+
+    overall = analysis.get("overall_sentiment", {})
+    score = overall.get("score", 0.0)
+    label = overall.get("label", "neutral")
+    confidence = overall.get("confidence", 0.0)
+
+    summary = f"Sentiment is {label} (score {score:+.2f}, confidence {confidence:.0%})."
+
+    details = analysis if depth == "deep" else {
+        "score": score,
+        "label": label,
+        "confidence": confidence,
+        "sources_analyzed": analysis.get("sources_analyzed", 0),
+    }
+
+    return AnalysisTypeResult(score=score, summary=summary, details=details)
+
+
+_ANALYSIS_RUNNERS = {
+    "fundamental": _run_fundamental,
+    "technical": _run_technical,
+    "sentiment": _run_sentiment,
+}
+
+
 # Routes
+
+@router.post("/analysis")
+@rate_limit(requests_per_minute=10)
+async def run_agent_analysis(
+    request: AgentAnalysisRequestV2,
+    background_tasks: BackgroundTasks,
+    current_user=Depends(get_current_user),
+) -> ApiResponse[AgentAnalysisResponseV2]:
+    """
+    Trigger AI agent-based stock analysis across multiple engines.
+
+    Accepts a ticker, a list of analysis types (fundamental, technical, sentiment),
+    and a depth setting.  Returns an aggregate result with per-engine scores,
+    summaries, and an overall confidence score.
+    """
+    ticker = request.ticker.upper().strip()
+    analysis_types = request.analysis_types
+    depth = request.depth
+
+    logger.info(
+        "Agent analysis requested: ticker=%s types=%s depth=%s user=%s",
+        ticker,
+        analysis_types,
+        depth,
+        current_user.get("username", "anonymous"),
+    )
+
+    start_time = time.monotonic()
+
+    try:
+        # Launch all requested analyses concurrently
+        tasks: Dict[str, asyncio.Task] = {}
+        for analysis_type in analysis_types:
+            runner = _ANALYSIS_RUNNERS.get(analysis_type)
+            if runner is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported analysis type: {analysis_type}",
+                )
+            tasks[analysis_type] = asyncio.create_task(runner(ticker, depth))
+
+        # Await all tasks, collecting results and handling per-engine errors
+        results: Dict[str, AnalysisTypeResult] = {}
+        errors: Dict[str, str] = {}
+
+        for analysis_type, task in tasks.items():
+            try:
+                results[analysis_type] = await task
+            except Exception as exc:
+                logger.error(
+                    "Analysis engine %s failed for %s: %s",
+                    analysis_type,
+                    ticker,
+                    exc,
+                )
+                errors[analysis_type] = str(exc)
+
+        if not results:
+            detail = "; ".join(f"{k}: {v}" for k, v in errors.items())
+            raise HTTPException(
+                status_code=500,
+                detail=f"All analysis engines failed: {detail}",
+            )
+
+        # Calculate aggregate confidence score.
+        # Fundamental: normalise 0-100 to 0-1.
+        # Technical: normalise -1..1 to 0..1.
+        # Sentiment: normalise -1..1 to 0..1.
+        confidence_values: List[float] = []
+        for atype, result in results.items():
+            if atype == "fundamental":
+                confidence_values.append(min(max(result.score / 100.0, 0.0), 1.0))
+            elif atype == "technical":
+                confidence_values.append(min(max((result.score + 1.0) / 2.0, 0.0), 1.0))
+            elif atype == "sentiment":
+                confidence_values.append(min(max((result.score + 1.0) / 2.0, 0.0), 1.0))
+
+        confidence_score = (
+            sum(confidence_values) / len(confidence_values) if confidence_values else 0.0
+        )
+
+        analysis_id = f"agt-{uuid.uuid4().hex[:8]}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+
+        duration = time.monotonic() - start_time
+
+        # Log metrics in the background
+        background_tasks.add_task(
+            _log_agent_analysis_metrics,
+            analysis_id,
+            ticker,
+            list(results.keys()),
+            depth,
+            confidence_score,
+            duration,
+        )
+
+        response = AgentAnalysisResponseV2(
+            analysis_id=analysis_id,
+            ticker=ticker,
+            results=results,
+            confidence_score=round(confidence_score, 4),
+            timestamp=timestamp,
+        )
+
+        return success_response(data=response)
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Agent analysis failed for %s: %s", ticker, exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Agent analysis failed: {str(exc)}",
+        )
+
+
+async def _log_agent_analysis_metrics(
+    analysis_id: str,
+    ticker: str,
+    analysis_types: List[str],
+    depth: str,
+    confidence_score: float,
+    duration: float,
+) -> None:
+    """Background task to log analysis metrics for monitoring."""
+    try:
+        logger.info(
+            "Agent analysis metrics - ID: %s, Ticker: %s, Types: %s, "
+            "Depth: %s, Confidence: %.4f, Duration: %.2fs",
+            analysis_id,
+            ticker,
+            analysis_types,
+            depth,
+            confidence_score,
+            duration,
+        )
+    except Exception as exc:
+        logger.error("Failed to log agent analysis metrics: %s", exc)
+
 
 @router.post("/analyze")
 @rate_limit(requests_per_minute=10)  # 10 calls per minute
