@@ -38,9 +38,10 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 - **Cost Optimized**: Designed to run under $50/month using free API tiers
 - **Fully Automated**: Daily analysis without manual intervention
 - **Compliance Ready**: GDPR and SEC 2025 compliant architecture
-- **Multi-Agent AI**: 134 specialized AI agents for various tasks
+- **Multi-Agent AI**: 121 specialized AI agents for various tasks
 - **Scalable**: Handles 6,000+ stocks with intelligent caching
 - **Performance Optimized**: Quick Wins implemented for 60-80% improvement
+- **Security Hardened**: CSRF protection, rate limiting, auth gates, SSL enforcement, timezone-aware UTC across 115+ files
 
 ---
 
@@ -48,27 +49,27 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 
 ```
 investment-analysis-platform/
-├── backend/                    # FastAPI backend (32 directories)
+├── backend/                    # FastAPI backend (31 directories)
 │   ├── api/                    # REST API endpoints (17 routers, 144 endpoints)
 │   ├── models/                 # SQLAlchemy ORM models
-│   ├── ml/                     # ML pipeline (22 modules)
-│   ├── etl/                    # ETL processors (17 modules)
-│   ├── tasks/                  # Celery task queue (9 modules)
-│   ├── utils/                  # Utilities (91 modules)
+│   ├── ml/                     # ML pipeline (32 modules)
+│   ├── etl/                    # ETL processors (19 modules)
+│   ├── tasks/                  # Celery task queue (10 modules)
+│   ├── utils/                  # Utilities (89 modules)
 │   └── migrations/             # Alembic migrations
 ├── frontend/web/               # React application
 │   ├── src/components/         # UI components (30+ components)
-│   ├── src/pages/              # Page components (12+ pages)
+│   ├── src/pages/              # Page components (12 pages)
 │   ├── src/store/              # Redux state (6 slices)
 │   └── src/hooks/              # Custom hooks
 ├── data_pipelines/airflow/     # Apache Airflow DAGs
 ├── infrastructure/             # Docker, monitoring configs
 ├── ml_models/                  # Trained ML model artifacts
-├── scripts/                    # Automation scripts (72 files)
+├── scripts/                    # Automation scripts (149 files)
 ├── .claude/                    # AI Agent framework
-│   ├── agents/                 # 134 AI agents
-│   ├── skills/                 # 71 skills
-│   ├── commands/               # 175+ commands
+│   ├── agents/                 # 121 AI agents
+│   ├── skills/                 # 104 skills
+│   ├── commands/               # 174 commands
 │   └── rules/                  # 8 coding rules
 └── .github/workflows/          # CI/CD (28 workflows)
 ```
@@ -89,7 +90,7 @@ investment-analysis-platform/
 | **ML/AI** | PyTorch 2.4, XGBoost 2.1, Prophet 1.1.5, FinBERT |
 | **Monitoring** | Prometheus, Grafana 10.2, AlertManager |
 | **Containerization** | Docker 7.1, docker-compose |
-| **Security** | 20+ modules (CSRF, rate limiting, injection prevention, RBAC) |
+| **Security** | 23 modules (CSRF, rate limiting, injection prevention, RBAC, SSL enforcement) |
 | **CI/CD** | GitHub Actions (28 workflows) |
 
 ---
@@ -250,11 +251,29 @@ pytest -m "integration" # Integration tests
 pytest -m "financial"   # Financial model tests
 ```
 
+### Test Suites
+
+The project includes 10 new integration and security test suites added in the Wave 5-6 hardening:
+
+| Suite | Location |
+|-------|----------|
+| Analysis Router | `backend/tests/integration/test_analysis_router.py` |
+| Auth Flow | `backend/tests/integration/test_auth_flow_complete.py` |
+| Health Router | `backend/tests/integration/test_health_router.py` |
+| News Router | `backend/tests/integration/test_news_router.py` |
+| Recommendations Router | `backend/tests/integration/test_recommendations_router.py` |
+| Settings Router | `backend/tests/integration/test_settings_router.py` |
+| Stocks Router | `backend/tests/integration/test_stocks_router.py` |
+| WebSocket Router | `backend/tests/integration/test_websocket_router.py` |
+| Rate Limiter | `backend/tests/security/test_rate_limiter.py` |
+| Security Modules | `backend/tests/security/test_security_modules.py` |
+
 ### Coverage Status (as of Queen Audit, 2026-02-08)
 - Backend test coverage: ~60% (target: 80%)
 - Frontend test coverage: ~5% (target: 80%)
 - Integration test pass rate: 39.5% (target: 90%)
 - Router test coverage: 10/17 routers covered
+- CI/CD pipelines report coverage per test suite with Codecov integration
 - See [Queen Audit Report](docs/QUEEN_AUDIT_MASTER_REPORT.md) for full metrics
 
 ---
@@ -296,9 +315,9 @@ The platform integrates a sophisticated multi-agent AI system:
 ### Statistics
 | Category | Count |
 |----------|-------|
-| AI Agents | 134 |
-| Skills | 71 |
-| Commands | 175+ |
+| AI Agents | 121 |
+| Skills | 104 |
+| Commands | 174 |
 | Helper Scripts | 32 |
 
 ### Primary Swarms
@@ -364,10 +383,9 @@ Designed to operate under **$50/month**:
 |----------|-------------|
 | [Queen Audit Report](docs/QUEEN_AUDIT_MASTER_REPORT.md) | 30-agent audit with grades, metrics, and roadmap |
 | [CLAUDE.md](CLAUDE.md) | Development guidelines & agent framework |
-| [TODO.md](TODO.md) | Project task tracking |
-| [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) | Detailed status report |
-| [ML_QUICKSTART.md](ML_QUICKSTART.md) | ML quick start guide |
-| [ML_PIPELINE_DOCUMENTATION.md](ML_PIPELINE_DOCUMENTATION.md) | ML technical reference |
+| [Implementation Status](docs/IMPLEMENTATION_STATUS.md) | Detailed status report |
+| [ML Quickstart](docs/ml/ML_QUICKSTART.md) | ML quick start guide |
+| [ML Pipeline Docs](docs/ml/ML_PIPELINE_DOCUMENTATION.md) | ML technical reference |
 | [/docs](http://localhost:8000/docs) | Interactive API documentation |
 
 ---
@@ -383,7 +401,7 @@ Designed to operate under **$50/month**:
 ### Code Standards
 - Python: Black (88 chars), isort, mypy, flake8
 - TypeScript: ESLint, Prettier
-- Test coverage: 85% minimum
+- Test coverage: 80% minimum
 - Conventional commits
 
 ---

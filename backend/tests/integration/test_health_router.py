@@ -7,6 +7,7 @@ Redis) are mocked so the test suite is self-contained.
 """
 
 import contextlib
+from typing import Optional
 
 import pytest
 from datetime import datetime
@@ -21,7 +22,7 @@ pytestmark = pytest.mark.integration
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _mock_redis_client(*, ping_ok: bool = True, info: dict | None = None):
+def _mock_redis_client(*, ping_ok: bool = True, info: Optional[dict] = None):
     """Return a mock Redis client with configurable behaviour."""
     client = MagicMock()
     if ping_ok:

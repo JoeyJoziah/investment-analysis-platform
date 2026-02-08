@@ -1,8 +1,8 @@
 # Investment Analysis Platform - Codebase Architecture Map
 
 **Last Updated:** 2026-02-08
-**Version:** 2.0.0
-**Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings.
+**Version:** 2.1.0
+**Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings. Updated post-30-agent Queen Audit.
 
 ---
 
@@ -24,8 +24,8 @@
 The Investment Analysis Platform is a full-stack financial analytics application:
 - **Backend**: FastAPI (Python) with async PostgreSQL via SQLAlchemy + asyncpg, plus a legacy synchronous SQLAlchemy layer
 - **Frontend**: React + TypeScript with Redux Toolkit state management and Material UI
-- **Architecture**: Layered domain-driven design with an 11-layer security middleware stack
-- **Key Features**: Real-time stock analysis, ML predictions, portfolio management, investment thesis generation, background task scheduling
+- **Architecture**: Layered domain-driven design with an 11-layer security middleware stack, timezone-aware UTC throughout
+- **Key Features**: Real-time stock analysis, ML predictions, portfolio management, investment thesis generation, background task scheduling, GDPR/SEC compliance, Kafka streaming
 
 ---
 
@@ -45,7 +45,7 @@ The FastAPI app is created with a `lifespan` context manager that initializes, i
 
 Additional middleware added after security stack:
 - `PrometheusMiddleware` -- Prometheus metrics collection
-- `CacheControlMiddleware` -- HTTP cache-control headers (excludes `/api/auth/`, `/api/admin/`, `/api/ws/`, `/api/metrics`)
+- `CacheControlMiddleware` -- HTTP cache-control headers (excludes `/api/v1/auth/`, `/api/v1/admin/`, `/api/v1/ws/`, `/api/v1/metrics`)
 - `V1DeprecationMiddleware` -- V1 API deprecation warnings (disabled during testing)
 
 Standardized error handlers are registered via `backend/middleware/error_handler.py`.
@@ -75,29 +75,29 @@ backend/api/routers/
 
 #### 17 Routers Mounted in `main.py`
 
-The following 16 routers from `backend/api/routers/` plus 1 from `backend/api/versioning.py` are actually included:
+The following 16 routers from `backend/api/routers/` plus 1 from `backend/api/versioning.py` are actually included. All API routers (except health) use the `/api/v1/` versioned prefix:
 
 | # | Router | Prefix (as mounted) | Tags | Notes |
 |---|--------|---------------------|------|-------|
-| 1 | `health.router` | `/api/health` | health | |
-| 2 | `auth.router` | `/api/auth` | authentication | |
-| 3 | `stocks.router` | `/api/stocks` | stocks | |
-| 4 | `analysis.router` | `/api/analysis` | analysis | |
-| 5 | `recommendations.router` | `/api/recommendations` | recommendations | |
-| 6 | `portfolio.router` | `/api/portfolio` | portfolio | |
-| 7 | `websocket.router` | `/api/ws` | websocket | |
-| 8 | `admin.router` | `/api/admin` | admin | |
-| 9 | `agents.router` | `/api/agents` | agents | |
-| 10 | `cache_management.router` | `/api/cache` | cache | |
+| 1 | `health.router` | `/api/health` | health | Outside versioned prefix |
+| 2 | `auth.router` | `/api/v1/auth` | authentication | |
+| 3 | `stocks.router` | `/api/v1/stocks` | stocks | |
+| 4 | `analysis.router` | `/api/v1/analysis` | analysis | |
+| 5 | `recommendations.router` | `/api/v1/recommendations` | recommendations | |
+| 6 | `portfolio.router` | `/api/v1/portfolio` | portfolio | |
+| 7 | `websocket.router` | `/api/v1/ws` | websocket | |
+| 8 | `admin.router` | `/api/v1/admin` | admin | |
+| 9 | `agents.router` | `/api/v1/agents` | agents | |
+| 10 | `cache_management.router` | `/api/v1/cache` | cache | |
 | 11 | `gdpr.router` | `/api/v1` | gdpr | Router has no internal prefix |
-| 12 | `watchlist.router` | `/api` | watchlists | Router defines internal prefix `/watchlists` -> effective `/api/watchlists` |
-| 13 | `thesis.router` | `/api/v1` | investment-thesis | Router defines internal prefix `/thesis` -> effective `/api/v1/thesis` |
-| 14 | `news.router` | `/api/news` | news | |
-| 15 | `settings.router` | `/api/settings` | settings | |
-| 16 | `v1_migration_router` | `/api/admin/v1-migration` | v1-migration, admin | From `backend/api/versioning.py` |
+| 12 | `watchlist.router` | `/api/v1/watchlists` | watchlists | |
+| 13 | `thesis.router` | `/api/v1/thesis` | investment-thesis | |
+| 14 | `news.router` | `/api/v1/news` | news | |
+| 15 | `settings_router.router` | `/api/v1/settings` | settings | Imported as `settings_router` to avoid config clash |
+| 16 | `v1_migration_router` | `/api/v1/admin/v1-migration` | v1-migration, admin | Self-prefixed, from `backend/api/versioning.py` |
 | 17 | Root endpoint | `/` | -- | Returns API status JSON |
 
-Additional non-router endpoint: `GET /api/metrics` defined directly on the app, returns Prometheus metrics.
+Additional non-router endpoint: `GET /api/v1/metrics` defined directly on the app, returns Prometheus metrics.
 
 **Not mounted:** `monitoring.py` (defines its own prefix `/api/monitoring` internally but is not imported or included in `main.py`). Also not mounted: `stocks_legacy.py`.
 
@@ -278,6 +278,7 @@ backend/data_ingestion/
 backend/etl/
 ├── concurrent_processor.py              # Async concurrent processing
 ├── data_extractor.py                    # Primary data extractor
+├── data_extractor_original_backup.py    # Original extractor backup
 ├── data_extractor_unlimited.py          # Unlimited extraction variant
 ├── data_loader.py                       # Bulk insert with conflict handling
 ├── data_transformer.py                  # Normalization & derived fields
@@ -375,6 +376,124 @@ backend/middleware/
 ```
 backend/services/
 └── realtime_price_service.py  # Real-time price data service
+```
+
+### 11. Auth (`backend/auth/`)
+
+```
+backend/auth/
+├── oauth2.py               # OAuth2 password flow & token handling
+└── password_validator.py    # Password strength validation
+```
+
+### 12. Compliance (`backend/compliance/`)
+
+```
+backend/compliance/
+├── gdpr.py                 # GDPR data subject request handling
+└── sec.py                  # SEC regulatory compliance
+```
+
+### 13. Streaming (`backend/streaming/`)
+
+```
+backend/streaming/
+└── kafka_client.py         # Kafka event streaming client
+```
+
+### 14. Monitoring (`backend/monitoring/`)
+
+```
+backend/monitoring/
+├── alerting_system.py          # Alert rule management
+├── alertmanager_webhook.py     # Alertmanager webhook handler
+├── api_performance.py          # API performance tracking
+├── application_monitoring.py   # Application-level metrics
+├── auto_scaler.py              # Auto-scaling logic
+├── data_quality_dashboard.py   # Data quality visualization
+├── data_quality_metrics.py     # Data quality metric collection
+├── database_performance.py     # Database performance monitoring
+├── financial_monitoring.py     # Financial metric tracking
+├── health_checks.py            # Health check definitions
+├── health_system.py            # Health system coordination
+├── log_analysis.py             # Log analysis utilities
+├── metrics_collector.py        # Prometheus metrics collector
+├── real_time_alerts.py         # Real-time alert processing
+└── sla_tracker.py              # SLA compliance tracking
+```
+
+### 15. Test Suite (`backend/tests/`)
+
+```
+backend/tests/
+├── conftest.py                                # Shared test configuration & fixtures
+├── async_fixtures.py                          # Async test fixtures
+├── fixtures/
+│   ├── comprehensive_mock_fixtures.py         # Comprehensive mock data
+│   ├── integration_test_fixtures.py           # Integration test fixtures
+│   ├── market_data_fixtures.py                # Market data fixtures
+│   └── mock_api_fixtures.py                   # Mock API response fixtures
+├── integration/
+│   ├── test_agents_to_recommendations_flow.py # Agent -> recommendation pipeline
+│   ├── test_analysis_router.py                # Analysis router endpoints
+│   ├── test_auth_flow_complete.py             # Complete auth flow (login/register/refresh)
+│   ├── test_auth_to_portfolio_flow.py         # Auth -> portfolio access flow
+│   ├── test_domain_contracts.py               # Domain contract validation
+│   ├── test_gdpr_data_lifecycle.py            # GDPR data lifecycle flow
+│   ├── test_health_router.py                  # Health endpoint tests
+│   ├── test_news_router.py                    # News router endpoints
+│   ├── test_phase3_integration.py             # Phase 3 integration tests
+│   ├── test_recommendations_router.py         # Recommendations router endpoints
+│   ├── test_settings_router.py                # Settings router endpoints
+│   ├── test_stock_to_analysis_flow.py         # Stock -> analysis pipeline
+│   ├── test_stocks_router.py                  # Stocks router endpoints
+│   └── test_websocket_router.py               # WebSocket router tests
+├── middleware/
+│   ├── test_request_size_limiter.py           # Request size limit tests
+│   └── test_security_headers.py               # Security header tests
+├── security/
+│   ├── test_csrf_auth_integration.py          # CSRF + auth integration tests
+│   ├── test_csrf_protection.py                # CSRF protection unit tests
+│   ├── test_rate_limiter.py                   # Rate limiter tests
+│   └── test_security_modules.py               # Security module tests
+├── unit/                                      # Unit test directory
+├── test_admin_api.py                          # Admin API tests
+├── test_agents_api.py                         # Agents API tests
+├── test_api_integration.py                    # API integration tests
+├── test_bloom_filter.py                       # Bloom filter tests
+├── test_cache_decorator.py                    # Cache decorator tests
+├── test_cache_management_api.py               # Cache management API tests
+├── test_circuit_breaker.py                    # Circuit breaker tests
+├── test_cointegration.py                      # Cointegration analysis tests
+├── test_comprehensive_units.py                # Comprehensive unit tests
+├── test_data_pipeline_integration.py          # Data pipeline integration tests
+├── test_data_quality.py                       # Data quality tests
+├── test_database_integration.py               # Database integration tests
+├── test_dividend_analyzer.py                  # Dividend analyzer tests
+├── test_error_scenarios.py                    # Error scenario tests
+├── test_financial_model_validation.py         # Financial model validation
+├── test_gdpr_api.py                           # GDPR API tests
+├── test_integration.py                        # General integration tests
+├── test_integration_comprehensive.py          # Comprehensive integration tests
+├── test_ml_performance.py                     # ML performance tests
+├── test_ml_pipeline.py                        # ML pipeline tests
+├── test_monitoring_api.py                     # Monitoring API tests
+├── test_n1_query_fix.py                       # N+1 query fix tests
+├── test_performance_load.py                   # Performance load tests
+├── test_performance_optimizations.py          # Performance optimization tests
+├── test_portfolio_optimizer.py                # Portfolio optimizer tests
+├── test_rate_limiting.py                      # Rate limiting tests
+├── test_recommendation_engine.py              # Recommendation engine tests
+├── test_resilience_integration.py             # Resilience integration tests
+├── test_risk_manager.py                       # Risk manager tests
+├── test_security_compliance.py                # Security compliance tests
+├── test_security_integration.py               # Security integration tests
+├── test_simple_async.py                       # Simple async tests
+├── test_thesis_api.py                         # Thesis API tests
+├── test_watchlist.py                          # Watchlist tests
+├── test_websocket_integration.py              # WebSocket integration tests
+├── benchmark_n1_query_fix.py                  # N+1 query benchmark
+└── locustfile.py                              # Locust load testing config
 ```
 
 ---
@@ -495,7 +614,7 @@ JSON serialization
 ### 2. WebSocket Connection
 
 ```
-/api/ws/stocks/{ticker}
+/api/v1/ws/stocks/{ticker}
     | Price updates streamed to client
     | WebSocketIndicator component shows connection status
     | Cleanup task runs periodically to prune stale connections
@@ -518,7 +637,7 @@ Cache monitoring dashboard available via `backend/utils/cache_monitoring.py`. Da
 
 `backend/api/versioning.py` provides:
 - `V1DeprecationMiddleware` -- Detects V1 requests (via URL path, header, or query param), adds deprecation warnings, tracks usage, supports optional auto-redirect to V2
-- `v1_migration_router` -- Admin endpoints at `/api/admin/v1-migration/` for monitoring migration progress (`/metrics`, `/clients`, `/endpoint-mapping`, `/version-info`)
+- `v1_migration_router` -- Admin endpoints at `/api/v1/admin/v1-migration/` for monitoring migration progress (`/metrics`, `/clients`, `/endpoint-mapping`, `/version-info`)
 
 ---
 
@@ -666,7 +785,7 @@ Security middleware is assembled in `add_comprehensive_security_middleware()` as
 
 ```
 FastAPI Application (main.py)
-+-- api/routers/ (17 routers)
++-- api/routers/ (16 routers, all at /api/v1/ except health at /api/health)
 |   +-- auth.py --> security/jwt_manager.py, security/security_config.py, models/tables.py
 |   +-- stocks.py --> repositories/stock_repository.py, data_ingestion/, utils/api_cache_decorators.py
 |   +-- recommendations.py --> analytics/recommendation_engine_optimized.py, repositories/
@@ -676,15 +795,21 @@ FastAPI Application (main.py)
 |   +-- news.py, settings.py, watchlist.py, gdpr.py, admin.py, health.py, cache_management.py
 |   +-- websocket.py (WebSocket connections)
 |
-+-- security/ (middleware + utilities)
++-- security/ (middleware + utilities, 22 modules)
 |   +-- security_config.py (assembles middleware stack)
 |   +-- advanced_rate_limiter.py --> redis
 |   +-- audit_logging.py --> database
 |   +-- jwt_manager.py, csrf_protection.py, input_validation.py, injection_prevention.py
 |
++-- auth/ (OAuth2 flow, password validation)
++-- compliance/ (GDPR, SEC regulatory)
++-- streaming/ (Kafka event streaming)
++-- monitoring/ (15 modules: alerts, health, SLA, metrics, auto-scaling)
+|
 +-- config/
 |   +-- database.py (AsyncDatabaseManager, primary)
 |   +-- settings.py (environment configuration)
+|   +-- monitoring_config.py (monitoring configuration)
 |
 +-- utils/database.py (legacy sync engine, deprecated)
 |
@@ -728,6 +853,6 @@ React Application (App.tsx)
 
 ---
 
-**Document Version:** 2.0.0
+**Document Version:** 2.1.0
 **Last Updated:** 2026-02-08
-**Generated From:** Code inspection of actual source files
+**Generated From:** Code inspection of actual source files, verified post-Queen Audit
