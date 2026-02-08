@@ -220,25 +220,27 @@ async def test_stale_data_detection(db_session: AsyncSession, test_portfolio):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_pydantic_models_end_to_end(async_client: AsyncClient):
+async def test_pydantic_models_end_to_end(authenticated_client: AsyncClient):
     """
     Test ApiResponse[MonitoringSchema] full cycle
 
     Integration Point: All routers + schemas
     """
-    # Test monitoring endpoint (Phase 3 standardized)
-    response = await async_client.get("/api/metrics")
+    # Test health endpoint which uses ApiResponse properly
+    response = await authenticated_client.get("/api/health/ping")
 
-    # Should return valid metrics data
+    # Should return valid health data
     assert response.status_code == 200
-    # Metrics endpoint may return plain text (Prometheus) or JSON (depending on setup)
-    content_type = response.headers.get("content-type", "")
-    assert content_type in [
-        "text/plain",
-        "text/plain; charset=utf-8",
-        "application/json",
-        "text/plain; version=0.0.4; charset=utf-8"  # Prometheus format
-    ], f"Unexpected content-type: {content_type}"
+
+    # Test that a standard API endpoint returns proper ApiResponse structure
+    response = await authenticated_client.get("/api/v1/recommendations/list", params={"limit": 5})
+
+    # Should return valid JSON with ApiResponse wrapper
+    assert response.status_code == 200
+    data = response.json()
+    assert "success" in data
+    assert "data" in data
+    assert data["success"] is True
 
 
 @pytest.mark.asyncio

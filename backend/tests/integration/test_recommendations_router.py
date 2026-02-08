@@ -478,11 +478,11 @@ async def test_backtest_rejects_invalid_strategy(async_client: AsyncClient):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_trending_recommendations(async_client: AsyncClient):
+async def test_trending_recommendations(authenticated_client: AsyncClient):
     """
     Trending endpoint returns recommendations ranked by trending_score.
     """
-    response = await async_client.get(
+    response = await authenticated_client.get(
         "/api/v1/recommendations/trending", params={"timeframe": "24h"}
     )
     data = _unwrap(response)
@@ -496,11 +496,11 @@ async def test_trending_recommendations(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_trending_rejects_invalid_timeframe(async_client: AsyncClient):
+async def test_trending_rejects_invalid_timeframe(authenticated_client: AsyncClient):
     """
     An invalid timeframe value should produce a 422 validation error.
     """
-    response = await async_client.get(
+    response = await authenticated_client.get(
         "/api/v1/recommendations/trending", params={"timeframe": "99y"}
     )
     assert response.status_code == 422
