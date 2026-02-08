@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from typing import Optional, Dict, Any
@@ -58,9 +58,9 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -202,16 +202,15 @@ async def login(
         )
 
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = datetime.now(timezone.utc)
     await db.commit()
 
-    # Create token with proper fields for JWT manager
+    # Create token - use email as sub (consistent with get_current_user lookup)
     access_token = create_access_token(data={
-        "sub": str(user.id),  # User ID as subject (standard JWT claim)
+        "sub": user.email,
         "user_id": user.id,
         "email": user.email,
-        "username": user.email,  # Use email as username
-        "role": "user"  # Default role
+        "role": "user"
     })
     return success_response(data=Token(
         access_token=access_token,
@@ -234,16 +233,15 @@ async def login_alt(
         )
 
     # Update last login
-    db_user.last_login = datetime.utcnow()
+    db_user.last_login = datetime.now(timezone.utc)
     await db.commit()
 
-    # Create token with proper fields for JWT manager
+    # Create token - use email as sub (consistent with get_current_user lookup)
     access_token = create_access_token(data={
-        "sub": str(db_user.id),  # User ID as subject (standard JWT claim)
+        "sub": db_user.email,
         "user_id": db_user.id,
         "email": db_user.email,
-        "username": db_user.email,  # Use email as username
-        "role": "user"  # Default role
+        "role": "user"
     })
     return success_response(data=Token(
         access_token=access_token,
