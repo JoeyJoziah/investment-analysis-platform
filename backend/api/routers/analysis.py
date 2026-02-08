@@ -406,15 +406,18 @@ def generate_insights(analysis: Dict) -> List[str]:
     """Generate key insights from analysis"""
     insights = []
     
-    if analysis.get("technical", {}).get("rsi", 0) > 70:
+    rsi = analysis.get("technical", {}).get("rsi")
+    if rsi is not None and rsi > 70:
         insights.append("RSI indicates overbought conditions - potential pullback ahead")
-    elif analysis.get("technical", {}).get("rsi", 0) < 30:
+    elif rsi is not None and rsi < 30:
         insights.append("RSI indicates oversold conditions - potential bounce opportunity")
-    
-    if analysis.get("fundamental", {}).get("pe_ratio", 0) < 15:
+
+    pe_ratio = analysis.get("fundamental", {}).get("pe_ratio")
+    if pe_ratio is not None and pe_ratio < 15:
         insights.append("Stock appears undervalued based on P/E ratio")
-    
-    if analysis.get("sentiment", {}).get("overall_sentiment", 0) > 0.5:
+
+    overall_sentiment = analysis.get("sentiment", {}).get("overall_sentiment")
+    if overall_sentiment is not None and overall_sentiment > 0.5:
         insights.append("Strong positive sentiment detected in recent news and social media")
     
     if not insights:

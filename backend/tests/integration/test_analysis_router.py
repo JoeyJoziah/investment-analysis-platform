@@ -106,11 +106,12 @@ async def second_stock(db_session: AsyncSession, nasdaq_exchange, technology_sec
     return stock
 
 
-def _mock_technical_analyzer():
-    """Return a patched TechnicalAnalysisEngine.analyze that produces deterministic output."""
-    result = AsyncMock(return_value={
+def _mock_technical_analyzer_obj():
+    """Return a mock TechnicalAnalysisEngine with an async analyze method."""
+    mock_obj = MagicMock()
+    mock_obj.analyze = AsyncMock(return_value={
         "rsi": 55.0,
-        "macd": {"macd": 1.2, "signal": "neutral", "histogram": 0.3},
+        "macd": {"macd": 1.2, "signal_line": 0.9, "histogram": 0.3},
         "moving_averages": {"sma_20": 150.0, "sma_50": 148.0, "sma_200": 145.0},
         "bollinger_bands": {"upper": 155.0, "middle": 150.0, "lower": 145.0},
         "volume_analysis": {"current_volume": 50000000, "avg_volume": 45000000},
@@ -119,7 +120,7 @@ def _mock_technical_analyzer():
         "trend": "bullish",
         "volatility": 0.18,
     })
-    return result
+    return mock_obj
 
 
 # ---------------------------------------------------------------------------
@@ -138,8 +139,8 @@ async def test_analyze_stock_comprehensive_success(
     populated AnalysisResponse wrapped in ApiResponse.
     """
     with patch(
-        "backend.api.routers.analysis.technical_analyzer.analyze",
-        new=_mock_technical_analyzer(),
+        "backend.api.routers.analysis.technical_analyzer",
+        _mock_technical_analyzer_obj(),
     ), patch(
         "backend.api.routers.analysis.alpha_vantage_client",
         None,
@@ -192,8 +193,8 @@ async def test_analyze_stock_technical_only(
     technical field but fundamental and sentiment should be None.
     """
     with patch(
-        "backend.api.routers.analysis.technical_analyzer.analyze",
-        new=_mock_technical_analyzer(),
+        "backend.api.routers.analysis.technical_analyzer",
+        _mock_technical_analyzer_obj(),
     ), patch(
         "backend.api.routers.analysis.alpha_vantage_client", None,
     ), patch(
@@ -295,8 +296,8 @@ async def test_analyze_stock_symbol_uppercased(
     the casing provided by the client.
     """
     with patch(
-        "backend.api.routers.analysis.technical_analyzer.analyze",
-        new=_mock_technical_analyzer(),
+        "backend.api.routers.analysis.technical_analyzer",
+        _mock_technical_analyzer_obj(),
     ), patch(
         "backend.api.routers.analysis.alpha_vantage_client", None,
     ), patch(
@@ -331,8 +332,8 @@ async def test_analyze_stock_risk_metrics_with_price_data(
     calculated risk metrics rather than fallback values.
     """
     with patch(
-        "backend.api.routers.analysis.technical_analyzer.analyze",
-        new=_mock_technical_analyzer(),
+        "backend.api.routers.analysis.technical_analyzer",
+        _mock_technical_analyzer_obj(),
     ), patch(
         "backend.api.routers.analysis.alpha_vantage_client", None,
     ), patch(
