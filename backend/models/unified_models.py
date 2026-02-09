@@ -128,13 +128,13 @@ class User(Base):
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     
-    # Relationships
-    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
-    watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
-    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
-    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")
-    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
-    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan")
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    orders = relationship("Order", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    audit_logs = relationship("AuditLog", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     
     __table_args__ = (
         Index('idx_user_email_active', 'email', 'is_active'),
@@ -159,9 +159,9 @@ class UserSession(Base):
     last_activity = Column(DateTime, default=func.now())
     is_active = Column(Boolean, default=True)
     
-    # Relationship
-    user = relationship("User", back_populates="sessions")
-    
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="sessions", lazy="selectin")
+
     __table_args__ = (
         Index('idx_session_token', 'session_token'),
         Index('idx_session_user_active', 'user_id', 'is_active'),
@@ -174,57 +174,57 @@ class UserSession(Base):
 class Exchange(Base):
     """Stock exchanges"""
     __tablename__ = "exchanges"
-    
+
     id = Column(Integer, primary_key=True)
-    code = Column(String(10), unique=True, nullable=False)
+    code = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
     timezone = Column(String(50))
     country = Column(String(2))
     currency = Column(String(3))
-    
+
     # Trading hours
     market_open = Column(String(5))  # HH:MM format
     market_close = Column(String(5))  # HH:MM format
-    
-    # Relationships
-    stocks = relationship("Stock", back_populates="exchange")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    stocks = relationship("Stock", back_populates="exchange", lazy="selectin")
 
 class Sector(Base):
     """Market sectors"""
     __tablename__ = "sectors"
-    
+
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), unique=True, nullable=False)
+    name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(Text)
-    
-    # Relationships
-    stocks = relationship("Stock", back_populates="sector")
-    industries = relationship("Industry", back_populates="sector")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    stocks = relationship("Stock", back_populates="sector", lazy="selectin")
+    industries = relationship("Industry", back_populates="sector", lazy="selectin")
 
 class Industry(Base):
     """Industries within sectors"""
     __tablename__ = "industries"
-    
+
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), unique=True, nullable=False)
-    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=False)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=False, index=True)
     description = Column(Text)
-    
-    # Relationships
-    sector = relationship("Sector", back_populates="industries")
-    stocks = relationship("Stock", back_populates="industry")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    sector = relationship("Sector", back_populates="industries", lazy="selectin")
+    stocks = relationship("Stock", back_populates="industry", lazy="selectin")
 
 class Stock(Base):
     """Master stock table for all tickers"""
     __tablename__ = "stocks"
-    
+
     id = Column(Integer, primary_key=True)
     symbol = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False)
-    exchange_id = Column(Integer, ForeignKey("exchanges.id"), nullable=False)
-    sector_id = Column(Integer, ForeignKey("sectors.id"))
-    industry_id = Column(Integer, ForeignKey("industries.id"))
-    
+    exchange_id = Column(Integer, ForeignKey("exchanges.id"), nullable=False, index=True)
+    sector_id = Column(Integer, ForeignKey("sectors.id"), index=True)
+    industry_id = Column(Integer, ForeignKey("industries.id"), index=True)
+
     # Stock details
     asset_type = Column(String(20), default="stock")
     market_cap = Column(Float)
@@ -235,29 +235,29 @@ class Stock(Base):
     description = Column(Text)
     website = Column(String(255))
     logo_url = Column(String(500))
-    
+
     # Status
     is_active = Column(Boolean, default=True)
     is_tradable = Column(Boolean, default=True)
     is_delisted = Column(Boolean, default=False)
     delisted_date = Column(Date)
-    
+
     # Tracking
     last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
     last_price_update = Column(DateTime)
-    
-    # Relationships
-    exchange = relationship("Exchange", back_populates="stocks")
-    sector = relationship("Sector", back_populates="stocks")
-    industry = relationship("Industry", back_populates="stocks")
-    price_history = relationship("PriceHistory", back_populates="stock", cascade="all, delete-orphan")
-    fundamentals = relationship("Fundamentals", back_populates="stock", cascade="all, delete-orphan")
-    technical_indicators = relationship("TechnicalIndicators", back_populates="stock", cascade="all, delete-orphan")
-    news_sentiment = relationship("NewsSentiment", back_populates="stock", cascade="all, delete-orphan")
-    predictions = relationship("MLPrediction", back_populates="stock", cascade="all, delete-orphan")
-    recommendations = relationship("Recommendation", back_populates="stock", cascade="all, delete-orphan")
-    positions = relationship("Position", back_populates="stock")
-    watchlist_items = relationship("Watchlist", back_populates="stock")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    exchange = relationship("Exchange", back_populates="stocks", lazy="selectin")
+    sector = relationship("Sector", back_populates="stocks", lazy="selectin")
+    industry = relationship("Industry", back_populates="stocks", lazy="selectin")
+    price_history = relationship("PriceHistory", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    fundamentals = relationship("Fundamentals", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    technical_indicators = relationship("TechnicalIndicators", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    news_sentiment = relationship("NewsSentiment", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    predictions = relationship("MLPrediction", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    recommendations = relationship("Recommendation", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    positions = relationship("Position", back_populates="stock", lazy="selectin")
+    watchlist_items = relationship("Watchlist", back_populates="stock", lazy="selectin")
     
     __table_args__ = (
         Index('idx_stock_exchange_sector', 'exchange_id', 'sector_id'),
@@ -268,11 +268,11 @@ class Stock(Base):
 class PriceHistory(Base):
     """Historical price data (OHLCV)"""
     __tablename__ = "price_history"
-    
+
     id = Column(Integer, primary_key=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    date = Column(DateTime, nullable=False)
-    
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
+    date = Column(DateTime, nullable=False, index=True)
+
     # OHLCV data
     open = Column(DECIMAL(10, 4), nullable=False)
     high = Column(DECIMAL(10, 4), nullable=False)
@@ -280,14 +280,14 @@ class PriceHistory(Base):
     close = Column(DECIMAL(10, 4), nullable=False)
     adjusted_close = Column(DECIMAL(10, 4))
     volume = Column(BigInteger, nullable=False)
-    
+
     # Additional metrics
     intraday_volatility = Column(Float)
     typical_price = Column(DECIMAL(10, 4))  # (H+L+C)/3
     vwap = Column(DECIMAL(10, 4))  # Volume Weighted Average Price
-    
-    # Relationship
-    stock = relationship("Stock", back_populates="price_history")
+
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="price_history", lazy="selectin")
     
     __table_args__ = (
         UniqueConstraint('stock_id', 'date', name='uq_stock_date'),
@@ -352,9 +352,9 @@ class Fundamentals(Base):
     operating_margin = Column(Float)
     net_margin = Column(Float)
     
-    # Relationship
-    stock = relationship("Stock", back_populates="fundamentals")
-    
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="fundamentals", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('stock_id', 'period_date', 'period_type', name='uq_fundamentals'),
         Index('idx_fundamentals_period', 'period_date', 'period_type'),
@@ -419,9 +419,9 @@ class TechnicalIndicators(Base):
     pivot_point = Column(Float)
     trend_strength = Column(Float)
     
-    # Relationship
-    stock = relationship("Stock", back_populates="technical_indicators")
-    
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="technical_indicators", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('stock_id', 'date', name='uq_technical_indicators'),
         Index('idx_technical_date', 'date'),
@@ -468,9 +468,9 @@ class NewsSentiment(Base):
     entities = Column(JSON)
     topics = Column(JSON)
     
-    # Relationship
-    stock = relationship("Stock", back_populates="news_sentiment")
-    
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="news_sentiment", lazy="selectin")
+
     __table_args__ = (
         Index('idx_sentiment_date', 'published_at'),
         Index('idx_sentiment_stock_date', 'stock_id', 'published_at'),
@@ -524,9 +524,9 @@ class MLPrediction(Base):
     prediction_error = Column(Float)
     was_correct = Column(Boolean)
     
-    # Relationship
-    stock = relationship("Stock", back_populates="predictions")
-    
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="predictions", lazy="selectin")
+
     __table_args__ = (
         Index('idx_prediction_date', 'prediction_date'),
         Index('idx_prediction_target', 'target_date'),
@@ -537,25 +537,25 @@ class MLPrediction(Base):
 class Recommendation(Base):
     """Final investment recommendations"""
     __tablename__ = "recommendations"
-    
+
     id = Column(Integer, primary_key=True)
     recommendation_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    created_at = Column(DateTime, default=func.now())
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=func.now(), index=True)
     valid_until = Column(DateTime)
-    
+
     # Recommendation
     action = Column(String(20), nullable=False)  # strong_buy, buy, hold, sell, strong_sell
     confidence = Column(Float, nullable=False)
     priority = Column(Integer)  # 1-10
-    
+
     # Price targets
     entry_price = Column(DECIMAL(10, 4))
     target_price = Column(DECIMAL(10, 4))
     stop_loss = Column(DECIMAL(10, 4))
     expected_return = Column(Float)
     time_horizon_days = Column(Integer)
-    
+
     # Risk metrics
     risk_score = Column(Float)
     risk_level = Column(String(20))  # low, medium, high
@@ -563,7 +563,7 @@ class Recommendation(Base):
     beta = Column(Float)
     sharpe_ratio = Column(Float)
     max_drawdown = Column(Float)
-    
+
     # Analysis scores
     technical_score = Column(Float)
     fundamental_score = Column(Float)
@@ -571,14 +571,14 @@ class Recommendation(Base):
     macro_score = Column(Float)
     alternative_score = Column(Float)
     overall_score = Column(Float)
-    
+
     # Explanation
     reasoning = Column(Text)
     key_factors = Column(JSON)
     risks = Column(JSON)
     opportunities = Column(JSON)
     catalysts = Column(JSON)
-    
+
     # Performance tracking
     is_active = Column(Boolean, default=True)
     actual_return = Column(Float)
@@ -586,9 +586,9 @@ class Recommendation(Base):
     max_loss = Column(Float)
     outcome = Column(String(20))  # success, partial, failure
     closed_at = Column(DateTime)
-    
-    # Relationship
-    stock = relationship("Stock", back_populates="recommendations")
+
+    # Relationship - use selectin to prevent MissingGreenlet in async
+    stock = relationship("Stock", back_populates="recommendations", lazy="selectin")
     
     __table_args__ = (
         Index('idx_recommendation_created', 'created_at'),
@@ -609,7 +609,7 @@ class Portfolio(Base):
 
     id = Column(Integer, primary_key=True)
     portfolio_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
 
@@ -628,7 +628,7 @@ class Portfolio(Base):
     cash_balance = Column(DECIMAL(20, 2), default=0.0)
     invested_value = Column(DECIMAL(20, 2), default=0.0)
     total_cost_basis = Column(DECIMAL(20, 2), default=0.0)
-    
+
     # Performance
     total_return = Column(DECIMAL(20, 2), default=0.0)
     total_return_pct = Column(Float, default=0.0)
@@ -636,23 +636,23 @@ class Portfolio(Base):
     weekly_return = Column(Float)
     monthly_return = Column(Float)
     yearly_return = Column(Float)
-    
+
     # Risk metrics
     volatility = Column(Float)
     sharpe_ratio = Column(Float)
     max_drawdown = Column(Float)
     beta = Column(Float)
-    
+
     # Timestamps
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     last_rebalanced = Column(DateTime)
-    
-    # Relationships
-    user = relationship("User", back_populates="portfolios")
-    positions = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan")
-    transactions = relationship("Transaction", back_populates="portfolio", cascade="all, delete-orphan")
-    orders = relationship("Order", back_populates="portfolio")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="portfolios", lazy="selectin")
+    positions = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan", lazy="selectin")
+    transactions = relationship("Transaction", back_populates="portfolio", cascade="all, delete-orphan", lazy="selectin")
+    orders = relationship("Order", back_populates="portfolio", lazy="selectin")
     
     __table_args__ = (
         UniqueConstraint('user_id', 'name', name='uq_user_portfolio'),
@@ -664,8 +664,8 @@ class Position(Base):
     __tablename__ = "positions"
 
     id = Column(Integer, primary_key=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
 
     # Optimistic locking
     version = Column(Integer, default=1, nullable=False, server_default='1')
@@ -674,32 +674,32 @@ class Position(Base):
     quantity = Column(DECIMAL(15, 6), nullable=False)
     avg_cost_basis = Column(DECIMAL(10, 4), nullable=False)
     total_cost_basis = Column(DECIMAL(20, 2))
-    
+
     # Current values
     current_price = Column(DECIMAL(10, 4))
     market_value = Column(DECIMAL(20, 2))
-    
+
     # Performance
     unrealized_gain_loss = Column(DECIMAL(20, 2))
     unrealized_gain_loss_pct = Column(Float)
     realized_gain_loss = Column(DECIMAL(20, 2))
     total_gain_loss = Column(DECIMAL(20, 2))
-    
+
     # Position metrics
     weight = Column(Float)  # Portfolio weight percentage
     target_weight = Column(Float)
-    
+
     # Dates
     first_purchase_date = Column(DateTime)
     last_transaction_date = Column(DateTime)
-    
+
     # Timestamps
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
-    # Relationships
-    portfolio = relationship("Portfolio", back_populates="positions")
-    stock = relationship("Stock", back_populates="positions")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    portfolio = relationship("Portfolio", back_populates="positions", lazy="selectin")
+    stock = relationship("Stock", back_populates="positions", lazy="selectin")
     
     __table_args__ = (
         UniqueConstraint('portfolio_id', 'stock_id', name='uq_portfolio_stock'),
@@ -709,36 +709,36 @@ class Position(Base):
 class Transaction(Base):
     """Transaction history"""
     __tablename__ = "transactions"
-    
+
     id = Column(Integer, primary_key=True)
     transaction_id = Column(String(36), default=lambda: str(uuid.uuid4()), unique=True)
-    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
-    
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
+
     # Transaction details
     transaction_type = Column(String(10), nullable=False)  # buy, sell
     quantity = Column(DECIMAL(15, 6), nullable=False)
     price = Column(DECIMAL(10, 4), nullable=False)
     total_amount = Column(DECIMAL(20, 2), nullable=False)
-    
+
     # Fees
     commission = Column(DECIMAL(10, 2), default=0)
     fees = Column(DECIMAL(10, 2), default=0)
     tax = Column(DECIMAL(10, 2), default=0)
-    
+
     # Settlement
     trade_date = Column(DateTime, nullable=False)
     settlement_date = Column(DateTime)
-    
+
     # Notes
     notes = Column(Text)
     order_id = Column(Integer, ForeignKey("orders.id"))
-    
+
     # Timestamps
     created_at = Column(DateTime, default=func.now())
-    
-    # Relationships
-    portfolio = relationship("Portfolio", back_populates="transactions")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    portfolio = relationship("Portfolio", back_populates="transactions", lazy="selectin")
     
     __table_args__ = (
         Index('idx_transaction_portfolio', 'portfolio_id'),
@@ -785,9 +785,9 @@ class Order(Base):
     rejection_reason = Column(Text)
     error_message = Column(Text)
     
-    # Relationships
-    user = relationship("User", back_populates="orders")
-    portfolio = relationship("Portfolio", back_populates="orders")
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="orders", lazy="selectin")
+    portfolio = relationship("Portfolio", back_populates="orders", lazy="selectin")
     
     __table_args__ = (
         Index('idx_order_user', 'user_id'),
@@ -804,8 +804,8 @@ class Watchlist(Base):
     __tablename__ = "watchlists"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
     name = Column(String(100))
     is_public = Column(Boolean, default=False)
 
@@ -814,17 +814,17 @@ class Watchlist(Base):
     notes = Column(Text)
     tags = Column(JSON)
     priority = Column(Integer, default=0)
-    
+
     # Price tracking
     target_price = Column(DECIMAL(10, 4))
     stop_loss = Column(DECIMAL(10, 4))
-    
+
     # Alerts
     alert_rules = Column(JSON)
-    
-    # Relationships
-    user = relationship("User", back_populates="watchlists")
-    stock = relationship("Stock", back_populates="watchlist_items")
+
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="watchlists", lazy="selectin")
+    stock = relationship("Stock", back_populates="watchlist_items", lazy="selectin")
     
     __table_args__ = (
         UniqueConstraint('user_id', 'stock_id', 'name', name='uq_user_watchlist'),
@@ -861,9 +861,9 @@ class Alert(Base):
     created_at = Column(DateTime, default=func.now())
     expires_at = Column(DateTime)
     
-    # Relationships
-    user = relationship("User", back_populates="alerts")
-    
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="alerts", lazy="selectin")
+
     __table_args__ = (
         Index('idx_alert_user_active', 'user_id', 'is_active'),
         Index('idx_alert_type', 'alert_type'),
@@ -929,9 +929,9 @@ class AuditLog(Base):
     # Timestamp
     created_at = Column(DateTime, default=func.now())
     
-    # Relationships
-    user = relationship("User", back_populates="audit_logs")
-    
+    # Relationships - use selectin to prevent MissingGreenlet in async
+    user = relationship("User", back_populates="audit_logs", lazy="selectin")
+
     __table_args__ = (
         Index('idx_audit_user', 'user_id'),
         Index('idx_audit_action', 'action'),
