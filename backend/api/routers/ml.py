@@ -28,6 +28,7 @@ from backend.ml.model_manager import get_model_manager, ModelManager
 from backend.models.api_response import ApiResponse, success_response
 from backend.models.unified_models import User
 from backend.utils.cache import get_redis, CacheManager
+from backend.utils.numpy_serializer import sanitize_numpy
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,9 @@ def _generate_prediction_points(
     # Normalize raw predictions into a list of floats
     predicted_prices: List[float] = []
 
+    # First sanitize numpy types in raw predictions
+    raw_predictions = sanitize_numpy(raw_predictions)
+
     if isinstance(raw_predictions, dict):
         # Prophet returns list of dicts with yhat / yhat_lower / yhat_upper
         if isinstance(raw_predictions, list):
@@ -194,14 +198,12 @@ def _generate_prediction_points(
             for entry in raw_predictions:
                 predicted_prices.append(float(entry.get("yhat", base_price)))
         else:
-            # Numeric list/array
+            # Numeric list/array (already converted from numpy by sanitize_numpy)
             for val in raw_predictions:
                 try:
                     predicted_prices.append(float(val))
                 except (TypeError, ValueError):
                     predicted_prices.append(base_price)
-    elif isinstance(raw_predictions, np.ndarray):
-        predicted_prices = raw_predictions.flatten().tolist()
     else:
         try:
             predicted_prices.append(float(raw_predictions))
@@ -356,14 +358,15 @@ async def _run_ensemble_prediction(
     ensemble_points: List[PredictionPoint] = []
     for day_offset in sorted(all_points.keys()):
         prices = all_points[day_offset]
-        avg_price = round(float(np.mean(prices)), 2)
+        # Convert numpy types to native Python before calculations
+        avg_price = round(float(sanitize_numpy(np.mean(prices))), 2)
         forecast_date = now + timedelta(days=day_offset + 1)
         while forecast_date.weekday() >= 5:
             forecast_date += timedelta(days=1)
 
         ci_pct = 0.02 + 0.005 * (day_offset + 1)
         # Widen CI for ensemble to account for model disagreement
-        spread = float(np.std(prices)) if len(prices) > 1 else 0.0
+        spread = float(sanitize_numpy(np.std(prices))) if len(prices) > 1 else 0.0
         ci_pct += spread / avg_price if avg_price > 0 else 0.0
 
         ensemble_points.append(
@@ -494,9 +497,11 @@ async def create_prediction(
     # 5. Store in Redis cache (15 min TTL)
     # ------------------------------------------------------------------
     try:
+        # Sanitize any remaining numpy types before caching
+        cache_data = sanitize_numpy(response_data.model_dump(mode="json"))
         await _ml_cache.set(
             cache_key,
-            response_data.model_dump(mode="json"),
+            cache_data,
             ttl=ML_PREDICTION_CACHE_TTL,
         )
         logger.debug(f"ML prediction cached: {cache_key} (TTL={ML_PREDICTION_CACHE_TTL}s)")

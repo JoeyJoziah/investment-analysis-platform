@@ -19,6 +19,7 @@ from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.utils.auth import get_current_user, require_admin
 from backend.utils.rate_limiter import rate_limit
 from backend.utils.llm_budget_manager import BudgetExceededException
+from backend.utils.numpy_serializer import sanitize_numpy
 from backend.models.api_response import ApiResponse, success_response
 
 logger = logging.getLogger(__name__)
@@ -300,6 +301,9 @@ async def _run_fundamental(ticker: str, depth: str) -> AnalysisTypeResult:
         peer_data=None,
     )
 
+    # Sanitize numpy types from analysis results
+    analysis = sanitize_numpy(analysis)
+
     composite = analysis.get("composite_score", 0.0)
     risks = analysis.get("risks", [])
     opportunities = analysis.get("opportunities", [])
@@ -353,6 +357,9 @@ async def _run_technical(ticker: str, depth: str) -> AnalysisTypeResult:
 
     analysis = engine.analyze_stock(df)
 
+    # Sanitize numpy types from analysis results
+    analysis = sanitize_numpy(analysis)
+
     composite = analysis.get("composite_score", 0.0)
     signals = analysis.get("signals", [])
     trend = analysis.get("market_structure", {}).get("trend", "unknown")
@@ -376,6 +383,9 @@ async def _run_sentiment(ticker: str, depth: str) -> AnalysisTypeResult:
     engine = _get_sentiment_engine()
 
     analysis = await engine.analyze_comprehensive_sentiment(ticker)
+
+    # Sanitize numpy types from analysis results
+    analysis = sanitize_numpy(analysis)
 
     overall = analysis.get("overall_sentiment", {})
     score = overall.get("score", 0.0)

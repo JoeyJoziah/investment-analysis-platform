@@ -29,6 +29,7 @@ from backend.utils.cache import cache_with_ttl
 from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager
 from backend.models.api_response import ApiResponse, success_response
+from backend.utils.numpy_serializer import sanitize_numpy
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -562,8 +563,12 @@ async def analyze_stock(
                     symbol=symbol
                 )
 
+                # Sanitize numpy types from technical analysis
+                tech_analysis = sanitize_numpy(tech_analysis)
+
                 # Merge external API indicators if available
                 if tech_indicators_data:
+                    tech_indicators_data = sanitize_numpy(tech_indicators_data)
                     tech_analysis.update(tech_indicators_data)
 
                 technical = TechnicalIndicators(
@@ -603,6 +608,10 @@ async def analyze_stock(
             logger.info(f"Processing fundamental analysis for {symbol}")
 
             try:
+                # Sanitize numpy types from fundamental data
+                if fundamental_data:
+                    fundamental_data = sanitize_numpy(fundamental_data)
+
                 # Parse and normalize the data from parallel fetch
                 pe_ratio = fundamental_data.get('PERatio', fundamental_data.get('peRatio')) if fundamental_data else None
                 eps = fundamental_data.get('EPS', fundamental_data.get('eps')) if fundamental_data else None
@@ -662,6 +671,8 @@ async def analyze_stock(
 
             try:
                 if sentiment_data:
+                    # Sanitize numpy types from sentiment data
+                    sentiment_data = sanitize_numpy(sentiment_data)
                     news_sentiment = sentiment_data.get('news', {}).get('overall_sentiment', 0)
                     social_data = sentiment_data.get('social', {})
 
@@ -735,7 +746,9 @@ async def analyze_stock(
                         default={}
                     )
 
+                    # Sanitize numpy types from ML predictions
                     if predictions:
+                        predictions = sanitize_numpy(predictions)
                         ml_predictions = MLPredictions(
                             price_prediction_1d=predictions.get('1d', None),
                             price_prediction_7d=predictions.get('7d', None),
