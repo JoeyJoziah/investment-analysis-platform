@@ -30,11 +30,20 @@ from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager
 from backend.models.api_response import ApiResponse, success_response
 from backend.utils.numpy_serializer import sanitize_numpy
+from backend.services.analysis_service import analysis_service
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analysis"])
+
+# ============================================================================
+# Service Layer Dependencies
+# ============================================================================
+
+def get_analysis_service():
+    """Dependency to get analysis service instance."""
+    return analysis_service
 
 # Initialize data clients and analyzers
 alpha_vantage_client = AlphaVantageClient() if settings.ALPHA_VANTAGE_API_KEY else None
@@ -432,7 +441,8 @@ def generate_insights(analysis: Dict) -> List[str]:
 async def analyze_stock(
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_async_db_session)
+    db: AsyncSession = Depends(get_async_db_session),
+    analysis_svc = Depends(get_analysis_service)
 ) -> ApiResponse[AnalysisResponse]:
     """
     Perform comprehensive analysis on a single stock with real data integration.
@@ -451,10 +461,18 @@ async def analyze_stock(
         #         status_code=status.HTTP_400_BAD_REQUEST,
         #         detail=f"Invalid stock symbol format: '{request.symbol}'"
         #     )
-        
+
         symbol = request.symbol.upper()
         logger.info(f"Starting analysis for {symbol} - Type: {request.analysis_type}")
-        
+
+        # Check if service has cached analysis
+        cached_analysis = await analysis_svc.get_cached_analysis(symbol)
+        if cached_analysis and request.analysis_type == AnalysisType.QUICK:
+            logger.info(f"Returning cached analysis for {symbol}")
+            # Transform cached result to match response format
+            # For now, we'll skip this optimization and continue with full analysis
+            pass
+
         # Verify stock exists in database
         stock = await stock_repository.get_by_symbol(symbol, session=db)
         if not stock:

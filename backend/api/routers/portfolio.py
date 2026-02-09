@@ -30,11 +30,20 @@ from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User, Portfolio, Position, Transaction as TransactionModel
 from backend.config.settings import settings
 from backend.models.api_response import ApiResponse, success_response
+from backend.services.portfolio_service import portfolio_service
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["portfolio"])
+
+# ============================================================================
+# Service Layer Dependencies
+# ============================================================================
+
+def get_portfolio_service():
+    """Dependency to get portfolio service instance."""
+    return portfolio_service
 
 # Enums
 class TransactionType(str, Enum):
