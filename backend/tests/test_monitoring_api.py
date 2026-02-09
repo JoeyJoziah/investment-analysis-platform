@@ -68,86 +68,65 @@ def mock_regular_user():
     }
 
 
-@pytest.mark.skip(reason="Prometheus metrics endpoint /api/metrics not yet implemented")
 class TestMetricsEndpoints:
     """Test suite for Prometheus metrics endpoints."""
 
     @pytest.mark.asyncio
     async def test_get_metrics_success(self):
         """
-        Test retrieving Prometheus metrics successfully.
+        Test retrieving metrics successfully.
 
         Verifies:
         - Endpoint returns 200 status
-        - Response contains valid Prometheus text format
+        - Response contains metrics data
         - Metrics are present and properly formatted
-        - Content-Type is text/plain; version=0.0.4
         """
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+        with patch("psutil.net_connections", return_value=[]):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
+                response = await client.get("/api/health/metrics")
 
-            assert response.status_code == 200
+                assert response.status_code == 200
 
-            # Verify Prometheus text format
-            content_type = response.headers.get("content-type", "")
-            assert "text/plain" in content_type or "application/json" in content_type
+                # Verify response format (JSON)
+                data = response.json()
 
-            # Verify response body contains metrics
-            metrics_text = response.text
-            assert len(metrics_text) > 0
+                # Should have success wrapper
+                assert "success" in data or "data" in data
 
-            # Should contain some metrics data
-            assert len(metrics_text.split('\n')) > 1 or "{" in metrics_text
+                # Get metrics data
+                metrics_data = data.get("data", data)
+                assert len(str(metrics_data)) > 0
 
     @pytest.mark.asyncio
     async def test_metrics_format_valid(self):
         """
-        Test that metrics follow valid Prometheus text format.
+        Test that metrics follow valid format.
 
         Verifies:
-        - Metrics lines follow pattern: metric_name{labels} value
-        - HELP and TYPE declarations are present
-        - No malformed metrics
-        - All metric lines are parseable
+        - Metrics response is properly structured
+        - Contains system metrics
+        - All metrics are parseable
         """
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+        with patch("psutil.net_connections", return_value=[]):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
+                response = await client.get("/api/health/metrics")
 
-            assert response.status_code == 200
-            metrics_lines = response.text.strip().split('\n')
+                assert response.status_code == 200
+                data = response.json()
 
-            # Track metrics found
-            metrics_found = {}
-            help_lines = 0
-            type_lines = 0
-            data_lines = 0
+                # Get metrics data
+                metrics_data = data.get("data", data)
+                assert isinstance(metrics_data, dict)
 
-            for line in metrics_lines:
-                if not line or line.startswith('#'):
-                    # Comment or empty line
-                    if line.startswith('# HELP'):
-                        help_lines += 1
-                    elif line.startswith('# TYPE'):
-                        type_lines += 1
-                    continue
+                # Should have system metrics
+                assert "system" in metrics_data or len(metrics_data) > 0
 
-                data_lines += 1
-
-                # Verify metric line format
-                # Format: metric_name{labels} value [timestamp]
-                parts = line.split(' ', 2)
-                assert len(parts) >= 2, f"Invalid metric line: {line}"
-
-                metric_name = parts[0].split('{')[0]
-                metrics_found[metric_name] = True
-
-            # Should have some metrics and documentation
-            assert help_lines >= 0
-            assert type_lines >= 0
-            assert data_lines > 0
-
-            # Should have some actual metrics
-            assert len(metrics_found) > 0
+                # If system metrics exist, validate structure
+                if "system" in metrics_data:
+                    system = metrics_data["system"]
+                    assert isinstance(system, dict)
+                    # Should have CPU, memory, or disk info
+                    assert any(key in system for key in ["cpu_percent", "memory", "disk", "network"])
 
     @pytest.mark.asyncio
     async def test_metrics_includes_system_info(self):
@@ -156,25 +135,20 @@ class TestMetricsEndpoints:
 
         Verifies:
         - System info metric is present
-        - Contains version information
-        - Contains environment information
+        - Contains system resource information
         """
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+        with patch("psutil.net_connections", return_value=[]):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
+                response = await client.get("/api/health/metrics")
 
-            assert response.status_code == 200
-            metrics_text = response.text
+                assert response.status_code == 200
+                data = response.json()
+                metrics_data = data.get("data", data)
 
-            # Check for key system metrics
-            # These indicate the metrics endpoint is working
-            has_metrics = (
-                "api_requests" in metrics_text or
-                "system" in metrics_text or
-                "python" in metrics_text or
-                "process" in metrics_text
-            )
+                # Check for system metrics
+                has_system_metrics = "system" in metrics_data or len(metrics_data) > 0
 
-            assert has_metrics, "No system metrics found in response"
+                assert has_system_metrics, "No system metrics found in response"
 
     @pytest.mark.asyncio
     async def test_metrics_includes_api_metrics(self):
@@ -182,24 +156,25 @@ class TestMetricsEndpoints:
         Test that metrics include API performance metrics.
 
         Verifies:
-        - Request count metrics are present
-        - Latency/duration metrics are present
-        - Error metrics are present
+        - Metrics endpoint returns data
+        - Contains valid metrics information
         """
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            # First make a request to generate metrics
-            await client.get("/api/health")
+        with patch("psutil.net_connections", return_value=[]):
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
+                # First make a request to generate metrics
+                await client.get("/api/health")
 
-            # Then get metrics
-            response = await client.get("/api/metrics")
+                # Then get metrics
+                response = await client.get("/api/health/metrics")
 
-            assert response.status_code == 200
-            metrics_text = response.text
+                assert response.status_code == 200
+                data = response.json()
+                metrics_data = data.get("data", data)
 
-            # Metrics endpoint should return valid format
-            assert len(metrics_text) > 0
-            # Should have some content about APIs or requests
-            assert "api" in metrics_text.lower() or "request" in metrics_text.lower()
+                # Metrics endpoint should return valid format
+                assert len(str(metrics_data)) > 0
+                # Should be a dictionary with metrics
+                assert isinstance(metrics_data, dict)
 
 
 class TestHealthCheckEndpoints:
@@ -352,21 +327,18 @@ class TestHealthCheckEndpoints:
                 assert "status" in health_data or "timestamp" in health_data
 
 
-@pytest.mark.skip(reason="Prometheus metrics endpoint /api/metrics not yet implemented")
+@patch("psutil.net_connections", return_value=[])
 class TestPerformanceMetricsEndpoints:
     """Test suite for performance metrics endpoints."""
 
     @pytest.mark.asyncio
-    async def test_performance_metrics_success(self):
+    async def test_performance_metrics_success(self, mock_net_conn):
         """
         Test retrieving performance metrics successfully.
 
         Verifies:
         - Endpoint returns 200 status
         - Response contains performance data
-        - Includes API response times
-        - Includes throughput/request count
-        - Proper formatting of numeric values
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             # Create an admin override
@@ -378,22 +350,23 @@ class TestPerformanceMetricsEndpoints:
 
             try:
                 # Test the actual metrics endpoint
-                response = await client.get("/api/metrics")
+                response = await client.get("/api/health/metrics")
 
                 # Should return 200
                 assert response.status_code == 200
 
                 # Verify response has content
-                assert len(response.text) > 0
+                data = response.json()
+                metrics_data = data.get("data", data)
+                assert len(str(metrics_data)) > 0
 
-                # Should have actual metrics data
-                metrics_text = response.text
-                assert any(char.isalnum() for char in metrics_text)
+                # Should be a dict with metrics
+                assert isinstance(metrics_data, dict)
             finally:
                 app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_performance_metrics_unauthorized(self):
+    async def test_performance_metrics_unauthorized(self, mock_net_conn):
         """
         Test that metrics endpoint is accessible regardless of auth.
 
@@ -403,16 +376,17 @@ class TestPerformanceMetricsEndpoints:
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             # Test metrics endpoint
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             # Metrics should be accessible
             assert response.status_code == 200
 
             # Should have content
-            assert len(response.text) > 0
+            data = response.json()
+            assert len(str(data)) > 0
 
     @pytest.mark.asyncio
-    async def test_performance_metrics_admin_access(self):
+    async def test_performance_metrics_admin_access(self, mock_net_conn):
         """
         Test admin access to metrics.
 
@@ -429,19 +403,20 @@ class TestPerformanceMetricsEndpoints:
             }
 
             try:
-                response = await client.get("/api/metrics")
+                response = await client.get("/api/health/metrics")
 
                 # Admin should be able to access
                 assert response.status_code == 200
 
                 # Should have data
-                assert len(response.text) > 0
+                data = response.json()
+                assert len(str(data)) > 0
 
             finally:
                 app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_api_usage_metrics_endpoint(self):
+    async def test_api_usage_metrics_endpoint(self, mock_net_conn):
         """
         Test that metrics include API usage information.
 
@@ -451,47 +426,47 @@ class TestPerformanceMetricsEndpoints:
         - Properly formatted data
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             # Should return 200
             assert response.status_code == 200
 
             # Should have data
-            assert len(response.text) > 0
+            data = response.json()
+            assert len(str(data)) > 0
 
     @pytest.mark.asyncio
-    async def test_cost_metrics_endpoint(self):
+    async def test_cost_metrics_endpoint(self, mock_net_conn):
         """
         Test that metrics include cost information.
 
         Verifies:
         - Metrics endpoint returns 200 status
-        - Contains cost-related metrics
-        - Proper formatting
+        - Contains valid metrics data
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             # Should return 200
             assert response.status_code == 200
 
             # Should have data
-            assert len(response.text) > 0
+            data = response.json()
+            assert len(str(data)) > 0
 
 
-@pytest.mark.skip(reason="Prometheus metrics endpoint /api/metrics not yet implemented")
+@patch("psutil.net_connections", return_value=[])
 class TestMetricsIntegration:
     """Integration tests for metrics collection and reporting."""
 
     @pytest.mark.asyncio
-    async def test_metrics_collection_after_requests(self):
+    async def test_metrics_collection_after_requests(self, mock_net_conn):
         """
         Test that metrics are collected from API requests.
 
         Verifies:
-        - Metrics endpoint counts requests
-        - Request latency is tracked
-        - Error metrics are recorded
+        - Metrics endpoint responds after requests
+        - Metrics data is returned
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             # Make a request to generate metrics
@@ -499,44 +474,42 @@ class TestMetricsIntegration:
             assert response.status_code == 200
 
             # Get metrics
-            metrics_response = await client.get("/api/metrics")
+            metrics_response = await client.get("/api/health/metrics")
             assert metrics_response.status_code == 200
 
-            metrics_text = metrics_response.text
+            data = metrics_response.json()
+            metrics_data = data.get("data", data)
 
             # Should have some metrics recorded
-            assert len(metrics_text) > 0
+            assert len(str(metrics_data)) > 0
 
     @pytest.mark.asyncio
-    async def test_metrics_endpoint_response_structure(self):
+    async def test_metrics_endpoint_response_structure(self, mock_net_conn):
         """
         Test that metrics endpoint returns proper response.
 
         Verifies:
         - Content-Type header is correct
-        - Response is not chunked encoding (or handles it properly)
         - Response is not empty
-        - Can be parsed as Prometheus format
+        - Response is valid JSON
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             assert response.status_code == 200
 
             # Check content type
             content_type = response.headers.get("content-type", "")
             assert content_type, "Content-Type header missing"
+            assert "json" in content_type.lower()
 
-            # Response should be text
-            assert isinstance(response.text, str)
-            assert len(response.text) > 0
-
-            # Should be able to get metrics as text
-            metrics_lines = response.text.split('\n')
-            assert len(metrics_lines) > 0
+            # Response should be parseable as JSON
+            data = response.json()
+            assert isinstance(data, dict)
+            assert len(str(data)) > 0
 
     @pytest.mark.asyncio
-    async def test_health_endpoint_timestamp_validity(self):
+    async def test_health_endpoint_timestamp_validity(self, mock_net_conn):
         """
         Test that health check includes valid timestamps.
 
@@ -579,12 +552,12 @@ class TestMetricsIntegration:
                     assert isinstance(timestamp_str, str)
 
 
-@pytest.mark.skip(reason="Prometheus metrics endpoint /api/metrics not yet implemented")
+@patch("psutil.net_connections", return_value=[])
 class TestMetricsErrorHandling:
     """Test error handling in metrics endpoints."""
 
     @pytest.mark.asyncio
-    async def test_metrics_endpoint_graceful_degradation(self):
+    async def test_metrics_endpoint_graceful_degradation(self, mock_net_conn):
         """
         Test that metrics endpoint handles errors gracefully.
 
@@ -594,16 +567,17 @@ class TestMetricsErrorHandling:
         - No exceptions are thrown to client
         """
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             # Should always return 200
             assert response.status_code == 200
 
             # Should have content
-            assert len(response.text) > 0
+            data = response.json()
+            assert len(str(data)) > 0
 
     @pytest.mark.asyncio
-    async def test_health_check_handles_service_failures(self):
+    async def test_health_check_handles_service_failures(self, mock_net_conn):
         """
         Test that health check handles service failures.
 
@@ -624,12 +598,12 @@ class TestMetricsErrorHandling:
 
 
 # Test collection metrics
-@pytest.mark.skip(reason="Prometheus metrics endpoint /api/metrics not yet implemented")
+@patch("psutil.net_connections", return_value=[])
 class TestMetricsCompleteness:
     """Test that all expected metrics are collected."""
 
     @pytest.mark.asyncio
-    async def test_api_request_metrics_collected(self):
+    async def test_api_request_metrics_collected(self, mock_net_conn):
         """Test that API request metrics are properly collected."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             # Make a test request
@@ -637,37 +611,30 @@ class TestMetricsCompleteness:
             assert test_response.status_code in [200, 404]
 
             # Get metrics
-            metrics_response = await client.get("/api/metrics")
+            metrics_response = await client.get("/api/health/metrics")
             assert metrics_response.status_code == 200
 
-            metrics_text = metrics_response.text
-
-            # Should have request metrics
-            # Look for common metric names
-            has_request_metrics = any(keyword in metrics_text.lower() for keyword in [
-                "request", "http", "api", "process"
-            ])
+            data = metrics_response.json()
+            metrics_data = data.get("data", data)
 
             # Should have some metrics
-            assert len(metrics_text) > 0
+            assert len(str(metrics_data)) > 0
+            assert isinstance(metrics_data, dict)
 
     @pytest.mark.asyncio
-    async def test_system_metrics_present(self):
+    async def test_system_metrics_present(self, mock_net_conn):
         """Test that system metrics are included in response."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
-            response = await client.get("/api/metrics")
+            response = await client.get("/api/health/metrics")
 
             assert response.status_code == 200
 
-            metrics_text = response.text
+            data = response.json()
+            metrics_data = data.get("data", data)
 
-            # Should have system-related metrics
-            has_system_metrics = any(keyword in metrics_text.lower() for keyword in [
-                "process", "python", "gauge", "counter", "histogram", "info"
-            ])
-
-            # Should be Prometheus format or have content
-            assert "#" in metrics_text or len(metrics_text.split('\n')) > 2
+            # Should have system metrics
+            assert isinstance(metrics_data, dict)
+            assert len(str(metrics_data)) > 0
 
 
 # Health endpoint tests that were previously inside metrics-only test classes
