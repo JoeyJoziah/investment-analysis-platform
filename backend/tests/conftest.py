@@ -607,16 +607,35 @@ def pytest_configure(config):
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to add markers automatically."""
     for item in items:
-        # Add integration marker to integration test files
-        if "test_integration" in item.fspath.basename:
+        # Get the test file path
+        test_path = str(item.fspath)
+
+        # Add markers based on directory structure
+        if "/integration/" in test_path:
             item.add_marker(pytest.mark.integration)
-        
+        elif "/security/" in test_path:
+            item.add_marker(pytest.mark.security)
+        elif "/unit/" in test_path:
+            item.add_marker(pytest.mark.unit)
+
+        # Add integration marker to integration test files
+        if "test_integration" in item.fspath.basename or "integration" in item.fspath.basename:
+            item.add_marker(pytest.mark.integration)
+
+        # Add security marker to security test files
+        if "security" in item.fspath.basename or "test_csrf" in item.fspath.basename:
+            item.add_marker(pytest.mark.security)
+
+        # Add unit marker to unit test files (default for tests/ root if no other marker)
+        if "test_comprehensive_units" in item.fspath.basename:
+            item.add_marker(pytest.mark.unit)
+
         # Add slow marker to tests with "slow" in name
         if "slow" in item.name:
             item.add_marker(pytest.mark.slow)
-        
+
         # Add performance marker to performance tests
-        if "performance" in item.name or "load" in item.name:
+        if "performance" in item.name or "load" in item.name or "test_performance" in item.fspath.basename:
             item.add_marker(pytest.mark.performance)
 
 

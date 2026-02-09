@@ -157,6 +157,7 @@ try:
     from backend.middleware.request_size_limiter import RequestSizeLimiterMiddleware, RequestSizeLimits
     from backend.security.audit_logging import AuditMiddleware
     from fastapi.middleware.gzip import GZipMiddleware
+    from backend.middleware.response_optimizer import ResponseTimingMiddleware, ETagMiddleware
 
     # Configure CORS
     cors_origins = ["http://localhost:3000", "http://localhost:8000"]
@@ -165,7 +166,15 @@ try:
 
     # Register middleware in priority order (highest priority = outermost)
 
-    # 1. CORS - Must be early to set headers before other processing
+    # 1. Response Timing - Outermost for accurate timing
+    stack.register(
+        "response_timing",
+        ResponseTimingMiddleware,
+        MiddlewarePriority.HIGHEST,
+        {}
+    )
+
+    # 2. CORS - Must be early to set headers before other processing
     stack.register(
         "cors",
         CORSMiddleware,
@@ -175,11 +184,11 @@ try:
             "allow_credentials": True,
             "allow_methods": ["*"],
             "allow_headers": ["*"],
-            "expose_headers": ["X-RateLimit-Remaining", "X-RateLimit-Reset", "X-Request-ID", "X-CSRF-Token"]
+            "expose_headers": ["X-RateLimit-Remaining", "X-RateLimit-Reset", "X-Request-ID", "X-CSRF-Token", "X-Response-Time", "ETag"]
         }
     )
 
-    # 2. Security Headers - After CORS
+    # 3. Security Headers - After CORS
     stack.register(
         "security_headers",
         SecurityHeadersMiddleware,
@@ -188,7 +197,7 @@ try:
         skip_in_testing=False  # Keep security headers in testing
     )
 
-    # 3. CSRF Protection - After security headers
+    # 4. CSRF Protection - After security headers
     csrf_secret = os.getenv("CSRF_SECRET_KEY")
     if not csrf_secret and not is_testing:
         logger.warning("CSRF_SECRET_KEY not set, using auto-generated key for development")
@@ -201,7 +210,7 @@ try:
         skip_in_testing=True  # CSRF interferes with test client
     )
 
-    # 4. Rate Limiting - After CSRF
+    # 5. Rate Limiting - After CSRF
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     rate_limit_rules = get_default_rate_limiting_rules()
 
@@ -213,7 +222,7 @@ try:
         skip_in_testing=True  # Rate limiting can interfere with tests
     )
 
-    # 5. Request Size Limits - After rate limiting
+    # 6. Request Size Limits - After rate limiting
     stack.register(
         "request_size",
         RequestSizeLimiterMiddleware,
@@ -222,7 +231,7 @@ try:
         skip_in_testing=False  # Keep size limits in testing
     )
 
-    # 6. Audit Logging - Monitor requests
+    # 7. Audit Logging - Monitor requests
     stack.register(
         "audit",
         AuditMiddleware,
@@ -231,7 +240,7 @@ try:
         skip_in_testing=True  # Audit can interfere with test client
     )
 
-    # 7. Prometheus Monitoring
+    # 8. Prometheus Monitoring
     stack.register(
         "prometheus",
         PrometheusMiddleware,
@@ -239,7 +248,7 @@ try:
         {}
     )
 
-    # 8. Cache Control
+    # 9. Cache Control
     stack.register(
         "cache_control",
         CacheControlMiddleware,
@@ -250,7 +259,18 @@ try:
         }
     )
 
-    # 9. GZip Compression - Innermost (compresses final response)
+    # 10. ETag Generation - After caching, before compression
+    stack.register(
+        "etag",
+        ETagMiddleware,
+        MiddlewarePriority.CACHING - 100,  # Just after cache control
+        {
+            "excluded_paths": ["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/health"],
+            "weak_etag": False
+        }
+    )
+
+    # 11. GZip Compression - Innermost (compresses final response)
     stack.register(
         "gzip",
         GZipMiddleware,
@@ -259,7 +279,7 @@ try:
         skip_in_testing=True  # GZip can interfere with test client
     )
 
-    # 10. V1 API Deprecation - After compression
+    # 12. V1 API Deprecation - After compression
     if not is_testing:
         stack.register(
             "v1_deprecation",
