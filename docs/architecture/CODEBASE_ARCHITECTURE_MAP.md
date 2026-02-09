@@ -1,7 +1,7 @@
 # Investment Analysis Platform - Codebase Architecture Map
 
 **Last Updated:** 2026-02-08
-**Version:** 2.2.0
+**Version:** 2.3.0
 **Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings. Updated post-Queen Orchestrator Session 2.
 
 ---
@@ -26,7 +26,7 @@ The Investment Analysis Platform is a full-stack financial analytics application
 - **Frontend**: React + TypeScript with Redux Toolkit state management and Material UI
 - **Architecture**: Layered domain-driven design with an 11-layer security middleware stack, timezone-aware UTC throughout
 - **Key Features**: Real-time stock analysis, ML predictions, portfolio management, investment thesis generation, background task scheduling, GDPR/SEC compliance, Kafka streaming, agent-based analysis, stock alerts
-- **Test Status**: 1071 tests passing, 110 skipped, 0 failed (as of 2026-02-08)
+- **Test Status**: 1179 tests passing, 102 skipped, 0 failed (as of 2026-02-08)
 
 ---
 
@@ -372,14 +372,18 @@ backend/tasks/
 backend/middleware/
 ├── error_handler.py          # Standardized exception handlers
 ├── request_size_limiter.py   # Request body size limits
-└── security_headers.py       # Additional security headers
+├── security_headers.py       # Additional security headers
+└── stack.py                  # MiddlewareStack class with priority ordering (NEW in Wave 5-6)
 ```
 
 ### 10. Services (`backend/services/`)
 
 ```
 backend/services/
-└── realtime_price_service.py  # Real-time price data service
+├── realtime_price_service.py       # Real-time price data service
+├── recommendation_service.py       # Multi-agent recommendation consensus (NEW in Wave 5-6)
+├── portfolio_service.py            # Portfolio operations service (NEW in Wave 5-6)
+└── analysis_service.py             # Analysis orchestration service (NEW in Wave 5-6)
 ```
 
 ### 11. Auth (`backend/auth/`)
@@ -405,7 +409,23 @@ backend/streaming/
 └── kafka_client.py         # Kafka event streaming client
 ```
 
-### 14. Monitoring (`backend/monitoring/`)
+### 14. Utilities (`backend/utils/`)
+
+Key utility modules:
+```
+backend/utils/
+├── comprehensive_cache.py          # Multi-tier caching system
+├── intelligent_cache_policies.py   # Cache policy management
+├── cache_monitoring.py             # Cache performance tracking
+├── numpy_serializer.py             # Numpy type conversion for JSON (NEW in Wave 5-6)
+├── database_enhanced.py            # Enhanced database utilities
+├── async_database_fixed.py         # Async database helpers
+├── enhanced_exceptions.py          # Custom exception handling
+├── structured_logging.py           # Structured logging system
+└── [30+ additional utility modules]
+```
+
+### 15. Monitoring (`backend/monitoring/`)
 
 ```
 backend/monitoring/
@@ -426,7 +446,7 @@ backend/monitoring/
 └── sla_tracker.py              # SLA compliance tracking
 ```
 
-### 15. Test Suite (`backend/tests/`)
+### 16. Test Suite (`backend/tests/`)
 
 ```
 backend/tests/
@@ -454,7 +474,8 @@ backend/tests/
 │   └── test_websocket_router.py               # WebSocket router tests
 ├── middleware/
 │   ├── test_request_size_limiter.py           # Request size limit tests
-│   └── test_security_headers.py               # Security header tests
+│   ├── test_security_headers.py               # Security header tests
+│   └── test_middleware_stack.py               # Middleware stack tests (NEW in Wave 5-6)
 ├── security/
 │   ├── test_csrf_auth_integration.py          # CSRF + auth integration tests
 │   ├── test_csrf_protection.py                # CSRF protection unit tests
@@ -463,6 +484,8 @@ backend/tests/
 ├── unit/                                      # Unit test directory
 ├── test_admin_api.py                          # Admin API tests
 ├── test_agents_api.py                         # Agents API tests
+├── test_analytics_coverage.py                 # Analytics module tests (NEW in Wave 5-6)
+├── test_service_wiring.py                     # Service wiring tests (NEW in Wave 5-6)
 ├── test_api_integration.py                    # API integration tests
 ├── test_bloom_filter.py                       # Bloom filter tests
 ├── test_cache_decorator.py                    # Cache decorator tests
@@ -858,9 +881,9 @@ React Application (App.tsx)
 
 ---
 
-## Recent Changes (Queen Orchestrator Session 2 - 2026-02-08)
+## Recent Changes (Wave 5-6 Updates - 2026-02-08)
 
-### New Endpoints Added
+### New Endpoints Added (Queen Orchestrator Session 2)
 1. `POST /api/v1/agents/analysis` - AI agent-based stock analysis
 2. `POST /api/v1/ml/predictions` - ML-powered price predictions
 3. `GET /api/v1/stocks/search` - Stock search with fuzzy matching
@@ -868,20 +891,35 @@ React Application (App.tsx)
 5. `POST /api/v1/gdpr/export` - GDPR data export
 6. `PUT /api/v1/gdpr/consent` - GDPR consent management
 7. `DELETE /api/v1/gdpr/delete` - GDPR right to be forgotten
+8. `POST /api/v1/gdpr/anonymize` - GDPR data anonymization (Wave 5-6)
+9. `GET /api/v1/gdpr/audit` - GDPR audit trail retrieval (Wave 5-6)
 
-### New Components
-- `backend/api/routers/ml.py` - ML predictions router
-- `backend/repositories/alert_repository.py` - Alert management repository
+### New Components (Wave 5-6)
+- `backend/middleware/stack.py` - MiddlewareStack class with priority ordering
+- `backend/services/recommendation_service.py` - Multi-agent recommendation consensus
+- `backend/services/portfolio_service.py` - Portfolio operations service
+- `backend/services/analysis_service.py` - Analysis orchestration service
+- `backend/utils/numpy_serializer.py` - Numpy type conversion utility
+- `backend/migrations/versions/adba55bf7b52_*.py` - Database index migration
+- `backend/tests/test_analytics_coverage.py` - 40 analytics tests
+- `backend/tests/test_service_wiring.py` - 9 service wiring tests
+- `backend/tests/middleware/test_middleware_stack.py` - 18 middleware tests
 
-### Test Coverage
-- 1071 tests passing
-- 110 tests skipped (mainly for optional features and unimplemented GDPR endpoints)
+### Performance Improvements (Wave 5-6)
+- Database indexes added for all major tables (10+ indexes)
+- All ORM relationships set to `lazy="selectin"` for eager loading
+- Alembic migration created for index deployment
+
+### Test Coverage (Wave 5-6)
+- 1179 tests passing (+108 from previous session)
+- 102 tests skipped (-8, as GDPR endpoints now implemented)
 - 0 tests failing
-- New test suites added for routers: analysis, auth flow, health, news, recommendations, settings, stocks, websocket
-- New security test suites: rate limiter, security modules
+- New analytics test coverage: 40 tests for fundamental, technical, and recommendation engines
+- New middleware tests: 18 tests for priority-based stack
+- New service wiring tests: 9 tests for service layer integration
 
 ---
 
-**Document Version:** 2.2.0
+**Document Version:** 2.3.0
 **Last Updated:** 2026-02-08
-**Generated From:** Code inspection of actual source files, verified post-Queen Orchestrator Session 2
+**Generated From:** Code inspection of actual source files, verified post-Wave 5-6
