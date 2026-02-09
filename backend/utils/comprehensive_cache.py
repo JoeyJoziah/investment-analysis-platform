@@ -23,6 +23,7 @@ import hashlib
 import gzip
 
 import numpy as np
+from prometheus_client import Counter, Histogram, Gauge
 
 import redis.asyncio as redis
 from sqlalchemy import text
@@ -33,6 +34,37 @@ from backend.utils.cache import get_redis
 from backend.config.database import get_async_db_session
 
 logger = logging.getLogger(__name__)
+
+# Prometheus Metrics for Cache Operations
+cache_hits_total = Counter(
+    'cache_hits_total',
+    'Total number of cache hits',
+    ['layer', 'prefix']
+)
+
+cache_misses_total = Counter(
+    'cache_misses_total',
+    'Total number of cache misses',
+    ['layer', 'prefix']
+)
+
+cache_latency_seconds = Histogram(
+    'cache_latency_seconds',
+    'Cache operation latency in seconds',
+    ['operation', 'layer']
+)
+
+cache_size_bytes = Gauge(
+    'cache_size_bytes',
+    'Current cache size in bytes',
+    ['layer']
+)
+
+cache_evictions_total = Counter(
+    'cache_evictions_total',
+    'Total number of cache evictions',
+    ['layer']
+)
 
 
 @dataclass
@@ -130,37 +162,60 @@ class LRUCache:
     
     def get(self, key: str) -> Tuple[Optional[Any], bool]:
         """Get item from cache, returns (value, hit)"""
+        start_time = time.time()
         with self.lock:
             if key in self.cache:
                 # Move to end (most recently used)
                 value = self.cache.pop(key)
                 self.cache[key] = value
                 self.access_times[key] = time.time()
+
+                # Record latency
+                latency = time.time() - start_time
+                cache_latency_seconds.labels(operation='get', layer='l1').observe(latency)
+
                 return value, True
             return None, False
     
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set item in cache"""
+        start_time = time.time()
         with self.lock:
             # Remove oldest items if at capacity
+            evictions = 0
             while len(self.cache) >= self.max_size:
                 oldest_key = next(iter(self.cache))
                 del self.cache[oldest_key]
                 self.access_times.pop(oldest_key, None)
-            
+                evictions += 1
+
+            # Record evictions
+            if evictions > 0:
+                cache_evictions_total.labels(layer='l1').inc(evictions)
+
             # Add new item
             self.cache[key] = {
                 'value': value,
                 'expires_at': time.time() + ttl if ttl else None
             }
             self.access_times[key] = time.time()
+
+            # Record latency
+            latency = time.time() - start_time
+            cache_latency_seconds.labels(operation='set', layer='l1').observe(latency)
     
     def delete(self, key: str) -> bool:
         """Delete item from cache"""
+        start_time = time.time()
         with self.lock:
             if key in self.cache:
                 del self.cache[key]
                 self.access_times.pop(key, None)
+
+                # Record latency
+                latency = time.time() - start_time
+                cache_latency_seconds.labels(operation='delete', layer='l1').observe(latency)
+
                 return True
             return False
     
@@ -174,25 +229,44 @@ class LRUCache:
         """Remove expired items, returns count removed"""
         current_time = time.time()
         expired_keys = []
-        
+
         with self.lock:
             for key, data in self.cache.items():
                 if data.get('expires_at') and data['expires_at'] < current_time:
                     expired_keys.append(key)
-            
+
             for key in expired_keys:
                 del self.cache[key]
                 self.access_times.pop(key, None)
-        
+
+        # Record evictions from expiration
+        if expired_keys:
+            cache_evictions_total.labels(layer='l1').inc(len(expired_keys))
+
         return len(expired_keys)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         with self.lock:
+            # Calculate approximate size in bytes
+            size_bytes = 0
+            for key, data in self.cache.items():
+                try:
+                    # Rough estimate: key size + value size
+                    size_bytes += len(key.encode('utf-8'))
+                    value_str = json.dumps(data.get('value', {}), default=str)
+                    size_bytes += len(value_str.encode('utf-8'))
+                except Exception:
+                    pass
+
+            # Update Prometheus gauge
+            cache_size_bytes.labels(layer='l1').set(size_bytes)
+
             return {
                 'size': len(self.cache),
                 'max_size': self.max_size,
-                'utilization': len(self.cache) / self.max_size
+                'utilization': len(self.cache) / self.max_size,
+                'size_bytes': size_bytes
             }
 
 
@@ -328,6 +402,7 @@ class ComprehensiveCacheManager:
         Get data from cache with fallback to computation
         Returns (data, source) where source is 'l1', 'l2', 'l3', or 'computed'
         """
+        start_time = time.time()
         self.metrics.total_requests += 1
         cache_key = self._make_key(data_type, identifier, params)
 
@@ -339,19 +414,31 @@ class ComprehensiveCacheManager:
         if l1_hit and l1_data and not self._is_expired(l1_data):
             self.metrics.l1_hits += 1
             self.metrics.track_prefix_hit(prefix)
+
+            # Prometheus metrics
+            cache_hits_total.labels(layer='l1', prefix=prefix).inc()
+            cache_latency_seconds.labels(operation='get', layer='l1').observe(time.time() - start_time)
+
             logger.debug(f"L1 cache hit: {cache_key}")
             return l1_data['value'], 'l1'
 
         if l1_hit:
             self.metrics.l1_misses += 1
-        
+            cache_misses_total.labels(layer='l1', prefix=prefix).inc()
+
         # L2 Cache Check (Redis)
         if self.redis_client:
             try:
+                l2_start = time.time()
                 l2_data = await self.redis_client.get(cache_key)
                 if l2_data:
                     self.metrics.l2_hits += 1
                     self.metrics.track_prefix_hit(prefix)
+
+                    # Prometheus metrics
+                    cache_hits_total.labels(layer='l2', prefix=prefix).inc()
+                    cache_latency_seconds.labels(operation='get', layer='l2').observe(time.time() - l2_start)
+
                     data = self._deserialize_data(l2_data)
 
                     # Populate L1 cache
@@ -362,15 +449,22 @@ class ComprehensiveCacheManager:
                     return data, 'l2'
                 else:
                     self.metrics.l2_misses += 1
+                    cache_misses_total.labels(layer='l2', prefix=prefix).inc()
             except Exception as e:
                 logger.warning(f"L2 cache error for {cache_key}: {e}")
                 self.metrics.l2_misses += 1
+                cache_misses_total.labels(layer='l2', prefix=prefix).inc()
 
         # L3 Cache Check (Database)
+        l3_start = time.time()
         l3_data = await self._get_from_database(cache_key)
         if l3_data:
             self.metrics.l3_hits += 1
             self.metrics.track_prefix_hit(prefix)
+
+            # Prometheus metrics
+            cache_hits_total.labels(layer='l3', prefix=prefix).inc()
+            cache_latency_seconds.labels(operation='get', layer='l3').observe(time.time() - l3_start)
 
             # Populate L1 and L2 caches with optimized TTL
             ttl_config = self.ttl_policies.get(data_type, {
@@ -386,7 +480,8 @@ class ComprehensiveCacheManager:
         else:
             self.metrics.l3_misses += 1
             self.metrics.track_prefix_miss(prefix)
-        
+            cache_misses_total.labels(layer='l3', prefix=prefix).inc()
+
         # Fallback to computation
         if fallback_func:
             try:
@@ -399,7 +494,7 @@ class ComprehensiveCacheManager:
                     return computed_data, 'computed'
             except Exception as e:
                 logger.error(f"Fallback function failed for {cache_key}: {e}")
-        
+
         return None, 'miss'
     
     async def set(
@@ -411,6 +506,7 @@ class ComprehensiveCacheManager:
         custom_ttl: Optional[Dict[str, int]] = None
     ):
         """Set data in all cache layers with optimized TTL"""
+        start_time = time.time()
         cache_key = self._make_key(data_type, identifier, params)
 
         # Use custom TTL, optimized policy TTL, or defaults
@@ -420,36 +516,54 @@ class ComprehensiveCacheManager:
             'l3': self.config.l3_ttl
         })
 
+        # Serialize once to calculate size
+        serialized_data = self._serialize_data(data)
+        data_size = len(serialized_data)
+
         # L1 Cache (Memory)
         self.l1_cache.set(cache_key, data, ttls.get('l1', self.config.l1_ttl))
 
         # L2 Cache (Redis)
         if self.redis_client:
+            l2_start = time.time()
             await self._set_redis(cache_key, data, ttls.get('l2', self.config.l2_ttl))
+            cache_latency_seconds.labels(operation='set', layer='l2').observe(time.time() - l2_start)
 
         # L3 Cache (Database)
+        l3_start = time.time()
         await self._set_database(cache_key, data, ttls.get('l3', self.config.l3_ttl))
+        cache_latency_seconds.labels(operation='set', layer='l3').observe(time.time() - l3_start)
 
         # Update metrics
-        data_size = len(self._serialize_data(data))
         self.metrics.cache_storage_bytes += data_size
+
+        # Update cache size gauges
+        self._update_cache_size_metrics()
 
         logger.debug(f"Data cached across all layers: {cache_key}")
     
     async def delete(self, data_type: str, identifier: str, params: Optional[Dict] = None):
         """Delete from all cache layers"""
+        start_time = time.time()
         cache_key = self._make_key(data_type, identifier, params)
-        
+
         # L1 Cache
         self.l1_cache.delete(cache_key)
-        
+
         # L2 Cache
         if self.redis_client:
+            l2_start = time.time()
             await self.redis_client.delete(cache_key)
-        
+            cache_latency_seconds.labels(operation='delete', layer='l2').observe(time.time() - l2_start)
+
         # L3 Cache
+        l3_start = time.time()
         await self._delete_from_database(cache_key)
-        
+        cache_latency_seconds.labels(operation='delete', layer='l3').observe(time.time() - l3_start)
+
+        # Update cache size gauges
+        self._update_cache_size_metrics()
+
         logger.debug(f"Cache entry deleted from all layers: {cache_key}")
     
     async def invalidate_pattern(self, pattern: str):
@@ -565,6 +679,9 @@ class ComprehensiveCacheManager:
         try:
             serialized_data = self._serialize_data(data)
             await self.redis_client.setex(key, ttl, serialized_data)
+
+            # Update L2 size metric with serialized data size
+            cache_size_bytes.labels(layer='l2').inc(len(serialized_data))
         except Exception as e:
             logger.warning(f"Failed to set Redis cache for {key}: {e}")
     
@@ -677,9 +794,24 @@ class ComprehensiveCacheManager:
                     text("DELETE FROM cache_storage WHERE expires_at < NOW()")
                 )
                 await db.commit()
+
+                # Record evictions
+                if result.rowcount > 0:
+                    cache_evictions_total.labels(layer='l3').inc(result.rowcount)
+
                 logger.info(f"Cleaned {result.rowcount} expired database cache entries")
         except Exception as e:
             logger.warning(f"Failed to cleanup database cache: {e}")
+
+    def _update_cache_size_metrics(self):
+        """Update Prometheus cache size metrics"""
+        try:
+            # Update L1 stats which updates the metric
+            self.l1_cache.get_stats()
+
+            # L2 and L3 sizes are updated during set/delete operations
+        except Exception as e:
+            logger.debug(f"Failed to update cache size metrics: {e}")
 
 
 # Global cache manager instance
