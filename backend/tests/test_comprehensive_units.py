@@ -659,19 +659,126 @@ class TestSecurityComponents:
 
 
 class TestRepositories:
-    """Tests for data repository layers - skipped without database"""
+    """Tests for data repository layers with mocked database"""
 
-    @pytest.mark.skip(reason="StockRepository requires database connection")
     @pytest.mark.asyncio
     async def test_stock_crud_operations(self):
-        """Test basic CRUD operations for stocks (requires database)"""
-        pass
+        """Test basic CRUD operations for stocks with mocked database"""
+        from unittest.mock import AsyncMock, MagicMock
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from backend.repositories.stock_repository import StockRepository
+        from backend.models.unified_models import Stock
 
-    @pytest.mark.skip(reason="StockRepository requires database connection")
+        # Create mock session
+        mock_session = AsyncMock(spec=AsyncSession)
+
+        # Create sample stock
+        sample_stock = Stock(
+            id=1,
+            symbol="AAPL",
+            name="Apple Inc.",
+            exchange_id=1,
+            asset_type="stock",
+            market_cap=2500000000000,
+            is_active=True,
+            is_tradable=True
+        )
+
+        # Mock execute result
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.first.return_value = sample_stock
+        mock_session.execute.return_value = mock_result
+
+        # Test repository operations
+        repo = StockRepository()
+
+        # Test get_by_symbol
+        stock = await repo.get_by_symbol("AAPL", session=mock_session)
+        assert stock is not None or mock_session.execute.called
+
+        # Verify session was used
+        assert mock_session.execute.called
+
     @pytest.mark.asyncio
     async def test_bulk_operations(self):
-        """Test bulk operations for performance (requires database)"""
-        pass
+        """Test bulk operations for performance with mocked database"""
+        from unittest.mock import AsyncMock, MagicMock, call
+        from sqlalchemy.ext.asyncio import AsyncSession
+        from backend.repositories.stock_repository import StockRepository
+        from backend.models.unified_models import Stock
+
+        # Create mock session
+        mock_session = AsyncMock(spec=AsyncSession)
+
+        # Mock successful bulk update
+        mock_session.commit = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        # Create sample stocks
+        stock_aapl = Stock(
+            id=1,
+            symbol="AAPL",
+            name="Apple Inc.",
+            exchange_id=1,
+            asset_type="stock",
+            market_cap=2400000000000,
+            is_active=True,
+            is_tradable=True
+        )
+
+        stock_msft = Stock(
+            id=2,
+            symbol="MSFT",
+            name="Microsoft Corporation",
+            exchange_id=1,
+            asset_type="stock",
+            market_cap=2200000000000,
+            is_active=True,
+            is_tradable=True
+        )
+
+        # Mock get_by_symbol to return stocks for each call
+        # Each stock lookup requires 3 execute calls: get_by_symbol, UPDATE stmt, get_by_id (refresh)
+        mock_result_aapl_1 = MagicMock()
+        mock_result_aapl_1.scalars.return_value.first.return_value = stock_aapl
+
+        mock_result_aapl_2 = MagicMock()  # For UPDATE statement
+        mock_result_aapl_2.rowcount = 1
+
+        mock_result_aapl_3 = MagicMock()
+        mock_result_aapl_3.scalars.return_value.first.return_value = stock_aapl
+
+        mock_result_msft_1 = MagicMock()
+        mock_result_msft_1.scalars.return_value.first.return_value = stock_msft
+
+        mock_result_msft_2 = MagicMock()  # For UPDATE statement
+        mock_result_msft_2.rowcount = 1
+
+        mock_result_msft_3 = MagicMock()
+        mock_result_msft_3.scalars.return_value.first.return_value = stock_msft
+
+        # Set up execute to return different results for each call
+        # Pattern: get_by_symbol -> UPDATE -> get_by_id (refresh) for each stock
+        mock_session.execute.side_effect = [
+            mock_result_aapl_1, mock_result_aapl_2, mock_result_aapl_3,  # AAPL
+            mock_result_msft_1, mock_result_msft_2, mock_result_msft_3   # MSFT
+        ]
+
+        # Test bulk update market caps
+        repo = StockRepository()
+        market_cap_data = [
+            {"symbol": "AAPL", "market_cap": 2500000000000},
+            {"symbol": "MSFT", "market_cap": 2300000000000}
+        ]
+
+        # Test bulk update
+        count = await repo.bulk_update_market_caps(market_cap_data, session=mock_session)
+
+        # Should return 2 since both stocks were found and updated
+        assert count == 2
+
+        # Verify session methods were called
+        assert mock_session.execute.call_count >= 2  # At least one call per stock lookup
 
 
 class TestDataIngestionClients:

@@ -298,22 +298,23 @@ class TestInvestmentThesisAPI:
         test_stock: Stock
     ):
         """Test that users cannot update theses they don't own"""
-        # Create another user with different ID
+        # Create another user with explicitly different data to ensure different ID
+        # Use a high ID value to avoid collision with auto-increment
         other_user = User(
-            email="other@example.com",
-            username="otheruser",
+            id=9999,  # Explicitly set high ID to avoid collision
+            email="other_unique_user@example.com",
+            username="otheruniqueuser",
             hashed_password="hashedpassword",
-            full_name="Other User",
+            full_name="Other Unique User",
             role="free_user"
         )
         db_session.add(other_user)
         await db_session.commit()
         await db_session.refresh(other_user)
 
-        # Check if other_user has different ID than test_thesis owner
-        # If they're the same, skip this test as authorization can't be properly tested
-        if other_user.id == test_thesis.user_id:
-            pytest.skip("Cannot test authorization - other_user has same ID as thesis owner")
+        # Verify we have different users
+        assert other_user.id != test_thesis.user_id, \
+            f"Test setup error: other_user.id ({other_user.id}) should not equal test_thesis.user_id ({test_thesis.user_id})"
 
         # Override get_current_user for other_user
         from backend.api.main import app
@@ -372,22 +373,23 @@ class TestInvestmentThesisAPI:
         test_thesis: InvestmentThesis
     ):
         """Test that users cannot delete theses they don't own"""
-        # Create another user
+        # Create another user with explicitly different data to ensure different ID
+        # Use a high ID value to avoid collision with auto-increment
         other_user = User(
-            email="other2@example.com",
-            username="otheruser2",
+            id=9998,  # Explicitly set high ID to avoid collision
+            email="other2_unique@example.com",
+            username="otheruser2unique",
             hashed_password="hashedpassword",
-            full_name="Other User 2",
+            full_name="Other User 2 Unique",
             role="free_user"
         )
         db_session.add(other_user)
         await db_session.commit()
         await db_session.refresh(other_user)
 
-        # Check if other_user has different ID than test_thesis owner
-        # If they're the same, skip this test as authorization can't be properly tested
-        if other_user.id == test_thesis.user_id:
-            pytest.skip("Cannot test authorization - other_user has same ID as thesis owner")
+        # Verify we have different users
+        assert other_user.id != test_thesis.user_id, \
+            f"Test setup error: other_user.id ({other_user.id}) should not equal test_thesis.user_id ({test_thesis.user_id})"
 
         # Override get_current_user for other_user
         from backend.api.main import app
