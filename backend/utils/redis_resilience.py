@@ -171,9 +171,12 @@ class RedisCircuitBreaker:
     
     def get_state(self) -> CircuitState:
         """Get current circuit state."""
-        if self._breaker.closed:
+        from pybreaker import STATE_CLOSED, STATE_OPEN, STATE_HALF_OPEN
+
+        state = self._breaker.current_state
+        if state == STATE_CLOSED:
             return CircuitState.CLOSED
-        elif self._breaker.opened:
+        elif state == STATE_OPEN:
             return CircuitState.OPEN
         else:
             return CircuitState.HALF_OPEN
