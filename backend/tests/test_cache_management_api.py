@@ -687,18 +687,18 @@ class TestCacheHealth:
                     'hit_ratio': 0.85,
                     'api_calls_saved': 8500,
                     'estimated_cost_savings': 425.50,
+                    'l1_hits': 4000,
+                    'l1_misses': 1000,
+                    'l2_hits': 3500,
+                    'l2_misses': 1000,
+                    'l3_hits': 1000,
+                    'l3_misses': 500,
                     **mock_cache_statistics['performance_metrics']
                 },
                 'storage_bytes': mock_cache_statistics['storage_statistics']['total_bytes'],
                 'active_warming_tasks': 5,
                 'l1_cache_stats': mock_cache_statistics['cache_layer_statistics']['l1']['stats'],
-                'l2_cache_stats': mock_cache_statistics['cache_layer_statistics']['l2']['stats'],
-                'l1_hits': 4000,
-                'l1_misses': 1000,
-                'l2_hits': 3500,
-                'l2_misses': 1000,
-                'l3_hits': 1000,
-                'l3_misses': 500
+                'l2_cache_stats': mock_cache_statistics['cache_layer_statistics']['l2']['stats']
             }
 
             mock_cache_instance = AsyncMock()
@@ -712,12 +712,6 @@ class TestCacheHealth:
             mock_query.return_value = mock_query_instance
 
             response = await async_client.get("/api/v1/cache/statistics", params={})
-
-            # Test might fail if cache manager has issues - handle gracefully
-            if response.status_code == 500:
-                # Log the error but don't fail - cache statistics endpoint has issues
-                pytest.skip("Cache statistics endpoint returned 500 - implementation issue")
-
             data = assert_success_response(response)
 
             # Verify cache layer statistics exist
