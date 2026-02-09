@@ -37,6 +37,7 @@ from backend.utils.api_cache_decorators import (
 from backend.utils.database_query_cache import cached_query
 from backend.config.settings import settings
 from backend.models.api_response import ApiResponse, success_response, paginated_response
+from backend.utils.response_utils import filter_response_fields
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -292,6 +293,7 @@ async def get_stocks(
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     sort_by: str = Query("market_cap", pattern="^(symbol|name|market_cap|created_at)$", description="Sort field"),
     order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to include (e.g., symbol,name,market_cap)"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[List[StockResponse]]:
     """
@@ -339,6 +341,13 @@ async def get_stocks(
         )
 
         stock_responses = [StockResponse.from_orm(stock) for stock in stocks]
+
+        # Apply field filtering if requested
+        if fields:
+            response_dicts = [resp.dict() for resp in stock_responses]
+            filtered_data = filter_response_fields(response_dicts, fields)
+            return success_response(data=filtered_data)
+
         return success_response(data=stock_responses)
 
     except Exception as e:
@@ -353,6 +362,7 @@ async def get_stocks(
 async def search_stocks(
     q: str = Query(..., min_length=1, alias="q", description="Search term (ticker symbol or company name)"),
     limit: int = Query(10, ge=1, le=100, description="Maximum number of results"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to include (e.g., symbol,name,exchange)"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[StockSearchResponse]:
     """
@@ -375,8 +385,23 @@ async def search_stocks(
 
         total_count = len(stocks)
 
+        stock_responses = [StockResponse.from_orm(stock) for stock in stocks]
+
+        # Apply field filtering if requested
+        if fields:
+            filtered_stocks = filter_response_fields(
+                [resp.dict() for resp in stock_responses],
+                fields
+            )
+            return success_response(data=StockSearchResponse(
+                stocks=filtered_stocks,
+                total_count=total_count,
+                page=1,
+                per_page=limit
+            ))
+
         return success_response(data=StockSearchResponse(
-            stocks=[StockResponse.from_orm(stock) for stock in stocks],
+            stocks=stock_responses,
             total_count=total_count,
             page=1,
             per_page=limit
@@ -545,6 +570,7 @@ async def get_top_performers(
 @router.get("/{symbol}")
 async def get_stock_detail(
     symbol: str = Path(..., description="Stock symbol"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to include"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[StockDetailResponse]:
     """
@@ -561,7 +587,14 @@ async def get_stock_detail(
                 detail=f"Stock with symbol '{symbol}' not found"
             )
 
-        return success_response(data=StockDetailResponse.from_orm(stock))
+        response = StockDetailResponse.from_orm(stock)
+
+        # Apply field filtering if requested
+        if fields:
+            filtered_data = filter_response_fields(response.dict(), fields)
+            return success_response(data=filtered_data)
+
+        return success_response(data=response)
 
     except HTTPException:
         raise
@@ -577,6 +610,7 @@ async def get_stock_detail(
 async def get_stock_quote(
     symbol: str = Path(..., description="Stock symbol"),
     force_refresh: bool = Query(False, description="Force refresh from external APIs"),
+    fields: Optional[str] = Query(None, description="Comma-separated list of fields to include"),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[StockQuoteResponse]:
     """
@@ -619,7 +653,7 @@ async def get_stock_quote(
             change = current_price - previous_close if previous_close else 0.0
             change_percent = (change / previous_close * 100) if previous_close else 0.0
 
-            return success_response(data=StockQuoteResponse(
+            quote_response = StockQuoteResponse(
                 symbol=symbol,
                 price=current_price,
                 change=change,
@@ -644,7 +678,14 @@ async def get_stock_quote(
                 data_source=data_source,
                 last_updated=datetime.now(timezone.utc),
                 is_real_time=True
-            ))
+            )
+
+            # Apply field filtering if requested
+            if fields:
+                filtered_data = filter_response_fields(quote_response.dict(), fields)
+                return success_response(data=filtered_data)
+
+            return success_response(data=quote_response)
         
         # Fallback to database data
         logger.info(f"Falling back to database for {symbol}")
@@ -673,7 +714,7 @@ async def get_stock_quote(
         change = current_price - previous_close
         change_percent = (change / previous_close * 100) if previous_close else 0.0
 
-        return success_response(data=StockQuoteResponse(
+        quote_response = StockQuoteResponse(
             symbol=symbol,
             price=current_price,
             change=change,
@@ -694,7 +735,14 @@ async def get_stock_quote(
             data_source="database",
             last_updated=latest_price.updated_at or datetime.now(timezone.utc),
             is_real_time=False
-        ))
+        )
+
+        # Apply field filtering if requested
+        if fields:
+            filtered_data = filter_response_fields(quote_response.dict(), fields)
+            return success_response(data=filtered_data)
+
+        return success_response(data=quote_response)
         
     except HTTPException:
         raise
