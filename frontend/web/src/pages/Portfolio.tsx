@@ -94,7 +94,7 @@ const Portfolio: React.FC = () => {
   );
   const [tabValue, setTabValue] = useState(0);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState<any>(null);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [transactionForm, setTransactionForm] = useState({
     ticker: '',
     type: 'BUY' as 'BUY' | 'SELL',

@@ -141,6 +141,13 @@ export interface PortfolioMetrics {
     yearly: PerformancePoint[];
   };
   riskMetrics: RiskMetrics;
+  correlationMatrix?: Record<string, Record<string, number>>;
+  efficientFrontier?: {
+    points?: Array<{ risk: number; return: number }>;
+    currentPosition?: { risk: number; return: number };
+    optimalPosition?: { risk: number; return: number };
+  };
+  diversificationScore?: number;
 }
 
 export interface PerformancePoint {

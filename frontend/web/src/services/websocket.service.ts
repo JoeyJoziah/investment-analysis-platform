@@ -190,7 +190,7 @@ class WebSocketService {
     });
   }
 
-  private handleTradeUpdate(data: any) {
+  private handleTradeUpdate(data: { ticker: string; price: number; volume: number; timestamp: string }) {
     // Process real-time trade data
     const { ticker, price, volume, timestamp } = data;
     
@@ -214,9 +214,15 @@ class WebSocketService {
   private checkPriceAlerts(ticker: string, price: number) {
     // This would normally check against user's configured alerts
     // For now, just a placeholder
-    const alerts = []; // Get from state or local storage
-    
-    alerts.forEach((alert: any) => {
+    interface PriceAlert {
+      ticker: string;
+      condition: 'above' | 'below';
+      value: number;
+      active: boolean;
+    }
+    const alerts: PriceAlert[] = []; // Get from state or local storage
+
+    alerts.forEach((alert) => {
       if (alert.ticker === ticker && alert.active) {
         const triggered = 
           (alert.condition === 'above' && price > alert.value) ||
@@ -234,7 +240,7 @@ class WebSocketService {
     });
   }
 
-  sendMessage(event: string, data: any) {
+  sendMessage(event: string, data: unknown) {
     if (!this.socket?.connected) {
       console.warn('WebSocket not connected');
       return;

@@ -212,6 +212,7 @@ const StockChart: React.FC<StockChartProps> = ({
           </LineChart>
         ) : chartType === 'area' ? (
           <ComposedChart data={filteredData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.3}/>

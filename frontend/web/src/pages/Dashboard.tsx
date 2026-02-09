@@ -65,7 +65,13 @@ const Dashboard: React.FC = () => {
     setRefreshing(false);
   };
 
-  const MetricCard = ({ title, value, change, icon, color }: any) => (
+  const MetricCard = ({ title, value, change, icon, color }: {
+    title: string;
+    value: string | number;
+    change?: number;
+    icon: React.ReactNode;
+    color?: string;
+  }) => (
     <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
       <CardContent>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start">
@@ -257,7 +263,7 @@ const Dashboard: React.FC = () => {
 
         {/* Portfolio Summary */}
         <Grid item xs={12} lg={4}>
-          <PortfolioSummary summary={portfolioSummary} />
+          <PortfolioSummary summary={portfolioSummary ?? undefined} />
         </Grid>
 
         {/* Recent News */}
@@ -277,7 +283,7 @@ const Dashboard: React.FC = () => {
 
         {/* Cost Monitor */}
         <Grid item xs={12} lg={4}>
-          <CostMonitor metrics={costMetrics} />
+          <CostMonitor metrics={costMetrics ?? undefined} />
         </Grid>
 
         {/* Market Sectors Performance */}

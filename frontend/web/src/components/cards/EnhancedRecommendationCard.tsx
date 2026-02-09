@@ -217,7 +217,7 @@ const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProps> = me
       case 'HIGH':
         return <ErrorOutline sx={{ fontSize: 16, color: theme.palette.error.main }} />;
       default:
-        return null;
+        return undefined;
     }
   };
   
@@ -306,7 +306,7 @@ const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProps> = me
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Box display="flex" alignItems="center" gap={1}>
                 <Badge
-                  badgeContent={bookmarked ? <Star sx={{ fontSize: 12 }} /> : null}
+                  badgeContent={bookmarked ? <Star sx={{ fontSize: 12 }} /> : undefined}
                   color="primary"
                 >
                   <Avatar sx={{ 
@@ -411,9 +411,9 @@ const EnhancedRecommendationCard: React.FC<EnhancedRecommendationCardProps> = me
             <Box display="flex" alignItems="center" gap={2}>
               <Badge
                 badgeContent={
-                  notificationsEnabled ? 
-                    <NotificationsActive sx={{ fontSize: 16 }} /> : 
-                    null
+                  notificationsEnabled ?
+                    <NotificationsActive sx={{ fontSize: 16 }} /> :
+                    undefined
                 }
                 color="primary"
               >

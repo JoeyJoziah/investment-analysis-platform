@@ -78,7 +78,7 @@ export const useDebouncedValue = <T,>(value: T, delay: number = 300): T => {
 /**
  * Throttled callback hook
  */
-export const useThrottledCallback = <T extends (...args: any[]) => any>(
+export const useThrottledCallback = <T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number = 300,
   deps: DependencyList = []
@@ -303,9 +303,9 @@ export const useIdleCallback = (
  * Prefetch hook for preloading data
  */
 export const usePrefetch = () => {
-  const cache = useRef(new Map());
-  
-  const prefetch = useCallback(async (key: string, fetcher: () => Promise<any>) => {
+  const cache = useRef(new Map<string, Promise<unknown>>());
+
+  const prefetch = useCallback(async (key: string, fetcher: () => Promise<unknown>) => {
     if (!cache.current.has(key)) {
       cache.current.set(key, fetcher());
     }

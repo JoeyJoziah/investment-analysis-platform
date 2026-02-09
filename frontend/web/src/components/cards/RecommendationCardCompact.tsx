@@ -89,7 +89,7 @@ const RecommendationCardCompact: React.FC<RecommendationCardCompactProps> = ({
       case 'STRONG_SELL':
         return <TrendingDownIcon {...iconProps} />;
       default:
-        return null;
+        return undefined;
     }
   };
 
