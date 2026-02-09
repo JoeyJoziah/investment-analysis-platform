@@ -138,47 +138,159 @@ app = FastAPI(
 # Register standardized error handlers
 register_exception_handlers(app)
 
-# Add comprehensive security middleware stack
-# This provides CORS, security headers, rate limiting, input validation, and injection prevention
+# Initialize priority-based middleware stack
+from backend.middleware.stack import MiddlewareStack, MiddlewarePriority
+from backend.api.security_integration import register_security_middleware
+import os
+
+is_testing = os.getenv("TESTING", "False").lower() == "true"
+
 try:
-    from backend.security.security_config import add_comprehensive_security_middleware
-    add_comprehensive_security_middleware(app)
-    logger.info("Comprehensive security middleware stack enabled")
-except Exception as e:
-    logger.warning(f"Failed to initialize comprehensive security middleware: {e}")
-    logger.info("Falling back to basic CORS middleware")
-    # Fallback to basic CORS if comprehensive security fails
+    # Create middleware stack
+    stack = MiddlewareStack(app)
+
+    # Import middleware classes
     from fastapi.middleware.cors import CORSMiddleware
+    from backend.middleware.security_headers import SecurityHeadersMiddleware, SecurityHeadersConfig
+    from backend.security.csrf_protection import CSRFMiddleware, CSRFConfig
+    from backend.security.advanced_rate_limiter import RateLimitingMiddleware, get_default_rate_limiting_rules
+    from backend.middleware.request_size_limiter import RequestSizeLimiterMiddleware, RequestSizeLimits
+    from backend.security.audit_logging import AuditMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
+
+    # Configure CORS
+    cors_origins = ["http://localhost:3000", "http://localhost:8000"]
+    if settings.ENVIRONMENT == "development":
+        cors_origins.extend(["http://127.0.0.1:3000", "http://127.0.0.1:8000"])
+
+    # Register middleware in priority order (highest priority = outermost)
+
+    # 1. CORS - Must be early to set headers before other processing
+    stack.register(
+        "cors",
+        CORSMiddleware,
+        MiddlewarePriority.CORS,
+        {
+            "allow_origins": cors_origins,
+            "allow_credentials": True,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+            "expose_headers": ["X-RateLimit-Remaining", "X-RateLimit-Reset", "X-Request-ID", "X-CSRF-Token"]
+        }
+    )
+
+    # 2. Security Headers - After CORS
+    stack.register(
+        "security_headers",
+        SecurityHeadersMiddleware,
+        MiddlewarePriority.SECURITY_HEADERS,
+        {"config": SecurityHeadersConfig()},
+        skip_in_testing=False  # Keep security headers in testing
+    )
+
+    # 3. CSRF Protection - After security headers
+    csrf_secret = os.getenv("CSRF_SECRET_KEY")
+    if not csrf_secret and not is_testing:
+        logger.warning("CSRF_SECRET_KEY not set, using auto-generated key for development")
+
+    stack.register(
+        "csrf",
+        CSRFMiddleware,
+        MiddlewarePriority.CSRF,
+        {"config": CSRFConfig(secret_key=csrf_secret)},
+        skip_in_testing=True  # CSRF interferes with test client
+    )
+
+    # 4. Rate Limiting - After CSRF
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    rate_limit_rules = get_default_rate_limiting_rules()
+
+    stack.register(
+        "rate_limiting",
+        RateLimitingMiddleware,
+        MiddlewarePriority.RATE_LIMITING,
+        {"rules": rate_limit_rules, "redis_url": redis_url},
+        skip_in_testing=True  # Rate limiting can interfere with tests
+    )
+
+    # 5. Request Size Limits - After rate limiting
+    stack.register(
+        "request_size",
+        RequestSizeLimiterMiddleware,
+        MiddlewarePriority.REQUEST_SIZE,
+        {"config": RequestSizeLimits()},
+        skip_in_testing=False  # Keep size limits in testing
+    )
+
+    # 6. Audit Logging - Monitor requests
+    stack.register(
+        "audit",
+        AuditMiddleware,
+        MiddlewarePriority.AUDIT,
+        {},
+        skip_in_testing=True  # Audit can interfere with test client
+    )
+
+    # 7. Prometheus Monitoring
+    stack.register(
+        "prometheus",
+        PrometheusMiddleware,
+        MiddlewarePriority.MONITORING,
+        {}
+    )
+
+    # 8. Cache Control
+    stack.register(
+        "cache_control",
+        CacheControlMiddleware,
+        MiddlewarePriority.CACHING,
+        {
+            "default_cache_control": "public, max-age=300",
+            "cache_excluded_paths": ["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/v1/metrics"]
+        }
+    )
+
+    # 9. GZip Compression - Innermost (compresses final response)
+    stack.register(
+        "gzip",
+        GZipMiddleware,
+        MiddlewarePriority.COMPRESSION,
+        {"minimum_size": 1000},
+        skip_in_testing=True  # GZip can interfere with test client
+    )
+
+    # 10. V1 API Deprecation - After compression
+    if not is_testing:
+        stack.register(
+            "v1_deprecation",
+            V1DeprecationMiddleware,
+            MiddlewarePriority.LOW,
+            {
+                "enable_redirects": False,
+                "grace_period_days": 30,
+                "strict_mode": False
+            },
+            skip_in_testing=True
+        )
+
+    # Apply all middleware in priority order
+    stack.apply(is_testing=is_testing)
+
+    # Log middleware stack summary
+    logger.info("\n" + stack.get_stack_summary())
+    logger.info("Priority-based middleware stack initialized successfully")
+
+except Exception as e:
+    logger.error(f"Failed to initialize middleware stack: {e}", exc_info=True)
+    logger.warning("Falling back to basic CORS middleware only")
+
+    # Emergency fallback - just CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000", "http://localhost:8000"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-    )
-
-# Add Prometheus monitoring
-app.add_middleware(PrometheusMiddleware)
-
-# Add comprehensive cache control middleware
-app.add_middleware(
-    CacheControlMiddleware,
-    default_cache_control="public, max-age=300",
-    cache_excluded_paths=["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/v1/metrics"]
-)
-
-# Add V1 API deprecation middleware
-# This handles V1 requests with deprecation warnings, usage tracking, and optional redirects
-# Set enable_redirects=True to automatically redirect V1 requests to V2
-# Set strict_mode=True to immediately return 410 for V1 requests (post-sunset)
-# IMPORTANT: Disabled during testing to prevent 410 errors in test suite
-import os
-if os.getenv("TESTING", "False").lower() != "true":
-    app.add_middleware(
-        V1DeprecationMiddleware,
-        enable_redirects=False,  # Set to True for automatic redirects
-        grace_period_days=30,    # Days after sunset to still allow V1 (with warnings)
-        strict_mode=False        # Set to True to immediately reject V1 requests
     )
 
 # Include routers - all API routers use /api/v1/ prefix for consistency
