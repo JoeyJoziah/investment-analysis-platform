@@ -34,20 +34,30 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         session: Optional[AsyncSession] = None
     ) -> List[Recommendation]:
         """Get all active recommendations"""
-        filters = [
-            FilterCriteria(field='is_active', operator='eq', value=True),
-            FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc))
-        ]
-        
-        pagination = PaginationParams(limit=limit) if limit else None
-        
-        return await self.get_multi(
-            filters=filters,
-            sort_params=[SortParams(field='created_at', direction='desc')],
-            pagination=pagination,
-            load_relationships=['stock'],
-            session=session
-        )
+        async def _get_active(session: AsyncSession) -> List[Recommendation]:
+            # Use selectinload to prevent N+1 queries for stock and related data
+            query = select(Recommendation).options(
+                selectinload(Recommendation.stock).selectinload(Stock.exchange),
+                selectinload(Recommendation.stock).selectinload(Stock.sector),
+                selectinload(Recommendation.stock).selectinload(Stock.industry)
+            ).where(
+                and_(
+                    Recommendation.is_active == True,
+                    Recommendation.valid_until > datetime.now(timezone.utc)
+                )
+            ).order_by(Recommendation.created_at.desc())
+
+            if limit:
+                query = query.limit(limit)
+
+            result = await session.execute(query)
+            return result.scalars().all()
+
+        if session:
+            return await _get_active(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_active(session)
     
     async def get_recommendations_by_symbol(
         self,
@@ -59,10 +69,15 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
     ) -> List[Recommendation]:
         """Get recommendations for a specific stock symbol"""
         async def _get_by_symbol(session: AsyncSession) -> List[Recommendation]:
-            query = select(Recommendation).join(Stock).where(
+            # Use selectinload to prevent N+1 queries
+            query = select(Recommendation).options(
+                selectinload(Recommendation.stock).selectinload(Stock.exchange),
+                selectinload(Recommendation.stock).selectinload(Stock.sector),
+                selectinload(Recommendation.stock).selectinload(Stock.industry)
+            ).join(Stock).where(
                 Stock.symbol == symbol.upper()
             )
-            
+
             if active_only:
                 query = query.where(
                     and_(
@@ -70,15 +85,15 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                         Recommendation.valid_until > datetime.now(timezone.utc)
                     )
                 )
-            
+
             query = query.order_by(Recommendation.created_at.desc())
-            
+
             if limit:
                 query = query.limit(limit)
-            
+
             result = await session.execute(query)
             return result.scalars().all()
-        
+
         if session:
             return await _get_by_symbol(session)
         else:
@@ -122,24 +137,33 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         session: Optional[AsyncSession] = None
     ) -> List[Recommendation]:
         """Get top recommendations by confidence score"""
-        filters = [
-            FilterCriteria(field='is_active', operator='eq', value=True),
-            FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc)),
-            FilterCriteria(field='confidence_score', operator='gte', value=min_confidence)
-        ]
-        
-        if recommendation_types:
-            filters.append(
-                FilterCriteria(field='recommendation_type', operator='in', value=recommendation_types)
+        async def _get_top(session: AsyncSession) -> List[Recommendation]:
+            # Use selectinload to prevent N+1 queries
+            query = select(Recommendation).options(
+                selectinload(Recommendation.stock).selectinload(Stock.exchange),
+                selectinload(Recommendation.stock).selectinload(Stock.sector),
+                selectinload(Recommendation.stock).selectinload(Stock.industry)
+            ).where(
+                and_(
+                    Recommendation.is_active == True,
+                    Recommendation.valid_until > datetime.now(timezone.utc),
+                    Recommendation.confidence_score >= min_confidence
+                )
             )
-        
-        return await self.get_multi(
-            filters=filters,
-            sort_params=[SortParams(field='confidence_score', direction='desc')],
-            pagination=PaginationParams(limit=limit),
-            load_relationships=['stock'],
-            session=session
-        )
+
+            if recommendation_types:
+                query = query.where(Recommendation.recommendation_type.in_(recommendation_types))
+
+            query = query.order_by(Recommendation.confidence_score.desc()).limit(limit)
+
+            result = await session.execute(query)
+            return result.scalars().all()
+
+        if session:
+            return await _get_top(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_top(session)
     
     async def get_recommendations_summary(
         self,

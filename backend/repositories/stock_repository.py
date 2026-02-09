@@ -98,18 +98,23 @@ class StockRepository(AsyncCRUDRepository[Stock]):
     ) -> List[Stock]:
         """
         Search stocks by symbol or name using full-text search.
-        
+
         Args:
             query: Search query
             limit: Maximum results
             session: Optional existing session
-        
+
         Returns:
             List of matching stocks
         """
         async def _search(session: AsyncSession) -> List[Stock]:
             # Use PostgreSQL full-text search for better performance
-            search_query = select(Stock).where(
+            # Add eager loading to prevent N+1 queries
+            search_query = select(Stock).options(
+                selectinload(Stock.exchange),
+                selectinload(Stock.sector),
+                selectinload(Stock.industry)
+            ).where(
                 or_(
                     Stock.symbol.ilike(f'%{query.upper()}%'),
                     Stock.name.ilike(f'%{query}%')
@@ -123,10 +128,10 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                 ),
                 Stock.market_cap.desc().nullslast()
             ).limit(limit)
-            
+
             result = await session.execute(search_query)
             return result.scalars().all()
-        
+
         if session:
             return await _search(session)
         else:
@@ -223,12 +228,12 @@ class StockRepository(AsyncCRUDRepository[Stock]):
     ) -> List[Dict[str, Any]]:
         """
         Get stocks with their latest prices and basic metrics.
-        
+
         Args:
             symbols: Optional list of symbols to filter by
             limit: Maximum results
             session: Optional existing session
-        
+
         Returns:
             List of stocks with latest price data
         """
@@ -244,13 +249,18 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                     order_by=PriceHistory.date.desc()
                 ).label('rn')
             ).subquery()
-            
+
             # Main query joining stock with latest prices
+            # Add eager loading to prevent N+1 queries
             query = select(
                 Stock,
                 latest_price_subq.c.latest_price,
                 latest_price_subq.c.price_date,
                 latest_price_subq.c.volume
+            ).options(
+                selectinload(Stock.exchange),
+                selectinload(Stock.sector),
+                selectinload(Stock.industry)
             ).join(
                 latest_price_subq,
                 and_(
@@ -260,13 +270,13 @@ class StockRepository(AsyncCRUDRepository[Stock]):
             ).where(
                 Stock.is_active == True
             )
-            
+
             # Filter by symbols if provided
             if symbols:
                 query = query.where(Stock.symbol.in_([s.upper() for s in symbols]))
-            
+
             query = query.order_by(Stock.market_cap.desc().nullslast()).limit(limit)
-            
+
             result = await session.execute(query)
             return [
                 {
@@ -277,7 +287,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                 }
                 for row in result
             ]
-        
+
         if session:
             return await _get_with_prices(session)
         else:
@@ -458,7 +468,12 @@ class StockRepository(AsyncCRUDRepository[Stock]):
             List of top stocks
         """
         async def _get_top_stocks(session: AsyncSession) -> List[Stock]:
-            query = select(Stock).where(
+            # Add eager loading to prevent N+1 queries
+            query = select(Stock).options(
+                selectinload(Stock.exchange),
+                selectinload(Stock.sector),
+                selectinload(Stock.industry)
+            ).where(
                 and_(
                     Stock.is_active == True,
                     Stock.is_tradable == True,

@@ -37,18 +37,27 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         session: Optional[AsyncSession] = None
     ) -> List[Portfolio]:
         """Get all portfolios for a user"""
-        filters = [FilterCriteria(field='user_id', operator='eq', value=user_id)]
-        
-        load_relationships = []
-        if include_positions:
-            load_relationships.append('positions')
-        
-        return await self.get_multi(
-            filters=filters,
-            sort_params=[SortParams(field='created_at', direction='desc')],
-            load_relationships=load_relationships,
-            session=session
-        )
+        async def _get_user_portfolios(session: AsyncSession) -> List[Portfolio]:
+            query = select(Portfolio).where(Portfolio.user_id == user_id)
+
+            if include_positions:
+                # Use joinedload for positions to prevent N+1 queries
+                query = query.options(
+                    joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.exchange),
+                    joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.sector),
+                    joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.industry)
+                )
+
+            query = query.order_by(Portfolio.created_at.desc())
+
+            result = await session.execute(query)
+            return result.unique().scalars().all()
+
+        if session:
+            return await _get_user_portfolios(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_user_portfolios(session)
     
     async def get_default_portfolio(
         self,
@@ -87,11 +96,22 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         session: Optional[AsyncSession] = None
     ) -> Optional[Portfolio]:
         """Get portfolio with all positions loaded"""
-        return await self.get_by_id(
-            portfolio_id,
-            load_relationships=['positions'],
-            session=session
-        )
+        async def _get_with_positions(session: AsyncSession) -> Optional[Portfolio]:
+            # Use joinedload for positions and their related stock data to prevent N+1 queries
+            query = select(Portfolio).options(
+                joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.exchange),
+                joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.sector),
+                joinedload(Portfolio.positions).selectinload(Position.stock).selectinload(Stock.industry)
+            ).where(Portfolio.id == portfolio_id)
+
+            result = await session.execute(query)
+            return result.unique().scalar_one_or_none()
+
+        if session:
+            return await _get_with_positions(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_with_positions(session)
     
     async def calculate_portfolio_value(
         self,
