@@ -31,6 +31,7 @@ from backend.compliance.gdpr import (
 from backend.utils.data_anonymization import data_anonymizer
 from backend.models.api_response import ApiResponse, success_response
 from backend.security.rate_limiter import rate_limit, RateLimitCategory, RateLimitRule
+from backend.security.audit_logging import get_audit_logger
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -790,4 +791,285 @@ async def enforce_retention_policies(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to schedule retention enforcement."
+        )
+
+
+# =============================================================================
+# Anonymization Endpoints (GDPR Article 17 - Alternative to deletion)
+# =============================================================================
+
+class AnonymizeRequest(BaseModel):
+    """Request model for anonymization"""
+    confirm: bool = Field(..., description="Confirmation that user wants to anonymize data")
+    reason: Optional[str] = Field(None, description="Optional reason for anonymization")
+
+
+class AnonymizeResponse(BaseModel):
+    """Response model for anonymization"""
+    request_id: str
+    status: str
+    message: str
+    anonymized_at: datetime
+    anonymized_records: Dict[str, int]
+
+
+@router.post(
+    "/users/me/anonymize",
+    summary="Anonymize user data",
+    description="Anonymize personal data while retaining records for compliance. "
+                "Alternative to full deletion for SEC/regulatory requirements.",
+    responses={
+        200: {"description": "Data anonymization initiated"},
+        401: {"description": "Not authenticated"},
+        400: {"description": "Confirmation required"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def anonymize_user_data(
+    anonymize_request: AnonymizeRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session)
+) -> ApiResponse[AnonymizeResponse]:
+    """
+    Anonymize user data while retaining records for compliance.
+
+    This endpoint anonymizes personal identifiable information while keeping
+    transaction and audit data for regulatory compliance (SEC 7-year requirement).
+
+    Unlike deletion, anonymization:
+    - Replaces PII with anonymized values
+    - Keeps financial transaction data intact
+    - Maintains audit trail integrity
+    - Allows continued regulatory compliance
+    """
+    try:
+        if not anonymize_request.confirm:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Confirmation required. Set 'confirm: true' to proceed with anonymization."
+            )
+
+        user_id = current_user.id
+
+        logger.info(f"Anonymization request for user {user_id}")
+
+        # Use the data_anonymizer to anonymize user data
+        import hashlib
+        anon_id = hashlib.sha256(str(user_id).encode()).hexdigest()[:12]
+
+        anonymized_counts = {}
+
+        # Anonymize user profile
+        from sqlalchemy import update
+        await db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                email=f"deleted_{anon_id}@anonymized.local",
+                username=f"deleted_{anon_id}",
+                full_name=f"Anonymized User {anon_id}",
+                phone_number=None,
+                preferences={},
+                notification_settings={}
+            )
+        )
+        await db.commit()
+        anonymized_counts["profile"] = 1
+
+        # Anonymize portfolios
+        from backend.models.unified_models import Portfolio
+        from sqlalchemy import select
+        result = await db.execute(
+            select(Portfolio.id).where(Portfolio.user_id == user_id)
+        )
+        portfolio_ids = [row[0] for row in result.fetchall()]
+
+        if portfolio_ids:
+            await db.execute(
+                update(Portfolio)
+                .where(Portfolio.user_id == user_id)
+                .values(
+                    name=f"Anonymized_{anon_id}",
+                    description=None,
+                    is_public=False
+                )
+            )
+            anonymized_counts["portfolios"] = len(portfolio_ids)
+
+            # Anonymize transactions (clear notes, keep financial data for compliance)
+            from backend.models.unified_models import Transaction
+            result = await db.execute(
+                update(Transaction)
+                .where(Transaction.portfolio_id.in_(portfolio_ids))
+                .values(notes=None)
+            )
+            anonymized_counts["transactions"] = result.rowcount
+
+        # Delete non-critical data
+        from backend.models.unified_models import UserSession, Watchlist, Alert
+        from sqlalchemy import delete
+
+        result = await db.execute(
+            delete(UserSession).where(UserSession.user_id == user_id)
+        )
+        anonymized_counts["sessions_deleted"] = result.rowcount
+
+        result = await db.execute(
+            delete(Watchlist).where(Watchlist.user_id == user_id)
+        )
+        anonymized_counts["watchlists_deleted"] = result.rowcount
+
+        result = await db.execute(
+            delete(Alert).where(Alert.user_id == user_id)
+        )
+        anonymized_counts["alerts_deleted"] = result.rowcount
+
+        await db.commit()
+
+        request_id = f"anon_{anon_id}_{int(datetime.now(timezone.utc).timestamp())}"
+
+        # Log the anonymization
+        audit_logger = get_audit_logger()
+        await audit_logger.log_gdpr_request(
+            request_type="data_anonymization",
+            user_id=str(user_id),
+            details={
+                "request_id": request_id,
+                "anonymized_records": anonymized_counts,
+                "reason": anonymize_request.reason
+            }
+        )
+
+        return success_response(data=AnonymizeResponse(
+            request_id=request_id,
+            status="completed",
+            message="User data anonymized successfully. Transaction data retained for compliance.",
+            anonymized_at=datetime.now(timezone.utc),
+            anonymized_records=anonymized_counts
+        ))
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error anonymizing user data: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to anonymize user data. Please contact support."
+        )
+
+
+# =============================================================================
+# Audit Trail Endpoints (GDPR Article 30 - Records of processing)
+# =============================================================================
+
+class AuditEntry(BaseModel):
+    """Model for a single audit entry"""
+    id: int
+    action: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+
+class AuditTrailResponse(BaseModel):
+    """Response model for audit trail"""
+    user_id: int
+    total_entries: int
+    entries: List[AuditEntry]
+    page: int
+    limit: int
+
+
+@router.get(
+    "/users/me/audit",
+    summary="Get audit trail",
+    description="Retrieve audit trail of all data processing activities for the user. "
+                "Supports pagination with skip and limit parameters.",
+    responses={
+        200: {"description": "Audit trail retrieved successfully"},
+        401: {"description": "Not authenticated"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def get_audit_trail(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session)
+) -> ApiResponse[AuditTrailResponse]:
+    """
+    Get comprehensive audit trail for the authenticated user.
+
+    GDPR Article 30 - Records of processing activities:
+    Controllers must maintain records of processing activities under their responsibility.
+
+    This endpoint provides transparency by showing all data processing activities
+    including:
+    - Data access (exports, views)
+    - Data modifications (updates, edits)
+    - Consent changes (granted, withdrawn)
+    - Account actions (login, logout, settings changes)
+
+    Supports pagination for large audit histories.
+    """
+    try:
+        user_id = current_user.id
+
+        logger.info(f"Audit trail requested for user {user_id} (skip={skip}, limit={limit})")
+
+        # Query audit logs for the user
+        from backend.models.unified_models import AuditLog
+        from sqlalchemy import select, func
+
+        # Get total count
+        count_result = await db.execute(
+            select(func.count(AuditLog.id))
+            .where(AuditLog.user_id == user_id)
+        )
+        total_entries = count_result.scalar() or 0
+
+        # Get paginated entries
+        result = await db.execute(
+            select(AuditLog)
+            .where(AuditLog.user_id == user_id)
+            .order_by(AuditLog.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        audit_logs = result.scalars().all()
+
+        # Convert to response format
+        entries = []
+        for log in audit_logs:
+            entries.append(AuditEntry(
+                id=log.id,
+                action=log.action,
+                resource_type=log.resource_type or "unknown",
+                resource_id=log.resource_id,
+                ip_address=log.ip_address,
+                user_agent=log.user_agent,
+                meta_data=log.meta_data,
+                created_at=log.created_at
+            ))
+
+        page = (skip // limit) + 1 if limit > 0 else 1
+
+        return success_response(data=AuditTrailResponse(
+            user_id=user_id,
+            total_entries=total_entries,
+            entries=entries,
+            page=page,
+            limit=limit
+        ))
+
+    except Exception as e:
+        logger.error(f"Error retrieving audit trail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve audit trail."
         )

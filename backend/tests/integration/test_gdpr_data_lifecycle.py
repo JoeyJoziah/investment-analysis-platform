@@ -267,37 +267,148 @@ async def test_data_deletion_cascades(
 
 
 @pytest.mark.asyncio
-async def test_anonymization_in_analytics(
-    async_client: AsyncClient,
-    db_session: AsyncSession,
-    gdpr_test_user: User
-):
-    """
-    Test PII scrubbing in analytics and aggregated data.
-
-    Validates that analytics data is properly anonymized with no
-    personally identifiable information exposed.
-
-    NOTE: This test uses endpoints that don't exist yet (/api/v1/analytics/aggregated).
-    This test is a placeholder for future analytics functionality.
-    """
-    pytest.skip("Analytics aggregated endpoint /api/v1/analytics/aggregated not implemented.")
-
-
-@pytest.mark.asyncio
-async def test_gdpr_compliance_audit_trail(
-    async_client: AsyncClient,
+async def test_anonymization_endpoint(
+    authenticated_client: AsyncClient,
     db_session: AsyncSession,
     gdpr_test_user: User,
     user_complete_data: dict
 ):
     """
-    Test comprehensive audit trail for all GDPR operations.
+    Test POST /api/v1/users/me/anonymize endpoint.
 
-    Validates that all data access, modifications, exports, and deletions
-    are properly logged for compliance auditing (GDPR Article 30).
-
-    NOTE: This test uses endpoints that don't exist yet (/api/v1/gdpr/audit-trail, /api/v1/gdpr/retention-policy).
-    This test is a placeholder for future audit trail functionality.
+    Validates that user data can be anonymized while retaining
+    transaction data for regulatory compliance.
     """
-    pytest.skip("GDPR audit trail endpoints not implemented.")
+    # Make anonymization request
+    response = await authenticated_client.post(
+        "/api/v1/users/me/anonymize",
+        json={
+            "confirm": True,
+            "reason": "Testing anonymization endpoint"
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] == True
+
+    anonymization_data = data["data"]
+    assert "request_id" in anonymization_data
+    assert anonymization_data["status"] == "completed"
+    assert "anonymized_records" in anonymization_data
+    assert "anonymized_at" in anonymization_data
+    assert "message" in anonymization_data
+
+    # Verify records were anonymized
+    anonymized_records = anonymization_data["anonymized_records"]
+    assert anonymized_records.get("profile") == 1
+    # Should have anonymized some data categories
+    assert len(anonymized_records) > 0
+
+
+@pytest.mark.asyncio
+async def test_anonymization_requires_confirmation(
+    authenticated_client: AsyncClient,
+    db_session: AsyncSession,
+    gdpr_test_user: User
+):
+    """
+    Test that anonymization endpoint requires explicit confirmation.
+    """
+    # Try without confirmation
+    response = await authenticated_client.post(
+        "/api/v1/users/me/anonymize",
+        json={
+            "confirm": False,
+            "reason": "Testing without confirmation"
+        }
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] == False
+    assert "confirmation required" in data.get("error", "").lower()
+
+
+@pytest.mark.asyncio
+async def test_gdpr_audit_trail_endpoint(
+    authenticated_client: AsyncClient,
+    db_session: AsyncSession,
+    gdpr_test_user: User,
+    user_complete_data: dict
+):
+    """
+    Test GET /api/v1/users/me/audit endpoint.
+
+    Validates that all data access, modifications, and operations
+    are properly logged for compliance auditing (GDPR Article 30).
+    """
+    # Get audit trail
+    response = await authenticated_client.get("/api/v1/users/me/audit")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] == True
+
+    audit_data = data["data"]
+    assert "user_id" in audit_data
+    assert audit_data["user_id"] == gdpr_test_user.id
+    assert "total_entries" in audit_data
+    assert "entries" in audit_data
+    assert isinstance(audit_data["entries"], list)
+    assert "page" in audit_data
+    assert "limit" in audit_data
+
+    # Verify we have at least one audit entry from fixture setup
+    assert audit_data["total_entries"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_audit_trail_pagination(
+    authenticated_client: AsyncClient,
+    db_session: AsyncSession,
+    gdpr_test_user: User,
+    user_complete_data: dict
+):
+    """
+    Test audit trail pagination functionality.
+    """
+    # Create multiple audit log entries
+    from backend.models.unified_models import AuditLog
+    for i in range(10):
+        audit_log = AuditLog(
+            user_id=gdpr_test_user.id,
+            action=f"test_action_{i}",
+            resource_type="test",
+            resource_id=str(i),
+            ip_address="192.168.1.1"
+        )
+        db_session.add(audit_log)
+    await db_session.commit()
+
+    # Test pagination - page 1 (skip=0, limit=5)
+    response = await authenticated_client.get(
+        "/api/v1/users/me/audit?skip=0&limit=5"
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    audit_data = data["data"]
+
+    assert len(audit_data["entries"]) <= 5
+    assert audit_data["page"] == 1
+    assert audit_data["limit"] == 5
+    assert audit_data["total_entries"] >= 10
+
+    # Test pagination - page 2 (skip=5, limit=5)
+    response = await authenticated_client.get(
+        "/api/v1/users/me/audit?skip=5&limit=5"
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    audit_data = data["data"]
+
+    assert len(audit_data["entries"]) <= 5
+    assert audit_data["page"] == 2
+    assert audit_data["limit"] == 5
