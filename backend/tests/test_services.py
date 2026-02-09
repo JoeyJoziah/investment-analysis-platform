@@ -13,6 +13,8 @@ from backend.services import (
     portfolio_service,
     AnalysisService,
     analysis_service,
+    TradingService,
+    trading_service,
 )
 
 
@@ -215,3 +217,183 @@ class TestServiceIntegration:
         assert hasattr(analysis_service, 'run_analysis')
         assert hasattr(analysis_service, 'get_cached_analysis')
         assert hasattr(analysis_service, 'compare_stocks')
+
+
+class TestTradingService:
+    """Test TradingService"""
+
+    def test_service_instance(self):
+        """Test that service instance is properly created"""
+        assert isinstance(trading_service, TradingService)
+        assert trading_service.repository is not None
+
+    @pytest.mark.asyncio
+    async def test_validate_order_missing_fields(self):
+        """Test order validation with missing required fields"""
+        service = TradingService()
+
+        result = await service.validate_order({})
+        assert result['valid'] is False
+        assert 'errors' in result
+        assert len(result['errors']) > 0
+
+    @pytest.mark.asyncio
+    async def test_validate_order_invalid_quantity(self):
+        """Test order validation with invalid quantity"""
+        service = TradingService()
+
+        # Mock repository to avoid database calls
+        with patch.object(
+            service.repository,
+            'get_by_id',
+            new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+
+            order_data = {
+                'portfolio_id': 1,
+                'symbol': 'AAPL',
+                'side': 'buy',
+                'order_type': 'market',
+                'quantity': -10
+            }
+
+            result = await service.validate_order(order_data)
+            assert result['valid'] is False
+            assert any('quantity' in err.lower() for err in result['errors'])
+
+    @pytest.mark.asyncio
+    async def test_validate_order_limit_without_price(self):
+        """Test limit order validation without price"""
+        service = TradingService()
+
+        # Mock repository to avoid database calls
+        with patch.object(
+            service.repository,
+            'get_by_id',
+            new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = None
+
+            order_data = {
+                'portfolio_id': 1,
+                'symbol': 'AAPL',
+                'side': 'buy',
+                'order_type': 'limit',
+                'quantity': 10
+            }
+
+            result = await service.validate_order(order_data)
+            assert result['valid'] is False
+            assert any('price' in err.lower() for err in result['errors'])
+
+    @pytest.mark.asyncio
+    async def test_validate_order_valid_market_order(self):
+        """Test valid market order validation"""
+        service = TradingService()
+
+        # Mock repository to return a portfolio
+        with patch.object(
+            service.repository,
+            'get_by_id',
+            new_callable=AsyncMock
+        ) as mock_get:
+            from decimal import Decimal
+            mock_portfolio = MagicMock()
+            mock_portfolio.cash_balance = Decimal('10000.00')
+            mock_get.return_value = mock_portfolio
+
+            order_data = {
+                'portfolio_id': 1,
+                'symbol': 'AAPL',
+                'side': 'buy',
+                'order_type': 'market',
+                'quantity': 10,
+                'price': 150.00
+            }
+
+            result = await service.validate_order(order_data)
+            assert result['valid'] is True
+
+    @pytest.mark.asyncio
+    async def test_execute_trade_returns_result(self):
+        """Test that execute_trade returns a result dictionary"""
+        service = TradingService()
+
+        # Mock repository methods
+        with patch.object(
+            service.repository,
+            'get_by_id',
+            new_callable=AsyncMock
+        ) as mock_get, \
+        patch.object(
+            service.repository,
+            'add_position',
+            new_callable=AsyncMock
+        ) as mock_add:
+            from decimal import Decimal
+
+            mock_portfolio = MagicMock()
+            mock_portfolio.cash_balance = Decimal('10000.00')
+            mock_get.return_value = mock_portfolio
+
+            mock_position = MagicMock()
+            mock_position.id = 1
+            mock_add.return_value = mock_position
+
+            order = {
+                'symbol': 'AAPL',
+                'side': 'buy',
+                'order_type': 'market',
+                'quantity': 10,
+                'price': 150.00
+            }
+
+            result = await service.execute_trade(portfolio_id=1, order=order)
+            assert isinstance(result, dict)
+            assert 'success' in result
+
+    @pytest.mark.asyncio
+    async def test_calculate_portfolio_impact_returns_dict(self):
+        """Test that calculate_portfolio_impact returns impact analysis"""
+        service = TradingService()
+
+        # Mock repository methods
+        with patch.object(
+            service.repository,
+            'get_by_id',
+            new_callable=AsyncMock
+        ) as mock_get, \
+        patch.object(
+            service.repository,
+            'get_portfolio_allocation',
+            new_callable=AsyncMock
+        ) as mock_alloc, \
+        patch.object(
+            service.repository,
+            'calculate_portfolio_value',
+            new_callable=AsyncMock
+        ) as mock_value:
+            from decimal import Decimal
+
+            mock_portfolio = MagicMock()
+            mock_portfolio.cash_balance = Decimal('10000.00')
+            mock_get.return_value = mock_portfolio
+
+            mock_alloc.return_value = {}
+            mock_value.return_value = {'total_value': 50000.0}
+
+            trade = {
+                'symbol': 'AAPL',
+                'side': 'buy',
+                'quantity': 10,
+                'price': 150.00
+            }
+
+            result = await service.calculate_portfolio_impact(portfolio_id=1, trade=trade)
+            assert isinstance(result, dict)
+            assert 'success' in result
+            if result['success']:
+                assert 'trade_impact' in result
+                assert 'before' in result
+                assert 'after' in result

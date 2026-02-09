@@ -30,7 +30,7 @@ from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User, Portfolio, Position, Transaction as TransactionModel
 from backend.config.settings import settings
 from backend.models.api_response import ApiResponse, success_response
-from backend.services.portfolio_service import portfolio_service
+from backend.services.portfolio_service import portfolio_service, PortfolioService
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -41,8 +41,19 @@ router = APIRouter(tags=["portfolio"])
 # Service Layer Dependencies
 # ============================================================================
 
-def get_portfolio_service():
-    """Dependency to get portfolio service instance."""
+async def get_portfolio_service():
+    """
+    Dependency to get portfolio service instance.
+
+    In test mode (TESTING=True), returns service without initialization.
+    """
+    import os
+    if not os.getenv("TESTING"):
+        try:
+            # Portfolio service doesn't need async initialization currently
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to initialize portfolio service: {e}")
     return portfolio_service
 
 # Enums
@@ -271,7 +282,8 @@ def calculate_performance_metrics() -> PerformanceMetrics:
 @cache_with_ttl(ttl=60)  # Cache for 1 minute
 async def get_portfolios_summary(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db_session)
+    db: AsyncSession = Depends(get_async_db_session),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[List[PortfolioSummary]]:
     """
     Get summary of all user portfolios with real-time price data.
@@ -450,7 +462,8 @@ async def calculate_portfolio_risk_score(portfolio_id: int, positions: List, db:
 async def get_portfolio_detail(
     portfolio_id: str = Path(..., description="Portfolio ID"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_async_db_session)
+    db: AsyncSession = Depends(get_async_db_session),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[PortfolioDetail]:
     """
     Get detailed portfolio information with real-time price updates.

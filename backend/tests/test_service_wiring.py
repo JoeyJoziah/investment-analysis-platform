@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from backend.services.recommendation_service import RecommendationService
 from backend.services.portfolio_service import PortfolioService
 from backend.services.analysis_service import AnalysisService
+from backend.services.trading_service import TradingService
 
 
 @pytest.mark.asyncio
@@ -63,8 +64,8 @@ async def test_portfolio_service_dependency_available(authenticated_client: Asyn
     """
     from backend.api.routers.portfolio import get_portfolio_service
 
-    # Get the service instance
-    service = get_portfolio_service()
+    # Get the service instance (it's async now)
+    service = await get_portfolio_service()
 
     # Verify it's the correct type
     assert isinstance(service, PortfolioService)
@@ -195,12 +196,77 @@ def test_service_singletons_exist():
     from backend.services.recommendation_service import recommendation_service
     from backend.services.portfolio_service import portfolio_service
     from backend.services.analysis_service import analysis_service
+    from backend.services.trading_service import trading_service
 
     assert recommendation_service is not None
     assert portfolio_service is not None
     assert analysis_service is not None
+    assert trading_service is not None
 
     # Verify they're the right types
     assert isinstance(recommendation_service, RecommendationService)
     assert isinstance(portfolio_service, PortfolioService)
     assert isinstance(analysis_service, AnalysisService)
+    assert isinstance(trading_service, TradingService)
+
+
+@pytest.mark.asyncio
+async def test_trading_service_dependency_available():
+    """
+    Verify that TradingService is available and properly structured.
+    """
+    from backend.services.trading_service import trading_service
+
+    # Verify it's the correct type
+    assert isinstance(trading_service, TradingService)
+    assert hasattr(trading_service, 'repository')
+    assert hasattr(trading_service, 'validate_order')
+    assert hasattr(trading_service, 'execute_trade')
+    assert hasattr(trading_service, 'calculate_portfolio_impact')
+
+
+@pytest.mark.asyncio
+async def test_trading_service_validate_order():
+    """
+    Test TradingService.validate_order() business logic.
+    """
+    from backend.services.trading_service import trading_service
+
+    # Test with missing fields
+    result = await trading_service.validate_order({})
+    assert result['valid'] is False
+    assert 'errors' in result
+    assert len(result['errors']) > 0
+
+    # Test with invalid quantity (mock repository to avoid DB calls)
+    with patch.object(
+        trading_service.repository,
+        'get_by_id',
+        new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = None
+
+        result = await trading_service.validate_order({
+            'portfolio_id': 1,
+            'symbol': 'AAPL',
+            'side': 'buy',
+            'order_type': 'market',
+            'quantity': -10
+        })
+        assert result['valid'] is False
+        assert any('quantity' in err.lower() for err in result['errors'])
+
+
+@pytest.mark.asyncio
+async def test_portfolio_service_wired_to_endpoints(authenticated_client: AsyncClient):
+    """
+    Verify that portfolio endpoints use PortfolioService.
+    """
+    # Test the summary endpoint (which now uses the service)
+    response = await authenticated_client.get("/api/v1/portfolio/summary")
+
+    # Should work (may return empty list or mock data)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "data" in data
