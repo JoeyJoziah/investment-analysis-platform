@@ -10,6 +10,7 @@ import logging
 
 from backend.models.api_response import ApiResponse, success_response
 from backend.utils.security_logger import get_security_logger, sanitize_log_input
+from backend.utils.comprehensive_cache import get_cache_manager
 
 logger = logging.getLogger(__name__)
 security_logger = get_security_logger()
@@ -679,6 +680,33 @@ async def update_configuration(
             ip_address=get_client_ip(request)
         )
         raise
+
+@router.get("/cache/stats")
+async def get_cache_stats(
+    current_user = Depends(check_admin_permission)
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Get comprehensive cache statistics including hit rates per key prefix
+    Admin-only endpoint for monitoring cache performance
+    """
+    try:
+        cache_manager = await get_cache_manager()
+        metrics = await cache_manager.get_metrics()
+
+        return success_response(data={
+            "cache_metrics": metrics.get("cache_metrics", {}),
+            "prefix_stats": metrics.get("prefix_stats", {}),
+            "l1_cache_stats": metrics.get("l1_cache_stats", {}),
+            "l2_cache_stats": metrics.get("l2_cache_stats", {}),
+            "storage_bytes": metrics.get("storage_bytes", 0),
+            "active_warming_tasks": metrics.get("active_warming_tasks", 0),
+            "ttl_policies": metrics.get("ttl_policies", {}),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get cache stats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve cache statistics")
 
 @router.get("/audit-logs")
 async def get_audit_logs(

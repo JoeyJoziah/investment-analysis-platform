@@ -60,7 +60,17 @@ class CacheMetrics:
     api_calls_saved: int = 0
     total_requests: int = 0
     cache_storage_bytes: int = 0
-    
+
+    # Per-key-prefix hit rate tracking
+    prefix_hits: Dict[str, int] = None
+    prefix_misses: Dict[str, int] = None
+
+    def __post_init__(self):
+        if self.prefix_hits is None:
+            self.prefix_hits = {}
+        if self.prefix_misses is None:
+            self.prefix_misses = {}
+
     @property
     def hit_ratio(self) -> float:
         total = self.total_requests
@@ -68,13 +78,45 @@ class CacheMetrics:
             return 0.0
         hits = self.l1_hits + self.l2_hits + self.l3_hits
         return hits / total
-    
+
     @property
     def cost_savings(self) -> float:
         # Estimate cost savings based on API calls avoided
         # Alpha Vantage: $50/month for premium, we're using free tier
         # Estimate $0.10 per API call if we had to pay
         return self.api_calls_saved * 0.10
+
+    def track_prefix_hit(self, prefix: str):
+        """Track cache hit for a key prefix"""
+        if prefix not in self.prefix_hits:
+            self.prefix_hits[prefix] = 0
+        self.prefix_hits[prefix] += 1
+
+    def track_prefix_miss(self, prefix: str):
+        """Track cache miss for a key prefix"""
+        if prefix not in self.prefix_misses:
+            self.prefix_misses[prefix] = 0
+        self.prefix_misses[prefix] += 1
+
+    def get_prefix_stats(self) -> Dict[str, Dict[str, any]]:
+        """Get hit rate statistics per key prefix"""
+        stats = {}
+        all_prefixes = set(self.prefix_hits.keys()) | set(self.prefix_misses.keys())
+
+        for prefix in all_prefixes:
+            hits = self.prefix_hits.get(prefix, 0)
+            misses = self.prefix_misses.get(prefix, 0)
+            total = hits + misses
+            hit_rate = hits / total if total > 0 else 0.0
+
+            stats[prefix] = {
+                'hits': hits,
+                'misses': misses,
+                'total': total,
+                'hit_rate': hit_rate
+            }
+
+        return stats
 
 
 class LRUCache:
@@ -167,14 +209,31 @@ class ComprehensiveCacheManager:
         self._warming_tasks: Dict[str, asyncio.Task] = {}
         self._last_cleanup = time.time()
         
-        # Cache key prefixes for different data types
+        # Cache key prefixes for different data types with optimized TTL
         self.key_prefixes = {
             'api_response': 'api:resp',
             'db_query': 'db:query',
             'computation': 'comp',
             'market_data': 'market',
             'user_data': 'user',
-            'analysis': 'analysis'
+            'analysis': 'analysis',
+            'real_time_quote': 'quote',
+            'company_overview': 'overview',
+            'technical_indicators': 'technical',
+            'ml_predictions': 'ml_pred',
+            'recommendations': 'recommend',
+            'stock_list': 'stocks'
+        }
+
+        # Optimized TTL values based on data freshness needs
+        self.ttl_policies = {
+            'real_time_quote': {'l1': 60, 'l2': 300, 'l3': 900},  # 1m, 5m, 15m
+            'company_overview': {'l1': 7200, 'l2': 43200, 'l3': 86400},  # 2h, 12h, 24h
+            'technical_indicators': {'l1': 1800, 'l2': 7200, 'l3': 21600},  # 30m, 2h, 6h
+            'ml_predictions': {'l1': 900, 'l2': 7200, 'l3': 14400},  # 15m, 2h, 4h
+            'recommendations': {'l1': 1800, 'l2': 21600, 'l3': 43200},  # 30m, 6h, 12h
+            'stock_list': {'l1': 300, 'l2': 900, 'l3': 3600},  # 5m, 15m, 1h
+            'analysis': {'l1': 1800, 'l2': 7200, 'l3': 28800},  # 30m, 2h, 8h
         }
     
     async def initialize(self):
@@ -271,14 +330,18 @@ class ComprehensiveCacheManager:
         """
         self.metrics.total_requests += 1
         cache_key = self._make_key(data_type, identifier, params)
-        
+
+        # Extract prefix for hit rate tracking
+        prefix = self.key_prefixes.get(data_type, 'misc')
+
         # L1 Cache Check (Memory)
         l1_data, l1_hit = self.l1_cache.get(cache_key)
         if l1_hit and l1_data and not self._is_expired(l1_data):
             self.metrics.l1_hits += 1
+            self.metrics.track_prefix_hit(prefix)
             logger.debug(f"L1 cache hit: {cache_key}")
             return l1_data['value'], 'l1'
-        
+
         if l1_hit:
             self.metrics.l1_misses += 1
         
@@ -288,11 +351,13 @@ class ComprehensiveCacheManager:
                 l2_data = await self.redis_client.get(cache_key)
                 if l2_data:
                     self.metrics.l2_hits += 1
+                    self.metrics.track_prefix_hit(prefix)
                     data = self._deserialize_data(l2_data)
-                    
+
                     # Populate L1 cache
-                    self.l1_cache.set(cache_key, data, self.config.l1_ttl)
-                    
+                    ttl_config = self.ttl_policies.get(data_type, {'l1': self.config.l1_ttl})
+                    self.l1_cache.set(cache_key, data, ttl_config.get('l1', self.config.l1_ttl))
+
                     logger.debug(f"L2 cache hit: {cache_key}")
                     return data, 'l2'
                 else:
@@ -300,21 +365,27 @@ class ComprehensiveCacheManager:
             except Exception as e:
                 logger.warning(f"L2 cache error for {cache_key}: {e}")
                 self.metrics.l2_misses += 1
-        
+
         # L3 Cache Check (Database)
         l3_data = await self._get_from_database(cache_key)
         if l3_data:
             self.metrics.l3_hits += 1
-            
-            # Populate L1 and L2 caches
-            self.l1_cache.set(cache_key, l3_data, self.config.l1_ttl)
+            self.metrics.track_prefix_hit(prefix)
+
+            # Populate L1 and L2 caches with optimized TTL
+            ttl_config = self.ttl_policies.get(data_type, {
+                'l1': self.config.l1_ttl,
+                'l2': self.config.l2_ttl
+            })
+            self.l1_cache.set(cache_key, l3_data, ttl_config.get('l1', self.config.l1_ttl))
             if self.redis_client:
-                await self._set_redis(cache_key, l3_data, self.config.l2_ttl)
-            
+                await self._set_redis(cache_key, l3_data, ttl_config.get('l2', self.config.l2_ttl))
+
             logger.debug(f"L3 cache hit: {cache_key}")
             return l3_data, 'l3'
         else:
             self.metrics.l3_misses += 1
+            self.metrics.track_prefix_miss(prefix)
         
         # Fallback to computation
         if fallback_func:
@@ -339,30 +410,30 @@ class ComprehensiveCacheManager:
         params: Optional[Dict] = None,
         custom_ttl: Optional[Dict[str, int]] = None
     ):
-        """Set data in all cache layers"""
+        """Set data in all cache layers with optimized TTL"""
         cache_key = self._make_key(data_type, identifier, params)
-        
-        # Use custom TTL or defaults
-        ttls = custom_ttl or {
+
+        # Use custom TTL, optimized policy TTL, or defaults
+        ttls = custom_ttl or self.ttl_policies.get(data_type, {
             'l1': self.config.l1_ttl,
             'l2': self.config.l2_ttl,
             'l3': self.config.l3_ttl
-        }
-        
+        })
+
         # L1 Cache (Memory)
-        self.l1_cache.set(cache_key, data, ttls['l1'])
-        
+        self.l1_cache.set(cache_key, data, ttls.get('l1', self.config.l1_ttl))
+
         # L2 Cache (Redis)
         if self.redis_client:
-            await self._set_redis(cache_key, data, ttls['l2'])
-        
+            await self._set_redis(cache_key, data, ttls.get('l2', self.config.l2_ttl))
+
         # L3 Cache (Database)
-        await self._set_database(cache_key, data, ttls['l3'])
-        
+        await self._set_database(cache_key, data, ttls.get('l3', self.config.l3_ttl))
+
         # Update metrics
         data_size = len(self._serialize_data(data))
         self.metrics.cache_storage_bytes += data_size
-        
+
         logger.debug(f"Data cached across all layers: {cache_key}")
     
     async def delete(self, data_type: str, identifier: str, params: Optional[Dict] = None):
@@ -445,9 +516,9 @@ class ComprehensiveCacheManager:
         self._warming_tasks[task_key] = asyncio.create_task(_warm_data())
     
     async def get_metrics(self) -> Dict[str, Any]:
-        """Get comprehensive cache metrics"""
+        """Get comprehensive cache metrics including per-prefix hit rates"""
         l1_stats = self.l1_cache.get_stats()
-        
+
         redis_stats = {}
         if self.redis_client:
             try:
@@ -460,7 +531,7 @@ class ComprehensiveCacheManager:
                 }
             except Exception as e:
                 logger.warning(f"Could not get Redis stats: {e}")
-        
+
         return {
             'cache_metrics': {
                 'l1_hits': self.metrics.l1_hits,
@@ -474,10 +545,12 @@ class ComprehensiveCacheManager:
                 'api_calls_saved': self.metrics.api_calls_saved,
                 'estimated_cost_savings': self.metrics.cost_savings
             },
+            'prefix_stats': self.metrics.get_prefix_stats(),
             'l1_cache_stats': l1_stats,
             'l2_cache_stats': redis_stats,
             'active_warming_tasks': len(self._warming_tasks),
-            'storage_bytes': self.metrics.cache_storage_bytes
+            'storage_bytes': self.metrics.cache_storage_bytes,
+            'ttl_policies': self.ttl_policies
         }
     
     # Private helper methods
