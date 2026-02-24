@@ -23,8 +23,8 @@ on:
         - containers
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
 
 concurrency:
   group: security-scan-${{ github.ref }}
@@ -441,7 +441,7 @@ jobs:
 
     - name: Install report generation tools
       run: |
-        pip install jq yq-python
+        pip install jq
 
     - name: Generate consolidated security report
       run: |

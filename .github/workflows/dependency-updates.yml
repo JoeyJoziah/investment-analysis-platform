@@ -23,8 +23,8 @@ on:
         type: boolean
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
 
 concurrency:
   group: dependency-updates
@@ -79,9 +79,14 @@ jobs:
         npm ci
         
         # Run npm audit and count high/critical vulnerabilities
-        AUDIT_RESULT=$(npm audit --audit-level=high --json 2>/dev/null || echo '{"vulnerabilities":{}}')
-        JS_VULNS=$(echo "$AUDIT_RESULT" | jq '.metadata.vulnerabilities.high + .metadata.vulnerabilities.critical' || echo "0")
-        
+        AUDIT_RESULT=$(npm audit --audit-level=high --json 2>/dev/null || echo '{"metadata":{"vulnerabilities":{"high":0,"critical":0}}}')
+        JS_VULNS=$(echo "$AUDIT_RESULT" | jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' || echo "0")
+
+        # Ensure we have a valid number, not null
+        if [ -z "$JS_VULNS" ] || [ "$JS_VULNS" = "null" ]; then
+          JS_VULNS="0"
+        fi
+
         echo "js_count=$JS_VULNS" >> $GITHUB_OUTPUT
 
     - name: Summarize vulnerability check
