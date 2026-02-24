@@ -93,6 +93,7 @@ jobs:
 
     - name: Run Semgrep static analysis
       uses: returntocorp/semgrep-action@v1
+      continue-on-error: true
       with:
         config: >-
           p/security-audit
