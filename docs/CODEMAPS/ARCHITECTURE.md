@@ -1,7 +1,7 @@
 # System Architecture Codemap
 
-**Last Updated:** 2026-01-28
-**Wave:** 5 (Integration Test Remediation)
+**Last Updated:** 2026-02-24
+**Wave:** 5-6+ (CI/CD Hardening, Test Recovery)
 **Status:** Production-Ready
 
 ---
@@ -303,13 +303,24 @@ Client                    API                     Database
 | prometheus | prometheus | 9090 | Metrics |
 | grafana | grafana | 3001 | Dashboards |
 
+### CI/CD Runtime Versions (Standardized 2026-02-24)
+
+| Runtime | Version | Notes |
+|---------|---------|-------|
+| Python | 3.12 (primary) | CI matrix also tests 3.9, 3.10, 3.11 |
+| Node.js | 20 | Upgraded from 18 across 9 workflows |
+| `actions/setup-python` | v5 | Upgraded from v4 |
+| `actions/setup-node` | v4 | Upgraded from v3 |
+| `actions/upload-artifact` | v4 | Upgraded from v3 |
+| `github/codeql-action/*` | v3 | Upgraded from v2 in security-scan |
+
 ---
 
 ## Key File Locations
 
 | Purpose | Path |
 |---------|------|
-| Main API | `backend/api/main_performance_optimized.py` |
+| Main API | `backend/api/main.py` |
 | Unified Models | `backend/models/unified_models.py` |
 | Router Registry | `backend/api/routers/__init__.py` |
 | Settings | `backend/config/settings.py` |
@@ -317,6 +328,7 @@ Client                    API                     Database
 | Rate Limiter | `backend/security/rate_limiter.py` |
 | Cache Utils | `backend/utils/cache.py` |
 | Test Fixtures | `backend/tests/conftest.py` |
+| ETL Data Classes | `backend/etl/unlimited_data_extractor.py` |
 
 ---
 
@@ -333,3 +345,14 @@ Client                    API                     Database
 - `178a92e` - fix: Resolve double-prefix routing causing 404 errors
 - `9e51bc9` - fix: Resolve integration test schema mismatches and fixture issues
 - `f12c6b2` - fix: Skip rate limiting when TESTING=True
+
+**Post-Wave 6 CI/CD Commits (2026-02-09 through 2026-02-24):**
+- `d9b2d1c` - fix: Upgrade Node 18 to 20, Python 3.11 to 3.12, standardize action versions
+- `786ffec` - fix(ci): Add TA-Lib C library to pipeline validation
+- `4b8b168` - fix(ci): Add TA-Lib C library to security scan
+- `ca91ccd` - fix(ci): Add missing SECRET_KEY/JWT_SECRET_KEY to pipeline validation
+- `4812e1f` - fix(ci): Fix pipeline validation db init and security scan issues
+- `9f22b30` - fix(ci): Make ETL validation resilient to import errors
+- `7a39cb9` - fix(ci): Make Semgrep non-blocking
+- `4bac2fc` - fix(ci): Make GitLeaks non-blocking
+- `4cd4620` - fix: Add missing StockData and ExtractionResult dataclasses to ETL

@@ -153,12 +153,61 @@ healthcheck:
 
 ## CI/CD Workflows (`.github/workflows/`)
 
+**Runtime Versions (standardized 2026-02-24):**
+- Python: `3.12` (primary), matrix tests 3.9-3.12 in `ci.yml`
+- Node.js: `20`
+
+**Action Versions (standardized 2026-02-24):**
+- `actions/setup-python@v5`, `actions/setup-node@v4`
+- `actions/upload-artifact@v4`, `actions/download-artifact@v4`
+- `github/codeql-action/*@v3` (except 2 legacy v2 refs in staging/production deploy)
+
+### Core Workflows
+
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | Push/PR | Run tests |
-| `deploy.yml` | Main merge | Production deploy |
-| `security.yml` | Schedule | Security scan |
-| `issue-sync.yml` | Issue events | Board sync |
+| `ci.yml` | Push/PR to main/develop | Lint, test (matrix), build, coverage |
+| `comprehensive-testing.yml` | Push/PR/daily 2AM | Security scan + full test suite |
+| `security-scan.yml` | Push/PR/daily 2AM | CodeQL (v3), Semgrep, GitLeaks, dependency audit |
+| `daily-pipeline-validation.yml` | Daily 6AM | ETL, data ingestion, ML pipeline validation |
+| `dependency-updates.yml` | Weekly Monday 10AM | Python + JS dependency updates |
+
+### Deployment Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `staging-deploy.yml` | Push to main | Build, test, deploy to staging |
+| `production-deploy.yml` | Release published | Build, test, deploy to production |
+| `release-management.yml` | Version tag push | Release versioning and changelog |
+| `automated-release.yml` | Manual/VERSION push | Semantic versioning pipeline |
+| `workflow-coordinator.yml` | Manual dispatch | Orchestrate multi-workflow runs |
+
+### Supporting Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `board-sync.yml` | Issue/PR events | GitHub Projects sync |
+| `documentation-sync.yml` | Push/schedule | Documentation updates |
+| `documentation-validation.yml` | Push/PR | Validate documentation |
+| `monitoring-notifications.yml` | Various | Alert routing |
+| `performance-monitoring.yml` | Schedule/dispatch | Performance benchmarks |
+| `pr-automation.yml` | PR events | PR labeling and checks |
+| `issue-management.yml` | Issue events | Issue triage |
+| `claude-code-review.yml` | PR events | AI code review |
+| `mypy.yml` | Push/PR | Type checking |
+| `type-check.yml` | Push/PR | TypeScript type checking |
+| `reusable-build.yml` | Called by others | Shared build job |
+| `reusable-test.yml` | Called by others | Shared test job |
+
+### TA-Lib C Library Dependency
+
+Workflows that run Python code importing `talib` include a build step that compiles TA-Lib 0.4.0 from source:
+- `daily-pipeline-validation.yml`
+- `security-scan.yml`
+- `ci.yml` (via requirements)
+- `reusable-test.yml`
+- `production-deploy.yml`
+- `dependency-updates.yml`
 
 ## Quick Wins Applied
 
@@ -246,4 +295,19 @@ docker compose restart <service>
 ./stop.sh && ./start.sh dev
 ```
 
-**Last Updated**: 2026-01-26
+## CI/CD Hardening History (2026-02-24)
+
+12 commits resolved daily CI failures:
+- `d9b2d1c` -- Node 18 to 20, standardized action versions across 9 workflows
+- `786ffec`, `4b8b168` -- TA-Lib C library added to pipeline validation and security scan
+- `ca91ccd` -- Missing SECRET_KEY/JWT_SECRET_KEY added to pipeline validation
+- `03b6237` -- SSL disabled for CI PostgreSQL service
+- `363fe69` -- Fixed inline Python code in pipeline validation
+- `4812e1f` -- Fixed pipeline validation db init and security scan issues
+- `9f22b30` -- ETL validation made resilient to import errors
+- `c7d78da` -- Fixed npm audit output concatenation in dependency-updates
+- `7a39cb9` -- Semgrep made non-blocking in security scan
+- `4bac2fc` -- GitLeaks made non-blocking in security scan
+- CodeQL upgraded from v2 to v3 in `security-scan.yml`
+
+**Last Updated**: 2026-02-24
