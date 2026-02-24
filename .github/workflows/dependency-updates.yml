@@ -79,11 +79,15 @@ jobs:
         npm ci
         
         # Run npm audit and count high/critical vulnerabilities
-        AUDIT_RESULT=$(npm audit --audit-level=high --json 2>/dev/null || echo '{"metadata":{"vulnerabilities":{"high":0,"critical":0}}}')
-        JS_VULNS=$(echo "$AUDIT_RESULT" | jq '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' || echo "0")
+        # Use || true to keep real JSON output (npm exits non-zero when vulns found)
+        AUDIT_RESULT=$(npm audit --json 2>/dev/null || true)
+        if [ -z "$AUDIT_RESULT" ]; then
+          AUDIT_RESULT='{"metadata":{"vulnerabilities":{"high":0,"critical":0}}}'
+        fi
+        JS_VULNS=$(echo "$AUDIT_RESULT" | jq -r '(.metadata.vulnerabilities.high // 0) + (.metadata.vulnerabilities.critical // 0)' 2>/dev/null | head -1)
 
-        # Ensure we have a valid number, not null
-        if [ -z "$JS_VULNS" ] || [ "$JS_VULNS" = "null" ]; then
+        # Ensure we have a valid number
+        if [ -z "$JS_VULNS" ] || [ "$JS_VULNS" = "null" ] || ! [[ "$JS_VULNS" =~ ^[0-9]+$ ]]; then
           JS_VULNS="0"
         fi
 
