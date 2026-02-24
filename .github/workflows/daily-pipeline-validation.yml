@@ -214,12 +214,12 @@ jobs:
         # Run minimal database setup
         python -c "
         import asyncio
-        from backend.utils.database import create_database_tables
-        
+        from backend.utils.database import init_db
+
         async def setup_db():
-            await create_database_tables()
+            await init_db()
             print('Database setup complete')
-        
+
         asyncio.run(setup_db())
         "
 
@@ -426,8 +426,9 @@ jobs:
         
         df = pd.DataFrame(data)
         
-        # Simple recommendation logic
-        latest_data = df.groupby('symbol').apply(lambda x: x.loc[x['date'].idxmax()]).reset_index(drop=True)
+        # Simple recommendation logic - get latest entry per symbol
+        idx = df.groupby('symbol')['date'].idxmax()
+        latest_data = df.loc[idx]
         recommendations = latest_data.nlargest(3, 'score')[['symbol', 'score']]
         
         print('✅ Recommendation engine validation successful')
