@@ -24,8 +24,53 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import os
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class StockData:
+    """Container for extracted stock data"""
+    ticker: str
+    timestamp: datetime = None
+    source: str = ""
+    price: float = 0.0
+    volume: int = 0
+    market_cap: float = 0.0
+    pe_ratio: float = 0.0
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+    def __init__(self, ticker: str, timestamp: datetime = None, source: str = "", **kwargs):
+        self.ticker = ticker
+        self.timestamp = timestamp or datetime.now()
+        self.source = source
+        self.price = kwargs.pop('price', 0.0)
+        self.volume = kwargs.pop('volume', 0)
+        self.market_cap = kwargs.pop('market_cap', 0.0)
+        self.pe_ratio = kwargs.pop('pe_ratio', 0.0)
+        self.extra = kwargs
+
+
+@dataclass
+class ExtractionResult:
+    """Result of a data extraction attempt"""
+    ticker: str
+    success: bool
+    data: Any = None
+    source: Optional[str] = None
+    error: Optional[str] = None
+    timestamp: datetime = None
+
+    def __post_init__(self):
+        if self.timestamp is None:
+            self.timestamp = datetime.now()
+
+
+# Aliases for classes imported by unlimited_extractor_with_fallbacks
+YahooFinanceWebScraper = None  # Placeholder - functionality is in UnlimitedDataExtractor
+SECEdgarExtractor = None  # Placeholder - functionality is in UnlimitedDataExtractor
+IEXCloudFreeExtractor = None  # Placeholder - functionality is in UnlimitedDataExtractor
 
 
 class UnlimitedDataExtractor:
