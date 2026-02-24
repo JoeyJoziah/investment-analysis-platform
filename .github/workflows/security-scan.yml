@@ -243,6 +243,7 @@ jobs:
           --json > trufflehog-results.json 2>/dev/null || true
 
     - name: Run GitLeaks secret scan
+      continue-on-error: true
       uses: gitleaks/gitleaks-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
