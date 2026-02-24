@@ -200,6 +200,8 @@ jobs:
         echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/test_pipeline_db" >> .env
         echo "REDIS_URL=redis://localhost:6379/0" >> .env
         echo "APP_ENV=testing" >> .env
+        echo "SECRET_KEY=test-secret-key-for-ci-pipeline-validation" >> .env
+        echo "JWT_SECRET_KEY=test-jwt-secret-key-for-ci-pipeline-validation" >> .env
 
     - name: Initialize test database
       run: |
