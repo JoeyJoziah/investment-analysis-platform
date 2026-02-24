@@ -197,30 +197,31 @@ jobs:
 
     - name: Set up test environment
       run: |
-        echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/test_pipeline_db?sslmode=disable" >> .env
+        echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/test_pipeline_db" >> .env
         echo "REDIS_URL=redis://localhost:6379/0" >> .env
         echo "APP_ENV=testing" >> .env
         echo "SECRET_KEY=test-secret-key-for-ci-pipeline-validation" >> .env
         echo "JWT_SECRET_KEY=test-jwt-secret-key-for-ci-pipeline-validation" >> .env
 
     - name: Initialize test database
+      env:
+        PGPASSWORD: testpass
       run: |
         # Wait for database to be ready
         until pg_isready -h localhost -p 5432 -U postgres; do
           echo "Waiting for PostgreSQL..."
           sleep 2
         done
-        
-        # Run minimal database setup
+
+        # Create tables using SQLAlchemy sync engine to avoid asyncpg SSL issues
         python -c "
-        import asyncio
-        from backend.utils.database import init_db
+        from sqlalchemy import create_engine
+        from backend.models.tables import Base
 
-        async def setup_db():
-            await init_db()
-            print('Database setup complete')
-
-        asyncio.run(setup_db())
+        engine = create_engine('postgresql://postgres:testpass@localhost:5432/test_pipeline_db')
+        Base.metadata.create_all(engine)
+        engine.dispose()
+        print('Database tables created successfully')
         "
 
     - name: Test ETL components
@@ -257,7 +258,7 @@ jobs:
         sys.exit(0 if success else 1)
         "
       env:
-        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_pipeline_db?sslmode=disable
+        DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_pipeline_db
         REDIS_URL: redis://localhost:6379/0
         SECRET_KEY: test-secret-key-for-ci-pipeline-validation
         JWT_SECRET_KEY: test-jwt-secret-key-for-ci-pipeline-validation
