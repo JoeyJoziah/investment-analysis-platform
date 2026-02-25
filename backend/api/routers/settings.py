@@ -11,7 +11,7 @@ import logging
 from backend.config.database import get_async_db_session
 from backend.models.api_response import ApiResponse, success_response
 from backend.auth.oauth2 import get_current_user
-from backend.models.tables import User
+from backend.models.unified_models import User
 from pydantic import BaseModel, Field
 
 router = APIRouter()

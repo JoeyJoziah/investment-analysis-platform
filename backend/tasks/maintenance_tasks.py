@@ -14,7 +14,7 @@ from pathlib import Path
 from backend.tasks.celery_app import celery_app
 from backend.utils.database import get_db_sync, get_engine
 from backend.utils.cache import get_redis_client
-from backend.models.tables import (
+from backend.models.unified_models import (
     Stock, PriceHistory, News, Recommendation, RecommendationPerformance,
     PortfolioPerformance, AuditLog, SystemMetrics, Portfolio, User, Fundamental
 )
@@ -878,7 +878,7 @@ async def _fetch_stock_data_for_warming(symbol: str) -> Dict[str, Any]:
     try:
         # Use synchronous database access for reliability
         with get_db_sync() as db:
-            from backend.models.tables import Stock, PriceHistory, Fundamental
+            from backend.models.unified_models import Stock, PriceHistory, Fundamental
 
             # Get stock info
             stock = db.query(Stock).filter(Stock.symbol == symbol).first()

@@ -128,29 +128,88 @@ class StockResponse(BaseModel):
     id: int
     symbol: str
     name: str
-    exchange: str
+    exchange: Optional[str] = None
     sector: Optional[str] = None
     industry: Optional[str] = None
     market_cap: Optional[int] = None
     is_active: bool
     is_tradable: bool
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm(cls, obj):
+        """
+        Build a StockResponse from a Stock ORM instance.
+
+        The Stock ORM model exposes ``exchange``, ``sector``, and ``industry``
+        as relationship objects, not plain strings.  This override resolves
+        each relationship to its name string so that Pydantic serialization
+        works correctly in an async context where the relationships have
+        already been eagerly loaded via ``lazy="selectin"``.
+
+        The Stock model also lacks ``created_at`` / ``updated_at`` columns
+        (it only has ``last_updated``), so we map ``last_updated`` to both
+        timestamp fields.
+        """
+        exchange_name = None
+        if obj.exchange is not None:
+            exchange_name = getattr(obj.exchange, "name", None) or getattr(obj.exchange, "code", None)
+
+        sector_name = None
+        if obj.sector is not None:
+            sector_name = getattr(obj.sector, "name", None)
+
+        industry_name = None
+        if obj.industry is not None:
+            industry_name = getattr(obj.industry, "name", None)
+
+        last_updated = getattr(obj, "last_updated", None)
+
+        return cls(
+            id=obj.id,
+            symbol=obj.symbol,
+            name=obj.name,
+            exchange=exchange_name,
+            sector=sector_name,
+            industry=industry_name,
+            market_cap=int(obj.market_cap) if obj.market_cap is not None else None,
+            is_active=obj.is_active,
+            is_tradable=obj.is_tradable,
+            created_at=last_updated,
+            updated_at=last_updated,
+        )
 
 
 class StockDetailResponse(StockResponse):
     """Detailed stock response with additional fields"""
     shares_outstanding: Optional[int] = None
     float_shares: Optional[int] = None
-    country: str
-    currency: str
+    country: Optional[str] = None
+    currency: Optional[str] = None
     ipo_date: Optional[date] = None
     description: Optional[str] = None
     website: Optional[str] = None
     employees: Optional[int] = None
+
+    @classmethod
+    def from_orm(cls, obj):
+        """Extend the base from_orm to include detail-level fields."""
+        base = StockResponse.from_orm(obj)
+
+        return cls(
+            **base.model_dump(),
+            shares_outstanding=getattr(obj, "shares_outstanding", None),
+            float_shares=getattr(obj, "float_shares", None),
+            country=getattr(obj, "country", None),
+            currency=getattr(obj, "currency", None),
+            ipo_date=getattr(obj, "ipo_date", None),
+            description=getattr(obj, "description", None),
+            website=getattr(obj, "website", None),
+            employees=getattr(obj, "employees", None),
+        )
 
 
 class PriceHistoryResponse(BaseModel):
@@ -733,7 +792,7 @@ async def get_stock_quote(
 
             # Meta data
             data_source="database",
-            last_updated=latest_price.updated_at or datetime.now(timezone.utc),
+            last_updated=datetime.now(timezone.utc),
             is_real_time=False
         )
 

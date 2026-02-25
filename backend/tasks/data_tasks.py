@@ -16,7 +16,7 @@ from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
 from backend.utils.database import get_db_sync
 from backend.utils.cache import get_redis_client
-from backend.models.tables import Stock, PriceHistory, Fundamental, News
+from backend.models.unified_models import Stock, PriceHistory, Fundamental, News
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 

@@ -172,7 +172,7 @@ obtain_letsencrypt_cert() {
         echo "  - DH params: $SSL_DIR/dhparam.pem"
         echo ""
         log_info "Next steps:"
-        echo "  1. Update docker-compose.prod.yml nginx config to use nginx-ssl.conf"
+        echo "  1. Update docker-compose.production.yml nginx config to use nginx-ssl.conf"
         echo "  2. Start the production stack: ./start.sh prod"
         echo "  3. Verify HTTPS is working: curl -I https://$domain"
     else

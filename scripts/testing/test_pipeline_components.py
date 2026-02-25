@@ -312,7 +312,7 @@ class PipelineComponentTester:
         """Test database operations"""
         try:
             from backend.models.database import get_db_session
-            from backend.models.tables import Stock, PriceHistory
+            from backend.models.unified_models import Stock, PriceHistory
             
             test_passed = True
             

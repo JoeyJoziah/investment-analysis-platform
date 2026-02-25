@@ -331,169 +331,101 @@ jobs:
     runs-on: ubuntu-latest
     needs: [validate-release, build-production-images, security-scan]
     environment: production
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         ref: ${{ github.event.inputs.tag || github.event.release.tag_name }}
 
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
+    # TODO: Add K8s manifests when ready for K8s deployment
+    # Production deployment uses docker-compose + blue_green_deploy.sh.
+    # Migrations run as a docker container before traffic is switched.
+
+    - name: Deploy to production via SSH
+      uses: appleboy/ssh-action@v1.0.0
       with:
-        version: 'v1.28.0'
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_SSH_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          set -euo pipefail
+          cd /opt/investment-analysis-platform
 
-    - name: Configure kubectl for production
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
-        kubectl config use-context production
+          # Pull specific release tag
+          git fetch --tags origin
+          git checkout ${{ github.event.inputs.tag || github.event.release.tag_name }}
 
-    - name: Verify cluster connection
-      run: |
-        kubectl cluster-info
-        kubectl get nodes
-        kubectl get namespaces
+          # Write production environment file
+          cat > .env << 'ENVEOF'
+          DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}
+          REDIS_URL=${{ secrets.PRODUCTION_REDIS_URL }}
+          JWT_SECRET_KEY=${{ secrets.PRODUCTION_JWT_SECRET }}
+          ALPHA_VANTAGE_API_KEY=${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}
+          POLYGON_API_KEY=${{ secrets.POLYGON_API_KEY }}
+          NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+          BACKEND_IMAGE=${{ needs.build-production-images.outputs.backend-image }}
+          FRONTEND_IMAGE=${{ needs.build-production-images.outputs.frontend-image }}
+          APP_ENV=production
+          VERSION=${{ needs.validate-release.outputs.version }}
+          ENVEOF
 
-    - name: Create namespace if not exists
-      run: |
-        kubectl create namespace investment-analysis-production --dry-run=client -o yaml | kubectl apply -f -
+          # Pull updated images
+          docker pull ${{ needs.build-production-images.outputs.backend-image }}
+          docker pull ${{ needs.build-production-images.outputs.frontend-image }}
 
-    - name: Backup current deployment (for rollback)
-      run: |
-        # Create backup of current deployment state
-        kubectl get deployment backend-deployment -n investment-analysis-production -o yaml > backup-backend-deployment.yaml || echo "No existing backend deployment"
-        kubectl get deployment frontend-deployment -n investment-analysis-production -o yaml > backup-frontend-deployment.yaml || echo "No existing frontend deployment"
-        
-        # Store current image versions for rollback
-        CURRENT_BACKEND=$(kubectl get deployment backend-deployment -n investment-analysis-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
-        CURRENT_FRONTEND=$(kubectl get deployment frontend-deployment -n investment-analysis-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
-        
-        echo "CURRENT_BACKEND_IMAGE=$CURRENT_BACKEND" >> $GITHUB_ENV
-        echo "CURRENT_FRONTEND_IMAGE=$CURRENT_FRONTEND" >> $GITHUB_ENV
+          # Record current image versions for rollback reference
+          CURRENT_BACKEND=$(docker inspect \
+            $(docker-compose -f docker-compose.production.yml ps -q backend 2>/dev/null || echo "") \
+            --format '{{.Config.Image}}' 2>/dev/null || echo "none")
+          CURRENT_FRONTEND=$(docker inspect \
+            $(docker-compose -f docker-compose.production.yml ps -q frontend 2>/dev/null || echo "") \
+            --format '{{.Config.Image}}' 2>/dev/null || echo "none")
+          echo "PREV_BACKEND=$CURRENT_BACKEND" > /tmp/rollback_images.env
+          echo "PREV_FRONTEND=$CURRENT_FRONTEND" >> /tmp/rollback_images.env
 
-    - name: Update production secrets
-      run: |
-        # Update application secrets
-        kubectl create secret generic app-secrets \
-          --namespace=investment-analysis-production \
-          --from-literal=database-url="${{ secrets.PRODUCTION_DATABASE_URL }}" \
-          --from-literal=redis-url="${{ secrets.PRODUCTION_REDIS_URL }}" \
-          --from-literal=jwt-secret="${{ secrets.PRODUCTION_JWT_SECRET }}" \
-          --from-literal=alpha-vantage-key="${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
-          --from-literal=finnhub-key="${{ secrets.FINNHUB_API_KEY }}" \
-          --from-literal=polygon-key="${{ secrets.POLYGON_API_KEY }}" \
-          --from-literal=news-api-key="${{ secrets.NEWS_API_KEY }}" \
-          --dry-run=client -o yaml | kubectl apply -f -
-        
-        # Update TLS certificates
-        kubectl create secret tls app-tls-cert \
-          --namespace=investment-analysis-production \
-          --cert="${{ secrets.PRODUCTION_TLS_CERT }}" \
-          --key="${{ secrets.PRODUCTION_TLS_KEY }}" \
-          --dry-run=client -o yaml | kubectl apply -f -
+          # Run database migrations before traffic switch
+          echo "Running database migrations for v${{ needs.validate-release.outputs.version }}..."
+          docker run --rm \
+            --env-file .env \
+            ${{ needs.build-production-images.outputs.backend-image }} \
+            sh -c "echo 'Starting migration...' && alembic upgrade head && echo 'Migration complete'"
 
-    - name: Run database migrations
-      run: |
-        # Run database migrations as a Job with proper retry logic
-        cat << EOF | kubectl apply -f -
-        apiVersion: batch/v1
-        kind: Job
-        metadata:
-          name: db-migration-${{ needs.validate-release.outputs.version }}
-          namespace: investment-analysis-production
-        spec:
-          template:
-            spec:
-              containers:
-              - name: db-migration
-                image: ${{ needs.build-production-images.outputs.backend-image }}
-                command: 
-                  - "sh"
-                  - "-c"
-                  - |
-                    echo "Starting database migration..."
-                    alembic upgrade head
-                    echo "Migration completed successfully"
-                env:
-                - name: DATABASE_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: app-secrets
-                      key: database-url
-                resources:
-                  requests:
-                    memory: "256Mi"
-                    cpu: "100m"
-                  limits:
-                    memory: "512Mi"
-                    cpu: "500m"
-              restartPolicy: Never
-          backoffLimit: 3
-          activeDeadlineSeconds: 600
-        EOF
-        
-        # Wait for migration to complete
-        kubectl wait --for=condition=complete --timeout=600s job/db-migration-${{ needs.validate-release.outputs.version }} -n investment-analysis-production
-        
-        # Check migration logs
-        kubectl logs job/db-migration-${{ needs.validate-release.outputs.version }} -n investment-analysis-production
-
-    - name: Deploy application with blue-green strategy
-      run: |
-        # Update deployment manifests with new image tags and production settings
-        sed -i "s|BACKEND_IMAGE_PLACEHOLDER|${{ needs.build-production-images.outputs.backend-image }}|g" infrastructure/kubernetes/deployment.yaml
-        sed -i "s|FRONTEND_IMAGE_PLACEHOLDER|${{ needs.build-production-images.outputs.frontend-image }}|g" infrastructure/kubernetes/deployment.yaml
-        sed -i "s|NAMESPACE_PLACEHOLDER|investment-analysis-production|g" infrastructure/kubernetes/deployment.yaml
-        sed -i "s|ENVIRONMENT_PLACEHOLDER|production|g" infrastructure/kubernetes/deployment.yaml
-        
-        # Add production-specific resource limits
-        kubectl apply -f infrastructure/kubernetes/ -n investment-analysis-production
-
-    - name: Wait for rollout to complete
-      run: |
-        echo "Waiting for backend deployment to complete..."
-        kubectl rollout status deployment/backend-deployment -n investment-analysis-production --timeout=900s
-        
-        echo "Waiting for frontend deployment to complete..."
-        kubectl rollout status deployment/frontend-deployment -n investment-analysis-production --timeout=900s
-
-    - name: Verify deployment health
-      run: |
-        # Check pod status
-        kubectl get pods -n investment-analysis-production
-        
-        # Verify all pods are running
-        kubectl wait --for=condition=Ready pod -l app=backend -n investment-analysis-production --timeout=300s
-        kubectl wait --for=condition=Ready pod -l app=frontend -n investment-analysis-production --timeout=300s
-        
-        # Check service endpoints
-        kubectl get services -n investment-analysis-production
-        kubectl get ingress -n investment-analysis-production
+          # Blue-green deploy: spin up new environment, verify, switch traffic
+          bash scripts/deployment/blue_green_deploy.sh \
+            --environment production \
+            --version ${{ needs.validate-release.outputs.version }}
 
     - name: Production smoke tests
       run: |
-        # Wait for services to be ready
+        echo "Waiting for production services to stabilize..."
         sleep 30
-        
+
         # Health check
-        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health" || exit 1
-        
+        curl -f --retry 5 --retry-delay 10 \
+          "${{ secrets.PRODUCTION_API_URL }}/api/health" || exit 1
+
         # Database connectivity
-        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health/db" || exit 1
-        
+        curl -f --retry 3 --retry-delay 5 \
+          "${{ secrets.PRODUCTION_API_URL }}/api/health/db" || exit 1
+
         # Cache connectivity
-        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health/cache" || exit 1
-        
+        curl -f --retry 3 --retry-delay 5 \
+          "${{ secrets.PRODUCTION_API_URL }}/api/health/cache" || exit 1
+
         # Frontend health
-        curl -f "${{ secrets.PRODUCTION_FRONTEND_URL }}" || exit 1
+        curl -f --retry 3 --retry-delay 5 \
+          "${{ secrets.PRODUCTION_FRONTEND_URL }}" || exit 1
+
+        echo "All production health checks passed"
 
     - name: Update deployment status
       run: |
         # Tag the successful deployment
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
-        
+
         # Create deployment tag
         DEPLOYMENT_TAG="deployment-production-${{ needs.validate-release.outputs.version }}-$(date +%Y%m%d-%H%M%S)"
         git tag -a "$DEPLOYMENT_TAG" -m "Production deployment of version ${{ needs.validate-release.outputs.version }}"
@@ -624,50 +556,48 @@ jobs:
     if: failure() && needs.deploy-production.result == 'failure'
     needs: [deploy-production]
     environment: production
-    
+
     steps:
-    - name: Emergency rollback
-      run: |
-        echo "🚨 EMERGENCY ROLLBACK INITIATED"
-        
-        # Configure kubectl
-        mkdir -p ~/.kube
-        echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
-        
-        # Rollback deployments
-        if [[ "${{ env.CURRENT_BACKEND_IMAGE }}" != "none" ]]; then
-          kubectl set image deployment/backend-deployment backend=${{ env.CURRENT_BACKEND_IMAGE }} -n investment-analysis-production
-        fi
-        
-        if [[ "${{ env.CURRENT_FRONTEND_IMAGE }}" != "none" ]]; then
-          kubectl set image deployment/frontend-deployment frontend=${{ env.CURRENT_FRONTEND_IMAGE }} -n investment-analysis-production
-        fi
-        
-        # Wait for rollback
-        kubectl rollout status deployment/backend-deployment -n investment-analysis-production --timeout=300s
-        kubectl rollout status deployment/frontend-deployment -n investment-analysis-production --timeout=300s
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # TODO: Add K8s manifests when ready for K8s deployment
+    # Emergency rollback restores the prior blue/green slot via rollback.sh.
+
+    - name: Emergency rollback via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_SSH_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          set -euo pipefail
+          echo "EMERGENCY ROLLBACK INITIATED"
+          cd /opt/investment-analysis-platform
+
+          # Execute rollback script which restores the previous blue/green slot
+          bash scripts/deployment/rollback.sh --environment production
+
+          echo "Rollback script completed"
 
     - name: Verify rollback
       run: |
-        # Health check after rollback
+        echo "Verifying production health after rollback..."
         sleep 30
-        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health" || echo "Health check failed after rollback"
+        curl -f "${{ secrets.PRODUCTION_API_URL }}/api/health" || \
+          echo "WARNING: Health check failed after rollback - manual intervention required"
 
     - name: Notify emergency rollback
       uses: 8398a7/action-slack@v3
       with:
         status: failure
         text: |
-          🚨 **EMERGENCY PRODUCTION ROLLBACK COMPLETED**
+          EMERGENCY PRODUCTION ROLLBACK COMPLETED
 
           Failed Version: v${{ needs.validate-release.outputs.version }}
           Repository: ${{ github.repository }}
 
           Previous version has been restored. Immediate investigation required.
-
-          Rollback Details:
-          - Backend: ${{ env.CURRENT_BACKEND_IMAGE }}
-          - Frontend: ${{ env.CURRENT_FRONTEND_IMAGE }}
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 

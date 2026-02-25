@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database with TimescaleDB
   # Resource-optimized for $50/month budget with analytics workload support
   postgres:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb:2.14.2-pg15
     container_name: investment_db
     environment:
       POSTGRES_DB: investment_db
@@ -89,7 +89,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      dockerfile: ./Dockerfile.backend
     container_name: investment_api
     env_file:
       - .env
@@ -132,8 +132,8 @@ services:
   # Note: Dev server needs more memory than production nginx static serving
   frontend:
     build:
-      context: ./frontend/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./Dockerfile.frontend
     container_name: investment_web
     environment:
       - REACT_APP_API_URL=http://localhost:8000
@@ -168,7 +168,7 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      dockerfile: ./Dockerfile.backend
     container_name: investment_worker
     env_file:
       - .env
@@ -236,7 +236,7 @@ services:
   celery_beat:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      dockerfile: ./Dockerfile.backend
     container_name: investment_scheduler
     env_file:
       - .env

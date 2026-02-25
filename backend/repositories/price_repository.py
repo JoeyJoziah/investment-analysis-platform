@@ -3,7 +3,7 @@ Price History Repository
 Specialized async repository for price history operations with time-series optimizations.
 """
 
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Union
 from datetime import date, datetime, timedelta
 import logging
 
@@ -83,6 +83,52 @@ class PriceHistoryRepository(AsyncCRUDRepository[PriceHistory]):
             symbol, limit=1, session=session
         )
         return price_history[0] if price_history else None
+
+    async def get_previous_price(
+        self,
+        symbol: str,
+        reference_date: Union[date, datetime],
+        session: Optional[AsyncSession] = None
+    ) -> Optional[PriceHistory]:
+        """
+        Get the most recent price record strictly before ``reference_date``.
+
+        This is used by the quote endpoint to compute the day-over-day price
+        change when falling back to database data (i.e. when external APIs are
+        unavailable).
+
+        Args:
+            symbol: Stock ticker symbol (case-insensitive).
+            reference_date: The date whose *preceding* price is requested.
+                Typically this is the date of the latest price record so
+                that we can calculate change = latest - previous.
+            session: Optional existing ``AsyncSession`` to reuse.
+
+        Returns:
+            The ``PriceHistory`` row with the greatest date that is strictly
+            less than ``reference_date``, or ``None`` if no such record exists.
+        """
+        async def _get_previous(session: AsyncSession) -> Optional[PriceHistory]:
+            query = (
+                select(PriceHistory)
+                .join(Stock)
+                .where(
+                    and_(
+                        Stock.symbol == symbol.upper(),
+                        PriceHistory.date < reference_date,
+                    )
+                )
+                .order_by(PriceHistory.date.desc())
+                .limit(1)
+            )
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+
+        if session:
+            return await _get_previous(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_previous(session)
     
     async def get_price_on_date(
         self,

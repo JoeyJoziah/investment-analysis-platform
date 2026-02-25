@@ -29,7 +29,7 @@ from backend.api.routers.watchlist import (
     convert_watchlist_to_summary,
 )
 from backend.repositories.watchlist_repository import WatchlistRepository, watchlist_repository
-from backend.models.tables import Watchlist, WatchlistItem, Stock, User
+from backend.models.unified_models import Watchlist, WatchlistItem, Stock, User
 from backend.models.schemas import (
     WatchlistCreate,
     WatchlistUpdate,

@@ -82,18 +82,34 @@ jobs:
       with:
         category: "/language:python,javascript,typescript"
 
-    - name: Run Bandit security scan
+    - name: Run Bandit security scan (critical/high block)
       run: |
         pip install bandit[toml]
         bandit -r backend/ \
           -f json \
           -o bandit-results.json \
-          -ll \
+          -ll -ii \
           --configfile pyproject.toml || true
+        # Gate: fail on HIGH/CRITICAL severity findings
+        python -c "
+        import json, sys
+        try:
+            with open('bandit-results.json') as f:
+                data = json.load(f)
+            results = data.get('results', [])
+            critical_high = [r for r in results if r.get('issue_severity') in ('HIGH', 'CRITICAL') and r.get('issue_confidence') in ('HIGH', 'MEDIUM')]
+            if critical_high:
+                print(f'BLOCKING: {len(critical_high)} HIGH/CRITICAL severity findings in bandit scan:')
+                for r in critical_high:
+                    print(f'  - {r[\"issue_severity\"]}/{r[\"issue_confidence\"]}: {r[\"issue_text\"]} ({r[\"filename\"]}:{r[\"line_number\"]})')
+                sys.exit(1)
+            print(f'Bandit: {len(results)} total findings, 0 HIGH/CRITICAL blocking issues')
+        except FileNotFoundError:
+            print('WARNING: bandit-results.json not found, scan may have failed')
+        "
 
-    - name: Run Semgrep static analysis
+    - name: Run Semgrep static analysis (error/warning block)
       uses: returntocorp/semgrep-action@v1
-      continue-on-error: true
       with:
         config: >-
           p/security-audit
@@ -143,14 +159,14 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Python dependency security scan with Safety
+    - name: Python dependency security scan with Safety (blocks on vulnerabilities)
       run: |
         pip install safety
         safety check \
           --json \
           --output safety-results.json \
           --continue-on-error || true
-        
+
         # Also check requirements files directly
         safety check \
           -r requirements.txt \
@@ -158,13 +174,54 @@ jobs:
           --output safety-requirements.json \
           --continue-on-error || true
 
-    - name: Python dependency scan with pip-audit
+        # Gate: fail if critical vulnerabilities found in requirements scan
+        python -c "
+        import json, sys
+        for fname in ['safety-results.json', 'safety-requirements.json']:
+            try:
+                with open(fname) as f:
+                    data = json.load(f)
+                vulns = data if isinstance(data, list) else data.get('vulnerabilities', [])
+                if vulns:
+                    print(f'BLOCKING: {len(vulns)} vulnerabilities found in {fname}')
+                    for v in vulns[:5]:
+                        pkg = v.get('package_name', v.get('package', 'unknown')) if isinstance(v, dict) else str(v)
+                        print(f'  - {pkg}')
+                    sys.exit(1)
+            except FileNotFoundError:
+                print(f'WARNING: {fname} not found')
+            except json.JSONDecodeError:
+                print(f'WARNING: {fname} is not valid JSON')
+        print('Safety: No known vulnerabilities found')
+        "
+
+    - name: Python dependency scan with pip-audit (blocks on vulnerabilities)
       run: |
         pip install pip-audit
         pip-audit \
           --format json \
-          --output pip-audit-results.json \
-          --continue-on-error || true
+          --output pip-audit-results.json || true
+        # Gate: fail if critical/high vulnerabilities found
+        python -c "
+        import json, sys
+        try:
+            with open('pip-audit-results.json') as f:
+                data = json.load(f)
+            # pip-audit format: list of {name, version, vulns: [{id, fix_versions, description}]}
+            deps = data.get('dependencies', data) if isinstance(data, dict) else data
+            vuln_deps = [d for d in deps if isinstance(d, dict) and d.get('vulns')]
+            if vuln_deps:
+                total = sum(len(d.get('vulns', [])) for d in vuln_deps)
+                print(f'BLOCKING: {total} vulnerabilities across {len(vuln_deps)} packages found by pip-audit')
+                for d in vuln_deps[:10]:
+                    print(f'  - {d.get(\"name\", \"unknown\")} {d.get(\"version\", \"\")}')
+                sys.exit(1)
+            print('pip-audit: No vulnerabilities found')
+        except FileNotFoundError:
+            print('WARNING: pip-audit-results.json not found')
+        except (json.JSONDecodeError, Exception) as e:
+            print(f'WARNING: Could not parse pip-audit output: {e}')
+        "
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -173,10 +230,28 @@ jobs:
         cache: 'npm'
         cache-dependency-path: frontend/web/package-lock.json
 
-    - name: NPM dependency security audit
+    - name: NPM dependency security audit (blocks on high/critical)
       working-directory: frontend/web
       run: |
-        npm audit --audit-level=moderate --json > npm-audit-results.json || true
+        npm audit --audit-level=high --json > npm-audit-results.json || true
+        # Gate: fail if high or critical vulnerabilities exist
+        node -e "
+        const fs = require('fs');
+        try {
+          const data = JSON.parse(fs.readFileSync('npm-audit-results.json', 'utf8'));
+          const meta = data.metadata || {};
+          const vulns = meta.vulnerabilities || {};
+          const high = vulns.high || 0;
+          const critical = vulns.critical || 0;
+          if (high + critical > 0) {
+            console.log('BLOCKING: npm audit found ' + critical + ' critical and ' + high + ' high severity vulnerabilities');
+            process.exit(1);
+          }
+          console.log('npm audit: No high/critical vulnerabilities found');
+        } catch (e) {
+          console.log('WARNING: Could not parse npm audit output: ' + e.message);
+        }
+        "
 
     - name: Yarn/NPM dependency scan with Snyk
       uses: snyk/actions/node@master
@@ -347,7 +422,7 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Run Trivy vulnerability scanner on backend
+    - name: Run Trivy vulnerability scanner on backend (all severities, report only)
       continue-on-error: true
       uses: aquasecurity/trivy-action@master
       with:
@@ -356,7 +431,15 @@ jobs:
         output: 'backend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-    - name: Run Trivy vulnerability scanner on frontend
+    - name: Run Trivy vulnerability scanner on backend (blocks on critical/high)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan-backend:latest'
+        format: 'table'
+        severity: 'HIGH,CRITICAL'
+        exit-code: '1'
+
+    - name: Run Trivy vulnerability scanner on frontend (all severities, report only)
       continue-on-error: true
       uses: aquasecurity/trivy-action@master
       with:
@@ -364,6 +447,14 @@ jobs:
         format: 'json'
         output: 'frontend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
+
+    - name: Run Trivy vulnerability scanner on frontend (blocks on critical/high)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan-frontend:latest'
+        format: 'table'
+        severity: 'HIGH,CRITICAL'
+        exit-code: '1'
 
     - name: Run Trivy config scan
       uses: aquasecurity/trivy-action@master

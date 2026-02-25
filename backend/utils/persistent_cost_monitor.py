@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, func, and_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.models.tables import CostMetrics
+from backend.models.unified_models import CostMetrics
 from backend.config.database import get_db_session
 from backend.utils.cache import enhanced_cache
 import redis.asyncio as aioredis

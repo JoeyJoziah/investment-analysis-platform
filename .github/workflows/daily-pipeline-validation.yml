@@ -216,7 +216,7 @@ jobs:
         # Create tables using SQLAlchemy sync engine to avoid asyncpg SSL issues
         python -c "
         from sqlalchemy import create_engine
-        from backend.models.tables import Base
+        from backend.models.unified_models import Base
 
         engine = create_engine('postgresql://postgres:testpass@localhost:5432/test_pipeline_db')
         Base.metadata.create_all(engine)

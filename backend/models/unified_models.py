@@ -257,7 +257,7 @@ class Stock(Base):
     predictions = relationship("MLPrediction", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
     recommendations = relationship("Recommendation", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
     positions = relationship("Position", back_populates="stock", lazy="selectin")
-    watchlist_items = relationship("Watchlist", back_populates="stock", lazy="selectin")
+    watchlist_items = relationship("WatchlistItem", back_populates="stock", lazy="selectin")
     
     __table_args__ = (
         Index('idx_stock_exchange_sector', 'exchange_id', 'sector_id'),
@@ -800,35 +800,25 @@ class Order(Base):
 # ============================================================================
 
 class Watchlist(Base):
-    """User watchlists"""
+    """User watchlists (header model - items are in WatchlistItem)"""
     __tablename__ = "watchlists"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
-    name = Column(String(100))
-    is_public = Column(Boolean, default=False)
-
-    # Watchlist details
-    added_date = Column(DateTime, default=func.now())
-    notes = Column(Text)
-    tags = Column(JSON)
-    priority = Column(Integer, default=0)
-
-    # Price tracking
-    target_price = Column(DECIMAL(10, 4))
-    stop_loss = Column(DECIMAL(10, 4))
-
-    # Alerts
-    alert_rules = Column(JSON)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    is_public = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships - use selectin to prevent MissingGreenlet in async
     user = relationship("User", back_populates="watchlists", lazy="selectin")
-    stock = relationship("Stock", back_populates="watchlist_items", lazy="selectin")
-    
+    items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan", lazy="selectin")
+
     __table_args__ = (
-        UniqueConstraint('user_id', 'stock_id', 'name', name='uq_user_watchlist'),
+        UniqueConstraint('user_id', 'name', name='uq_user_watchlist_name'),
         Index('idx_watchlist_user', 'user_id'),
+        Index('idx_watchlist_public', 'is_public'),
     )
 
 class Alert(Base):
@@ -997,3 +987,184 @@ def create_all_tables(engine):
 def drop_all_tables(engine):
     """Drop all database tables"""
     Base.metadata.drop_all(bind=engine)
+
+
+# ============================================================================
+# MODELS MIGRATED FROM tables.py (previously only in legacy module)
+# ============================================================================
+
+class DividendHistory(Base):
+    """Dividend history for stocks"""
+    __tablename__ = "dividend_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
+    ex_date = Column(Date, nullable=False, index=True)
+    record_date = Column(Date)
+    pay_date = Column(Date, nullable=False, index=True)
+    announcement_date = Column(Date)
+    dividend_amount = Column(DECIMAL(10, 4), nullable=False)
+    currency = Column(String(3), default="USD")
+    is_special = Column(Boolean, default=False, index=True)
+    dividend_type = Column(String(50), default="regular")
+    notes = Column(Text)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('stock_id', 'ex_date', name='uq_stock_ex_date'),
+        Index('idx_dividend_stock_ex_date', 'stock_id', 'ex_date'),
+        Index('idx_dividend_pay_date', 'pay_date'),
+        Index('idx_dividend_is_special', 'is_special'),
+        CheckConstraint('dividend_amount >= 0', name='check_dividend_non_negative'),
+        CheckConstraint('ex_date <= pay_date', name='check_ex_before_pay'),
+    )
+
+
+class News(Base):
+    """News articles for stocks"""
+    __tablename__ = "news"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"))
+    headline = Column(String(500), nullable=False)
+    summary = Column(Text)
+    content = Column(Text)
+    source = Column(String(100))
+    url = Column(String(500))
+    author = Column(String(100))
+    sentiment_score = Column(Float)
+    published_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index('idx_news_stock_published', 'stock_id', 'published_at'),
+        Index('idx_news_published', 'published_at'),
+        Index('idx_news_sentiment', 'sentiment_score'),
+    )
+
+
+class PortfolioPerformance(Base):
+    """Portfolio performance history"""
+    __tablename__ = "portfolio_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    portfolio_id = Column(Integer, ForeignKey("portfolios.id", ondelete="CASCADE"), nullable=False)
+    date = Column(Date, nullable=False)
+    total_value = Column(DECIMAL(15, 2), nullable=False)
+    cash_value = Column(DECIMAL(15, 2), nullable=False)
+    positions_value = Column(DECIMAL(15, 2), nullable=False)
+    daily_return = Column(Float)
+    cumulative_return = Column(Float)
+    benchmark_return = Column(Float)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    portfolio = relationship("Portfolio", lazy="selectin")
+
+    __table_args__ = (
+        UniqueConstraint('portfolio_id', 'date', name='uq_portfolio_performance_date'),
+        Index('idx_portfolio_performance_date', 'portfolio_id', 'date'),
+    )
+
+
+class RecommendationPerformance(Base):
+    """Performance tracking for recommendations"""
+    __tablename__ = "recommendation_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recommendation_id = Column(Integer, ForeignKey("recommendations.id", ondelete="CASCADE"), unique=True, nullable=False)
+    entry_price = Column(DECIMAL(10, 4), nullable=False)
+    current_price = Column(DECIMAL(10, 4), nullable=False)
+    highest_price = Column(DECIMAL(10, 4), nullable=False)
+    lowest_price = Column(DECIMAL(10, 4), nullable=False)
+    actual_return = Column(Float)
+    max_return = Column(Float)
+    max_drawdown = Column(Float)
+    days_active = Column(Integer)
+    target_hit = Column(Boolean, default=False)
+    stop_loss_hit = Column(Boolean, default=False)
+    last_updated = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    recommendation = relationship("Recommendation", lazy="selectin")
+
+
+class ApiLog(Base):
+    """API request logging"""
+    __tablename__ = "api_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    endpoint = Column(String(255), nullable=False)
+    method = Column(String(10), nullable=False)
+    status_code = Column(Integer)
+    response_time_ms = Column(Integer)
+    ip_address = Column(String(45))
+    user_agent = Column(String(255))
+    request_body = Column(JSON)
+    response_body = Column(JSON)
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index('idx_api_log_user', 'user_id'),
+        Index('idx_api_log_endpoint', 'endpoint'),
+        Index('idx_api_log_created', 'created_at'),
+    )
+
+
+class SystemSettings(Base):
+    """System-wide settings (singleton)"""
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    maintenance_mode = Column(Boolean, default=False, nullable=False)
+    maintenance_message = Column(Text)
+    allow_registrations = Column(Boolean, default=True, nullable=False)
+    require_email_verification = Column(Boolean, default=True, nullable=False)
+    max_api_calls_per_minute = Column(Integer, default=60)
+    max_portfolio_size = Column(Integer, default=100)
+    max_watchlist_size = Column(Integer, default=50)
+    cache_ttl_seconds = Column(Integer, default=300)
+    data_retention_days = Column(Integer, default=365)
+    settings = Column(JSON, default={})
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint('id = 1', name='check_single_row'),
+    )
+
+
+class WatchlistItem(Base):
+    """Individual items within a watchlist"""
+    __tablename__ = "watchlist_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    watchlist_id = Column(Integer, ForeignKey("watchlists.id", ondelete="CASCADE"), nullable=False)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    target_price = Column(DECIMAL(10, 4))
+    notes = Column(Text)
+    alert_enabled = Column(Boolean, default=False)
+    added_at = Column(DateTime, default=func.now(), nullable=False)
+
+    watchlist = relationship("Watchlist", back_populates="items", lazy="selectin")
+    stock = relationship("Stock", back_populates="watchlist_items", lazy="selectin")
+
+    __table_args__ = (
+        UniqueConstraint('watchlist_id', 'stock_id', name='uq_watchlist_stock'),
+        Index('idx_watchlist_item_watchlist', 'watchlist_id'),
+    )
+
+
+# ============================================================================
+# BACKWARD COMPATIBILITY ALIASES
+# These allow code importing from tables.py to be redirected here without
+# requiring field-level code changes (except for Position.average_cost ->
+# Position.avg_cost_basis which must be updated in calling code).
+# ============================================================================
+
+# Enum aliases (tables.py exports these too)
+# UserRoleEnum, OrderTypeEnum, OrderSideEnum, OrderStatusEnum, AssetTypeEnum,
+# RecommendationTypeEnum are already defined above with matching values.
+
+# Fundamental alias: tables.py used "Fundamental" (singular), unified uses "Fundamentals"
+Fundamental = Fundamentals

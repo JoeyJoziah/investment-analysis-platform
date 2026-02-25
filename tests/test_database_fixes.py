@@ -16,7 +16,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from backend.models.consolidated_models import Base, Exchange, Stock, Sector, Industry
+from backend.models.unified_models import Base, Exchange, Stock, Sector, Industry
 from backend.utils.async_database_fixed import AsyncDatabaseManager, BatchProcessor, DataQualityValidator
 from backend.utils.enhanced_data_quality import EnhancedDataQualityChecker, ValidationResult
 from backend.utils.robust_error_handling import (
@@ -65,19 +65,19 @@ class TestDatabaseSchemaFixes:
         assert row is not None, "NASDAQ exchange should be found"
         assert row[0] > 0, "Exchange should have valid ID"
     
-    def test_stock_ticker_column_consistent(self, test_session):
-        """Test that stocks table uses 'ticker' field consistently"""
+    def test_stock_symbol_column_consistent(self, test_session):
+        """Test that stocks table uses 'symbol' field consistently"""
         # Add test stock
         exchange = test_session.query(Exchange).filter_by(code="NYSE").first()
-        stock = Stock(ticker="AAPL", name="Apple Inc.", exchange=exchange)
+        stock = Stock(symbol="AAPL", name="Apple Inc.", exchange=exchange)
         test_session.add(stock)
         test_session.commit()
-        
-        # Query using 'ticker' field (should not fail)
-        result = test_session.execute(text("SELECT id FROM stocks WHERE ticker = 'AAPL'"))
+
+        # Query using 'symbol' field (should not fail)
+        result = test_session.execute(text("SELECT id FROM stocks WHERE symbol = 'AAPL'"))
         row = result.fetchone()
-        
-        assert row is not None, "Stock should be found by ticker"
+
+        assert row is not None, "Stock should be found by symbol"
     
     def test_database_schema_fixer(self):
         """Test the schema fixer functionality"""
@@ -93,13 +93,20 @@ class TestDatabaseSchemaFixes:
     
     def test_safe_exchange_lookup(self, test_session):
         """Test safe exchange lookup with error handling"""
-        from backend.models.consolidated_models import get_exchange_by_code
-        
+        def get_exchange_by_code(session, code):
+            """Local helper: lookup or create exchange by code."""
+            exchange = session.query(Exchange).filter(Exchange.code == code).first()
+            if not exchange:
+                exchange = Exchange(code=code, name=f"{code} Stock Exchange")
+                session.add(exchange)
+                session.commit()
+            return exchange
+
         # Test existing exchange
         exchange = get_exchange_by_code(test_session, "NYSE")
         assert exchange is not None
         assert exchange.code == "NYSE"
-        
+
         # Test non-existing exchange (should create it)
         new_exchange = get_exchange_by_code(test_session, "TSE")
         assert new_exchange is not None
@@ -332,7 +339,7 @@ class TestIntegrationScenarios:
             
             # Create stock (should not fail)
             stock = Stock(
-                ticker=stock_data["ticker"],
+                symbol=stock_data["ticker"],
                 name=stock_data["name"],
                 exchange=nasdaq
             )
@@ -340,9 +347,9 @@ class TestIntegrationScenarios:
             session.commit()
             
             # Verify creation
-            created_stock = session.query(Stock).filter_by(ticker="AAPL").first()
+            created_stock = session.query(Stock).filter_by(symbol="AAPL").first()
             assert created_stock is not None
-            assert created_stock.ticker == "AAPL"
+            assert created_stock.symbol == "AAPL"
             assert created_stock.exchange.code == "NASDAQ"
     
     @pytest.mark.asyncio

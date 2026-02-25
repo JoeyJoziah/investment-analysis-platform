@@ -19,7 +19,7 @@ else
 fi
 
 if [ "$MODE" == "prod" ]; then
-    docker compose -f docker-compose.yml -f docker-compose.prod.yml $PROFILE_FLAG up -d
+    docker compose -f docker-compose.production.yml $PROFILE_FLAG up -d
 elif [ "$MODE" == "test" ]; then
     docker compose -f docker-compose.yml -f docker-compose.test.yml $PROFILE_FLAG up -d
 else

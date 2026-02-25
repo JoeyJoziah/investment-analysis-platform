@@ -299,7 +299,7 @@ jobs:
         import os
         
         # Validate docker-compose files
-        for compose_file in ['docker-compose.yml', 'docker-compose.prod.yml']:
+        for compose_file in ['docker-compose.yml', 'docker-compose.production.yml']:
             if os.path.exists(compose_file):
                 with open(compose_file) as f:
                     yaml.safe_load(f)

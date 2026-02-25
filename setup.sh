@@ -73,7 +73,7 @@ start_services() {
     echo "Starting services in $MODE mode..."
     
     if [ "$MODE" == "prod" ]; then
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+        docker compose -f docker-compose.production.yml up -d
     else
         docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
     fi

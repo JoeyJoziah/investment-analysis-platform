@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Import from tables.py to match auth router
-from backend.models.tables import (
+# Import from unified_models (canonical model source)
+from backend.models.unified_models import (
     User, UserSession, Portfolio, Position, Transaction,
     UserRoleEnum, OrderSideEnum, AssetTypeEnum
 )

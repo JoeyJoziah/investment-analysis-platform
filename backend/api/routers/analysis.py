@@ -4,11 +4,9 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta, date, timezone
 from enum import Enum
-import asyncio
 import random
 import logging
 import statistics
-import math
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import enhanced dependencies
@@ -25,12 +23,26 @@ from backend.analytics.dividend_analyzer import (
 )
 from backend.repositories import stock_repository, price_repository
 from backend.utils.cache import cache_with_ttl
-# from backend.utils.enhanced_error_handling import handle_api_error, validate_stock_symbol
 from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager
 from backend.models.api_response import ApiResponse, success_response
 from backend.utils.numpy_serializer import sanitize_numpy
-from backend.services.analysis_service import analysis_service
+from backend.services.analysis_service import (
+    analysis_service,
+    safe_async_call,
+    fetch_parallel_with_fallback,
+    fetch_technical_indicators,
+    fetch_fundamental_data,
+    fetch_sentiment_data,
+    calculate_rsi,
+    calculate_macd,
+    generate_insights,
+    calculate_risk_metrics_from_prices,
+    calculate_overall_score,
+    cache_analysis_results,
+    DEFAULT_API_TIMEOUT,
+    PARALLEL_BATCH_TIMEOUT,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,210 +74,6 @@ try:
 except Exception as e:
     logger.warning(f"ML model manager not available: {e}")
 
-# Constants for API timeouts
-DEFAULT_API_TIMEOUT = 5.0  # 5 seconds timeout for individual API calls
-PARALLEL_BATCH_TIMEOUT = 10.0  # 10 seconds for entire parallel batch
-
-
-async def safe_async_call(
-    coro,
-    timeout: float = DEFAULT_API_TIMEOUT,
-    default: Any = None,
-    error_msg: str = "API call"
-) -> Any:
-    """
-    Safely execute an async coroutine with timeout and error handling.
-
-    Args:
-        coro: The coroutine to execute
-        timeout: Maximum time to wait in seconds
-        default: Default value to return on failure
-        error_msg: Description for error logging
-
-    Returns:
-        The result of the coroutine or the default value on failure
-    """
-    try:
-        return await asyncio.wait_for(coro, timeout=timeout)
-    except asyncio.TimeoutError:
-        logger.warning(f"Timeout ({timeout}s) for {error_msg}")
-        return default
-    except Exception as e:
-        logger.error(f"Error in {error_msg}: {e}")
-        return default
-
-
-async def fetch_parallel_with_fallback(
-    tasks: List[Tuple[str, Any]],
-    timeout: float = PARALLEL_BATCH_TIMEOUT
-) -> Dict[str, Any]:
-    """
-    Execute multiple async tasks in parallel with individual error handling.
-
-    Args:
-        tasks: List of (name, coroutine) tuples
-        timeout: Maximum time for all tasks combined
-
-    Returns:
-        Dictionary mapping task names to results (None for failed tasks)
-    """
-    if not tasks:
-        return {}
-
-    task_names = [name for name, _ in tasks]
-    coroutines = [coro for _, coro in tasks]
-
-    try:
-        # Execute all tasks in parallel with overall timeout
-        results = await asyncio.wait_for(
-            asyncio.gather(*coroutines, return_exceptions=True),
-            timeout=timeout
-        )
-
-        result_dict = {}
-        for name, result in zip(task_names, results):
-            if isinstance(result, Exception):
-                logger.warning(f"Task '{name}' failed: {result}")
-                result_dict[name] = None
-            else:
-                result_dict[name] = result
-
-        return result_dict
-
-    except asyncio.TimeoutError:
-        logger.warning(f"Parallel tasks timed out after {timeout}s")
-        return {name: None for name in task_names}
-    except Exception as e:
-        logger.error(f"Error in parallel execution: {e}")
-        return {name: None for name in task_names}
-
-
-# Helper functions for real data analysis
-async def fetch_technical_indicators(symbol: str, period: str = "1M") -> Dict[str, Any]:
-    """Fetch real technical indicators from price data using parallel API calls"""
-    try:
-        if not alpha_vantage_client:
-            return {}
-
-        # Execute indicator API calls in parallel
-        indicator_tasks = [
-            ("rsi", safe_async_call(
-                alpha_vantage_client.get_rsi(symbol, interval="daily", time_period=14),
-                error_msg=f"RSI fetch for {symbol}"
-            )),
-            ("macd", safe_async_call(
-                alpha_vantage_client.get_macd(symbol),
-                error_msg=f"MACD fetch for {symbol}"
-            )),
-            ("sma_20", safe_async_call(
-                alpha_vantage_client.get_sma(symbol, interval="daily", time_period=20),
-                error_msg=f"SMA fetch for {symbol}"
-            )),
-        ]
-
-        results = await fetch_parallel_with_fallback(indicator_tasks)
-
-        # Filter out None results
-        indicators = {k: v for k, v in results.items() if v is not None}
-        return indicators
-
-    except Exception as e:
-        logger.error(f"Error fetching technical indicators for {symbol}: {e}")
-        return {}
-
-
-async def fetch_fundamental_data(symbol: str) -> Dict[str, Any]:
-    """Fetch fundamental data from available sources using parallel API calls"""
-    try:
-        fundamental_tasks = []
-
-        if alpha_vantage_client:
-            fundamental_tasks.extend([
-                ("overview", safe_async_call(
-                    alpha_vantage_client.get_company_overview(symbol),
-                    error_msg=f"Company overview for {symbol}"
-                )),
-                ("earnings", safe_async_call(
-                    alpha_vantage_client.get_earnings(symbol),
-                    error_msg=f"Earnings data for {symbol}"
-                )),
-            ])
-
-        if finnhub_client:
-            fundamental_tasks.append(
-                ("metrics", safe_async_call(
-                    finnhub_client.get_basic_financials(symbol),
-                    error_msg=f"Financial metrics for {symbol}"
-                ))
-            )
-
-        if not fundamental_tasks:
-            return {}
-
-        results = await fetch_parallel_with_fallback(fundamental_tasks)
-
-        # Merge results into single dict
-        fundamental_data = {}
-        if results.get("overview"):
-            fundamental_data.update(results["overview"])
-        if results.get("earnings"):
-            fundamental_data["earnings"] = results["earnings"]
-        if results.get("metrics"):
-            fundamental_data.update(results["metrics"])
-
-        return fundamental_data
-
-    except Exception as e:
-        logger.error(f"Error fetching fundamental data for {symbol}: {e}")
-        return {}
-
-
-async def fetch_sentiment_data(symbol: str) -> Dict[str, Any]:
-    """Fetch sentiment data from news and social sources using parallel API calls"""
-    try:
-        if not finnhub_client:
-            return {}
-
-        # Execute news and social sentiment fetches in parallel
-        sentiment_tasks = [
-            ("news", safe_async_call(
-                finnhub_client.get_company_news(
-                    symbol,
-                    _from=datetime.now() - timedelta(days=7),
-                    to=datetime.now()
-                ),
-                error_msg=f"News fetch for {symbol}"
-            )),
-            ("social", safe_async_call(
-                finnhub_client.get_social_sentiment(symbol),
-                error_msg=f"Social sentiment for {symbol}"
-            )),
-        ]
-
-        results = await fetch_parallel_with_fallback(sentiment_tasks)
-
-        sentiment_data = {}
-
-        # Process news sentiment if available
-        if results.get("news"):
-            try:
-                sentiment_data["news"] = await safe_async_call(
-                    sentiment_analyzer.analyze_news_sentiment(results["news"]),
-                    error_msg=f"News sentiment analysis for {symbol}",
-                    default={}
-                )
-            except Exception as e:
-                logger.warning(f"Failed to analyze news sentiment for {symbol}: {e}")
-
-        # Add social sentiment if available
-        if results.get("social"):
-            sentiment_data["social"] = results["social"]
-
-        return sentiment_data
-
-    except Exception as e:
-        logger.error(f"Error fetching sentiment data for {symbol}: {e}")
-        return {}
 
 # Enums
 class AnalysisType(str, Enum):
@@ -393,47 +201,20 @@ class ComparisonResult(BaseModel):
     recommendations: Dict[str, SignalStrength]
     correlation_matrix: Optional[Dict[str, Dict[str, float]]] = None
 
-# Utility functions
-def calculate_rsi(prices: List[float], period: int = 14) -> float:
-    """Calculate Relative Strength Index"""
-    # Simplified RSI calculation for demonstration
-    return random.uniform(30, 70)
 
-def calculate_macd(prices: List[float]) -> Dict[str, float]:
-    """Calculate MACD indicator"""
-    return {
-        "macd": random.uniform(-2, 2),
-        "signal": random.uniform(-2, 2),
-        "histogram": random.uniform(-1, 1)
-    }
+def _determine_recommendation(overall_score: float) -> SignalStrength:
+    """Map overall score to a SignalStrength recommendation."""
+    if overall_score >= 80:
+        return SignalStrength.STRONG_BUY
+    elif overall_score >= 65:
+        return SignalStrength.BUY
+    elif overall_score >= 35:
+        return SignalStrength.NEUTRAL
+    elif overall_score >= 20:
+        return SignalStrength.SELL
+    else:
+        return SignalStrength.STRONG_SELL
 
-def analyze_sentiment(text_data: List[str]) -> float:
-    """Analyze sentiment from text data"""
-    # Placeholder for sentiment analysis
-    return random.uniform(-0.5, 0.5)
-
-def generate_insights(analysis: Dict) -> List[str]:
-    """Generate key insights from analysis"""
-    insights = []
-    
-    rsi = analysis.get("technical", {}).get("rsi")
-    if rsi is not None and rsi > 70:
-        insights.append("RSI indicates overbought conditions - potential pullback ahead")
-    elif rsi is not None and rsi < 30:
-        insights.append("RSI indicates oversold conditions - potential bounce opportunity")
-
-    pe_ratio = analysis.get("fundamental", {}).get("pe_ratio")
-    if pe_ratio is not None and pe_ratio < 15:
-        insights.append("Stock appears undervalued based on P/E ratio")
-
-    overall_sentiment = analysis.get("sentiment", {}).get("overall_sentiment")
-    if overall_sentiment is not None and overall_sentiment > 0.5:
-        insights.append("Strong positive sentiment detected in recent news and social media")
-    
-    if not insights:
-        insights.append("Stock showing neutral signals across indicators")
-    
-    return insights
 
 # Enhanced Endpoints
 @router.post("/analyze")
@@ -446,22 +227,15 @@ async def analyze_stock(
 ) -> ApiResponse[AnalysisResponse]:
     """
     Perform comprehensive analysis on a single stock with real data integration.
-    
+
     This endpoint provides multi-layered analysis including:
     - Technical indicators from real market data
     - Fundamental analysis from financial statements
     - Sentiment analysis from news and social media
     - ML-powered predictions and pattern recognition
     """
-    
-    try:
-        # Validate stock symbol
-        # if not validate_stock_symbol(request.symbol):
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail=f"Invalid stock symbol format: '{request.symbol}'"
-        #     )
 
+    try:
         symbol = request.symbol.upper()
         logger.info(f"Starting analysis for {symbol} - Type: {request.analysis_type}")
 
@@ -469,8 +243,6 @@ async def analyze_stock(
         cached_analysis = await analysis_svc.get_cached_analysis(symbol)
         if cached_analysis and request.analysis_type == AnalysisType.QUICK:
             logger.info(f"Returning cached analysis for {symbol}")
-            # Transform cached result to match response format
-            # For now, we'll skip this optimization and continue with full analysis
             pass
 
         # Verify stock exists in database
@@ -480,22 +252,19 @@ async def analyze_stock(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Stock '{symbol}' not found in database"
             )
-        
+
         # Initialize response components
         technical = None
         fundamental = None
         sentiment = None
         ml_predictions = None
-        risk_metrics = None
         price_history = None
 
         # =====================================================================
         # PHASE 1: Execute all external API calls in PARALLEL
-        # This is the critical optimization - reduces latency by ~70%
         # =====================================================================
         logger.info(f"Starting parallel data fetch for {symbol}")
 
-        # Determine which data sources we need based on analysis type
         needs_technical = request.analysis_type in [AnalysisType.TECHNICAL, AnalysisType.COMPREHENSIVE]
         needs_fundamental = request.analysis_type in [AnalysisType.FUNDAMENTAL, AnalysisType.COMPREHENSIVE]
         needs_sentiment = (
@@ -503,10 +272,8 @@ async def analyze_stock(
             and request.include_news_sentiment
         )
 
-        # Build list of parallel tasks with names for result mapping
         parallel_tasks: List[Tuple[str, Any]] = []
 
-        # Price history is needed for technical analysis and risk metrics
         if needs_technical or request.include_ml_predictions:
             parallel_tasks.append((
                 "price_history",
@@ -524,42 +291,41 @@ async def analyze_stock(
                 )
             ))
 
-        # External API calls - these are the slow ones that benefit most from parallelization
         if needs_technical:
             parallel_tasks.append((
                 "tech_indicators",
-                fetch_technical_indicators(symbol, request.period)
+                fetch_technical_indicators(symbol, request.period, alpha_vantage_client)
             ))
 
         if needs_fundamental:
             parallel_tasks.append((
                 "fundamental_data",
-                fetch_fundamental_data(symbol)
+                fetch_fundamental_data(symbol, alpha_vantage_client, finnhub_client)
             ))
 
         if needs_sentiment:
             parallel_tasks.append((
                 "sentiment_data",
-                fetch_sentiment_data(symbol)
+                fetch_sentiment_data(symbol, finnhub_client, sentiment_analyzer)
             ))
 
-        # Execute all tasks in parallel with overall timeout
         parallel_results = await fetch_parallel_with_fallback(
             parallel_tasks,
             timeout=PARALLEL_BATCH_TIMEOUT
         )
 
-        # Extract results (None if task failed or wasn't requested)
         price_history = parallel_results.get("price_history", [])
         tech_indicators_data = parallel_results.get("tech_indicators", {})
         fundamental_data = parallel_results.get("fundamental_data", {})
         sentiment_data = parallel_results.get("sentiment_data", {})
 
-        logger.info(f"Parallel fetch completed for {symbol}: "
-                   f"price_history={len(price_history) if price_history else 0} records, "
-                   f"tech={bool(tech_indicators_data)}, "
-                   f"fundamental={bool(fundamental_data)}, "
-                   f"sentiment={bool(sentiment_data)}")
+        logger.info(
+            f"Parallel fetch completed for {symbol}: "
+            f"price_history={len(price_history) if price_history else 0} records, "
+            f"tech={bool(tech_indicators_data)}, "
+            f"fundamental={bool(fundamental_data)}, "
+            f"sentiment={bool(sentiment_data)}"
+        )
 
         # =====================================================================
         # PHASE 2: Process results and build response objects
@@ -570,21 +336,17 @@ async def analyze_stock(
             logger.info(f"Processing technical analysis for {symbol}")
 
             if price_history and len(price_history) > 0:
-                # Calculate technical indicators from price data
                 prices = [float(p.close) for p in price_history]
                 volumes = [p.volume for p in price_history]
 
-                # Use our technical analyzer (this is CPU-bound, not I/O)
                 tech_analysis = await technical_analyzer.analyze(
                     prices=prices,
                     volumes=volumes,
                     symbol=symbol
                 )
 
-                # Sanitize numpy types from technical analysis
                 tech_analysis = sanitize_numpy(tech_analysis)
 
-                # Merge external API indicators if available
                 if tech_indicators_data:
                     tech_indicators_data = sanitize_numpy(tech_indicators_data)
                     tech_analysis.update(tech_indicators_data)
@@ -606,7 +368,6 @@ async def analyze_stock(
                 )
             else:
                 logger.warning(f"No price history found for {symbol}, using mock data")
-                # Fallback to mock data
                 technical = TechnicalIndicators(
                     rsi=calculate_rsi([]),
                     rsi_signal=SignalStrength.NEUTRAL,
@@ -626,20 +387,15 @@ async def analyze_stock(
             logger.info(f"Processing fundamental analysis for {symbol}")
 
             try:
-                # Sanitize numpy types from fundamental data
                 if fundamental_data:
                     fundamental_data = sanitize_numpy(fundamental_data)
 
-                # Parse and normalize the data from parallel fetch
                 pe_ratio = fundamental_data.get('PERatio', fundamental_data.get('peRatio')) if fundamental_data else None
                 eps = fundamental_data.get('EPS', fundamental_data.get('eps')) if fundamental_data else None
 
-                # Calculate dividend yield using DividendAnalyzer
-                # Extract API dividend data and validate
                 dividend_yield = None
                 if fundamental_data and fundamental_data.get('DividendYield'):
                     try:
-                        # Use DividendAnalyzer to validate and calculate yield
                         dividend_yield = float(fundamental_data.get('DividendYield', 0))
                         logger.debug(f"Using API dividend yield for {symbol}: {dividend_yield:.4f}%")
                     except (ValueError, TypeError):
@@ -659,13 +415,12 @@ async def analyze_stock(
                     market_cap=float(fundamental_data.get('MarketCapitalization', stock.market_cap or 0)) if fundamental_data and fundamental_data.get('MarketCapitalization') else stock.market_cap,
                     enterprise_value=float(fundamental_data.get('EVToRevenue', 0)) * float(fundamental_data.get('RevenueTTM', 0)) if fundamental_data and fundamental_data.get('EVToRevenue') and fundamental_data.get('RevenueTTM') else None,
                     book_value=float(fundamental_data.get('BookValue', 0)) if fundamental_data and fundamental_data.get('BookValue') else None,
-                    intrinsic_value=None,  # Would require complex calculation
-                    valuation_score=random.uniform(60, 85)  # Placeholder for now
+                    intrinsic_value=None,
+                    valuation_score=random.uniform(60, 85)
                 )
 
             except Exception as e:
                 logger.error(f"Error processing fundamental data for {symbol}: {e}")
-                # Fallback to mock data
                 fundamental = FundamentalMetrics(
                     pe_ratio=25.5,
                     peg_ratio=1.8,
@@ -689,7 +444,6 @@ async def analyze_stock(
 
             try:
                 if sentiment_data:
-                    # Sanitize numpy types from sentiment data
                     sentiment_data = sanitize_numpy(sentiment_data)
                     news_sentiment = sentiment_data.get('news', {}).get('overall_sentiment', 0)
                     social_data = sentiment_data.get('social', {})
@@ -699,14 +453,13 @@ async def analyze_stock(
                         sentiment_label="Positive" if news_sentiment > 0.1 else "Negative" if news_sentiment < -0.1 else "Neutral",
                         news_sentiment=news_sentiment,
                         social_sentiment=social_data.get('sentiment', 0) if social_data else None,
-                        analyst_sentiment=None,  # Would require analyst ratings data
-                        insider_sentiment=None,  # Would require insider trading data
+                        analyst_sentiment=None,
+                        insider_sentiment=None,
                         sentiment_momentum=sentiment_data.get('momentum', 'stable'),
                         key_topics=sentiment_data.get('news', {}).get('key_topics', []),
                         sentiment_sources=sentiment_data.get('sources', {})
                     )
                 else:
-                    # Fallback sentiment
                     sentiment = SentimentAnalysis(
                         overall_sentiment=0.0,
                         sentiment_label="Neutral",
@@ -732,18 +485,15 @@ async def analyze_stock(
                     key_topics=["earnings beat", "product launch", "market expansion"],
                     sentiment_sources={"news": 150, "social": 5000, "analysts": 25}
                 )
-    
+
         # ML Predictions with real models
-        # NOTE: Reuses price_history from parallel fetch above - no additional DB call needed
         if request.include_ml_predictions and model_manager:
             logger.info(f"Generating ML predictions for {symbol}")
 
             try:
-                # Use price_history already fetched in parallel (for last 60 days, take most recent)
                 recent_prices = price_history[-60:] if price_history and len(price_history) >= 60 else price_history
 
                 if recent_prices and len(recent_prices) >= 30:
-                    # Prepare data for ML model
                     price_data = [
                         {
                             'open': float(p.open),
@@ -756,7 +506,6 @@ async def analyze_stock(
                         for p in recent_prices
                     ]
 
-                    # Get predictions from ML models with timeout
                     predictions = await safe_async_call(
                         model_manager.get_price_predictions(symbol, price_data),
                         timeout=DEFAULT_API_TIMEOUT,
@@ -764,7 +513,6 @@ async def analyze_stock(
                         default={}
                     )
 
-                    # Sanitize numpy types from ML predictions
                     if predictions:
                         predictions = sanitize_numpy(predictions)
                         ml_predictions = MLPredictions(
@@ -786,7 +534,6 @@ async def analyze_stock(
 
             except Exception as e:
                 logger.error(f"Error generating ML predictions for {symbol}: {e}")
-                # Fallback to mock predictions
                 ml_predictions = MLPredictions(
                     price_prediction_1d=152.5,
                     price_prediction_7d=155.0,
@@ -798,95 +545,17 @@ async def analyze_stock(
                     anomaly_detection=False,
                     trend_prediction="neutral"
                 )
-    
-        # Risk Metrics calculation
+
+        # Risk Metrics calculation (delegated to service)
         logger.info(f"Calculating risk metrics for {symbol}")
+        prices_for_risk = [float(p.close) for p in price_history] if price_history else []
+        risk_fields = calculate_risk_metrics_from_prices(prices_for_risk)
+        risk_metrics = RiskMetrics(**risk_fields)
 
-        # Calculate real risk metrics if we have price data
-        risk_metrics = None
-        if price_history and len(price_history) >= 30:
-            prices = [float(p.close) for p in price_history]
-            returns = [(prices[i] - prices[i-1]) / prices[i-1] for i in range(1, len(prices))]
+        # Calculate overall score and recommendation (delegated to service)
+        overall_score = calculate_overall_score(technical, fundamental, sentiment, ml_predictions)
+        recommendation = _determine_recommendation(overall_score)
 
-            volatility = statistics.stdev(returns) if len(returns) > 1 else 0.0
-            mean_return = statistics.mean(returns) if returns else 0.0
-            
-            # Simplified risk calculations (would use more sophisticated methods in production)
-            sharpe_ratio = (mean_return * 252) / (volatility * math.sqrt(252)) if volatility > 0 else 0.0
-            
-            risk_metrics = RiskMetrics(
-                beta=random.uniform(0.8, 1.2),  # Would calculate vs market
-                alpha=mean_return * 252,
-                sharpe_ratio=sharpe_ratio,
-                sortino_ratio=sharpe_ratio * 1.2,  # Approximation
-                max_drawdown=min(returns) if returns else 0.0,
-                var_95=statistics.quantiles(returns, n=20)[0] if len(returns) > 20 else min(returns, default=0.0),
-                cvar_95=min(returns) if returns else 0.0,
-                correlation_with_market=random.uniform(0.6, 0.9),
-                risk_adjusted_return=mean_return / volatility if volatility > 0 else 0.0,
-                overall_risk_score=min(100, max(0, (volatility * 100) * 2))
-            )
-        else:
-            # Fallback risk metrics
-            risk_metrics = RiskMetrics(
-                beta=1.15,
-                alpha=0.02,
-                sharpe_ratio=1.85,
-                sortino_ratio=2.10,
-                max_drawdown=-0.15,
-                var_95=-0.025,
-                cvar_95=-0.035,
-                correlation_with_market=0.75,
-                risk_adjusted_return=0.18,
-                overall_risk_score=42.0
-            )
-        
-        # Calculate overall score and recommendation
-        scores = []
-        
-        if technical:
-            tech_score = 50  # Base score
-            if technical.rsi:
-                if 30 <= technical.rsi <= 70:
-                    tech_score += 20
-                elif technical.rsi < 30:
-                    tech_score += 10  # Oversold can be good
-            if technical.trend == "bullish":
-                tech_score += 15
-            elif technical.trend == "bearish":
-                tech_score -= 15
-            scores.append(min(100, max(0, tech_score)))
-        
-        if fundamental:
-            fund_score = 50
-            if fundamental.pe_ratio and 10 <= fundamental.pe_ratio <= 25:
-                fund_score += 20
-            if fundamental.revenue_growth and fundamental.revenue_growth > 0:
-                fund_score += 15
-            scores.append(min(100, max(0, fund_score)))
-        
-        if sentiment:
-            sent_score = 50 + (sentiment.overall_sentiment * 25)
-            scores.append(min(100, max(0, sent_score)))
-        
-        if ml_predictions:
-            ml_score = ml_predictions.confidence_score * 100
-            scores.append(ml_score)
-        
-        overall_score = statistics.mean(scores) if scores else 60.0
-        
-        # Determine recommendation
-        if overall_score >= 80:
-            recommendation = SignalStrength.STRONG_BUY
-        elif overall_score >= 65:
-            recommendation = SignalStrength.BUY
-        elif overall_score >= 35:
-            recommendation = SignalStrength.NEUTRAL
-        elif overall_score >= 20:
-            recommendation = SignalStrength.SELL
-        else:
-            recommendation = SignalStrength.STRONG_SELL
-        
         # Generate insights
         analysis_data = {
             "technical": technical.dict() if technical else {},
@@ -894,7 +563,7 @@ async def analyze_stock(
             "sentiment": sentiment.dict() if sentiment else {}
         }
         insights = generate_insights(analysis_data)
-        
+
         # Add data source info to insights
         data_sources = []
         if technical:
@@ -905,13 +574,13 @@ async def analyze_stock(
             data_sources.append("news sentiment")
         if ml_predictions:
             data_sources.append("ML predictions")
-        
+
         if data_sources:
             insights.append(f"Analysis includes: {', '.join(data_sources)}")
-        
-        # Background task to cache results and update database
+
+        # Background task to cache results
         background_tasks.add_task(cache_analysis_results, symbol, overall_score, analysis_data)
-        
+
         # Calculate confidence based on available data
         confidence = min(1.0, len([x for x in [technical, fundamental, sentiment, ml_predictions] if x is not None]) * 0.25)
 
@@ -929,15 +598,14 @@ async def analyze_stock(
             confidence=confidence,
             key_insights=insights,
             warnings=["High volatility detected in recent price action"] if risk_metrics and risk_metrics.overall_risk_score > 60 else None,
-            next_earnings_date=datetime.now(timezone.utc).date() + timedelta(days=random.randint(10, 90)),  # Would fetch from earnings calendar
+            next_earnings_date=datetime.now(timezone.utc).date() + timedelta(days=random.randint(10, 90)),
             last_updated=datetime.now(timezone.utc)
         ))
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in comprehensive analysis for {symbol}: {e}")
-        # await handle_api_error(e, f"analyze stock {symbol}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error performing analysis: {str(e)}"
@@ -946,21 +614,17 @@ async def analyze_stock(
 @router.post("/batch")
 async def batch_analysis(request: BatchAnalysisRequest) -> ApiResponse[List[AnalysisResponse]]:
     """Analyze multiple stocks at once"""
-    
+
     results = []
     for symbol in request.symbols:
-        # Create individual analysis request
         analysis_req = AnalysisRequest(
             symbol=symbol,
             analysis_type=request.analysis_type,
             include_ml_predictions=False,
             include_news_sentiment=False
         )
-        
-        # Perform quick analysis for each symbol
-        # In production, this would be parallelized
+
         result = await analyze_stock(analysis_req, BackgroundTasks())
-        # Extract data from ApiResponse wrapper
         results.append(result.data)
 
     return success_response(data=results)
@@ -968,13 +632,13 @@ async def batch_analysis(request: BatchAnalysisRequest) -> ApiResponse[List[Anal
 @router.post("/compare")
 async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[ComparisonResult]:
     """Compare multiple stocks side by side"""
-    
+
     if len(request.symbols) < 2:
         raise HTTPException(status_code=400, detail="At least 2 symbols required for comparison")
-    
+
     comparison_metrics = {}
     recommendations = {}
-    
+
     for symbol in request.symbols:
         comparison_metrics[symbol] = {
             "score": random.uniform(50, 90),
@@ -984,7 +648,7 @@ async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[Compariso
             "risk_score": random.uniform(20, 80),
             "expected_return": random.uniform(-0.1, 0.3)
         }
-        
+
         score = comparison_metrics[symbol]["score"]
         if score >= 75:
             recommendations[symbol] = SignalStrength.BUY
@@ -992,14 +656,12 @@ async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[Compariso
             recommendations[symbol] = SignalStrength.NEUTRAL
         else:
             recommendations[symbol] = SignalStrength.SELL
-    
-    # Determine best performer
-    best_performer = max(comparison_metrics.keys(), 
+
+    best_performer = max(comparison_metrics.keys(),
                         key=lambda x: comparison_metrics[x]["score"])
-    
-    # Generate correlation matrix if requested
+
     correlation_matrix = None
-    if len(request.symbols) <= 10:  # Limit correlation matrix for performance
+    if len(request.symbols) <= 10:
         correlation_matrix = {}
         for symbol1 in request.symbols:
             correlation_matrix[symbol1] = {}
@@ -1023,12 +685,12 @@ async def get_technical_indicators(
     indicators: List[Indicator] = Query(None)
 ) -> ApiResponse[Dict[str, Any]]:
     """Get specific technical indicators for a stock"""
-    
+
     result = {}
-    
+
     if not indicators:
         indicators = list(Indicator)
-    
+
     for indicator in indicators:
         if indicator == Indicator.RSI:
             result["rsi"] = {
@@ -1072,7 +734,7 @@ async def get_technical_indicators(
 @router.get("/sentiment/{symbol}")
 async def get_sentiment_analysis(symbol: str) -> ApiResponse[SentimentAnalysis]:
     """Get detailed sentiment analysis for a stock"""
-    
+
     return success_response(data=SentimentAnalysis(
         overall_sentiment=random.uniform(-0.5, 0.5),
         sentiment_label="Positive" if random.random() > 0.5 else "Neutral",
@@ -1084,30 +746,3 @@ async def get_sentiment_analysis(symbol: str) -> ApiResponse[SentimentAnalysis]:
         key_topics=["earnings", "product launch", "market conditions"],
         sentiment_sources={"news": 100, "social": 5000, "analysts": 20}
     ))
-
-# Enhanced Background task functions
-async def cache_analysis_results(symbol: str, score: float, analysis_data: Dict[str, Any]):
-    """Cache analysis results and update database"""
-    try:
-        logger.info(f"Caching analysis results for {symbol} with score {score}")
-        
-        # Cache the results (would use Redis in production)
-        # For now, just log the operation
-        cache_data = {
-            "symbol": symbol,
-            "score": score,
-            "analysis_data": analysis_data,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        
-        # In production, this would:
-        # 1. Save to Redis with appropriate TTL
-        # 2. Update analysis results in database
-        # 3. Trigger any necessary notifications
-        # 4. Update recommendation caches
-        
-        await asyncio.sleep(0.1)  # Simulate async operation
-        logger.info(f"Successfully cached analysis for {symbol}")
-        
-    except Exception as e:
-        logger.error(f"Error caching analysis results for {symbol}: {e}")

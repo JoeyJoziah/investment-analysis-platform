@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any
 from datetime import date, datetime, timedelta, timezone
 import logging
 
-from sqlalchemy import select, func, and_, or_, desc, asc, text
+from sqlalchemy import select, func, case, and_, or_, desc, asc, text
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -121,7 +121,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
                 )
             ).order_by(
                 # Prioritize exact symbol matches
-                func.case(
+                case(
                     (Stock.symbol == query.upper(), 1),
                     (Stock.symbol.ilike(f'{query.upper()}%'), 2),
                     else_=3

@@ -28,7 +28,7 @@ from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.utils.cache import get_cache
 from backend.utils.cost_monitor import CostMonitor
 from backend.models.database import get_db_session
-from backend.models.tables import Stock, PriceHistory
+from backend.models.unified_models import Stock, PriceHistory
 
 # Initialize colorama
 init(autoreset=True)

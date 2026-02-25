@@ -12,8 +12,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
-from backend.models.unified_models import Recommendation, Stock
-from backend.models.tables import RecommendationPerformance
+from backend.models.unified_models import Recommendation, Stock, RecommendationPerformance
 from backend.config.database import get_db_session
 
 logger = logging.getLogger(__name__)
@@ -110,20 +109,20 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
     ) -> List[Recommendation]:
         """Get recommendations by type (strong_buy, buy, hold, sell, strong_sell)"""
         filters = [
-            FilterCriteria(field='recommendation_type', operator='eq', value=recommendation_type)
+            FilterCriteria(field='action', operator='eq', value=recommendation_type)
         ]
-        
+
         if active_only:
             filters.extend([
                 FilterCriteria(field='is_active', operator='eq', value=True),
                 FilterCriteria(field='valid_until', operator='gt', value=datetime.now(timezone.utc))
             ])
-        
+
         pagination = PaginationParams(limit=limit) if limit else None
-        
+
         return await self.get_multi(
             filters=filters,
-            sort_params=[SortParams(field='confidence_score', direction='desc')],
+            sort_params=[SortParams(field='confidence', direction='desc')],
             pagination=pagination,
             load_relationships=['stock'],
             session=session
@@ -147,14 +146,14 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                 and_(
                     Recommendation.is_active == True,
                     Recommendation.valid_until > datetime.now(timezone.utc),
-                    Recommendation.confidence_score >= min_confidence
+                    Recommendation.confidence >= min_confidence
                 )
             )
 
             if recommendation_types:
-                query = query.where(Recommendation.recommendation_type.in_(recommendation_types))
+                query = query.where(Recommendation.action.in_(recommendation_types))
 
-            query = query.order_by(Recommendation.confidence_score.desc()).limit(limit)
+            query = query.order_by(Recommendation.confidence.desc()).limit(limit)
 
             result = await session.execute(query)
             return result.scalars().all()
@@ -173,18 +172,18 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
         async def _get_summary(session: AsyncSession) -> Dict[str, Any]:
             # Active recommendations by type
             active_by_type_query = select(
-                Recommendation.recommendation_type,
+                Recommendation.action,
                 func.count(Recommendation.id).label('count')
             ).where(
                 and_(
                     Recommendation.is_active == True,
                     Recommendation.valid_until > datetime.now(timezone.utc)
                 )
-            ).group_by(Recommendation.recommendation_type)
-            
+            ).group_by(Recommendation.action)
+
             result = await session.execute(active_by_type_query)
-            active_by_type = {row.recommendation_type.value: row.count for row in result}
-            
+            active_by_type = {row.action: row.count for row in result}
+
             # Overall statistics
             stats_query = select(
                 func.count(Recommendation.id).label('total_recommendations'),
@@ -194,9 +193,9 @@ class RecommendationRepository(AsyncCRUDRepository[Recommendation]):
                         Recommendation.valid_until > datetime.now(timezone.utc)
                     )
                 ).label('active_recommendations'),
-                func.avg(Recommendation.confidence_score).label('avg_confidence'),
+                func.avg(Recommendation.confidence).label('avg_confidence'),
                 func.avg(
-                    Recommendation.confidence_score
+                    Recommendation.confidence
                 ).filter(
                     and_(
                         Recommendation.is_active == True,

@@ -17,7 +17,7 @@ from backend.analytics.sentiment_analysis import SentimentAnalysisEngine as Sent
 from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.utils.database import get_db_sync
 from backend.utils.cache import get_redis_client, get_cache_key as cache_key
-from backend.models.tables import (
+from backend.models.unified_models import (
     Stock, PriceHistory, Recommendation, RecommendationPerformance,
     Fundamental, News
 )
@@ -310,9 +310,8 @@ def create_recommendation(symbol: str, analysis_result: Dict[str, Any]) -> bool:
             # Create recommendation
             recommendation = Recommendation(
                 stock_id=stock.id,
-                recommendation_type=rec_type,
-                confidence_score=abs(score - 50) / 50,  # Convert to 0-1 scale
-                current_price=current_price,
+                action=rec_type,
+                confidence=abs(score - 50) / 50,  # Convert to 0-1 scale
                 target_price=target_price,
                 stop_loss=stop_loss,
                 time_horizon_days=30,
@@ -391,7 +390,7 @@ def track_recommendation_performance() -> Dict[str, Any]:
                         perf.days_active = (datetime.now(timezone.utc) - rec.created_at).days
                         
                         # Check if targets hit
-                        if rec.recommendation_type in ['buy', 'strong_buy']:
+                        if rec.action in ['buy', 'strong_buy']:
                             if current_price >= rec.target_price:
                                 perf.target_hit = True
                                 rec.is_active = False
@@ -571,7 +570,7 @@ def check_watchlist_price_alerts() -> Dict[str, Any]:
     """
     try:
         with get_db_sync() as db:
-            from backend.models.tables import WatchlistItem, Watchlist, Stock, PriceHistory, User
+            from backend.models.unified_models import WatchlistItem, Watchlist, Stock, PriceHistory, User
 
             # Get all items with alerts enabled and target prices set
             alert_items = db.query(WatchlistItem).join(
@@ -706,7 +705,7 @@ def _get_current_price_sync(symbol: str, db: Session) -> Optional[float]:
                 pass
 
         # Fall back to database - get latest price from PriceHistory
-        from backend.models.tables import Stock, PriceHistory
+        from backend.models.unified_models import Stock, PriceHistory
 
         stock = db.query(Stock).filter(Stock.symbol == symbol).first()
         if not stock:

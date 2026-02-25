@@ -184,96 +184,86 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-images, security-scan]
     environment: staging
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
-      with:
-        version: 'v1.28.0'
+    # TODO: Add K8s manifests when ready for K8s deployment
+    # The steps below use docker-compose based deployment via blue_green_deploy.sh
+    # which is the existing deployment mechanism for this project.
 
-    - name: Configure kubectl for staging
+    - name: Write environment file
       run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
-        kubectl config use-context staging
-
-    - name: Verify cluster connection
-      run: |
-        kubectl cluster-info
-        kubectl get nodes
-
-    - name: Create namespace if not exists
-      run: |
-        kubectl create namespace investment-analysis-staging --dry-run=client -o yaml | kubectl apply -f -
-
-    - name: Update Kubernetes secrets
-      run: |
-        # Create or update application secrets
-        kubectl create secret generic app-secrets \
-          --namespace=investment-analysis-staging \
-          --from-literal=database-url="${{ secrets.STAGING_DATABASE_URL }}" \
-          --from-literal=redis-url="${{ secrets.STAGING_REDIS_URL }}" \
-          --from-literal=jwt-secret="${{ secrets.STAGING_JWT_SECRET }}" \
-          --from-literal=alpha-vantage-key="${{ secrets.ALPHA_VANTAGE_API_KEY }}" \
-          --from-literal=finnhub-key="${{ secrets.FINNHUB_API_KEY }}" \
-          --from-literal=polygon-key="${{ secrets.POLYGON_API_KEY }}" \
-          --from-literal=news-api-key="${{ secrets.NEWS_API_KEY }}" \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-    - name: Deploy database migrations
-      run: |
-        # Run database migrations as a Job
-        cat << EOF | kubectl apply -f -
-        apiVersion: batch/v1
-        kind: Job
-        metadata:
-          name: db-migration-${{ github.sha }}
-          namespace: investment-analysis-staging
-        spec:
-          template:
-            spec:
-              containers:
-              - name: db-migration
-                image: ${{ needs.build-images.outputs.backend-image }}
-                command: ["alembic", "upgrade", "head"]
-                env:
-                - name: DATABASE_URL
-                  valueFrom:
-                    secretKeyRef:
-                      name: app-secrets
-                      key: database-url
-              restartPolicy: Never
-          backoffLimit: 3
+        cat > .env.staging << EOF
+        DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
+        REDIS_URL=${{ secrets.STAGING_REDIS_URL }}
+        JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET }}
+        ALPHA_VANTAGE_API_KEY=${{ secrets.ALPHA_VANTAGE_API_KEY }}
+        FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}
+        POLYGON_API_KEY=${{ secrets.POLYGON_API_KEY }}
+        NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+        BACKEND_IMAGE=${{ needs.build-images.outputs.backend-image }}
+        FRONTEND_IMAGE=${{ needs.build-images.outputs.frontend-image }}
+        APP_ENV=staging
         EOF
-        
-        # Wait for migration to complete
-        kubectl wait --for=condition=complete --timeout=300s job/db-migration-${{ github.sha }} -n investment-analysis-staging
 
-    - name: Deploy application
-      run: |
-        # Update deployment with new image tags
-        sed -i "s|BACKEND_IMAGE_PLACEHOLDER|${{ needs.build-images.outputs.backend-image }}|g" infrastructure/kubernetes/deployment.yaml
-        sed -i "s|FRONTEND_IMAGE_PLACEHOLDER|${{ needs.build-images.outputs.frontend-image }}|g" infrastructure/kubernetes/deployment.yaml
-        sed -i "s|NAMESPACE_PLACEHOLDER|investment-analysis-staging|g" infrastructure/kubernetes/deployment.yaml
-        
-        # Apply Kubernetes manifests
-        kubectl apply -f infrastructure/kubernetes/ -n investment-analysis-staging
+    - name: Deploy to staging via SSH
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_SSH_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          set -euo pipefail
 
-    - name: Wait for rollout to complete
-      run: |
-        kubectl rollout status deployment/backend-deployment -n investment-analysis-staging --timeout=600s
-        kubectl rollout status deployment/frontend-deployment -n investment-analysis-staging --timeout=600s
+          cd /opt/investment-analysis-platform
 
-    - name: Verify deployment
+          # Pull latest code
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Write environment file
+          cat > .env << 'ENVEOF'
+          DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
+          REDIS_URL=${{ secrets.STAGING_REDIS_URL }}
+          JWT_SECRET_KEY=${{ secrets.STAGING_JWT_SECRET }}
+          ALPHA_VANTAGE_API_KEY=${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}
+          POLYGON_API_KEY=${{ secrets.POLYGON_API_KEY }}
+          NEWS_API_KEY=${{ secrets.NEWS_API_KEY }}
+          BACKEND_IMAGE=${{ needs.build-images.outputs.backend-image }}
+          FRONTEND_IMAGE=${{ needs.build-images.outputs.frontend-image }}
+          APP_ENV=staging
+          ENVEOF
+
+          # Pull updated images
+          docker pull ${{ needs.build-images.outputs.backend-image }}
+          docker pull ${{ needs.build-images.outputs.frontend-image }}
+
+          # Run database migrations before switching traffic
+          echo "Running database migrations..."
+          docker run --rm \
+            --env-file .env \
+            ${{ needs.build-images.outputs.backend-image }} \
+            alembic upgrade head
+
+          # Deploy using blue-green script
+          bash scripts/deployment/blue_green_deploy.sh \
+            --environment staging \
+            --version ${{ github.sha }} \
+            --skip-backup
+
+    - name: Verify staging deployment health
       run: |
-        # Check pod status
-        kubectl get pods -n investment-analysis-staging
-        
-        # Check service endpoints
-        kubectl get services -n investment-analysis-staging
+        echo "Waiting for staging services to stabilize..."
+        sleep 30
+
+        # Basic health check against staging URL
+        curl -f --retry 5 --retry-delay 10 \
+          "${{ secrets.STAGING_API_URL }}/api/health" || exit 1
+
+        echo "Staging deployment verified healthy"
 
   # Run smoke tests
   smoke-tests:
@@ -504,42 +494,43 @@ jobs:
     if: failure() && needs.deploy-staging.result == 'failure'
     needs: [deploy-staging]
     environment: staging
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup kubectl
-      uses: azure/setup-kubectl@v3
+    # TODO: Add K8s manifests when ready for K8s deployment
+    # Rollback uses docker-compose blue-green script to restore prior environment.
+
+    - name: Rollback to previous version via SSH
+      uses: appleboy/ssh-action@v1.0.0
       with:
-        version: 'v1.28.0'
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_SSH_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          set -euo pipefail
+          cd /opt/investment-analysis-platform
 
-    - name: Configure kubectl
-      run: |
-        mkdir -p ~/.kube
-        echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+          echo "Initiating rollback on staging..."
+          bash scripts/deployment/rollback.sh --environment staging
 
-    - name: Rollback to previous version
-      run: |
-        echo "🔄 Rolling back deployment..."
-        kubectl rollout undo deployment/backend-deployment -n investment-analysis-staging
-        kubectl rollout undo deployment/frontend-deployment -n investment-analysis-staging
-        
-        # Wait for rollback to complete
-        kubectl rollout status deployment/backend-deployment -n investment-analysis-staging --timeout=300s
-        kubectl rollout status deployment/frontend-deployment -n investment-analysis-staging --timeout=300s
+          # Verify health after rollback
+          sleep 20
+          curl -f "${{ secrets.STAGING_API_URL }}/api/health" || \
+            echo "WARNING: Health check failed after rollback - manual intervention may be needed"
 
     - name: Notify rollback
       uses: 8398a7/action-slack@v3
       with:
         status: failure
         text: |
-          🔄 **Staging Deployment Rolled Back**
-          
+          Staging Deployment Rolled Back
+
           Repository: ${{ github.repository }}
           Branch: ${{ github.ref_name }}
           Commit: ${{ github.sha }}
-          
+
           The deployment failed and has been automatically rolled back to the previous version.
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

@@ -194,10 +194,6 @@ async def price_history_30d(db_session: AsyncSession, sample_stock: Stock):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="StockResponse.from_orm fails on lazy-loaded relationships in async context",
-    strict=True,
-)
 async def test_get_stocks_returns_success(
     async_client: AsyncClient,
     sample_stock: Stock,
@@ -218,21 +214,20 @@ async def test_get_stocks_returns_success(
 
 
 @pytest.mark.asyncio
-async def test_get_stocks_serialization_returns_500(
+async def test_get_stocks_serialization_returns_200(
     async_client: AsyncClient,
     sample_stock: Stock,
 ):
     """
-    Regression test: GET /api/v1/stocks currently returns 500 because
-    StockResponse.from_orm() cannot lazy-load relationships in async.
-    This test documents the current behavior.
+    Regression test: GET /api/v1/stocks returns 200 after the StockResponse
+    serialization bug (lazy-loaded relationships in async context) was fixed.
     """
     response = await async_client.get(PREFIX)
-    assert response.status_code == 500
+    assert response.status_code == 200
 
     body = response.json()
-    assert body["success"] is False
-    assert "error" in body
+    assert body["success"] is True
+    assert isinstance(body["data"], list)
 
 
 @pytest.mark.asyncio
@@ -266,10 +261,6 @@ async def test_get_stocks_invalid_order_rejected(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="StockResponse.from_orm fails on lazy-loaded relationships in async context",
-    strict=True,
-)
 async def test_search_stocks_by_symbol(
     async_client: AsyncClient,
     sample_stock: Stock,
@@ -278,7 +269,7 @@ async def test_search_stocks_by_symbol(
     """Search by exact symbol prefix returns matching stocks."""
     response = await async_client.get(
         f"{PREFIX}/search",
-        params={"query": "AAPL"},
+        params={"q": "AAPL"},
     )
     assert response.status_code == 200
 
@@ -305,10 +296,6 @@ async def test_search_stocks_missing_query_rejected(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason="StockDetailResponse.from_orm fails on lazy-loaded relationships in async context",
-    strict=True,
-)
 async def test_get_stock_detail_found(
     async_client: AsyncClient,
     sample_stock: Stock,
@@ -385,14 +372,6 @@ async def test_get_stock_quote_from_external_api(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason=(
-        "Database fallback path has two bugs: "
-        "price_repository.get_previous_price is not implemented, "
-        "and PriceHistory has no updated_at attribute (stocks.py:551)"
-    ),
-    strict=True,
-)
 async def test_get_stock_quote_database_fallback(
     async_client: AsyncClient,
     sample_stock: Stock,
@@ -401,9 +380,6 @@ async def test_get_stock_quote_database_fallback(
     """
     When external APIs return None, the quote endpoint falls back to
     database price history and returns is_real_time=False.
-
-    Mocks get_previous_price because it is not yet implemented on
-    PriceHistoryRepository.
     """
     mock_prev_price = MagicMock()
     mock_prev_price.close = Decimal("160.00")
@@ -696,14 +672,6 @@ async def test_remove_from_watchlist_deprecated_endpoint(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason=(
-        "Database fallback path has two bugs: "
-        "price_repository.get_previous_price is not implemented, "
-        "and PriceHistory has no updated_at attribute (stocks.py:551)"
-    ),
-    strict=True,
-)
 async def test_quote_data_source_fallback_order(
     async_client: AsyncClient,
     sample_stock: Stock,
@@ -711,8 +679,7 @@ async def test_quote_data_source_fallback_order(
 ):
     """
     When all external providers fail (get_real_time_quote returns None),
-    the quote endpoint falls back to the database.  Mocks
-    get_previous_price since it is not yet implemented.
+    the quote endpoint falls back to the database.
     """
     call_log = []
 

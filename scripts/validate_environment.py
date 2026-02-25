@@ -198,7 +198,7 @@ def generate_summary(all_issues: Dict[str, List[str]]) -> None:
         print("1. Fix the issues listed above")
         print("2. Run this script again to verify")
     print("3. Run: python debug_validate.py")
-    print("4. Build Docker images: docker-compose -f docker-compose.prod.yml build")
+    print("4. Build Docker images: docker-compose -f docker-compose.production.yml build")
     print("5. Run deployment: kubectl apply -f infrastructure/kubernetes/")
 
 def main():

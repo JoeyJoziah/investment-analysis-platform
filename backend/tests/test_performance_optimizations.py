@@ -28,7 +28,7 @@ from backend.utils.dynamic_resource_manager import (
 from backend.utils.performance_profiler import (
     PerformanceProfiler, MetricType, PerformanceMetric
 )
-from backend.analytics.recommendation_engine_optimized import OptimizedRecommendationEngine
+from backend.analytics.recommendation_engine import OptimizedRecommendationEngine
 
 
 class TestMemoryManager:

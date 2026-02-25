@@ -11,6 +11,7 @@ import logging
 from backend.models.api_response import ApiResponse, success_response
 from backend.utils.security_logger import get_security_logger, sanitize_log_input
 from backend.utils.comprehensive_cache import get_cache_manager
+import backend.services.admin_service as admin_service
 
 logger = logging.getLogger(__name__)
 security_logger = get_security_logger()
@@ -249,26 +250,7 @@ def get_client_ip(request: Request) -> str:
 async def get_system_health(current_user = Depends(check_admin_permission)) -> ApiResponse[SystemHealth]:
     """Get comprehensive system health status"""
 
-    return success_response(data=SystemHealth(
-        status=SystemStatus.OPERATIONAL,
-        uptime=random.randint(86400, 864000),  # 1-10 days in seconds
-        cpu_usage=random.uniform(20, 80),
-        memory_usage=random.uniform(30, 70),
-        disk_usage=random.uniform(40, 60),
-        active_connections=random.randint(10, 100),
-        request_rate=random.uniform(10, 100),
-        error_rate=random.uniform(0, 5),
-        response_time_avg=random.uniform(50, 200),
-        services={
-            "api": ServiceStatus.RUNNING,
-            "database": ServiceStatus.RUNNING,
-            "cache": ServiceStatus.RUNNING,
-            "worker": ServiceStatus.RUNNING,
-            "scheduler": ServiceStatus.RUNNING,
-            "websocket": ServiceStatus.RUNNING
-        },
-        last_check=datetime.now(timezone.utc)
-    ))
+    return success_response(data=SystemHealth(**admin_service.get_system_health_data()))
 
 @router.get("/users")
 async def list_users(
@@ -280,30 +262,13 @@ async def list_users(
 ) -> ApiResponse[List[User]]:
     """List all users with filtering options"""
 
-    users = []
-    for i in range(100):
-        user = User(
-            id=str(uuid.uuid4()),
-            email=f"user{i}@example.com",
-            full_name=f"User {i}",
-            role=random.choice(list(UserRole)),
-            is_active=random.choice([True, False]),
-            is_verified=random.choice([True, False]),
-            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 365)),
-            last_login=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 30)) if random.random() > 0.3 else None,
-            subscription_tier=random.choice([None, "free", "basic", "premium", "enterprise"]),
-            api_calls_today=random.randint(0, 1000),
-            storage_used_mb=random.uniform(0, 1000)
-        )
-
-        if role and user.role != role:
-            continue
-        if is_active is not None and user.is_active != is_active:
-            continue
-
-        users.append(user)
-
-    return success_response(data=users[offset:offset + limit])
+    raw_users = admin_service.list_users(
+        limit=limit,
+        offset=offset,
+        role=role.value if role else None,
+        is_active=is_active,
+    )
+    return success_response(data=[User(**u) for u in raw_users])
 
 @router.get("/users/{user_id}")
 async def get_user_details(
@@ -322,19 +287,7 @@ async def get_user_details(
         ip_address=get_client_ip(request)
     )
 
-    return success_response(data=User(
-        id=user_id,
-        email="user@example.com",
-        full_name="John Doe",
-        role=UserRole.USER,
-        is_active=True,
-        is_verified=True,
-        created_at=datetime.now(timezone.utc) - timedelta(days=180),
-        last_login=datetime.now(timezone.utc) - timedelta(hours=2),
-        subscription_tier="premium",
-        api_calls_today=150,
-        storage_used_mb=250.5
-    ))
+    return success_response(data=User(**admin_service.get_user_by_id(user_id)))
 
 @router.patch("/users/{user_id}")
 async def update_user(
@@ -393,10 +346,7 @@ async def delete_user(
             ip_address=get_client_ip(request)
         )
 
-        return success_response(data={
-            "message": f"User {sanitize_log_input(user_id)} has been deleted",
-            "status": "success"
-        })
+        return success_response(data=admin_service.delete_user(user_id))
     except Exception as e:
         security_logger.log_user_management(
             admin_id=current_user.id,
@@ -415,91 +365,14 @@ async def get_api_usage_stats(
 ) -> ApiResponse[List[ApiUsageStats]]:
     """Get API usage statistics"""
 
-    endpoints = [
-        ("/stocks", "GET"),
-        ("/stocks/{symbol}", "GET"),
-        ("/analysis/analyze", "POST"),
-        ("/recommendations", "GET"),
-        ("/portfolio", "GET"),
-        ("/auth/login", "POST")
-    ]
-
-    stats = []
-    for endpoint, method in endpoints:
-        stats.append(ApiUsageStats(
-            endpoint=endpoint,
-            method=method,
-            total_calls=random.randint(1000, 50000),
-            successful_calls=random.randint(900, 49000),
-            failed_calls=random.randint(10, 1000),
-            avg_response_time=random.uniform(50, 500),
-            p95_response_time=random.uniform(100, 1000),
-            p99_response_time=random.uniform(200, 2000),
-            total_data_transferred=random.uniform(100, 10000),
-            unique_users=random.randint(10, 500),
-            last_called=datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 60))
-        ))
-
-    return success_response(data=stats)
+    raw_stats = admin_service.get_api_usage_stats(days_back=days_back)
+    return success_response(data=[ApiUsageStats(**s) for s in raw_stats])
 
 @router.get("/metrics")
 async def get_system_metrics(admin: bool = Depends(check_admin_permission)) -> ApiResponse[SystemMetrics]:
     """Get detailed system metrics"""
 
-    return success_response(data=SystemMetrics(
-        timestamp=datetime.now(timezone.utc),
-        cpu={
-            "usage_percent": random.uniform(20, 80),
-            "load_average_1m": random.uniform(0.5, 2.0),
-            "load_average_5m": random.uniform(0.5, 2.0),
-            "load_average_15m": random.uniform(0.5, 2.0),
-            "cores": 8
-        },
-        memory={
-            "total_gb": 16,
-            "used_gb": random.uniform(4, 12),
-            "free_gb": random.uniform(4, 12),
-            "cached_gb": random.uniform(1, 4),
-            "usage_percent": random.uniform(30, 75)
-        },
-        disk={
-            "total_gb": 500,
-            "used_gb": random.uniform(100, 300),
-            "free_gb": random.uniform(200, 400),
-            "usage_percent": random.uniform(20, 60),
-            "read_mb_s": random.uniform(10, 100),
-            "write_mb_s": random.uniform(5, 50)
-        },
-        network={
-            "bytes_sent": random.randint(1000000, 10000000),
-            "bytes_recv": random.randint(1000000, 10000000),
-            "packets_sent": random.randint(10000, 100000),
-            "packets_recv": random.randint(10000, 100000),
-            "errors": random.randint(0, 10),
-            "dropped": random.randint(0, 5)
-        },
-        database={
-            "connections_active": random.randint(5, 50),
-            "connections_idle": random.randint(10, 100),
-            "queries_per_second": random.uniform(10, 100),
-            "slow_queries": random.randint(0, 10),
-            "replication_lag_ms": random.uniform(0, 100)
-        },
-        cache={
-            "hits": random.randint(10000, 100000),
-            "misses": random.randint(100, 1000),
-            "hit_rate": random.uniform(0.85, 0.99),
-            "memory_used_mb": random.uniform(100, 500),
-            "evictions": random.randint(0, 100)
-        },
-        queue={
-            "pending": random.randint(0, 100),
-            "processing": random.randint(0, 20),
-            "completed": random.randint(1000, 10000),
-            "failed": random.randint(0, 50),
-            "retry": random.randint(0, 10)
-        }
-    ))
+    return success_response(data=SystemMetrics(**admin_service.get_system_metrics_data()))
 
 @router.get("/jobs")
 async def list_background_jobs(
@@ -508,30 +381,10 @@ async def list_background_jobs(
 ) -> ApiResponse[List[BackgroundJob]]:
     """List background jobs"""
 
-    jobs = []
-    job_types = ["data_sync", "analysis", "report_generation", "cleanup", "backup"]
-
-    for i in range(20):
-        job_status = status or random.choice(list(JobStatus))
-        started = datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 120))
-
-        jobs.append(BackgroundJob(
-            id=str(uuid.uuid4()),
-            name=f"Job_{i}",
-            type=random.choice(job_types),
-            status=job_status,
-            progress=random.uniform(0, 100) if job_status == JobStatus.RUNNING else 100 if job_status == JobStatus.COMPLETED else 0,
-            started_at=started,
-            completed_at=started + timedelta(minutes=random.randint(1, 30)) if job_status == JobStatus.COMPLETED else None,
-            error_message="Connection timeout" if job_status == JobStatus.FAILED else None,
-            result={"records_processed": random.randint(100, 10000)} if job_status == JobStatus.COMPLETED else None,
-            retry_count=random.randint(0, 3)
-        ))
-
-    if status:
-        jobs = [j for j in jobs if j.status == status]
-
-    return success_response(data=jobs)
+    raw_jobs = admin_service.list_background_jobs(
+        status=status.value if status else None
+    )
+    return success_response(data=[BackgroundJob(**j) for j in raw_jobs])
 
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(
@@ -540,10 +393,7 @@ async def cancel_job(
 ) -> ApiResponse[Dict[str, Any]]:
     """Cancel a running job"""
 
-    return success_response(data={
-        "message": f"Job {job_id} has been cancelled",
-        "status": "success"
-    })
+    return success_response(data=admin_service.cancel_job(job_id))
 
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(
@@ -552,11 +402,7 @@ async def retry_job(
 ) -> ApiResponse[Dict[str, Any]]:
     """Retry a failed job"""
 
-    return success_response(data={
-        "message": f"Job {job_id} has been queued for retry",
-        "status": "success",
-        "new_job_id": str(uuid.uuid4())
-    })
+    return success_response(data=admin_service.retry_job(job_id))
 
 @router.get("/config")
 async def get_configuration(
@@ -565,63 +411,11 @@ async def get_configuration(
 ) -> ApiResponse[Dict[str, Any]]:
     """Get system configuration"""
 
-    def mask_secret(value: Optional[str]) -> str:
-        """Mask secret values for safe display"""
-        if not value or len(value) < 8:
-            return "***NOT_SET***"
-        return f"{value[:4]}...{value[-4:]}"
-
-    config = {
-        "api_keys": {
-            "alpha_vantage": mask_secret(os.getenv("ALPHA_VANTAGE_API_KEY")),
-            "finnhub": mask_secret(os.getenv("FINNHUB_API_KEY")),
-            "polygon": mask_secret(os.getenv("POLYGON_API_KEY")),
-            "news_api": mask_secret(os.getenv("NEWS_API_KEY"))
-        },
-        "database": {
-            "host": "postgres",
-            "port": 5432,
-            "name": "investment_db",
-            "pool_size": 20,
-            "max_overflow": 10
-        },
-        "cache": {
-            "host": "redis",
-            "port": 6379,
-            "ttl_default": 300,
-            "max_memory": "512mb"
-        },
-        "security": {
-            "jwt_expiration_minutes": 1440,
-            "password_min_length": 8,
-            "require_2fa": False,
-            "allowed_origins": ["http://localhost:3000"]
-        },
-        "features": {
-            "real_time_quotes": True,
-            "ml_predictions": True,
-            "social_sentiment": True,
-            "options_trading": False,
-            "crypto_trading": False
-        },
-        "limits": {
-            "max_api_calls_per_minute": 60,
-            "max_portfolio_size": 100,
-            "max_watchlist_size": 50,
-            "max_concurrent_connections": 1000
-        },
-        "monitoring": {
-            "prometheus_enabled": True,
-            "grafana_enabled": True,
-            "sentry_enabled": False,
-            "log_level": "INFO"
-        }
-    }
-
-    if section:
-        return success_response(data={section: config.get(section, {})})
-
-    return success_response(data=config)
+    return success_response(
+        data=admin_service.get_configuration(
+            section=section.value if section else None
+        )
+    )
 
 @router.patch("/config")
 async def update_configuration(
@@ -662,11 +456,13 @@ async def update_configuration(
         # In production, update configuration in database/config file
         background_tasks.add_task(reload_configuration, update.section)
 
-        return success_response(data={
-            "message": f"Configuration updated: {update.section}.{update.key}",
-            "status": "success",
-            "requires_restart": update.section in [ConfigSection.DATABASE, ConfigSection.CACHE]
-        })
+        return success_response(
+            data=admin_service.apply_configuration_update(
+                section=update.section.value,
+                key=update.key,
+                value=update.value,
+            )
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -718,34 +514,13 @@ async def get_audit_logs(
 ) -> ApiResponse[List[AuditLog]]:
     """Get audit logs"""
 
-    logs = []
-    actions = ["login", "logout", "create", "update", "delete", "export", "import"]
-    resources = ["user", "portfolio", "trade", "configuration", "report"]
-
-    for i in range(200):
-        log = AuditLog(
-            id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc) - timedelta(minutes=random.randint(0, 10080)),
-            user_id=user_id or str(uuid.uuid4()),
-            user_email=f"user{i % 20}@example.com",
-            action=action or random.choice(actions),
-            resource_type=random.choice(resources),
-            resource_id=str(uuid.uuid4()) if random.random() > 0.3 else None,
-            details={"ip": f"192.168.1.{random.randint(1, 255)}"},
-            ip_address=f"192.168.1.{random.randint(1, 255)}",
-            user_agent="Mozilla/5.0...",
-            success=random.random() > 0.1,
-            error_message="Permission denied" if random.random() < 0.1 else None
-        )
-
-        if user_id and log.user_id != user_id:
-            continue
-        if action and log.action != action:
-            continue
-
-        logs.append(log)
-
-    return success_response(data=sorted(logs, key=lambda x: x.timestamp, reverse=True)[offset:offset + limit])
+    raw_logs = admin_service.get_audit_logs(
+        user_id=user_id,
+        action=action,
+        limit=limit,
+        offset=offset,
+    )
+    return success_response(data=[AuditLog(**log) for log in raw_logs])
 
 @router.post("/announcements")
 async def create_announcement(
@@ -764,31 +539,8 @@ async def list_announcements(
 ) -> ApiResponse[List[Announcement]]:
     """List system announcements"""
 
-    announcements = [
-        Announcement(
-            id=str(uuid.uuid4()),
-            title="Scheduled Maintenance",
-            message="System will be under maintenance on Sunday 2 AM - 4 AM EST",
-            type="warning",
-            active=True,
-            start_time=datetime.now(timezone.utc),
-            end_time=datetime.now(timezone.utc) + timedelta(days=7)
-        ),
-        Announcement(
-            id=str(uuid.uuid4()),
-            title="New Features Released",
-            message="Check out our new portfolio analytics dashboard!",
-            type="info",
-            active=True,
-            start_time=datetime.now(timezone.utc) - timedelta(days=2),
-            end_time=None
-        )
-    ]
-
-    if active_only:
-        announcements = [a for a in announcements if a.active]
-
-    return success_response(data=announcements)
+    raw = admin_service.list_announcements(active_only=active_only)
+    return success_response(data=[Announcement(**a) for a in raw])
 
 @router.post("/export")
 async def export_data(
@@ -799,8 +551,6 @@ async def export_data(
 ) -> ApiResponse[Dict[str, Any]]:
     """Export system data"""
 
-    job_id = str(uuid.uuid4())
-
     # Task 2: Log data export
     security_logger.log_data_export(
         user_id=current_user.id,
@@ -810,14 +560,12 @@ async def export_data(
         ip_address=get_client_ip(request)
     )
 
-    background_tasks.add_task(process_data_export, job_id, export_request)
+    result = admin_service.initiate_data_export(
+        export_type=export_request.export_type
+    )
+    background_tasks.add_task(process_data_export, result["job_id"], export_request)
 
-    return success_response(data={
-        "job_id": job_id,
-        "status": "processing",
-        "estimated_time_seconds": random.randint(30, 300),
-        "download_url": f"/admin/export/{job_id}/download"
-    })
+    return success_response(data=result)
 
 @router.post("/command")
 async def execute_system_command(
@@ -840,15 +588,12 @@ async def execute_system_command(
             ip_address=get_client_ip(request)
         )
 
-        return success_response(data={
-            "command": command.command,
-            "status": "executed",
-            "result": {
-                "success": True,
-                "message": f"Command {command.command} executed successfully",
-                "execution_time_ms": execution_time_ms
-            }
-        })
+        return success_response(
+            data=admin_service.execute_system_command(
+                command=command.command,
+                execution_time_ms=execution_time_ms,
+            )
+        )
     except Exception as e:
         security_logger.log_system_command(
             user_id=current_user.id,
@@ -866,19 +611,13 @@ async def enable_maintenance_mode(
 ) -> ApiResponse[Dict[str, Any]]:
     """Enable maintenance mode"""
 
-    return success_response(data={
-        "status": "maintenance_enabled",
-        "message": message
-    })
+    return success_response(data=admin_service.enable_maintenance_mode(message=message))
 
 @router.post("/maintenance/disable")
 async def disable_maintenance_mode(admin: bool = Depends(check_admin_permission)) -> ApiResponse[Dict[str, Any]]:
     """Disable maintenance mode"""
 
-    return success_response(data={
-        "status": "maintenance_disabled",
-        "message": "System is operational"
-    })
+    return success_response(data=admin_service.disable_maintenance_mode())
 
 # Background task functions
 async def reload_configuration(section: ConfigSection):

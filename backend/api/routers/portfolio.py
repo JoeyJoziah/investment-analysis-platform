@@ -105,13 +105,13 @@ class Position(BaseModel):
     asset_class: AssetClass
     sector: Optional[str] = None
     allocation_percent: float = Field(..., ge=0, le=100)
-    
+
     @validator('market_value', always=True)
     def calculate_market_value(cls, v, values):
         if 'quantity' in values and 'current_price' in values:
             return values['quantity'] * values['current_price']
         return v
-    
+
     @validator('cost_basis', always=True)
     def calculate_cost_basis(cls, v, values):
         if 'quantity' in values and 'average_cost' in values:
@@ -155,7 +155,7 @@ class Transaction(BaseModel):
     fees: float = 0
     notes: Optional[str] = None
     timestamp: datetime
-    
+
     @validator('total_amount', always=True)
     def calculate_total(cls, v, values):
         if 'quantity' in values and 'price' in values:
@@ -237,11 +237,11 @@ def generate_position(symbol: str = None) -> Position:
     if not symbol:
         symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
         symbol = random.choice(symbols)
-    
+
     quantity = random.uniform(10, 100)
     average_cost = random.uniform(50, 300)
     current_price = average_cost * random.uniform(0.7, 1.5)
-    
+
     return Position(
         id=str(uuid.uuid4()),
         symbol=symbol,
@@ -257,24 +257,6 @@ def generate_position(symbol: str = None) -> Position:
         asset_class=AssetClass.STOCKS,
         sector=random.choice(["Technology", "Healthcare", "Finance", "Consumer"]),
         allocation_percent=random.uniform(5, 25)
-    )
-
-def calculate_performance_metrics() -> PerformanceMetrics:
-    """Calculate portfolio performance metrics"""
-    return PerformanceMetrics(
-        total_return=random.uniform(-0.1, 0.3),
-        annualized_return=random.uniform(0.05, 0.15),
-        volatility=random.uniform(0.1, 0.3),
-        sharpe_ratio=random.uniform(0.5, 2.0),
-        sortino_ratio=random.uniform(0.7, 2.5),
-        max_drawdown=random.uniform(-0.3, -0.05),
-        beta=random.uniform(0.8, 1.2),
-        alpha=random.uniform(-0.02, 0.05),
-        treynor_ratio=random.uniform(0.1, 0.3),
-        calmar_ratio=random.uniform(0.5, 2.0),
-        win_rate=random.uniform(0.4, 0.7),
-        profit_factor=random.uniform(1.2, 2.5),
-        risk_adjusted_return=random.uniform(0.08, 0.20)
     )
 
 # Enhanced Endpoints with Real Database Integration
@@ -337,7 +319,11 @@ async def get_portfolios_summary(
                 for position in positions:
                     # Get current price from realtime service
                     price_update = prices.get(position.symbol)
-                    current_price = price_update.price if price_update else await get_current_stock_price(position.symbol, db)
+                    current_price = (
+                        price_update.price
+                        if price_update
+                        else await service.get_current_stock_price(position.symbol, db)
+                    )
 
                     position_value = position.quantity * current_price
                     position_cost = position.quantity * position.average_cost
@@ -358,8 +344,8 @@ async def get_portfolios_summary(
                 total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
                 day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
 
-                # Calculate risk score
-                risk_score = await calculate_portfolio_risk_score(portfolio.id, positions, db)
+                # Calculate risk score via service
+                risk_score = await service.calculate_portfolio_risk_score(portfolio.id, positions, db)
 
                 summaries.append(PortfolioSummary(
                     id=str(portfolio.portfolio_id or portfolio.id),
@@ -409,53 +395,6 @@ async def get_portfolios_summary(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error fetching portfolio summaries"
         )
-
-# Helper functions
-async def get_current_stock_price(symbol: str, db: AsyncSession) -> float:
-    """Get current stock price from database or external source"""
-    try:
-        # Try to get latest price from database first
-        from backend.repositories import price_repository
-        latest_price = await price_repository.get_latest_price(symbol, session=db)
-        
-        if latest_price:
-            return float(latest_price.close)
-        
-        # Fallback to mock price
-        return random.uniform(50, 500)
-        
-    except Exception as e:
-        logger.error(f"Error getting current price for {symbol}: {e}")
-        return random.uniform(50, 500)
-
-async def calculate_portfolio_risk_score(portfolio_id: int, positions: List, db: AsyncSession) -> float:
-    """Calculate portfolio risk score based on positions and volatility"""
-    try:
-        if not positions:
-            return 30.0  # Low risk for cash-only portfolio
-        
-        # Simple risk calculation based on position concentration
-        total_value = sum(pos.quantity * pos.average_cost for pos in positions)
-        
-        if total_value == 0:
-            return 30.0
-        
-        # Calculate concentration risk
-        max_position_value = max(pos.quantity * pos.average_cost for pos in positions)
-        concentration_risk = (max_position_value / total_value) * 100
-        
-        # Calculate sector diversification (simplified)
-        unique_sectors = len(set(pos.symbol[:2] for pos in positions))  # Approximation
-        diversification_bonus = min(unique_sectors * 5, 20)
-        
-        # Base risk score
-        risk_score = 50 + concentration_risk - diversification_bonus
-        
-        return min(100, max(10, risk_score))
-        
-    except Exception as e:
-        logger.error(f"Error calculating risk score for portfolio {portfolio_id}: {e}")
-        return 50.0
 
 @router.get("/{portfolio_id}")
 @cache_with_ttl(ttl=30)  # Cache for 30 seconds
@@ -517,7 +456,7 @@ async def get_portfolio_detail(
                 current_price = price_update.price
                 day_change_raw = price_update.change or 0
             else:
-                current_price = await get_current_stock_price(db_pos.symbol, db)
+                current_price = await service.get_current_stock_price(db_pos.symbol, db)
                 day_change_raw = 0
 
             market_value = db_pos.quantity * current_price
@@ -550,45 +489,45 @@ async def get_portfolio_detail(
             total_value += market_value
             total_cost += cost_basis
             day_change += db_pos.quantity * day_change_raw
-        
+
         # Add cash to total value
         cash_balance = float(portfolio.cash_balance or 0)
         total_value += cash_balance
-        
+
         # Calculate allocation percentages
         for position in positions:
             position.allocation_percent = round((position.market_value / total_value) * 100, 2) if total_value > 0 else 0.0
-        
+
         # Asset allocation calculation
         stocks_value = sum(p.market_value for p in positions)
         cash_percent = (cash_balance / total_value * 100) if total_value > 0 else 0
         stocks_percent = (stocks_value / total_value * 100) if total_value > 0 else 0
-        
+
         asset_allocation = {
             AssetClass.STOCKS: round(stocks_percent, 2),
             AssetClass.CASH: round(cash_percent, 2),
             AssetClass.BONDS: 0.0,
             AssetClass.ETF: 0.0
         }
-        
+
         # Sector allocation
         sector_allocation = {}
         for position in positions:
             if position.sector and position.sector != "Unknown":
                 sector_allocation[position.sector] = sector_allocation.get(position.sector, 0) + position.allocation_percent
-        
+
         # Top and worst performers
         positions_sorted = sorted(positions, key=lambda x: x.unrealized_gain_percent, reverse=True)
         top_performers = positions_sorted[:3] if len(positions_sorted) >= 3 else positions_sorted
         worst_performers = positions_sorted[-3:] if len(positions_sorted) >= 3 else []
-        
+
         # Get recent transactions
         recent_transactions = await portfolio_repository.get_recent_transactions(
             portfolio_id=portfolio.id,
             limit=10,
             session=db
         )
-        
+
         # Convert transactions to response format
         transactions = []
         for trans in recent_transactions:
@@ -604,15 +543,16 @@ async def get_portfolio_detail(
                 notes=trans.notes,
                 timestamp=trans.created_at
             ))
-        
-        # Calculate performance metrics
-        performance_metrics = await calculate_real_performance_metrics(portfolio.id, positions, db)
-        
+
+        # Calculate performance metrics via service
+        metrics_dict = await service.calculate_real_performance_metrics(portfolio.id, positions, db)
+        performance_metrics = PerformanceMetrics(**metrics_dict)
+
         # Portfolio summary calculations
         total_gain = total_value - total_cost
         total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
         day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
-        risk_score = await calculate_portfolio_risk_score(portfolio.id, db_positions, db)
+        risk_score = await service.calculate_portfolio_risk_score(portfolio.id, db_positions, db)
 
         return success_response(data=PortfolioDetail(
             id=portfolio_id,
@@ -649,65 +589,20 @@ async def get_portfolio_detail(
             detail="Error fetching portfolio details"
         )
 
-async def calculate_real_performance_metrics(portfolio_id: int, positions: List[Position], db: AsyncSession) -> PerformanceMetrics:
-    """Calculate real performance metrics from portfolio data"""
-    try:
-        if not positions:
-            return calculate_performance_metrics()  # Fallback to mock
-        
-        # Calculate portfolio returns
-        total_return = sum(p.unrealized_gain_percent for p in positions) / len(positions) / 100
-        
-        # Calculate volatility (simplified)
-        returns = [p.unrealized_gain_percent / 100 for p in positions]
-        
-        import statistics
-        volatility = statistics.stdev(returns) if len(returns) > 1 else 0.1
-        annualized_volatility = volatility * (252 ** 0.5)
-        
-        # Risk-free rate approximation
-        risk_free_rate = 0.02
-        
-        # Calculate Sharpe ratio
-        sharpe_ratio = (total_return - risk_free_rate) / annualized_volatility if annualized_volatility > 0 else 0
-        
-        # Calculate other metrics
-        positive_returns = [r for r in returns if r >= 0]
-        win_rate = len(positive_returns) / len(returns) if returns else 0.5
-        
-        return PerformanceMetrics(
-            total_return=total_return,
-            annualized_return=total_return,  # Simplified
-            volatility=annualized_volatility,
-            sharpe_ratio=sharpe_ratio,
-            sortino_ratio=sharpe_ratio * 1.2,  # Approximation
-            max_drawdown=min(returns) if returns else 0,
-            beta=random.uniform(0.8, 1.2),  # Would calculate vs market
-            alpha=total_return - 0.08,  # vs benchmark approximation
-            treynor_ratio=total_return / 1.0,  # Simplified
-            calmar_ratio=total_return / abs(min(returns, default=0.1)),
-            win_rate=win_rate,
-            profit_factor=2.0 if total_return > 0 else 0.8,
-            risk_adjusted_return=total_return / max(volatility, 0.01)
-        )
-        
-    except Exception as e:
-        logger.error(f"Error calculating performance metrics: {e}")
-        return calculate_performance_metrics()  # Fallback
-
 @router.post("/{portfolio_id}/positions")
 async def add_position(
     portfolio_id: str,
     request: AddPositionRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Add a new position or add to existing position"""
-    
+
     # Get current price if not provided
     if not request.price:
         request.price = random.uniform(50, 300)
-    
+
     # Create transaction record
     transaction = Transaction(
         id=str(uuid.uuid4()),
@@ -721,9 +616,9 @@ async def add_position(
         notes=request.notes,
         timestamp=datetime.now(timezone.utc)
     )
-    
+
     # Background task to update portfolio metrics
-    background_tasks.add_task(update_portfolio_metrics, portfolio_id)
+    background_tasks.add_task(service.update_portfolio_metrics, portfolio_id)
 
     return success_response(data={
         "message": f"Successfully added {request.quantity} shares of {request.symbol}",
@@ -737,20 +632,21 @@ async def remove_position(
     symbol: str,
     request: RemovePositionRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Remove or reduce a position"""
-    
+
     # Get current price if not provided
     if not request.price:
         request.price = random.uniform(50, 300)
-    
+
     # Determine quantity to sell
     if request.sell_all:
         quantity_to_sell = random.uniform(10, 100)  # Simulated current position
     else:
         quantity_to_sell = request.quantity or 0
-    
+
     # Create transaction record
     transaction = Transaction(
         id=str(uuid.uuid4()),
@@ -764,9 +660,9 @@ async def remove_position(
         notes=f"Sold {'all' if request.sell_all else request.quantity} shares",
         timestamp=datetime.now(timezone.utc)
     )
-    
+
     # Background task to update portfolio metrics
-    background_tasks.add_task(update_portfolio_metrics, portfolio_id)
+    background_tasks.add_task(service.update_portfolio_metrics, portfolio_id)
 
     return success_response(data={
         "message": f"Successfully sold {quantity_to_sell} shares of {symbol}",
@@ -783,208 +679,101 @@ async def get_transactions(
     transaction_type: Optional[TransactionType] = None,
     symbol: Optional[str] = None,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[List[Transaction]]:
     """Get portfolio transaction history"""
-    
-    # Generate sample transactions
-    transactions = []
-    symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA"]
-    
-    for i in range(100):
-        trans_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 365))
-        
-        if start_date and trans_date.date() < start_date:
-            continue
-        if end_date and trans_date.date() > end_date:
-            continue
-        
-        trans = Transaction(
-            id=str(uuid.uuid4()),
-            portfolio_id=portfolio_id,
-            symbol=symbol.upper() if symbol else random.choice(symbols),
-            transaction_type=transaction_type or random.choice(list(TransactionType)),
-            quantity=random.uniform(1, 50),
-            price=random.uniform(50, 500),
-            total_amount=0,  # Will be calculated
-            fees=random.uniform(0, 10),
-            notes="Transaction note",
-            timestamp=trans_date
-        )
-        
-        if transaction_type and trans.transaction_type != transaction_type:
-            continue
-        if symbol and trans.symbol != symbol.upper():
-            continue
-        
-        transactions.append(trans)
-    
-    # Sort by timestamp descending
-    transactions.sort(key=lambda x: x.timestamp, reverse=True)
 
-    return success_response(data=transactions[offset:offset + limit])
+    raw_transactions = service.generate_transaction_list(
+        portfolio_id=portfolio_id,
+        limit=limit,
+        offset=offset,
+        transaction_type_filter=transaction_type,
+        symbol_filter=symbol,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    transactions = [
+        Transaction(
+            id=t["id"],
+            portfolio_id=t["portfolio_id"],
+            symbol=t["symbol"],
+            transaction_type=t["transaction_type"],
+            quantity=t["quantity"],
+            price=t["price"],
+            total_amount=t["quantity"] * t["price"] + t["fees"],
+            fees=t["fees"],
+            notes=t["notes"],
+            timestamp=t["timestamp"],
+        )
+        for t in raw_transactions
+    ]
+
+    return success_response(data=transactions)
 
 @router.get("/{portfolio_id}/performance")
 async def get_portfolio_performance(
     portfolio_id: str,
     period: str = Query("1M", pattern="^(1D|1W|1M|3M|6M|1Y|3Y|5Y|ALL)$"),
-    benchmark: str = "SPY"
+    benchmark: str = "SPY",
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Get portfolio performance over time"""
-    
-    # Generate performance data points
-    data_points = []
-    
-    # Determine number of points based on period
-    if period == "1D":
-        num_points = 24
-    elif period == "1W":
-        num_points = 7
-    elif period == "1M":
-        num_points = 30
-    elif period == "3M":
-        num_points = 90
-    elif period == "6M":
-        num_points = 180
-    elif period == "1Y":
-        num_points = 252
-    else:
-        num_points = 365
-    
-    base_value = 100000
-    for i in range(num_points):
-        date_point = datetime.now(timezone.utc) - timedelta(days=num_points - i)
-        value = base_value * (1 + random.uniform(-0.02, 0.02))
-        base_value = value
-        
-        data_points.append({
-            "date": date_point.date().isoformat(),
-            "value": round(value, 2),
-            "benchmark_value": round(value * random.uniform(0.95, 1.05), 2)
-        })
-    
-    # Calculate metrics
-    start_value = data_points[0]["value"]
-    end_value = data_points[-1]["value"]
-    total_return = (end_value - start_value) / start_value
-    
-    return success_response(data={
-        "portfolio_id": portfolio_id,
-        "period": period,
-        "data_points": data_points,
-        "metrics": {
-            "total_return": round(total_return, 4),
-            "annualized_return": round(total_return * (365 / num_points), 4),
-            "volatility": random.uniform(0.1, 0.3),
-            "sharpe_ratio": random.uniform(0.5, 2.0),
-            "max_drawdown": random.uniform(-0.2, -0.05),
-            "benchmark_correlation": random.uniform(0.6, 0.95)
-        },
-        "vs_benchmark": {
-            "excess_return": random.uniform(-0.05, 0.1),
-            "tracking_error": random.uniform(0.02, 0.1),
-            "information_ratio": random.uniform(-0.5, 1.5)
-        }
-    })
+
+    result = service.generate_performance_data_points(
+        portfolio_id=portfolio_id,
+        period=period,
+        benchmark=benchmark,
+    )
+    return success_response(data=result)
 
 @router.post("/{portfolio_id}/analyze")
 async def analyze_portfolio(
     portfolio_id: str,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[PortfolioAnalysis]:
     """Perform comprehensive portfolio analysis"""
-    
-    return success_response(data=PortfolioAnalysis(
-        portfolio_id=portfolio_id,
-        analysis_date=date.today(),
-        risk_analysis={
-            "var_95": random.uniform(-0.1, -0.02),
-            "cvar_95": random.uniform(-0.15, -0.03),
-            "downside_deviation": random.uniform(0.05, 0.15),
-            "upside_potential": random.uniform(0.1, 0.3)
-        },
-        diversification_score=random.uniform(60, 90),
-        concentration_risk={
-            "top_holding": random.uniform(0.1, 0.3),
-            "top_3_holdings": random.uniform(0.3, 0.5),
-            "top_5_holdings": random.uniform(0.5, 0.7)
-        },
-        correlation_matrix={
-            "AAPL": {"GOOGL": 0.7, "MSFT": 0.65, "AMZN": 0.6},
-            "GOOGL": {"AAPL": 0.7, "MSFT": 0.75, "AMZN": 0.65},
-            "MSFT": {"AAPL": 0.65, "GOOGL": 0.75, "AMZN": 0.6}
-        },
-        efficient_frontier={
-            "current_position": {"return": 0.12, "risk": 0.15},
-            "optimal_position": {"return": 0.14, "risk": 0.14},
-            "improvement_potential": 0.02
-        },
-        optimization_suggestions=[
-            "Reduce concentration in Technology sector",
-            "Consider adding international exposure",
-            "Increase allocation to fixed income for better risk-adjusted returns",
-            "Review positions with high correlation"
-        ],
-        rebalancing_needed=random.choice([True, False]),
-        recommended_changes=[
-            {"action": "reduce", "symbol": "AAPL", "percent": 5},
-            {"action": "increase", "symbol": "BND", "percent": 10},
-            {"action": "add", "symbol": "VXUS", "percent": 5}
-        ]
-    ))
+
+    analysis_data = service.build_portfolio_analysis(portfolio_id)
+    return success_response(data=PortfolioAnalysis(**analysis_data))
 
 @router.post("/{portfolio_id}/rebalance")
 async def rebalance_portfolio(
     portfolio_id: str,
     request: RebalanceRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Generate rebalancing recommendations"""
-    
+
     # Validate target allocation sums to 100%
     total_allocation = sum(request.target_allocation.values())
     if abs(total_allocation - 100) > 0.01:
         raise HTTPException(status_code=400, detail="Target allocation must sum to 100%")
-    
-    # Generate rebalancing trades
-    trades = []
-    for asset_class, target_percent in request.target_allocation.items():
-        current_percent = random.uniform(0, 30)
-        difference = target_percent - current_percent
-        
-        if abs(difference) > 1:  # Only rebalance if difference > 1%
-            action = "buy" if difference > 0 else "sell"
-            trades.append({
-                "asset_class": asset_class,
-                "action": action,
-                "amount": abs(difference) * 1000,  # Convert to dollar amount
-                "current_allocation": round(current_percent, 2),
-                "target_allocation": target_percent,
-                "impact": round(difference, 2)
-            })
-    
-    # Limit number of trades
-    trades = trades[:request.max_trades]
-    
-    # Background task to execute rebalancing
-    background_tasks.add_task(execute_rebalancing, portfolio_id, trades)
 
-    return success_response(data={
-        "portfolio_id": portfolio_id,
-        "rebalancing_plan": trades,
-        "estimated_cost": sum(t["amount"] * 0.001 for t in trades),  # 0.1% transaction cost
-        "tax_impact": random.uniform(-1000, -100) if request.tax_efficient else 0,
-        "execution_status": "pending"
-    })
+    result = service.generate_rebalancing_trades(
+        portfolio_id=portfolio_id,
+        target_allocation=request.target_allocation,
+        max_trades=request.max_trades,
+        min_trade_value=request.min_trade_value,
+        tax_efficient=request.tax_efficient,
+    )
+
+    # Background task to execute rebalancing
+    background_tasks.add_task(service.execute_rebalancing, portfolio_id, result["rebalancing_plan"])
+
+    return success_response(data=result)
 
 @router.get("/{portfolio_id}/watchlist")
 async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
     """Get portfolio watchlist"""
-    
+
     watchlist = []
     symbols = ["DIS", "NFLX", "BA", "GS", "WMT", "PG", "KO", "PEP"]
-    
+
     for symbol in symbols[:5]:
         current_price = random.uniform(50, 300)
         watchlist.append(WatchlistItem(
@@ -1007,7 +796,7 @@ async def add_to_watchlist(
     current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, str]]:
     """Add item to watchlist"""
-    
+
     return success_response(data={
         "message": f"Added {item.symbol} to watchlist",
         "portfolio_id": portfolio_id,
@@ -1021,19 +810,8 @@ async def update_portfolio_settings(
     current_user: User = Depends(get_current_user)
 ) -> ApiResponse[Dict[str, str]]:
     """Update portfolio settings"""
-    
+
     return success_response(data={
         "message": "Portfolio settings updated successfully",
         "portfolio_id": portfolio_id
     })
-
-# Background task functions
-async def update_portfolio_metrics(portfolio_id: str):
-    """Update portfolio metrics after transaction"""
-    # In production, this would recalculate portfolio metrics
-    print(f"Updating metrics for portfolio {portfolio_id}")
-
-async def execute_rebalancing(portfolio_id: str, trades: List[Dict]):
-    """Execute rebalancing trades"""
-    # In production, this would execute the trades
-    print(f"Executing {len(trades)} trades for portfolio {portfolio_id}")

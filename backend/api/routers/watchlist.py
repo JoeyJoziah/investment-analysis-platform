@@ -662,7 +662,7 @@ async def remove_watchlist_item(
 
         # Find the item first to get the stock_id
         from sqlalchemy import select
-        from backend.models.tables import WatchlistItem
+        from backend.models.unified_models import WatchlistItem
 
         query = select(WatchlistItem).where(
             WatchlistItem.id == item_id,

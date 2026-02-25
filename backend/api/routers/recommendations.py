@@ -29,7 +29,14 @@ from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User, Recommendation
 from backend.config.settings import settings
 from backend.models.api_response import ApiResponse, success_response
-from backend.services.recommendation_service import recommendation_service
+from backend.services.recommendation_service import (
+    recommendation_service,
+    SEC_RISK_WARNING,
+    SEC_METHODOLOGY_DISCLOSURE_TEMPLATE,
+    SEC_LIMITATIONS_STATEMENT,
+    RECOMMENDATION_MODEL_VERSION,
+    RECOMMENDATION_MODEL_TRAINING_DATE,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -54,39 +61,6 @@ async def get_recommendation_service():
             logger.warning(f"Failed to initialize recommendation service: {e}")
             # Service will work in degraded mode without full initialization
     return recommendation_service
-
-# =============================================================================
-# SEC 2025 COMPLIANCE CONSTANTS
-# =============================================================================
-
-# Standard SEC Risk Warning (required on all recommendations)
-SEC_RISK_WARNING = (
-    "IMPORTANT: Past performance does not guarantee future results. All investments "
-    "involve risk, including possible loss of principal. The value of investments can "
-    "fluctuate, and investors may not get back the amount originally invested. Before "
-    "making any investment decision, you should carefully consider your investment "
-    "objectives, level of experience, and risk appetite."
-)
-
-# Standard Methodology Disclosure Template
-SEC_METHODOLOGY_DISCLOSURE_TEMPLATE = (
-    "This recommendation was generated using {algorithm_type} analysis incorporating "
-    "technical indicators, fundamental metrics, and market sentiment data. Model version: "
-    "{model_version}. Last model training date: {training_date}."
-)
-
-# Standard Limitations Statement
-SEC_LIMITATIONS_STATEMENT = (
-    "This analysis does NOT consider: (1) your individual financial situation or goals, "
-    "(2) tax implications specific to your circumstances, (3) real-time market conditions "
-    "that may have changed since data collection, (4) non-public information, (5) geopolitical "
-    "events occurring after the analysis date. Data freshness may vary by source; prices and "
-    "metrics may be delayed up to 15 minutes for free-tier data sources."
-)
-
-# Current model version for SEC disclosure
-RECOMMENDATION_MODEL_VERSION = "1.0.0"
-RECOMMENDATION_MODEL_TRAINING_DATE = "2025-12-15"
 
 # Enum definitions (moved to top to avoid forward reference issues)
 class RecommendationType(str, Enum):
@@ -253,6 +227,8 @@ class AlertSettings(BaseModel):
     categories: List[RecommendationCategory] = []
 
 # Initialize ML model manager and recommendation engine
+# (kept at module level so tests can patch backend.api.routers.recommendations.model_manager
+#  and backend.api.routers.recommendations.recommendation_engine)
 model_manager = None
 recommendation_engine = None
 
@@ -265,6 +241,17 @@ except Exception as e:
     recommendation_engine = RecommendationEngine()  # Fallback without ML
 
 
+# ============================================================================
+# Router-level functions
+# (generate_sec_disclosure and generate_recommendation are kept here because
+#  tests import them directly from this module.
+#
+#  generate_ml_powered_recommendations and generate_personalized_recommendations
+#  are kept here because tests in test_n1_query_fix.py import them from this module
+#  AND patch backend.api.routers.recommendations.{stock_repository,price_repository,
+#  recommendation_engine,model_manager} - the patches must target this module.)
+# ============================================================================
+
 def generate_sec_disclosure(
     algorithm_type: str = "ML-powered quantitative",
     data_sources: List[str] = None,
@@ -272,6 +259,9 @@ def generate_sec_disclosure(
 ) -> SECDisclosure:
     """
     Generate SEC 2025 compliant disclosure for a recommendation.
+
+    Delegates business logic to the service layer and wraps the result
+    in a SECDisclosure Pydantic model for type safety and API serialization.
 
     Args:
         algorithm_type: Description of the algorithm used
@@ -281,45 +271,14 @@ def generate_sec_disclosure(
     Returns:
         SECDisclosure object with all required fields
     """
-    # Default data sources if not provided
-    if data_sources is None:
-        data_sources = [
-            f"Alpha Vantage API (delayed 15 min) - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Finnhub Market Data - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Historical price data (EOD) - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-            f"Financial statements (quarterly) - Last updated Q4 2025",
-        ]
-
-    # Determine confidence level from score
-    if confidence_score >= 0.8:
-        confidence_level = "high"
-    elif confidence_score >= 0.6:
-        confidence_level = "moderate"
-    else:
-        confidence_level = "low"
-
-    # Generate methodology disclosure
-    methodology_disclosure = SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
+    data = recommendation_service.generate_sec_disclosure(
         algorithm_type=algorithm_type,
-        model_version=RECOMMENDATION_MODEL_VERSION,
-        training_date=RECOMMENDATION_MODEL_TRAINING_DATE
-    )
-
-    return SECDisclosure(
-        methodology_disclosure=methodology_disclosure,
         data_sources=data_sources,
-        model_version=RECOMMENDATION_MODEL_VERSION,
-        model_training_date=RECOMMENDATION_MODEL_TRAINING_DATE,
-        risk_warning=SEC_RISK_WARNING,
-        limitations_statement=SEC_LIMITATIONS_STATEMENT,
-        confidence_level=confidence_level,
-        conflict_of_interest_statement=(
-            "This platform does not hold positions in any recommended securities. "
-            "No material relationships exist between this platform and any recommended issuers."
-        )
+        confidence_score=confidence_score,
     )
+    return SECDisclosure(**data)
 
-# Helper functions for real recommendation generation
+
 async def generate_ml_powered_recommendations(
     user_id: Optional[int] = None,
     portfolio_id: Optional[str] = None,
@@ -334,6 +293,12 @@ async def generate_ml_powered_recommendations(
     OPTIMIZED: Uses batch queries to eliminate N+1 query pattern.
     Previously: 201+ queries (1 for stocks + 2 per stock for prices/ML)
     Now: 2-3 queries total (1 for stocks + 1 bulk price history)
+
+    NOTE: This function is kept at router module level (rather than being fully
+    delegated to the service) because integration tests in test_n1_query_fix.py
+    import it from this module and patch the module-level names
+    stock_repository, price_repository, recommendation_engine, and model_manager.
+    Behavior is unchanged from the original implementation.
     """
     try:
         logger.info(f"Generating ML recommendations for user {user_id}, portfolio {portfolio_id}")
@@ -568,39 +533,39 @@ async def generate_personalized_recommendations(
     """Generate personalized recommendations based on user's portfolio and preferences"""
     try:
         logger.info(f"Generating personalized recommendations for user {user_id}")
-        
+
         # Get user's portfolio(s) to understand preferences
         user_portfolios = await portfolio_repository.get_user_portfolios(
             user_id=user_id,
             session=db_session
         )
-        
+
         # Analyze existing positions to understand preferences
         existing_symbols = set()
         preferred_sectors = {}
         risk_tolerance = RiskLevel.MODERATE
-        
+
         for portfolio in user_portfolios:
             positions = await portfolio_repository.get_portfolio_positions(
                 portfolio_id=portfolio.id,
                 session=db_session
             )
-            
+
             for position in positions:
                 existing_symbols.add(position.symbol)
-                
+
                 # Get stock info to determine sector preference
                 stock = await stock_repository.get_by_symbol(position.symbol, session=db_session)
                 if stock and stock.sector:
                     preferred_sectors[stock.sector] = preferred_sectors.get(stock.sector, 0) + 1
-        
+
         # Generate recommendations excluding existing positions
         all_recommendations = await generate_ml_powered_recommendations(
             user_id=user_id,
             limit=20,
             db_session=db_session
         )
-        
+
         # Filter out existing positions and prefer similar sectors
         filtered_recommendations = []
         for rec in all_recommendations:
@@ -609,16 +574,16 @@ async def generate_personalized_recommendations(
                 if rec.sector in preferred_sectors:
                     rec.confidence_score = min(0.95, rec.confidence_score * 1.1)
                     rec.reasoning += f" (Matches your sector preference for {rec.sector})"
-                
+
                 filtered_recommendations.append(rec)
-        
+
         return filtered_recommendations[:10]
-        
+
     except Exception as e:
         logger.error(f"Error generating personalized recommendations: {e}")
         return await generate_ml_powered_recommendations(limit=5, db_session=db_session)
 
-# Sample data generator functions
+# Sample data generator function
 def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
     """Generate a sample recommendation with SEC disclosure"""
     if not symbol:
@@ -689,7 +654,12 @@ def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
         sec_disclosure=sec_disclosure
     )
 
+
+# ============================================================================
 # Enhanced Endpoints with ML Integration
+# (Router endpoints are now thin: parse request, call service/helpers, format response)
+# ============================================================================
+
 @router.get("/daily")
 @cache_with_ttl(ttl=3600)  # Cache for 1 hour
 async def get_daily_recommendations(
@@ -701,7 +671,7 @@ async def get_daily_recommendations(
 ) -> ApiResponse[DailyRecommendations]:
     """
     Get daily curated recommendations powered by ML models and market analysis.
-    
+
     Provides comprehensive daily market recommendations including:
     - ML-generated top picks based on technical and fundamental analysis
     - Market sentiment analysis and outlook
@@ -709,119 +679,45 @@ async def get_daily_recommendations(
     - Risk-adjusted picks based on user preference
     - Special market situations and opportunities
     """
+    target_date = date_param or date.today()
+    logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
+
     try:
-        target_date = date_param or date.today()
-        logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
-        
-        # Generate ML-powered recommendations
-        ml_recommendations = await generate_ml_powered_recommendations(
+        # Delegate aggregation logic to service
+        result = await rec_service.build_daily_recommendations(
             user_id=current_user.id,
-            risk_level=risk_level,
-            limit=15,
-            db_session=db
+            target_date=target_date,
+            risk_level=risk_level.value if risk_level else None,
+            db_session=db,
         )
-        
-        # Get personalized recommendations based on user's portfolio
-        personalized_recs = await generate_personalized_recommendations(
-            user_id=current_user.id,
-            db_session=db
-        )
-        
-        # Combine and deduplicate recommendations
-        all_recommendations = {}
-        for rec in ml_recommendations + personalized_recs:
-            if rec.symbol not in all_recommendations:
-                all_recommendations[rec.symbol] = rec
-            elif rec.confidence_score > all_recommendations[rec.symbol].confidence_score:
-                all_recommendations[rec.symbol] = rec
-        
-        # Filter by risk level if specified
-        if risk_level:
-            filtered_recs = [r for r in all_recommendations.values() if r.risk_level == risk_level]
-            if len(filtered_recs) < 5:
-                # Include some moderate risk recommendations if not enough matches
-                other_recs = [r for r in all_recommendations.values() if r.risk_level != risk_level]
-                filtered_recs.extend(other_recs[:(5-len(filtered_recs))])
-            all_recommendations = {r.symbol: r for r in filtered_recs}
-        
-        # Sort by confidence score and take top picks
-        top_picks = sorted(all_recommendations.values(), key=lambda x: x.confidence_score, reverse=True)[:8]
-        
-        # Generate watchlist from remaining high-confidence picks
-        watchlist_symbols = [r.symbol for r in sorted(all_recommendations.values(), key=lambda x: x.confidence_score, reverse=True)[8:15]]
-        
-        # Generate avoid list based on negative recommendations
-        avoid_list = []
-        negative_recs = [r for r in all_recommendations.values() if r.recommendation_type in [RecommendationType.SELL, RecommendationType.STRONG_SELL]]
-        avoid_list = [r.symbol for r in negative_recs[:5]]
-        
-        # Determine sector focus based on recommendations
-        sector_counts = {}
-        for rec in top_picks:
-            if rec.sector and rec.sector != "Unknown":
-                sector_counts[rec.sector] = sector_counts.get(rec.sector, 0) + 1
-        
-        sector_focus = max(sector_counts.items(), key=lambda x: x[1])[0] if sector_counts else "Technology"
-        
-        # Calculate market sentiment from recommendations
-        sentiment_scores = [
-            1.0 if rec.recommendation_type == RecommendationType.STRONG_BUY else
-            0.5 if rec.recommendation_type == RecommendationType.BUY else
-            0.0 if rec.recommendation_type == RecommendationType.HOLD else
-            -0.5 if rec.recommendation_type == RecommendationType.SELL else
-            -1.0 for rec in top_picks
-        ]
-        market_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
-        
-        # Generate market outlook
-        if market_sentiment > 0.3:
-            outlook = "Bullish - Strong buying opportunities identified across multiple sectors"
-        elif market_sentiment > 0.1:
-            outlook = "Cautiously optimistic - Selective opportunities in preferred sectors"
-        elif market_sentiment > -0.1:
-            outlook = "Neutral - Mixed signals, focus on risk management"
-        elif market_sentiment > -0.3:
-            outlook = "Cautious - Defensive positioning recommended"
-        else:
-            outlook = "Bearish - High risk environment, consider cash positions"
-        
-        # Risk assessment based on volatility and market conditions
-        avg_confidence = sum(r.confidence_score for r in top_picks) / len(top_picks) if top_picks else 0.5
-        if avg_confidence > 0.8:
-            risk_assessment = "Low - High confidence in current recommendations"
-        elif avg_confidence > 0.6:
-            risk_assessment = "Moderate - Standard market conditions"
-        else:
-            risk_assessment = "Elevated - Uncertain market environment"
-        
-        # Generate special situations (earnings, events, etc.)
-        special_situations = []
-        for rec in top_picks[:3]:
-            if rec.recommendation_type in [RecommendationType.STRONG_BUY, RecommendationType.BUY]:
-                special_situations.append({
-                    "type": "high_confidence_pick",
-                    "symbol": rec.symbol,
-                    "confidence": rec.confidence_score,
-                    "reasoning": rec.reasoning[:100] + "..." if len(rec.reasoning) > 100 else rec.reasoning,
-                    "target_return": rec.expected_return
-                })
+
+        # Convert service dicts to Pydantic models and format response
+        top_picks_raw = result["top_picks"]
+        top_picks: List[RecommendationDetail] = []
+        for r in top_picks_raw:
+            if isinstance(r, RecommendationDetail):
+                top_picks.append(r)
+            else:
+                if isinstance(r.get("sec_disclosure"), dict):
+                    r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
+                top_picks.append(RecommendationDetail(**r))
 
         return success_response(data=DailyRecommendations(
             date=target_date,
-            market_outlook=outlook,
-            top_picks=top_picks[:5],  # Limit to top 5 for clarity
-            watchlist=watchlist_symbols,
-            avoid_list=avoid_list,
-            sector_focus=sector_focus,
-            market_sentiment=round(market_sentiment, 3),
-            risk_assessment=risk_assessment,
-            special_situations=special_situations
+            market_outlook=result["market_outlook"],
+            top_picks=top_picks,
+            watchlist=result["watchlist"],
+            avoid_list=result["avoid_list"],
+            sector_focus=result["sector_focus"],
+            market_sentiment=round(result["market_sentiment"], 3),
+            risk_assessment=result["risk_assessment"],
+            special_situations=result["special_situations"],
         ))
-        
+
     except Exception as e:
         logger.error(f"Error generating daily recommendations: {e}")
         await handle_api_error(e, "generate daily recommendations")
-        
+
         # Fallback to basic recommendations
         fallback_picks = [generate_recommendation() for _ in range(5)]
         return success_response(data=DailyRecommendations(
@@ -848,38 +744,34 @@ async def get_recommendations(
     order: str = Query("desc", pattern="^(asc|desc)$")
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Get list of recommendations with filters"""
-    
-    # Generate sample recommendations
-    recommendations = [generate_recommendation() for _ in range(50)]
-    
-    # Apply filters
-    if recommendation_type:
-        recommendations = [r for r in recommendations if r.recommendation_type == recommendation_type]
-    
-    if category:
-        recommendations = [r for r in recommendations if r.category == category]
-    
-    if risk_level:
-        recommendations = [r for r in recommendations if r.risk_level == risk_level]
-    
-    recommendations = [r for r in recommendations if r.confidence_score >= min_confidence]
-    
-    # Sort
-    reverse = (order == "desc")
-    if sort_by == "confidence_score":
-        recommendations.sort(key=lambda x: x.confidence_score, reverse=reverse)
-    elif sort_by == "expected_return":
-        recommendations.sort(key=lambda x: x.expected_return, reverse=reverse)
-    elif sort_by == "created_at":
-        recommendations.sort(key=lambda x: x.created_at, reverse=reverse)
 
-    # Pagination
-    return success_response(data=recommendations[offset:offset + limit])
+    recs_data = recommendation_service.generate_filtered_recommendations(
+        count=50,
+        recommendation_type=recommendation_type.value if recommendation_type else None,
+        category=category.value if category else None,
+        risk_level=risk_level.value if risk_level else None,
+        min_confidence=min_confidence,
+        sort_by=sort_by,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+
+    recommendations = []
+    for r in recs_data:
+        if isinstance(r, RecommendationDetail):
+            recommendations.append(r)
+        else:
+            if isinstance(r.get("sec_disclosure"), dict):
+                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
+            recommendations.append(RecommendationDetail(**r))
+
+    return success_response(data=recommendations)
 
 @router.get("/{recommendation_id}")
 async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
     """Get detailed information about a specific recommendation"""
-    
+
     # Generate a recommendation with the specified ID
     recommendation = generate_recommendation()
     recommendation.id = recommendation_id
@@ -892,64 +784,56 @@ async def filter_recommendations(
     limit: int = Query(20, le=100)
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Advanced filtering of recommendations"""
-    
-    # Generate recommendations
-    recommendations = [generate_recommendation() for _ in range(100)]
-    
-    # Apply filters
-    if filter_params.categories:
-        recommendations = [r for r in recommendations if r.category in filter_params.categories]
-    
-    if filter_params.risk_levels:
-        recommendations = [r for r in recommendations if r.risk_level in filter_params.risk_levels]
-    
-    if filter_params.time_horizons:
-        recommendations = [r for r in recommendations if r.time_horizon in filter_params.time_horizons]
-    
-    if filter_params.min_confidence is not None:
-        recommendations = [r for r in recommendations if r.confidence_score >= filter_params.min_confidence]
-    
-    if filter_params.min_expected_return is not None:
-        recommendations = [r for r in recommendations if r.expected_return >= filter_params.min_expected_return]
-    
-    if filter_params.sectors:
-        recommendations = [r for r in recommendations if r.sector in filter_params.sectors]
-    
-    if filter_params.market_cap_min is not None:
-        recommendations = [r for r in recommendations if r.market_cap >= filter_params.market_cap_min]
-    
-    if filter_params.market_cap_max is not None:
-        recommendations = [r for r in recommendations if r.market_cap <= filter_params.market_cap_max]
-    
-    # Sort by confidence score
-    recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
 
-    return success_response(data=recommendations[:limit])
+    recs_data = recommendation_service.generate_filtered_recommendations(
+        count=100,
+        categories=[c.value for c in filter_params.categories] if filter_params.categories else None,
+        risk_levels=[r.value for r in filter_params.risk_levels] if filter_params.risk_levels else None,
+        time_horizons=[t.value for t in filter_params.time_horizons] if filter_params.time_horizons else None,
+        min_confidence=filter_params.min_confidence or 0.0,
+        min_expected_return=filter_params.min_expected_return,
+        sectors=filter_params.sectors,
+        market_cap_min=filter_params.market_cap_min,
+        market_cap_max=filter_params.market_cap_max,
+        sort_by="confidence_score",
+        order="desc",
+        limit=limit,
+        offset=0,
+    )
+
+    recommendations = []
+    for r in recs_data:
+        if isinstance(r, RecommendationDetail):
+            recommendations.append(r)
+        else:
+            if isinstance(r.get("sec_disclosure"), dict):
+                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
+            recommendations.append(RecommendationDetail(**r))
+
+    return success_response(data=recommendations)
 
 @router.get("/portfolio/{portfolio_id}")
 async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
     """Get personalized recommendations for a specific portfolio"""
-    
-    # Generate recommendations tailored to portfolio
-    recommendations = [generate_recommendation() for _ in range(5)]
-    
-    # Create rebalancing suggestions
-    rebalancing = {
-        "AAPL": 0.25,
-        "GOOGL": 0.20,
-        "MSFT": 0.20,
-        "AMZN": 0.15,
-        "NVDA": 0.10,
-        "Cash": 0.10
-    }
+
+    data = recommendation_service.build_portfolio_recommendations(portfolio_id=portfolio_id)
+
+    recommendations = []
+    for r in data["recommendations"]:
+        if isinstance(r, RecommendationDetail):
+            recommendations.append(r)
+        else:
+            if isinstance(r.get("sec_disclosure"), dict):
+                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
+            recommendations.append(RecommendationDetail(**r))
 
     return success_response(data=PortfolioRecommendation(
-        portfolio_id=portfolio_id,
+        portfolio_id=data["portfolio_id"],
         recommendations=recommendations,
-        rebalancing_suggestions=rebalancing,
-        risk_score=random.uniform(30, 70),
-        expected_portfolio_return=random.uniform(0.08, 0.15),
-        diversification_score=random.uniform(0.6, 0.9)
+        rebalancing_suggestions=data["rebalancing_suggestions"],
+        risk_score=data["risk_score"],
+        expected_portfolio_return=data["expected_portfolio_return"],
+        diversification_score=data["diversification_score"],
     ))
 
 @router.get("/performance/track")
@@ -958,39 +842,19 @@ async def track_recommendation_performance(
     status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
 ) -> ApiResponse[List[RecommendationPerformance]]:
     """Track performance of past recommendations"""
-    
-    performances = []
-    
-    for i in range(20):
-        entry_price = random.uniform(50, 300)
-        current_price = entry_price * random.uniform(0.8, 1.3)
-        target_price = entry_price * random.uniform(1.1, 1.4)
-        
-        perf = RecommendationPerformance(
-            recommendation_id=f"REC-{1000 + i}",
-            symbol=random.choice(["AAPL", "GOOGL", "MSFT", "AMZN", "META"]),
-            recommended_date=date.today() - timedelta(days=random.randint(1, days_back)),
-            recommendation_type=random.choice(list(RecommendationType)),
-            entry_price=entry_price,
-            current_price=current_price,
-            target_price=target_price,
-            actual_return=(current_price - entry_price) / entry_price,
-            expected_return=(target_price - entry_price) / entry_price,
-            days_since_recommendation=random.randint(1, days_back),
-            status=status or random.choice(["active", "closed", "stopped_out"]),
-            performance_rating=random.uniform(2, 5)
-        )
-        performances.append(perf)
-    
-    if status:
-        performances = [p for p in performances if p.status == status]
 
+    perf_data = recommendation_service.generate_performance_records(
+        days_back=days_back,
+        status_filter=status,
+    )
+
+    performances = [RecommendationPerformance(**p) for p in perf_data]
     return success_response(data=performances)
 
 @router.post("/alerts/settings")
 async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str, str]]:
     """Update recommendation alert settings"""
-    
+
     # In production, this would save to user preferences
     return success_response(data={
         "message": "Alert settings updated successfully",
@@ -1002,20 +866,9 @@ async def get_alert_history(
     days_back: int = Query(7, le=30)
 ) -> ApiResponse[List[Dict[str, Any]]]:
     """Get history of recommendation alerts"""
-    
-    alerts = []
-    for i in range(10):
-        alert_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, days_back))
-        alerts.append({
-            "id": f"ALERT-{1000 + i}",
-            "timestamp": alert_date.isoformat(),
-            "type": random.choice(["strong_buy", "target_reached", "stop_loss_triggered"]),
-            "symbol": random.choice(["AAPL", "GOOGL", "MSFT"]),
-            "message": "Strong buy signal detected",
-            "read": random.choice([True, False])
-        })
 
-    return success_response(data=sorted(alerts, key=lambda x: x["timestamp"], reverse=True))
+    alerts = recommendation_service.generate_alert_history(days_back=days_back)
+    return success_response(data=alerts)
 
 @router.post("/backtest")
 async def backtest_strategy(
@@ -1025,36 +878,14 @@ async def backtest_strategy(
     initial_capital: float = 100000
 ) -> ApiResponse[Dict[str, Any]]:
     """Backtest a recommendation strategy"""
-    
-    # Simulate backtest results
-    total_return = random.uniform(-0.2, 0.5)
 
-    return success_response(data={
-        "strategy": strategy,
-        "period": {
-            "start": start_date.isoformat(),
-            "end": end_date.isoformat()
-        },
-        "initial_capital": initial_capital,
-        "final_value": initial_capital * (1 + total_return),
-        "total_return": total_return,
-        "annualized_return": total_return * (365 / (end_date - start_date).days),
-        "sharpe_ratio": random.uniform(0.5, 2.0),
-        "max_drawdown": random.uniform(-0.3, -0.05),
-        "win_rate": random.uniform(0.4, 0.7),
-        "total_trades": random.randint(20, 100),
-        "profitable_trades": random.randint(10, 70),
-        "average_win": random.uniform(0.05, 0.15),
-        "average_loss": random.uniform(-0.1, -0.03),
-        "best_trade": {
-            "symbol": "NVDA",
-            "return": 0.45
-        },
-        "worst_trade": {
-            "symbol": "BBBY",
-            "return": -0.25
-        }
-    })
+    result = recommendation_service.run_backtest(
+        strategy=strategy.value,
+        start_date=start_date,
+        end_date=end_date,
+        initial_capital=initial_capital,
+    )
+    return success_response(data=result)
 
 @router.get("/trending")
 async def get_trending_recommendations(

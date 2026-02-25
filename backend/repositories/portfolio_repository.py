@@ -13,8 +13,7 @@ from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
-from backend.models.unified_models import Portfolio, Position, Transaction, User, Stock
-from backend.models.tables import PortfolioPerformance
+from backend.models.unified_models import Portfolio, Position, Transaction, User, Stock, PortfolioPerformance, PriceHistory
 from backend.config.database import get_db_session
 from backend.exceptions import StaleDataError, InsufficientBalanceError, InvalidPositionError
 
@@ -144,15 +143,15 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
                 positions_value += position_value
                 
                 # Calculate unrealized gain/loss
-                cost_basis = position.average_cost * position.quantity
+                cost_basis = position.avg_cost_basis * position.quantity
                 unrealized_gain_loss = position_value - cost_basis
                 unrealized_gain_loss_pct = (unrealized_gain_loss / cost_basis * 100) if cost_basis > 0 else 0
-                
+
                 position_details.append({
                     'position_id': position.id,
                     'stock_id': position.stock_id,
                     'quantity': float(position.quantity),
-                    'average_cost': float(position.average_cost),
+                    'average_cost': float(position.avg_cost_basis),
                     'current_price': float(latest_price),
                     'market_value': float(position_value),
                     'cost_basis': float(cost_basis),
@@ -348,7 +347,7 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         async def _get_transactions(session: AsyncSession) -> List[Transaction]:
             query = select(Transaction).where(
                 Transaction.portfolio_id == portfolio_id
-            ).order_by(Transaction.executed_at.desc())
+            ).order_by(Transaction.trade_date.desc())
             
             if limit:
                 query = query.limit(limit)

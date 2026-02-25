@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from httpx import AsyncClient, ASGITransport
 
-from backend.models.tables import User as TablesUser, Base as TablesBase, UserRoleEnum
+from backend.models.unified_models import User as TablesUser, Base as TablesBase, UserRoleEnum
 from backend.models.unified_models import User
 from backend.security.security_config import SecurityConfig
 from backend.api.routers.auth import (

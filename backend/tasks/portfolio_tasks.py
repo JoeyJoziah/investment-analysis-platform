@@ -11,7 +11,7 @@ import json
 from backend.tasks.celery_app import celery_app
 from backend.utils.database import get_db_sync
 from backend.utils.cache import get_redis_client
-from backend.models.tables import (
+from backend.models.unified_models import (
     Portfolio, Position, Transaction, Order, Stock, PriceHistory,
     PortfolioPerformance, User
 )
@@ -52,8 +52,8 @@ def update_portfolio_value(portfolio_id: int) -> Dict[str, Any]:
                         'quantity': float(position.quantity),
                         'current_price': float(current_price),
                         'market_value': float(market_value),
-                        'cost_basis': float(position.quantity * position.average_cost),
-                        'unrealized_gain': float(market_value - (position.quantity * position.average_cost))
+                        'cost_basis': float(position.quantity * position.avg_cost_basis),
+                        'unrealized_gain': float(market_value - (position.quantity * position.avg_cost_basis))
                     })
             
             # Calculate total portfolio value
@@ -198,10 +198,10 @@ def execute_order(order_id: int) -> Dict[str, Any]:
                 quantity=order.quantity,
                 price=Decimal(str(execution_price)),
                 commission=order.commission,
-                executed_at=datetime.now(timezone.utc)
+                trade_date=datetime.now(timezone.utc)
             )
             db.add(transaction)
-            
+
             # Update portfolio position
             portfolio = order.portfolio
             position = db.query(Position).filter(
@@ -210,22 +210,22 @@ def execute_order(order_id: int) -> Dict[str, Any]:
                     Position.stock_id == order.stock_id
                 )
             ).first()
-            
+
             if order.order_side == 'buy':
                 if position:
                     # Update existing position
                     new_quantity = position.quantity + order.quantity
-                    new_cost = (position.quantity * position.average_cost + 
+                    new_cost = (position.quantity * position.avg_cost_basis +
                                order.quantity * Decimal(str(execution_price))) / new_quantity
                     position.quantity = new_quantity
-                    position.average_cost = new_cost
+                    position.avg_cost_basis = new_cost
                 else:
                     # Create new position
                     position = Position(
                         portfolio_id=order.portfolio_id,
                         stock_id=order.stock_id,
                         quantity=order.quantity,
-                        average_cost=Decimal(str(execution_price))
+                        avg_cost_basis=Decimal(str(execution_price))
                     )
                     db.add(position)
                 
@@ -285,11 +285,11 @@ def check_rebalancing_needed() -> Dict[str, Any]:
                     continue
                 
                 # Calculate current allocation
-                total_value = sum(p.quantity * p.average_cost for p in positions) + portfolio.cash_balance
+                total_value = sum(p.quantity * p.avg_cost_basis for p in positions) + portfolio.cash_balance
                 current_allocation = {}
-                
+
                 for position in positions:
-                    weight = float((position.quantity * position.average_cost) / total_value * 100)
+                    weight = float((position.quantity * position.avg_cost_basis) / total_value * 100)
                     sector = position.stock.sector or 'Other'
                     current_allocation[sector] = current_allocation.get(sector, 0) + weight
                 
@@ -509,15 +509,15 @@ def check_stop_losses() -> Dict[str, Any]:
                     continue
                 
                 current_price = float(latest_price.close)
-                loss_percent = (current_price - float(position.average_cost)) / float(position.average_cost)
-                
+                loss_percent = (current_price - float(position.avg_cost_basis)) / float(position.avg_cost_basis)
+
                 # Check if stop loss triggered (e.g., -10%)
                 if loss_percent <= -0.10:
                     triggered.append({
                         'portfolio_id': position.portfolio_id,
                         'symbol': position.stock.symbol,
                         'quantity': float(position.quantity),
-                        'average_cost': float(position.average_cost),
+                        'avg_cost_basis': float(position.avg_cost_basis),
                         'current_price': current_price,
                         'loss_percent': loss_percent * 100
                     })

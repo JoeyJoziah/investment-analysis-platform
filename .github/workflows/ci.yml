@@ -141,17 +141,49 @@ jobs:
       run: |
         pip install -r requirements.txt
         pip-audit --desc --format json --output pip-audit.json
-      continue-on-error: true
 
-    - name: Run bandit for security issues
+    - name: Run bandit for security issues (critical/high block)
       run: |
-        bandit -r backend/ -f json -o bandit.json -ll
-      continue-on-error: true
+        bandit -r backend/ -f json -o bandit.json -ll -ii
+        # Parse bandit output: fail if any HIGH or CRITICAL (severity >= HIGH, confidence >= MEDIUM)
+        python -c "
+        import json, sys
+        with open('bandit.json') as f:
+            data = json.load(f)
+        results = data.get('results', [])
+        critical_high = [r for r in results if r.get('issue_severity') in ('HIGH', 'CRITICAL') and r.get('issue_confidence') in ('HIGH', 'MEDIUM')]
+        if critical_high:
+            print(f'BLOCKING: {len(critical_high)} HIGH/CRITICAL severity findings in bandit scan:')
+            for r in critical_high:
+                print(f'  - {r[\"issue_severity\"]}/{r[\"issue_confidence\"]}: {r[\"issue_text\"]} ({r[\"filename\"]}:{r[\"line_number\"]})')
+            sys.exit(1)
+        print(f'Bandit: {len(results)} total findings, 0 HIGH/CRITICAL blocking issues')
+        "
 
     - name: Check Python dependencies for vulnerabilities
       run: |
         safety check --json --output safety.json
-      continue-on-error: true
+        # Parse safety output: fail if any vulnerabilities found
+        python -c "
+        import json, sys
+        try:
+            with open('safety.json') as f:
+                data = json.load(f)
+            # safety v3 format: list of vulnerability dicts
+            vulns = data if isinstance(data, list) else data.get('vulnerabilities', [])
+            if vulns:
+                print(f'BLOCKING: {len(vulns)} known vulnerabilities found by safety check')
+                for v in vulns[:10]:
+                    pkg = v.get('package_name', v.get('package', 'unknown')) if isinstance(v, dict) else str(v)
+                    print(f'  - {pkg}')
+                if len(vulns) > 10:
+                    print(f'  ... and {len(vulns) - 10} more')
+                sys.exit(1)
+            print('Safety: No known vulnerabilities found')
+        except Exception as e:
+            print(f'WARNING: Could not parse safety output: {e}')
+            sys.exit(1)
+        "
 
     - name: Upload security reports
       uses: actions/upload-artifact@v4
@@ -325,9 +357,8 @@ jobs:
         MASTER_SECRET_KEY: test-master-secret-key-for-ci
         APP_ENV: testing
 
-    - name: Check coverage target
+    - name: Check coverage floor (blocking at 35%)
       if: always()
-      continue-on-error: true
       run: |
         if [ -f coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml ]; then
           COVERAGE=$(python -c "
@@ -344,14 +375,30 @@ jobs:
           echo "| Line coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
           echo "| Python version | ${{ matrix.python-version }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test suite | ${{ matrix.test-suite }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Minimum threshold (fail) | 60% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Target threshold | 80% |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Floor threshold (BLOCKS)** | **35%** |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target threshold (advisory) | 80% |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Warn if below 80% target but above 60% minimum
+          # HARD GATE: Fail if coverage drops below 35% floor
+          python -c "
+          import sys
+          coverage = float('${COVERAGE}')
+          if coverage < 35.0:
+              print(f'BLOCKING: Coverage {coverage}% is below the 35% floor. Coverage must not regress.')
+              sys.exit(1)
+          elif coverage < 80.0:
+              print(f'WARNING: Coverage {coverage}% is above 35% floor but below 80% target. Please add tests.')
+          else:
+              print(f'Coverage {coverage}% meets the 80% target.')
+          "
+
+          # Summary annotation
+          BELOW_FLOOR=$(python -c "print('true' if float('${COVERAGE}') < 35.0 else 'false')")
           BELOW_TARGET=$(python -c "print('true' if float('${COVERAGE}') < 80.0 else 'false')")
-          if [ "$BELOW_TARGET" = "true" ]; then
-            echo "> **Warning:** Coverage is below the 80% target. Please add tests to improve coverage." >> $GITHUB_STEP_SUMMARY
+          if [ "$BELOW_FLOOR" = "true" ]; then
+            echo "> **BLOCKED:** Coverage is below the 35% floor. This must be fixed before merging." >> $GITHUB_STEP_SUMMARY
+          elif [ "$BELOW_TARGET" = "true" ]; then
+            echo "> **Warning:** Coverage is above the 35% floor but below the 80% target. Please add tests." >> $GITHUB_STEP_SUMMARY
           else
             echo "> Coverage meets the 80% target." >> $GITHUB_STEP_SUMMARY
           fi

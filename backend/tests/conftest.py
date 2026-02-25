@@ -26,7 +26,6 @@ from httpx import AsyncClient, ASGITransport
 from backend.api.main import app
 from backend.config.database import get_async_db_session, initialize_database
 from backend.auth.oauth2 import get_current_user, create_access_token
-from backend.utils.auth import get_current_user as get_current_user_utils
 from backend.models.unified_models import User
 from backend.utils.comprehensive_cache import get_cache_manager
 from backend.config.settings import settings
@@ -198,19 +197,12 @@ async def authenticated_client(test_db_engine, test_user):
     async def override_get_current_user():
         return test_user
 
-    async def override_get_current_user_as_dict():
-        """Return user as dict for routers that expect dict (e.g. agents, monitoring)."""
-        return {
-            "id": test_user.id,
-            "username": getattr(test_user, "username", test_user.email),
-            "email": test_user.email,
-            "role": getattr(test_user, "role", "user"),
-            "is_active": True,
-        }
-
+    # Overriding the canonical oauth2.get_current_user is sufficient.
+    # backend.utils.auth.get_current_user depends on it via Depends(), so
+    # FastAPI's DI system cascades this override automatically - no separate
+    # override for get_current_user_utils is required.
     app.dependency_overrides[get_async_db_session] = override_get_async_db_session
     app.dependency_overrides[get_current_user] = override_get_current_user
-    app.dependency_overrides[get_current_user_utils] = override_get_current_user_as_dict
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         yield client

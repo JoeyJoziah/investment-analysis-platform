@@ -402,7 +402,7 @@ jobs:
           ISSUES=0
 
           # Check docker-compose files exist
-          for file in docker-compose.yml docker-compose.prod.yml; do
+          for file in docker-compose.yml docker-compose.production.yml; do
             if [ ! -f "$file" ]; then
               echo "Missing: $file"
               ISSUES=$((ISSUES + 1))

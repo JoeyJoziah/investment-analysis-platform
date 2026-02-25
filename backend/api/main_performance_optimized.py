@@ -24,7 +24,7 @@ from backend.config.settings import settings
 from backend.utils.memory_manager import get_memory_manager
 from backend.utils.dynamic_resource_manager import get_resource_manager
 from backend.utils.enhanced_parallel_processor import enhanced_parallel_processor
-from backend.analytics.recommendation_engine_optimized import get_optimized_recommendation_engine
+from backend.analytics.recommendation_engine import get_optimized_recommendation_engine
 
 # Import routers
 from backend.api.routers import (

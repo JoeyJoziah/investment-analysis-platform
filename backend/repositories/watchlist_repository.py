@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, PaginationParams
-from backend.models.tables import Watchlist, WatchlistItem, Stock, PriceHistory
+from backend.models.unified_models import Watchlist, WatchlistItem, Stock, PriceHistory
 from backend.config.database import get_db_session
 
 logger = logging.getLogger(__name__)

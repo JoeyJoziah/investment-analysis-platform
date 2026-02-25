@@ -4,7 +4,7 @@ Database Schema Fix Script
 Addresses all identified database schema issues and inconsistencies
 
 This script:
-1. Fixes the column mismatch issues (ticker vs symbol)
+1. Fixes the column mismatch issues (ensures 'symbol' column exists)
 2. Ensures exchanges table has 'code' column
 3. Creates missing tables with proper schema
 4. Migrates existing data safely
@@ -24,7 +24,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from sqlalchemy import create_engine, text, inspect, MetaData, Table, Column, Integer, String, Boolean, DateTime, Float
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from backend.models.consolidated_models import Base, Exchange, Sector, Industry, Stock
+from backend.models.unified_models import Base, Exchange, Sector, Industry, Stock
 from backend.config.settings import settings
 
 # Configure logging
@@ -78,11 +78,11 @@ class DatabaseSchemaFixer:
             # Check stocks table
             if 'stocks' in existing_tables:
                 stocks_columns = [col['name'] for col in self.inspector.get_columns('stocks')]
-                if 'ticker' not in stocks_columns and 'symbol' not in stocks_columns:
-                    schema_status['column_issues'].append("stocks table missing ticker/symbol column")
+                if 'symbol' not in stocks_columns and 'ticker' not in stocks_columns:
+                    schema_status['column_issues'].append("stocks table missing symbol column")
                     schema_status['needs_migration'] = True
-                elif 'symbol' in stocks_columns and 'ticker' not in stocks_columns:
-                    schema_status['column_issues'].append("stocks table uses 'symbol' instead of 'ticker'")
+                elif 'ticker' in stocks_columns and 'symbol' not in stocks_columns:
+                    schema_status['column_issues'].append("stocks table uses 'ticker' instead of 'symbol'")
                     schema_status['needs_migration'] = True
             else:
                 schema_status['missing_tables'].append('stocks')
@@ -195,18 +195,18 @@ class DatabaseSchemaFixer:
             return False
     
     def fix_stocks_table(self) -> bool:
-        """Fix stocks table to use 'ticker' field consistently"""
+        """Fix stocks table to use 'symbol' field consistently"""
         logger.info("Fixing stocks table...")
-        
+
         try:
             with self.engine.connect() as conn:
                 if 'stocks' not in self.inspector.get_table_names():
-                    # Create stocks table from scratch using consolidated model
+                    # Create stocks table from scratch using unified model
                     logger.info("Creating stocks table with proper schema...")
                     conn.execute(text("""
                         CREATE TABLE stocks (
                             id SERIAL PRIMARY KEY,
-                            ticker VARCHAR(10) UNIQUE NOT NULL,
+                            symbol VARCHAR(10) UNIQUE NOT NULL,
                             name VARCHAR(255) NOT NULL,
                             exchange_id INTEGER REFERENCES exchanges(id),
                             sector_id INTEGER REFERENCES sectors(id),
@@ -214,41 +214,35 @@ class DatabaseSchemaFixer:
                             asset_type VARCHAR(20) DEFAULT 'stock',
                             market_cap FLOAT,
                             is_active BOOLEAN DEFAULT true NOT NULL,
-                            is_tradeable BOOLEAN DEFAULT true NOT NULL,
+                            is_tradable BOOLEAN DEFAULT true NOT NULL,
                             is_delisted BOOLEAN DEFAULT false NOT NULL,
-                            data_quality_score FLOAT DEFAULT 100.0,
                             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             last_price_update TIMESTAMP
                         )
                     """))
                     conn.commit()
-                    
+
                     # Create indexes
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stocks_ticker ON stocks(ticker)"))
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stocks_active_tradeable ON stocks(is_active, is_tradeable)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stocks_symbol ON stocks(symbol)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stocks_active_tradable ON stocks(is_active, is_tradable)"))
                     conn.commit()
                     logger.info("Created stocks table with proper schema")
-                    
+
                 else:
                     # Check current column structure
                     columns = [col['name'] for col in self.inspector.get_columns('stocks')]
-                    
-                    if 'symbol' in columns and 'ticker' not in columns:
-                        logger.info("Renaming 'symbol' column to 'ticker'...")
-                        conn.execute(text("ALTER TABLE stocks RENAME COLUMN symbol TO ticker"))
+
+                    if 'ticker' in columns and 'symbol' not in columns:
+                        logger.info("Renaming 'ticker' column to 'symbol'...")
+                        conn.execute(text("ALTER TABLE stocks RENAME COLUMN ticker TO symbol"))
                         conn.commit()
-                        logger.info("Renamed 'symbol' to 'ticker'")
-                    
-                    elif 'ticker' not in columns and 'symbol' not in columns:
-                        logger.error("Stocks table missing both 'ticker' and 'symbol' columns")
+                        logger.info("Renamed 'ticker' to 'symbol'")
+
+                    elif 'symbol' not in columns and 'ticker' not in columns:
+                        logger.error("Stocks table missing both 'symbol' and 'ticker' columns")
                         return False
-                    
+
                     # Add missing columns if needed
-                    if 'data_quality_score' not in columns:
-                        conn.execute(text("ALTER TABLE stocks ADD COLUMN data_quality_score FLOAT DEFAULT 100.0"))
-                        conn.commit()
-                        logger.info("Added data_quality_score column")
-                    
                     if 'is_delisted' not in columns:
                         conn.execute(text("ALTER TABLE stocks ADD COLUMN is_delisted BOOLEAN DEFAULT false"))
                         conn.commit()
@@ -303,7 +297,7 @@ class DatabaseSchemaFixer:
                     return False
                 
                 # Test stocks table structure
-                result = conn.execute(text("SELECT ticker FROM stocks LIMIT 1"))
+                result = conn.execute(text("SELECT symbol FROM stocks LIMIT 1"))
                 # This should not raise an error
                 
                 logger.info("Schema validation passed successfully")

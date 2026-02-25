@@ -114,7 +114,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      dockerfile: ./Dockerfile.backend
       args:
         - BUILD_DATE=${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         - VCS_REF=${VCS_REF:-$(git rev-parse --short HEAD)}
@@ -167,8 +167,8 @@ services:
   # Frontend Web - CDN-ready optimized build
   frontend:
     build:
-      context: ./frontend/web
-      dockerfile: ../../infrastructure/docker/frontend/Dockerfile.optimized
+      context: .
+      dockerfile: ./Dockerfile.frontend
       args:
         - REACT_APP_API_URL=${API_URL:-https://api.yourdomain.com}
         - REACT_APP_WS_URL=${WS_URL:-wss://api.yourdomain.com/ws}
@@ -198,7 +198,7 @@ services:
   celery_worker:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      dockerfile: ./Dockerfile.backend
       target: runtime
     image: investment-backend:${VERSION:-latest}
     container_name: investment_worker_prod
@@ -240,7 +240,7 @@ services:
   celery_beat:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      dockerfile: ./Dockerfile.backend
       target: runtime
     image: investment-backend:${VERSION:-latest}
     container_name: investment_scheduler_prod
@@ -354,7 +354,7 @@ services:
   cost_monitor:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile.optimized
+      dockerfile: ./Dockerfile.backend
       target: runtime
     image: investment-backend:${VERSION:-latest}
     container_name: investment_cost_monitor

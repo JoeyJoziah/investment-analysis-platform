@@ -17,7 +17,7 @@ from jinja2 import Template
 from backend.tasks.celery_app import celery_app
 from backend.utils.database import get_db_sync
 from backend.utils.cache import get_redis_client
-from backend.models.tables import (
+from backend.models.unified_models import (
     User, Alert, Portfolio, Position, Stock, PriceHistory,
     Recommendation, News, Order, PortfolioPerformance, Watchlist, WatchlistItem
 )
@@ -464,9 +464,8 @@ def send_recommendation_alert(recommendation_id: int) -> Dict[str, Any]:
                     <html>
                     <body>
                         <h2>New Recommendation: {stock.symbol}</h2>
-                        <p><strong>{recommendation.recommendation_type.replace('_', ' ').title()}</strong></p>
-                        <p>Confidence: {recommendation.confidence_score * 100:.0f}%</p>
-                        <p>Current Price: ${recommendation.current_price:.2f}</p>
+                        <p><strong>{recommendation.action.replace('_', ' ').title()}</strong></p>
+                        <p>Confidence: {recommendation.confidence * 100:.0f}%</p>
                         <p>Target Price: ${recommendation.target_price:.2f}</p>
                         <p>Reasoning: {recommendation.reasoning}</p>
                         <p>Key Factors:</p>
@@ -476,8 +475,8 @@ def send_recommendation_alert(recommendation_id: int) -> Dict[str, Any]:
                     </body>
                     </html>
                     """
-                    
-                    subject = f"New {recommendation.recommendation_type.replace('_', ' ').title()} Recommendation: {stock.symbol}"
+
+                    subject = f"New {recommendation.action.replace('_', ' ').title()} Recommendation: {stock.symbol}"
                     
                     send_email.delay(user.email, subject, html_content)
                     sent += 1
@@ -558,8 +557,8 @@ def send_portfolio_report(portfolio_id: int, period: str = 'monthly') -> bool:
                     <tr>
                         <td>{p.stock.symbol}</td>
                         <td>{p.quantity:.2f}</td>
-                        <td>${p.average_cost:.2f}</td>
-                        <td>${p.quantity * p.average_cost:.2f}</td>
+                        <td>${p.avg_cost_basis:.2f}</td>
+                        <td>${p.quantity * p.avg_cost_basis:.2f}</td>
                         <td>TBD</td>
                     </tr>
                     ''' for p in positions)}
@@ -688,16 +687,16 @@ def gather_daily_summary_data(db: Session, user_id: int) -> Dict[str, Any]:
         # Get top recommendations
         recommendations = db.query(Recommendation).filter(
             Recommendation.is_active == True,
-            Recommendation.confidence_score >= 0.7
-        ).order_by(Recommendation.confidence_score.desc()).limit(5).all()
-        
+            Recommendation.confidence >= 0.7
+        ).order_by(Recommendation.confidence.desc()).limit(5).all()
+
         rec_data = []
         for rec in recommendations:
             rec_data.append({
                 'symbol': rec.stock.symbol,
-                'recommendation_type': rec.recommendation_type.replace('_', ' ').title(),
+                'recommendation_type': rec.action.replace('_', ' ').title(),
                 'target_price': float(rec.target_price),
-                'confidence': float(rec.confidence_score)
+                'confidence': float(rec.confidence)
             })
         
         # Get market overview (simplified)

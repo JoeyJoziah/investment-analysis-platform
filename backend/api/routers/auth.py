@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import os
 import logging
 from backend.config.database import get_async_db_session
-from backend.models.tables import User
+from backend.models.unified_models import User
 from backend.config.settings import settings
 from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, rate_limit
 from backend.security.jwt_manager import get_jwt_manager, TokenClaims

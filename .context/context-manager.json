@@ -249,7 +249,7 @@
       "features": ["hot_reload", "debug_tools", "detailed_logging"]
     },
     "production": {
-      "compose_file": "docker-compose.prod.yml", 
+      "compose_file": "docker-compose.production.yml",
       "services": ["postgres", "redis", "elasticsearch", "backend", "frontend", "nginx", "prometheus", "grafana"],
       "features": ["ssl_termination", "load_balancing", "monitoring", "backup_services"]
     },

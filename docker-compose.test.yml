@@ -29,7 +29,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: ./infrastructure/docker/backend/Dockerfile
+      dockerfile: ./Dockerfile.backend
       target: test
     environment:
       - DATABASE_URL=postgresql://postgres:test_password@postgres:5432/test_investment_db
@@ -57,8 +57,8 @@ services:
   # Frontend testing
   frontend_test:
     build:
-      context: ./frontend/web
-      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
+      context: .
+      dockerfile: ./Dockerfile.frontend
       target: test
     volumes:
       - ./frontend/web/src:/app/src
