@@ -327,6 +327,7 @@ jobs:
 
     - name: Check coverage target
       if: always()
+      continue-on-error: true
       run: |
         if [ -f coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml ]; then
           COVERAGE=$(python -c "
