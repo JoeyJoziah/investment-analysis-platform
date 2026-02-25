@@ -16,7 +16,7 @@ from backend.utils.monitoring import data_anonymization_operations
 fake = Faker()
 
 # Encryption key for reversible anonymization
-ENCRYPTION_KEY = settings.GDPR_ENCRYPTION_KEY.encode() if hasattr(settings, 'GDPR_ENCRYPTION_KEY') else Fernet.generate_key()
+ENCRYPTION_KEY = settings.GDPR_ENCRYPTION_KEY.encode() if getattr(settings, 'GDPR_ENCRYPTION_KEY', None) else Fernet.generate_key()
 fernet = Fernet(ENCRYPTION_KEY)
 
 

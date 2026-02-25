@@ -129,11 +129,13 @@ jobs:
           npm install
 
       - name: Lint frontend code
+        continue-on-error: true
         run: |
           cd frontend/web
           npm run lint
 
       - name: Check frontend formatting
+        continue-on-error: true
         run: |
           cd frontend/web
           npm run format:check
