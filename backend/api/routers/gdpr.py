@@ -20,18 +20,10 @@ import logging
 from backend.config.database import get_async_db_session
 from backend.models.unified_models import User
 from backend.auth.oauth2 import get_current_user
-from backend.compliance.gdpr import (
-    data_portability,
-    data_deletion,
-    consent_manager,
-    retention_manager,
-    ConsentType,
-    DeletionStatus
-)
-from backend.utils.data_anonymization import data_anonymizer
+from backend.compliance.gdpr import retention_manager
 from backend.models.api_response import ApiResponse, success_response
 from backend.security.rate_limiter import rate_limit, RateLimitCategory, RateLimitRule
-from backend.security.audit_logging import get_audit_logger
+import backend.services.gdpr_service as gdpr_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -193,15 +185,10 @@ async def export_user_data(
     in a structured, commonly used and machine-readable format.
     """
     try:
-        user_id = current_user.id
-
-        logger.info(f"Data export requested for user {user_id}")
-
-        # Use the database-integrated export service
-        result = await data_portability.export_user_data(
-            user_id=user_id,
+        result = await gdpr_service.export_user_data(
+            user_id=current_user.id,
             session=db,
-            include_categories=include_categories
+            include_categories=include_categories,
         )
 
         return success_response(data=DataExportFullResponse(
@@ -237,9 +224,9 @@ async def export_user_data_json(
 ) -> ApiResponse[Dict[str, Any]]:
     """Export user data as JSON format"""
     try:
-        result = await data_portability.export_user_data(
+        result = await gdpr_service.export_user_data(
             user_id=current_user.id,
-            session=db
+            session=db,
         )
         return success_response(data=result.data)
 
@@ -284,15 +271,10 @@ async def request_deletion(
     anonymized rather than deleted to maintain audit trails.
     """
     try:
-        user_id = current_user.id
-
-        logger.info(f"Deletion request initiated for user {user_id}")
-
-        # Create deletion request
-        result = await data_deletion.request_deletion(
-            user_id=user_id,
+        result = await gdpr_service.request_deletion(
+            user_id=current_user.id,
+            session=db,
             reason=reason,
-            session=db
         )
 
         return success_response(data=DeleteRequestResponse(
@@ -336,9 +318,9 @@ async def process_deletion_request(
 ) -> ApiResponse[DeleteRequestResponse]:
     """Process a pending deletion request"""
     try:
-        result = await data_deletion.process_deletion(
+        result = await gdpr_service.process_deletion(
             request_id=request_id,
-            session=db
+            session=db,
         )
 
         return success_response(data=DeleteRequestResponse(
@@ -384,7 +366,7 @@ async def get_deletion_audit(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeletionAuditResponse]:
     """Get audit trail for a deletion request"""
-    audit = data_deletion.get_deletion_audit(request_id)
+    audit = gdpr_service.get_deletion_audit(request_id)
 
     if not audit:
         raise HTTPException(
@@ -431,21 +413,11 @@ async def get_consent_status(
     try:
         user_id = current_user.id
 
-        logger.info(f"Consent status requested for user {user_id}")
-
-        # Get consent status from database
-        status_data = await consent_manager.get_consent_status(
+        status_data = await gdpr_service.get_consent_status(
             user_id=user_id,
-            session=db
+            session=db,
         )
-
-        # Find last updated timestamp
-        last_updated = None
-        for consent_type, info in status_data.items():
-            if info.get("consent_date"):
-                consent_date = datetime.fromisoformat(info["consent_date"])
-                if last_updated is None or consent_date > last_updated:
-                    last_updated = consent_date
+        last_updated = gdpr_service.derive_last_updated(status_data)
 
         return success_response(data=ConsentStatusResponse(
             user_id=user_id,
@@ -479,9 +451,9 @@ async def get_consent_history(
     try:
         user_id = current_user.id
 
-        history = await consent_manager.get_consent_history(
+        history = await gdpr_service.get_consent_history(
             user_id=user_id,
-            session=db
+            session=db,
         )
 
         return success_response(data=ConsentHistoryResponse(
@@ -527,42 +499,27 @@ async def record_consent(
     try:
         user_id = current_user.id
 
-        logger.info(
-            f"Recording consent for user {user_id}: "
-            f"{consent_request.consent_type}"
-        )
-
-        # Get client IP address and anonymize immediately for GDPR compliance
-        raw_ip_address = get_client_ip(request)
-        ip_address = data_anonymizer.anonymize_ip(raw_ip_address) if raw_ip_address else None
-        user_agent = request.headers.get("user-agent")
-
-        # Map string to ConsentType enum
-        consent_type_map = {
-            "data_processing": ConsentType.DATA_PROCESSING,
-            "marketing": ConsentType.MARKETING,
-            "analytics": ConsentType.ANALYTICS,
-            "third_party_sharing": ConsentType.THIRD_PARTY_SHARING,
-            "profiling": ConsentType.PROFILING,
-            "automated_decisions": ConsentType.AUTOMATED_DECISIONS
-        }
-        consent_type = consent_type_map.get(consent_request.consent_type)
-
+        # Resolve and validate consent type
+        consent_type = gdpr_service.resolve_consent_type(consent_request.consent_type)
         if not consent_type:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid consent type: {consent_request.consent_type}"
             )
 
-        # Record consent in database
-        consent_id = await consent_manager.record_consent(
+        # Get client IP and anonymize immediately for GDPR compliance
+        raw_ip = get_client_ip(request)
+        ip_address = gdpr_service.anonymize_ip(raw_ip)
+        user_agent = request.headers.get("user-agent")
+
+        consent_id = await gdpr_service.record_consent(
             user_id=user_id,
             consent_type=consent_type,
             consent_given=consent_request.granted,
             legal_basis=consent_request.legal_basis,
             ip_address=ip_address,
             user_agent=user_agent,
-            session=db
+            session=db,
         )
 
         return success_response(data=ConsentRecordResponse(
@@ -613,33 +570,20 @@ async def withdraw_consent(
     try:
         user_id = current_user.id
 
-        logger.info(f"Withdrawing consent for user {user_id}: {consent_type}")
-
-        ip_address = get_client_ip(request)
-
-        # Map string to ConsentType enum
-        consent_type_map = {
-            "data_processing": ConsentType.DATA_PROCESSING,
-            "marketing": ConsentType.MARKETING,
-            "analytics": ConsentType.ANALYTICS,
-            "third_party_sharing": ConsentType.THIRD_PARTY_SHARING,
-            "profiling": ConsentType.PROFILING,
-            "automated_decisions": ConsentType.AUTOMATED_DECISIONS
-        }
-        consent_type_enum = consent_type_map.get(consent_type)
-
+        consent_type_enum = gdpr_service.resolve_consent_type(consent_type)
         if not consent_type_enum:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid consent type: {consent_type}"
             )
 
-        # Withdraw consent (record with granted=False)
-        consent_id = await consent_manager.withdraw_consent(
+        raw_ip = get_client_ip(request)
+
+        consent_id = await gdpr_service.withdraw_consent(
             user_id=user_id,
             consent_type=consent_type_enum,
-            ip_address=ip_address,
-            session=db
+            ip_address=raw_ip,
+            session=db,
         )
 
         return success_response(data=ConsentRecordResponse(
@@ -648,7 +592,7 @@ async def withdraw_consent(
             granted=False,
             timestamp=datetime.now(timezone.utc),
             legal_basis="consent_withdrawal",
-            ip_address=data_anonymizer.anonymize_ip(ip_address) if ip_address else None
+            ip_address=gdpr_service.anonymize_ip(raw_ip)
         ))
 
     except HTTPException:
@@ -683,20 +627,12 @@ async def check_consent(
     try:
         user_id = current_user.id
 
-        consent_type_map = {
-            "data_processing": ConsentType.DATA_PROCESSING,
-            "marketing": ConsentType.MARKETING,
-            "analytics": ConsentType.ANALYTICS,
-            "third_party_sharing": ConsentType.THIRD_PARTY_SHARING,
-            "profiling": ConsentType.PROFILING,
-            "automated_decisions": ConsentType.AUTOMATED_DECISIONS
-        }
-        consent_type_enum = consent_type_map.get(consent_type)
+        consent_type_enum = gdpr_service.resolve_consent_type(consent_type)
 
-        has_consent = await consent_manager.check_consent(
+        has_consent = await gdpr_service.check_consent(
             user_id=user_id,
             consent_type=consent_type_enum,
-            session=db
+            session=db,
         )
 
         return success_response(data={
@@ -736,9 +672,9 @@ async def get_retention_report(
     try:
         user_id = current_user.id
 
-        report = await retention_manager.get_retention_report(
+        report = await gdpr_service.get_retention_report(
             user_id=user_id,
-            session=db
+            session=db,
         )
 
         return success_response(data=RetentionReportResponse(
@@ -774,7 +710,6 @@ async def enforce_retention_policies(
     Admin only endpoint.
     """
     try:
-        # Add retention enforcement as background task
         background_tasks.add_task(
             retention_manager.enforce_retention_policies,
             session=db
@@ -851,102 +786,20 @@ async def anonymize_user_data(
             )
 
         user_id = current_user.id
-
         logger.info(f"Anonymization request for user {user_id}")
 
-        # Use the data_anonymizer to anonymize user data
-        import hashlib
-        anon_id = hashlib.sha256(str(user_id).encode()).hexdigest()[:12]
-
-        anonymized_counts = {}
-
-        # Anonymize user profile
-        from sqlalchemy import update
-        await db.execute(
-            update(User)
-            .where(User.id == user_id)
-            .values(
-                email=f"deleted_{anon_id}@anonymized.local",
-                username=f"deleted_{anon_id}",
-                full_name=f"Anonymized User {anon_id}",
-                phone_number=None,
-                preferences={},
-                notification_settings={}
-            )
-        )
-        await db.commit()
-        anonymized_counts["profile"] = 1
-
-        # Anonymize portfolios
-        from backend.models.unified_models import Portfolio
-        from sqlalchemy import select
-        result = await db.execute(
-            select(Portfolio.id).where(Portfolio.user_id == user_id)
-        )
-        portfolio_ids = [row[0] for row in result.fetchall()]
-
-        if portfolio_ids:
-            await db.execute(
-                update(Portfolio)
-                .where(Portfolio.user_id == user_id)
-                .values(
-                    name=f"Anonymized_{anon_id}",
-                    description=None,
-                    is_public=False
-                )
-            )
-            anonymized_counts["portfolios"] = len(portfolio_ids)
-
-            # Anonymize transactions (clear notes, keep financial data for compliance)
-            from backend.models.unified_models import Transaction
-            result = await db.execute(
-                update(Transaction)
-                .where(Transaction.portfolio_id.in_(portfolio_ids))
-                .values(notes=None)
-            )
-            anonymized_counts["transactions"] = result.rowcount
-
-        # Delete non-critical data
-        from backend.models.unified_models import UserSession, Watchlist, Alert
-        from sqlalchemy import delete
-
-        result = await db.execute(
-            delete(UserSession).where(UserSession.user_id == user_id)
-        )
-        anonymized_counts["sessions_deleted"] = result.rowcount
-
-        result = await db.execute(
-            delete(Watchlist).where(Watchlist.user_id == user_id)
-        )
-        anonymized_counts["watchlists_deleted"] = result.rowcount
-
-        result = await db.execute(
-            delete(Alert).where(Alert.user_id == user_id)
-        )
-        anonymized_counts["alerts_deleted"] = result.rowcount
-
-        await db.commit()
-
-        request_id = f"anon_{anon_id}_{int(datetime.now(timezone.utc).timestamp())}"
-
-        # Log the anonymization
-        audit_logger = get_audit_logger()
-        await audit_logger.log_gdpr_request(
-            request_type="data_anonymization",
-            user_id=str(user_id),
-            details={
-                "request_id": request_id,
-                "anonymized_records": anonymized_counts,
-                "reason": anonymize_request.reason
-            }
+        result = await gdpr_service.anonymize_user_data(
+            user_id=user_id,
+            reason=anonymize_request.reason,
+            session=db,
         )
 
         return success_response(data=AnonymizeResponse(
-            request_id=request_id,
+            request_id=result["request_id"],
             status="completed",
             message="User data anonymized successfully. Transaction data retained for compliance.",
             anonymized_at=datetime.now(timezone.utc),
-            anonymized_records=anonymized_counts
+            anonymized_records=result["anonymized_counts"]
         ))
 
     except HTTPException:
@@ -1020,51 +873,21 @@ async def get_audit_trail(
     try:
         user_id = current_user.id
 
-        logger.info(f"Audit trail requested for user {user_id} (skip={skip}, limit={limit})")
-
-        # Query audit logs for the user
-        from backend.models.unified_models import AuditLog
-        from sqlalchemy import select, func
-
-        # Get total count
-        count_result = await db.execute(
-            select(func.count(AuditLog.id))
-            .where(AuditLog.user_id == user_id)
+        trail = await gdpr_service.get_audit_trail(
+            user_id=user_id,
+            skip=skip,
+            limit=limit,
+            session=db,
         )
-        total_entries = count_result.scalar() or 0
 
-        # Get paginated entries
-        result = await db.execute(
-            select(AuditLog)
-            .where(AuditLog.user_id == user_id)
-            .order_by(AuditLog.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
-        audit_logs = result.scalars().all()
-
-        # Convert to response format
-        entries = []
-        for log in audit_logs:
-            entries.append(AuditEntry(
-                id=log.id,
-                action=log.action,
-                resource_type=log.resource_type or "unknown",
-                resource_id=log.resource_id,
-                ip_address=log.ip_address,
-                user_agent=log.user_agent,
-                meta_data=log.meta_data,
-                created_at=log.created_at
-            ))
-
-        page = (skip // limit) + 1 if limit > 0 else 1
+        entries = [AuditEntry(**e) for e in trail["entries"]]
 
         return success_response(data=AuditTrailResponse(
             user_id=user_id,
-            total_entries=total_entries,
+            total_entries=trail["total_entries"],
             entries=entries,
-            page=page,
-            limit=limit
+            page=trail["page"],
+            limit=trail["limit"],
         ))
 
     except Exception as e:

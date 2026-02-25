@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.unified_models import (
     User, Portfolio, Position, Transaction, Alert,
-    Watchlist, Stock, AuditLog,
+    Watchlist, WatchlistItem, Stock, AuditLog,
     UserSession, Exchange, Sector,
     UserRoleEnum, AssetTypeEnum
 )
@@ -152,14 +152,21 @@ async def user_complete_data(db_session: AsyncSession, gdpr_test_user: User, nas
     db_session.add(transaction)
     await db_session.commit()
 
-    # Create watchlist
+    # Create watchlist (header) and watchlist item (separate records)
     watchlist = Watchlist(
         user_id=gdpr_test_user.id,
-        stock_id=stock1.id,
         name="Tech Watchlist",
         is_public=False
     )
     db_session.add(watchlist)
+    await db_session.commit()
+    await db_session.refresh(watchlist)
+
+    watchlist_item = WatchlistItem(
+        watchlist_id=watchlist.id,
+        stock_id=stock1.id
+    )
+    db_session.add(watchlist_item)
     await db_session.commit()
 
     # Create alerts

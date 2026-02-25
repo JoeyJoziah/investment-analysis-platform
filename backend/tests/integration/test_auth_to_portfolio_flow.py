@@ -56,7 +56,7 @@ async def premium_user(db_session: AsyncSession):
         email="premium@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Premium User",
-        role=UserRoleEnum.PREMIUM_USER,  # Use enum directly, not .value
+        role=UserRoleEnum.PREMIUM_USER.value,  # String column requires .value
         is_active=True,
         is_verified=True,
         subscription_tier="premium",
@@ -75,7 +75,7 @@ async def free_user(db_session: AsyncSession):
         email="free@test.com",
         hashed_password="$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU2VXhI0Asei",
         full_name="Free User",
-        role=UserRoleEnum.FREE_USER,  # Use enum directly, not .value
+        role=UserRoleEnum.FREE_USER.value,  # String column requires .value
         is_active=True,
         is_verified=True,
         subscription_tier="free"
