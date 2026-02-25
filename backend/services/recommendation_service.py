@@ -14,6 +14,9 @@ from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 
 logger = logging.getLogger(__name__)
 
+# Sentinel to distinguish "not provided" from an explicit None
+_UNSET = object()
+
 # =============================================================================
 # SEC 2025 COMPLIANCE CONSTANTS
 # =============================================================================
@@ -225,7 +228,12 @@ class RecommendationService:
         risk_level: Optional[str] = None,
         categories: Optional[List[str]] = None,
         limit: int = 10,
-        db_session: Optional[AsyncSession] = None
+        db_session: Optional[AsyncSession] = None,
+        *,
+        stock_repo: Any = _UNSET,
+        price_repo: Any = _UNSET,
+        model_mgr: Any = _UNSET,
+        rec_engine: Any = _UNSET,
     ) -> List[Dict[str, Any]]:
         """
         Generate ML-powered recommendations with real market data.
@@ -241,33 +249,43 @@ class RecommendationService:
             categories: List of category strings to filter by
             limit: Maximum number of recommendations to return
             db_session: Database session for repository queries
+            stock_repo: Optional stock repository override (for test patching)
+            price_repo: Optional price repository override (for test patching)
+            model_mgr: Optional model manager override (for test patching)
+            rec_engine: Optional recommendation engine override (for test patching)
 
         Returns:
             List of recommendation dictionaries
         """
-        from backend.repositories import (
-            stock_repository,
-            price_repository,
-        )
-        from backend.ml.model_manager import get_model_manager
-        from backend.analytics.recommendation_engine import RecommendationEngine
+        if stock_repo is _UNSET or price_repo is _UNSET:
+            from backend.repositories import (
+                stock_repository as _stock_repo,
+                price_repository as _price_repo,
+            )
+            stock_repo = _stock_repo if stock_repo is _UNSET else stock_repo
+            price_repo = _price_repo if price_repo is _UNSET else price_repo
 
-        # Module-level singletons (mirroring router initialization)
-        model_manager = None
-        recommendation_engine_instance = None
-
-        try:
-            model_manager = get_model_manager()
-            recommendation_engine_instance = RecommendationEngine(model_manager=model_manager)
-        except Exception as e:
-            logger.warning(f"ML model manager not available: {e}")
-            recommendation_engine_instance = RecommendationEngine()
+        # Use provided engine/manager or initialise defaults
+        if model_mgr is _UNSET and rec_engine is _UNSET:
+            from backend.ml.model_manager import get_model_manager as _get_mm
+            from backend.analytics.recommendation_engine import RecommendationEngine as _RE
+            model_manager = None
+            recommendation_engine_instance = None
+            try:
+                model_manager = _get_mm()
+                recommendation_engine_instance = _RE(model_manager=model_manager)
+            except Exception as e:
+                logger.warning(f"ML model manager not available: {e}")
+                recommendation_engine_instance = _RE()
+        else:
+            model_manager = model_mgr if model_mgr is not _UNSET else None
+            recommendation_engine_instance = rec_engine if rec_engine is not _UNSET else None
 
         try:
             logger.info(f"Generating ML recommendations for user {user_id}, portfolio {portfolio_id}")
 
             # Query 1: Get market data for top stocks
-            top_stocks = await stock_repository.get_top_stocks(
+            top_stocks = await stock_repo.get_top_stocks(
                 limit=100,
                 by_market_cap=True,
                 session=db_session
@@ -281,7 +299,7 @@ class RecommendationService:
             symbols_to_fetch = [stock.symbol for stock in top_stocks[:limit * 2]]
 
             # Query 2: Single bulk query for all price histories
-            all_price_histories = await price_repository.get_bulk_price_history(
+            all_price_histories = await price_repo.get_bulk_price_history(
                 symbols=symbols_to_fetch,
                 start_date=datetime.now().date() - timedelta(days=90),
                 end_date=datetime.now().date(),
@@ -448,9 +466,11 @@ class RecommendationService:
                             "industry": stock.industry
                         },
                         "risk_factors": [
-                            "Market volatility",
-                            "Sector-specific risks",
-                            "Liquidity risk" if stock.market_cap and stock.market_cap < 1000000000 else None
+                            f for f in [
+                                "Market volatility",
+                                "Sector-specific risks",
+                                "Liquidity risk" if stock.market_cap and stock.market_cap < 1000000000 else None,
+                            ] if f is not None
                         ],
                         "entry_points": [current_price * 0.98, current_price * 0.95],
                         "exit_points": [target_price * 0.95, target_price],
@@ -486,7 +506,11 @@ class RecommendationService:
         self,
         user_id: int,
         portfolio_id: Optional[str] = None,
-        db_session: Optional[AsyncSession] = None
+        db_session: Optional[AsyncSession] = None,
+        *,
+        stock_repo: Any = None,
+        portfolio_repo: Any = None,
+        ml_recs_fn: Any = None,
     ) -> List[Dict[str, Any]]:
         """
         Generate personalized recommendations based on user's portfolio and preferences.
@@ -495,20 +519,26 @@ class RecommendationService:
             user_id: User identifier for preference lookup
             portfolio_id: Optional portfolio identifier
             db_session: Database session for repository queries
+            stock_repo: Optional stock repository override (for test patching)
+            portfolio_repo: Optional portfolio repository override (for test patching)
+            ml_recs_fn: Optional callable override for ML recommendation generation
 
         Returns:
             List of personalized recommendation dictionaries
         """
-        from backend.repositories import (
-            portfolio_repository,
-            stock_repository,
-        )
+        if portfolio_repo is None or stock_repo is None:
+            from backend.repositories import (
+                portfolio_repository as _portfolio_repo,
+                stock_repository as _stock_repo,
+            )
+            portfolio_repo = portfolio_repo or _portfolio_repo
+            stock_repo = stock_repo or _stock_repo
 
         try:
             logger.info(f"Generating personalized recommendations for user {user_id}")
 
             # Get user's portfolio(s) to understand preferences
-            user_portfolios = await portfolio_repository.get_user_portfolios(
+            user_portfolios = await portfolio_repo.get_user_portfolios(
                 user_id=user_id,
                 session=db_session
             )
@@ -518,7 +548,7 @@ class RecommendationService:
             preferred_sectors: Dict[str, int] = {}
 
             for portfolio in user_portfolios:
-                positions = await portfolio_repository.get_portfolio_positions(
+                positions = await portfolio_repo.get_portfolio_positions(
                     portfolio_id=portfolio.id,
                     session=db_session
                 )
@@ -527,16 +557,19 @@ class RecommendationService:
                     existing_symbols.add(position.symbol)
 
                     # Get stock info to determine sector preference
-                    stock = await stock_repository.get_by_symbol(position.symbol, session=db_session)
+                    stock = await stock_repo.get_by_symbol(position.symbol, session=db_session)
                     if stock and stock.sector:
                         preferred_sectors[stock.sector] = preferred_sectors.get(stock.sector, 0) + 1
 
             # Generate recommendations excluding existing positions
-            all_recommendations = await self.generate_ml_powered_recommendations(
-                user_id=user_id,
-                limit=20,
-                db_session=db_session
-            )
+            if ml_recs_fn:
+                all_recommendations = await ml_recs_fn(user_id=user_id, limit=20, db_session=db_session)
+            else:
+                all_recommendations = await self.generate_ml_powered_recommendations(
+                    user_id=user_id,
+                    limit=20,
+                    db_session=db_session
+                )
 
             # Filter out existing positions and prefer similar sectors
             filtered_recommendations = []
@@ -1138,6 +1171,38 @@ class RecommendationService:
             return 0.0
 
         return weighted_sum / total_weight
+
+    @staticmethod
+    def generate_trending_fallback(
+        symbols: List[str],
+        limit: int = 10,
+        timeframe: str = "24h",
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate fallback trending data when the real trending service is unavailable.
+
+        Args:
+            symbols: Pool of symbols to pick from
+            limit: Maximum entries to return
+            timeframe: Timeframe label to attach to each entry
+
+        Returns:
+            List of trending recommendation dicts sorted by trending_score descending
+        """
+        trending = []
+        for symbol in symbols[:limit]:
+            trending.append({
+                "symbol": symbol,
+                "views": random.randint(1000, 50000),
+                "saves": random.randint(100, 5000),
+                "recommendation_type": random.choice(
+                    ["strong_buy", "buy", "hold", "sell", "strong_sell"]
+                ),
+                "confidence_score": random.uniform(0.7, 0.95),
+                "trending_score": random.uniform(70, 100),
+                "timeframe": timeframe,
+            })
+        return sorted(trending, key=lambda x: x["trending_score"], reverse=True)
 
     async def monitor_recommendations(
         self,

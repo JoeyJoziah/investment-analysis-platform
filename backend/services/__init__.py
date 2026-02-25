@@ -8,6 +8,7 @@ from backend.services.portfolio_service import PortfolioService, portfolio_servi
 from backend.services.analysis_service import AnalysisService, analysis_service
 from backend.services.trading_service import TradingService, trading_service
 from backend.services.watchlist_service import WatchlistService, watchlist_service
+from backend.services.stocks_service import StocksService, stocks_service
 import backend.services.gdpr_service as gdpr_service
 import backend.services.agents_service as agents_service
 
@@ -22,6 +23,8 @@ __all__ = [
     'trading_service',
     'WatchlistService',
     'watchlist_service',
+    'StocksService',
+    'stocks_service',
     'gdpr_service',
     'agents_service',
 ]

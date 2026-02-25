@@ -6,11 +6,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 import random
-import asyncio
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Enhanced imports for real functionality
 from backend.config.database import get_async_db_session
 from backend.repositories import (
     recommendation_repository,
@@ -38,7 +36,6 @@ from backend.services.recommendation_service import (
     RECOMMENDATION_MODEL_TRAINING_DATE,
 )
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["recommendations"])
@@ -59,10 +56,12 @@ async def get_recommendation_service():
             await recommendation_service.initialize()
         except Exception as e:
             logger.warning(f"Failed to initialize recommendation service: {e}")
-            # Service will work in degraded mode without full initialization
     return recommendation_service
 
-# Enum definitions (moved to top to avoid forward reference issues)
+# ============================================================================
+# Enum definitions
+# ============================================================================
+
 class RecommendationType(str, Enum):
     STRONG_BUY = "strong_buy"
     BUY = "buy"
@@ -71,9 +70,9 @@ class RecommendationType(str, Enum):
     STRONG_SELL = "strong_sell"
 
 class TimeHorizon(str, Enum):
-    SHORT_TERM = "short_term"  # 1-7 days
-    MEDIUM_TERM = "medium_term"  # 1-3 months
-    LONG_TERM = "long_term"  # 3+ months
+    SHORT_TERM = "short_term"   # 1-7 days
+    MEDIUM_TERM = "medium_term" # 1-3 months
+    LONG_TERM = "long_term"     # 3+ months
 
 class RiskLevel(str, Enum):
     CONSERVATIVE = "conservative"
@@ -89,7 +88,10 @@ class RecommendationCategory(str, Enum):
     INDEX = "index"
     SECTOR_ROTATION = "sector_rotation"
 
-# Pydantic models (defined before any functions that use them)
+# ============================================================================
+# Pydantic models
+# ============================================================================
+
 class RecommendationBase(BaseModel):
     symbol: str
     company_name: str
@@ -104,41 +106,32 @@ class RecommendationBase(BaseModel):
 
 class SECDisclosure(BaseModel):
     """SEC 2025 Required Disclosure Fields for Investment Recommendations"""
-    model_config = {"protected_namespaces": ()}  # Allow model_* field names
+    model_config = {"protected_namespaces": ()}
 
     methodology_disclosure: str = Field(
-        ...,
-        description="Description of the algorithm and methodology used to generate this recommendation"
+        ..., description="Description of the algorithm and methodology used"
     )
     data_sources: List[str] = Field(
-        ...,
-        description="List of data sources used with timestamps indicating data freshness"
+        ..., description="List of data sources used with timestamps"
     )
     model_version: str = Field(
-        ...,
-        description="Version identifier of the ML model used for this recommendation"
+        ..., description="Version identifier of the ML model used"
     )
     model_training_date: str = Field(
-        ...,
-        description="Date when the recommendation model was last trained"
+        ..., description="Date when the recommendation model was last trained"
     )
     risk_warning: str = Field(
-        ...,
-        description="Standard SEC-required risk warning text"
+        ..., description="Standard SEC-required risk warning text"
     )
     limitations_statement: str = Field(
-        ...,
-        description="Statement of what the analysis does NOT consider"
+        ..., description="Statement of what the analysis does NOT consider"
     )
     confidence_level: str = Field(
-        default="moderate",
-        description="Confidence level of the recommendation (low/moderate/high)"
+        default="moderate", description="Confidence level (low/moderate/high)"
     )
     conflict_of_interest_statement: Optional[str] = Field(
-        default=None,
-        description="Disclosure of any material relationships with recommended securities"
+        default=None, description="Disclosure of material relationships"
     )
-
 
 class RecommendationDetail(RecommendationBase):
     id: str
@@ -157,10 +150,8 @@ class RecommendationDetail(RecommendationBase):
     volume: int
     analyst_consensus: Optional[str] = None
     similar_stocks: Optional[List[str]] = None
-    # SEC 2025 Required Disclosure Fields
     sec_disclosure: Optional[SECDisclosure] = Field(
-        default=None,
-        description="SEC 2025 required disclosure information for this recommendation"
+        default=None, description="SEC 2025 required disclosure information"
     )
 
 class DailyRecommendations(BaseModel):
@@ -173,18 +164,15 @@ class DailyRecommendations(BaseModel):
     market_sentiment: float = Field(..., ge=-1, le=1)
     risk_assessment: str
     special_situations: Optional[List[Dict[str, Any]]] = None
-    # SEC 2025 Required Global Disclosures
     sec_global_disclosure: str = Field(
-        default=SEC_RISK_WARNING,
-        description="SEC-required global risk warning applicable to all recommendations"
+        default=SEC_RISK_WARNING, description="SEC-required global risk warning"
     )
     data_as_of: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
-        description="Timestamp indicating when data was collected for these recommendations"
+        description="Timestamp when data was collected"
     )
     recommendation_model_version: str = Field(
-        default=RECOMMENDATION_MODEL_VERSION,
-        description="Version of the recommendation model used"
+        default=RECOMMENDATION_MODEL_VERSION, description="Version of the recommendation model"
     )
 
 class PortfolioRecommendation(BaseModel):
@@ -226,9 +214,12 @@ class AlertSettings(BaseModel):
     min_confidence: float = 0.7
     categories: List[RecommendationCategory] = []
 
-# Initialize ML model manager and recommendation engine
-# (kept at module level so tests can patch backend.api.routers.recommendations.model_manager
-#  and backend.api.routers.recommendations.recommendation_engine)
+# ============================================================================
+# Module-level ML singletons (kept for test patch paths)
+# Tests patch: backend.api.routers.recommendations.model_manager
+# Tests patch: backend.api.routers.recommendations.recommendation_engine
+# ============================================================================
+
 model_manager = None
 recommendation_engine = None
 
@@ -238,18 +229,31 @@ try:
     logger.info("ML model manager and recommendation engine initialized successfully")
 except Exception as e:
     logger.warning(f"ML model manager not available: {e}")
-    recommendation_engine = RecommendationEngine()  # Fallback without ML
+    recommendation_engine = RecommendationEngine()
 
+# ============================================================================
+# Conversion helpers
+# ============================================================================
+
+def _dict_to_detail(r: Any) -> RecommendationDetail:
+    """Convert a service dict (or existing RecommendationDetail) to RecommendationDetail."""
+    if isinstance(r, RecommendationDetail):
+        return r
+    if isinstance(r.get("sec_disclosure"), dict):
+        r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
+    return RecommendationDetail(**r)
+
+
+def _dicts_to_details(items: List[Any]) -> List[RecommendationDetail]:
+    """Convert a list of service dicts to RecommendationDetail models."""
+    return [_dict_to_detail(r) for r in items]
 
 # ============================================================================
 # Router-level functions
-# (generate_sec_disclosure and generate_recommendation are kept here because
-#  tests import them directly from this module.
-#
-#  generate_ml_powered_recommendations and generate_personalized_recommendations
-#  are kept here because tests in test_n1_query_fix.py import them from this module
-#  AND patch backend.api.routers.recommendations.{stock_repository,price_repository,
-#  recommendation_engine,model_manager} - the patches must target this module.)
+# These functions are kept at module level because tests import them directly
+# from this module AND patch module-level names (stock_repository,
+# price_repository, recommendation_engine, model_manager).
+# The bodies delegate to the service, passing the patchable module-level names.
 # ============================================================================
 
 def generate_sec_disclosure(
@@ -257,20 +261,7 @@ def generate_sec_disclosure(
     data_sources: List[str] = None,
     confidence_score: float = 0.5
 ) -> SECDisclosure:
-    """
-    Generate SEC 2025 compliant disclosure for a recommendation.
-
-    Delegates business logic to the service layer and wraps the result
-    in a SECDisclosure Pydantic model for type safety and API serialization.
-
-    Args:
-        algorithm_type: Description of the algorithm used
-        data_sources: List of data sources with timestamps
-        confidence_score: Model confidence score (0-1)
-
-    Returns:
-        SECDisclosure object with all required fields
-    """
+    """Generate SEC 2025 compliant disclosure for a recommendation."""
     data = recommendation_service.generate_sec_disclosure(
         algorithm_type=algorithm_type,
         data_sources=data_sources,
@@ -286,382 +277,63 @@ async def generate_ml_powered_recommendations(
     categories: Optional[List[RecommendationCategory]] = None,
     limit: int = 10,
     db_session: AsyncSession = None
-) -> List["RecommendationDetail"]:
+) -> List[RecommendationDetail]:
     """
     Generate ML-powered recommendations with real market data.
 
-    OPTIMIZED: Uses batch queries to eliminate N+1 query pattern.
-    Previously: 201+ queries (1 for stocks + 2 per stock for prices/ML)
-    Now: 2-3 queries total (1 for stocks + 1 bulk price history)
-
-    NOTE: This function is kept at router module level (rather than being fully
-    delegated to the service) because integration tests in test_n1_query_fix.py
-    import it from this module and patch the module-level names
-    stock_repository, price_repository, recommendation_engine, and model_manager.
-    Behavior is unchanged from the original implementation.
+    Delegates to the service layer while passing module-level repository and
+    engine references so that test patches on this module propagate correctly.
     """
-    try:
-        logger.info(f"Generating ML recommendations for user {user_id}, portfolio {portfolio_id}")
+    raw = await recommendation_service.generate_ml_powered_recommendations(
+        user_id=user_id,
+        portfolio_id=portfolio_id,
+        risk_level=risk_level.value if risk_level else None,
+        categories=[c.value for c in categories] if categories else None,
+        limit=limit,
+        db_session=db_session,
+        stock_repo=stock_repository,
+        price_repo=price_repository,
+        model_mgr=model_manager,
+        rec_engine=recommendation_engine,
+    )
+    return _dicts_to_details(raw)
 
-        # Query 1: Get market data for top stocks
-        top_stocks = await stock_repository.get_top_stocks(
-            limit=100,
-            by_market_cap=True,
-            session=db_session
-        )
-
-        if not top_stocks:
-            logger.warning("No stocks found for recommendations")
-            return [generate_recommendation() for _ in range(min(limit, 5))]
-
-        # OPTIMIZATION: Batch fetch all price histories in a single query
-        # This eliminates the N+1 pattern (was: 1 query per stock in loop)
-        symbols_to_fetch = [stock.symbol for stock in top_stocks[:limit * 2]]  # Fetch extra for filtering
-
-        # Query 2: Single bulk query for all price histories
-        all_price_histories = await price_repository.get_bulk_price_history(
-            symbols=symbols_to_fetch,
-            start_date=datetime.now().date() - timedelta(days=90),
-            end_date=datetime.now().date(),
-            limit_per_symbol=60,
-            session=db_session
-        )
-
-        logger.debug(f"Bulk fetched price histories for {len(all_price_histories)} symbols")
-
-        # Build stock lookup for similar stocks calculation
-        stock_by_sector: Dict[str, List[str]] = {}
-        for stock in top_stocks:
-            if stock.sector:
-                if stock.sector not in stock_by_sector:
-                    stock_by_sector[stock.sector] = []
-                stock_by_sector[stock.sector].append(stock.symbol)
-
-        # OPTIMIZATION: Prepare batch ML predictions if available
-        ml_predictions_batch: Dict[str, Dict[str, Any]] = {}
-        if model_manager and recommendation_engine:
-            try:
-                # Prepare all price data for batch ML prediction
-                batch_price_data = {}
-                for symbol, price_history in all_price_histories.items():
-                    if price_history and len(price_history) >= 30:
-                        batch_price_data[symbol] = [
-                            {
-                                'open': float(p.open),
-                                'high': float(p.high),
-                                'low': float(p.low),
-                                'close': float(p.close),
-                                'volume': p.volume,
-                                'date': p.date
-                            }
-                            for p in price_history
-                        ]
-
-                # Try batch prediction if available, otherwise will fall back to individual
-                if hasattr(recommendation_engine, 'analyze_stocks_batch'):
-                    ml_predictions_batch = await recommendation_engine.analyze_stocks_batch(
-                        price_data_batch=batch_price_data,
-                        user_risk_tolerance=risk_level.value if risk_level else 'moderate'
-                    )
-            except Exception as e:
-                logger.warning(f"Batch ML prediction not available, will use individual: {e}")
-
-        recommendations = []
-
-        # Process stocks using pre-fetched data (no additional queries in loop)
-        for stock in top_stocks:
-            if len(recommendations) >= limit:
-                break
-
-            try:
-                # Use pre-fetched price history (no query needed)
-                price_history = all_price_histories.get(stock.symbol, [])
-
-                if not price_history or len(price_history) < 30:
-                    continue
-
-                # Prepare data for ML model (using cached data)
-                price_data = [
-                    {
-                        'open': float(p.open),
-                        'high': float(p.high),
-                        'low': float(p.low),
-                        'close': float(p.close),
-                        'volume': p.volume,
-                        'date': p.date
-                    }
-                    for p in price_history
-                ]
-
-                current_price = float(price_history[-1].close)
-
-                # Get ML prediction (from batch or individual)
-                ml_prediction = None
-                recommendation_type = RecommendationType.HOLD
-                confidence_score = 0.6
-
-                if stock.symbol in ml_predictions_batch:
-                    # Use batch prediction result
-                    analysis = ml_predictions_batch[stock.symbol]
-                    ml_prediction = analysis.get('prediction')
-                    confidence_score = analysis.get('confidence', 0.6)
-                elif model_manager and recommendation_engine:
-                    # Fallback to individual prediction
-                    try:
-                        analysis = await recommendation_engine.analyze_stock(
-                            symbol=stock.symbol,
-                            price_data=price_data,
-                            user_risk_tolerance=risk_level.value if risk_level else 'moderate'
-                        )
-                        ml_prediction = analysis.get('prediction')
-                        confidence_score = analysis.get('confidence', 0.6)
-                    except Exception as e:
-                        logger.error(f"Error in ML prediction for {stock.symbol}: {e}")
-
-                # Map ML prediction to recommendation type
-                if ml_prediction:
-                    pred_value = ml_prediction.get('direction', 0)
-                    if pred_value > 0.7:
-                        recommendation_type = RecommendationType.STRONG_BUY
-                    elif pred_value > 0.3:
-                        recommendation_type = RecommendationType.BUY
-                    elif pred_value < -0.7:
-                        recommendation_type = RecommendationType.STRONG_SELL
-                    elif pred_value < -0.3:
-                        recommendation_type = RecommendationType.SELL
-
-                # Calculate target price
-                target_price = current_price * (1 + (confidence_score * 0.2 - 0.1))
-                expected_return = (target_price - current_price) / current_price
-
-                # Determine category based on stock characteristics
-                category = RecommendationCategory.GROWTH
-                if stock.sector == "Technology":
-                    category = RecommendationCategory.GROWTH
-                elif stock.market_cap and stock.market_cap > 100000000000:
-                    category = RecommendationCategory.VALUE
-
-                # Filter by requested categories
-                if categories and category not in categories:
-                    continue
-
-                # Generate SEC disclosure for this recommendation
-                sec_disclosure = generate_sec_disclosure(
-                    algorithm_type="ML-powered quantitative analysis",
-                    data_sources=[
-                        f"Price history database - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-                        f"Stock fundamentals - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-                        f"ML prediction model v{RECOMMENDATION_MODEL_VERSION}",
-                    ],
-                    confidence_score=confidence_score
-                )
-
-                # Get similar stocks from pre-computed sector lookup
-                similar_stocks = []
-                if stock.sector and stock.sector in stock_by_sector:
-                    similar_stocks = [s for s in stock_by_sector[stock.sector] if s != stock.symbol][:3]
-
-                # Create recommendation with SEC disclosure
-                recommendation = RecommendationDetail(
-                    id=f"ML-{stock.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
-                    symbol=stock.symbol,
-                    company_name=stock.name,
-                    recommendation_type=recommendation_type,
-                    category=category,
-                    confidence_score=confidence_score,
-                    target_price=round(target_price, 2),
-                    current_price=current_price,
-                    expected_return=round(expected_return, 4),
-                    time_horizon=TimeHorizon.MEDIUM_TERM,
-                    risk_level=risk_level or RiskLevel.MODERATE,
-                    created_at=datetime.now(timezone.utc),
-                    valid_until=datetime.now(timezone.utc) + timedelta(days=7),
-                    reasoning="ML-powered analysis based on price patterns, volume trends, and market conditions",
-                    key_factors=[
-                        f"ML confidence: {confidence_score:.1%}",
-                        f"Price momentum: {'Positive' if expected_return > 0 else 'Negative'}",
-                        f"Market cap: ${stock.market_cap:,.0f}" if stock.market_cap else "Market cap: N/A",
-                        f"Sector: {stock.sector}" if stock.sector else "Sector: N/A"
-                    ],
-                    technical_signals={
-                        "ml_prediction": ml_prediction.get('direction', 0) if ml_prediction else 0,
-                        "price_trend": "bullish" if expected_return > 0 else "bearish",
-                        "volatility": ml_prediction.get('volatility', 0.2) if ml_prediction else 0.2
-                    },
-                    fundamental_metrics={
-                        "market_cap": stock.market_cap,
-                        "sector": stock.sector,
-                        "industry": stock.industry
-                    },
-                    risk_factors=[
-                        "Market volatility",
-                        "Sector-specific risks",
-                        "Liquidity risk" if stock.market_cap and stock.market_cap < 1000000000 else None
-                    ],
-                    entry_points=[current_price * 0.98, current_price * 0.95],
-                    exit_points=[target_price * 0.95, target_price],
-                    stop_loss=current_price * 0.92,
-                    sector=stock.sector or "Unknown",
-                    market_cap=stock.market_cap or 0,
-                    volume=price_history[-1].volume if price_history else 0,
-                    analyst_consensus=None,  # Would integrate with analyst data
-                    similar_stocks=similar_stocks,
-                    sec_disclosure=sec_disclosure
-                )
-
-                recommendations.append(recommendation)
-
-            except Exception as e:
-                logger.error(f"Error generating recommendation for {stock.symbol}: {e}")
-                continue
-
-        # Sort by confidence score
-        recommendations.sort(key=lambda x: x.confidence_score, reverse=True)
-        logger.info(f"Generated {len(recommendations)} ML recommendations using optimized batch queries")
-        return recommendations[:limit]
-
-    except Exception as e:
-        logger.error(f"Error generating ML recommendations: {e}")
-        # Fallback to mock data
-        return [generate_recommendation() for _ in range(min(limit, 5))]
 
 async def generate_personalized_recommendations(
     user_id: int,
     portfolio_id: Optional[str] = None,
     db_session: AsyncSession = None
-) -> List["RecommendationDetail"]:
-    """Generate personalized recommendations based on user's portfolio and preferences"""
-    try:
-        logger.info(f"Generating personalized recommendations for user {user_id}")
-
-        # Get user's portfolio(s) to understand preferences
-        user_portfolios = await portfolio_repository.get_user_portfolios(
-            user_id=user_id,
-            session=db_session
-        )
-
-        # Analyze existing positions to understand preferences
-        existing_symbols = set()
-        preferred_sectors = {}
-        risk_tolerance = RiskLevel.MODERATE
-
-        for portfolio in user_portfolios:
-            positions = await portfolio_repository.get_portfolio_positions(
-                portfolio_id=portfolio.id,
-                session=db_session
-            )
-
-            for position in positions:
-                existing_symbols.add(position.symbol)
-
-                # Get stock info to determine sector preference
-                stock = await stock_repository.get_by_symbol(position.symbol, session=db_session)
-                if stock and stock.sector:
-                    preferred_sectors[stock.sector] = preferred_sectors.get(stock.sector, 0) + 1
-
-        # Generate recommendations excluding existing positions
-        all_recommendations = await generate_ml_powered_recommendations(
-            user_id=user_id,
-            limit=20,
-            db_session=db_session
-        )
-
-        # Filter out existing positions and prefer similar sectors
-        filtered_recommendations = []
-        for rec in all_recommendations:
-            if rec.symbol not in existing_symbols:
-                # Boost confidence for preferred sectors
-                if rec.sector in preferred_sectors:
-                    rec.confidence_score = min(0.95, rec.confidence_score * 1.1)
-                    rec.reasoning += f" (Matches your sector preference for {rec.sector})"
-
-                filtered_recommendations.append(rec)
-
-        return filtered_recommendations[:10]
-
-    except Exception as e:
-        logger.error(f"Error generating personalized recommendations: {e}")
-        return await generate_ml_powered_recommendations(limit=5, db_session=db_session)
-
-# Sample data generator function
-def generate_recommendation(symbol: str = None) -> "RecommendationDetail":
-    """Generate a sample recommendation with SEC disclosure"""
-    if not symbol:
-        symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
-        symbol = random.choice(symbols)
-
-    current_price = random.uniform(50, 500)
-    target_price = current_price * random.uniform(0.9, 1.3)
-    confidence_score = random.uniform(0.6, 0.95)
-
-    # Generate SEC disclosure for sample recommendation
-    sec_disclosure = generate_sec_disclosure(
-        algorithm_type="quantitative technical and fundamental",
-        data_sources=[
-            f"Market data feed - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-            f"Financial statements - Q4 2025",
-            f"Analyst consensus data - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-        ],
-        confidence_score=confidence_score
+) -> List[RecommendationDetail]:
+    """Generate personalized recommendations based on user's portfolio and preferences."""
+    raw = await recommendation_service.generate_personalized_recommendations(
+        user_id=user_id,
+        portfolio_id=portfolio_id,
+        db_session=db_session,
+        stock_repo=stock_repository,
+        portfolio_repo=portfolio_repository,
+        ml_recs_fn=lambda **kw: recommendation_service.generate_ml_powered_recommendations(
+            stock_repo=stock_repository,
+            price_repo=price_repository,
+            model_mgr=model_manager,
+            rec_engine=recommendation_engine,
+            **kw,
+        ),
     )
+    return _dicts_to_details(raw)
 
-    return RecommendationDetail(
-        id=f"REC-{random.randint(1000, 9999)}",
-        symbol=symbol,
-        company_name=f"{symbol} Inc.",
-        recommendation_type=random.choice(list(RecommendationType)),
-        category=random.choice(list(RecommendationCategory)),
-        confidence_score=confidence_score,
-        target_price=round(target_price, 2),
-        current_price=round(current_price, 2),
-        expected_return=round((target_price - current_price) / current_price, 4),
-        time_horizon=random.choice(list(TimeHorizon)),
-        risk_level=random.choice(list(RiskLevel)),
-        created_at=datetime.now(timezone.utc),
-        valid_until=datetime.now(timezone.utc) + timedelta(days=random.randint(7, 90)),
-        reasoning="Based on strong technical indicators and improving fundamentals",
-        key_factors=[
-            "Strong earnings growth",
-            "Positive analyst sentiment",
-            "Technical breakout pattern",
-            "Sector rotation favor"
-        ],
-        technical_signals={
-            "rsi": random.uniform(30, 70),
-            "macd": "bullish",
-            "support": current_price * 0.95,
-            "resistance": current_price * 1.05
-        },
-        fundamental_metrics={
-            "pe_ratio": random.uniform(10, 30),
-            "eps_growth": random.uniform(-0.1, 0.3),
-            "revenue_growth": random.uniform(0, 0.25),
-            "profit_margin": random.uniform(0.05, 0.3)
-        },
-        risk_factors=[
-            "Market volatility",
-            "Sector competition",
-            "Regulatory changes"
-        ],
-        entry_points=[current_price * 0.98, current_price * 0.96],
-        exit_points=[target_price * 0.95, target_price],
-        stop_loss=current_price * 0.92,
-        sector="Technology",
-        market_cap=random.uniform(100000000000, 3000000000000),
-        volume=random.randint(10000000, 100000000),
-        analyst_consensus="Buy",
-        similar_stocks=["GOOG", "FB", "NFLX"] if symbol != "GOOGL" else ["AAPL", "MSFT"],
-        sec_disclosure=sec_disclosure
-    )
+
+def generate_recommendation(symbol: str = None) -> RecommendationDetail:
+    """Generate a sample recommendation with SEC disclosure."""
+    data = recommendation_service.generate_sample_recommendation(symbol=symbol)
+    return _dict_to_detail(data)
 
 
 # ============================================================================
-# Enhanced Endpoints with ML Integration
-# (Router endpoints are now thin: parse request, call service/helpers, format response)
+# Endpoints
 # ============================================================================
 
 @router.get("/daily")
-@cache_with_ttl(ttl=3600)  # Cache for 1 hour
+@cache_with_ttl(ttl=3600)
 async def get_daily_recommendations(
     date_param: Optional[date] = Query(None, alias="date"),
     risk_level: Optional[RiskLevel] = None,
@@ -669,21 +341,11 @@ async def get_daily_recommendations(
     db: AsyncSession = Depends(get_async_db_session),
     rec_service = Depends(get_recommendation_service)
 ) -> ApiResponse[DailyRecommendations]:
-    """
-    Get daily curated recommendations powered by ML models and market analysis.
-
-    Provides comprehensive daily market recommendations including:
-    - ML-generated top picks based on technical and fundamental analysis
-    - Market sentiment analysis and outlook
-    - Sector rotation recommendations
-    - Risk-adjusted picks based on user preference
-    - Special market situations and opportunities
-    """
+    """Get daily curated recommendations powered by ML models and market analysis."""
     target_date = date_param or date.today()
     logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
 
     try:
-        # Delegate aggregation logic to service
         result = await rec_service.build_daily_recommendations(
             user_id=current_user.id,
             target_date=target_date,
@@ -691,21 +353,10 @@ async def get_daily_recommendations(
             db_session=db,
         )
 
-        # Convert service dicts to Pydantic models and format response
-        top_picks_raw = result["top_picks"]
-        top_picks: List[RecommendationDetail] = []
-        for r in top_picks_raw:
-            if isinstance(r, RecommendationDetail):
-                top_picks.append(r)
-            else:
-                if isinstance(r.get("sec_disclosure"), dict):
-                    r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
-                top_picks.append(RecommendationDetail(**r))
-
         return success_response(data=DailyRecommendations(
             date=target_date,
             market_outlook=result["market_outlook"],
-            top_picks=top_picks,
+            top_picks=_dicts_to_details(result["top_picks"]),
             watchlist=result["watchlist"],
             avoid_list=result["avoid_list"],
             sector_focus=result["sector_focus"],
@@ -718,12 +369,10 @@ async def get_daily_recommendations(
         logger.error(f"Error generating daily recommendations: {e}")
         await handle_api_error(e, "generate daily recommendations")
 
-        # Fallback to basic recommendations
-        fallback_picks = [generate_recommendation() for _ in range(5)]
         return success_response(data=DailyRecommendations(
             date=target_date,
             market_outlook="Market analysis temporarily unavailable",
-            top_picks=fallback_picks,
+            top_picks=[generate_recommendation() for _ in range(5)],
             watchlist=["AAPL", "GOOGL", "MSFT", "NVDA", "AMD"],
             avoid_list=[],
             sector_focus="Technology",
@@ -744,7 +393,6 @@ async def get_recommendations(
     order: str = Query("desc", pattern="^(asc|desc)$")
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Get list of recommendations with filters"""
-
     recs_data = recommendation_service.generate_filtered_recommendations(
         count=50,
         recommendation_type=recommendation_type.value if recommendation_type else None,
@@ -756,27 +404,14 @@ async def get_recommendations(
         limit=limit,
         offset=offset,
     )
-
-    recommendations = []
-    for r in recs_data:
-        if isinstance(r, RecommendationDetail):
-            recommendations.append(r)
-        else:
-            if isinstance(r.get("sec_disclosure"), dict):
-                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
-            recommendations.append(RecommendationDetail(**r))
-
-    return success_response(data=recommendations)
+    return success_response(data=_dicts_to_details(recs_data))
 
 @router.get("/{recommendation_id}")
 async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
     """Get detailed information about a specific recommendation"""
-
-    # Generate a recommendation with the specified ID
-    recommendation = generate_recommendation()
-    recommendation.id = recommendation_id
-
-    return success_response(data=recommendation)
+    rec = generate_recommendation()
+    rec.id = recommendation_id
+    return success_response(data=rec)
 
 @router.post("/filter")
 async def filter_recommendations(
@@ -784,7 +419,6 @@ async def filter_recommendations(
     limit: int = Query(20, le=100)
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Advanced filtering of recommendations"""
-
     recs_data = recommendation_service.generate_filtered_recommendations(
         count=100,
         categories=[c.value for c in filter_params.categories] if filter_params.categories else None,
@@ -800,36 +434,15 @@ async def filter_recommendations(
         limit=limit,
         offset=0,
     )
-
-    recommendations = []
-    for r in recs_data:
-        if isinstance(r, RecommendationDetail):
-            recommendations.append(r)
-        else:
-            if isinstance(r.get("sec_disclosure"), dict):
-                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
-            recommendations.append(RecommendationDetail(**r))
-
-    return success_response(data=recommendations)
+    return success_response(data=_dicts_to_details(recs_data))
 
 @router.get("/portfolio/{portfolio_id}")
 async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
     """Get personalized recommendations for a specific portfolio"""
-
     data = recommendation_service.build_portfolio_recommendations(portfolio_id=portfolio_id)
-
-    recommendations = []
-    for r in data["recommendations"]:
-        if isinstance(r, RecommendationDetail):
-            recommendations.append(r)
-        else:
-            if isinstance(r.get("sec_disclosure"), dict):
-                r = {**r, "sec_disclosure": SECDisclosure(**r["sec_disclosure"])}
-            recommendations.append(RecommendationDetail(**r))
-
     return success_response(data=PortfolioRecommendation(
         portfolio_id=data["portfolio_id"],
-        recommendations=recommendations,
+        recommendations=_dicts_to_details(data["recommendations"]),
         rebalancing_suggestions=data["rebalancing_suggestions"],
         risk_score=data["risk_score"],
         expected_portfolio_return=data["expected_portfolio_return"],
@@ -842,20 +455,15 @@ async def track_recommendation_performance(
     status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
 ) -> ApiResponse[List[RecommendationPerformance]]:
     """Track performance of past recommendations"""
-
     perf_data = recommendation_service.generate_performance_records(
         days_back=days_back,
         status_filter=status,
     )
-
-    performances = [RecommendationPerformance(**p) for p in perf_data]
-    return success_response(data=performances)
+    return success_response(data=[RecommendationPerformance(**p) for p in perf_data])
 
 @router.post("/alerts/settings")
 async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str, str]]:
     """Update recommendation alert settings"""
-
-    # In production, this would save to user preferences
     return success_response(data={
         "message": "Alert settings updated successfully",
         "status": "success"
@@ -866,7 +474,6 @@ async def get_alert_history(
     days_back: int = Query(7, le=30)
 ) -> ApiResponse[List[Dict[str, Any]]]:
     """Get history of recommendation alerts"""
-
     alerts = recommendation_service.generate_alert_history(days_back=days_back)
     return success_response(data=alerts)
 
@@ -878,7 +485,6 @@ async def backtest_strategy(
     initial_capital: float = 100000
 ) -> ApiResponse[Dict[str, Any]]:
     """Backtest a recommendation strategy"""
-
     result = recommendation_service.run_backtest(
         strategy=strategy.value,
         start_date=start_date,
@@ -894,52 +500,27 @@ async def get_trending_recommendations(
     risk_tolerance: str = Query("moderate", pattern="^(conservative|moderate|aggressive)$"),
     rec_service = Depends(get_recommendation_service)
 ) -> ApiResponse[List[Dict[str, Any]]]:
-    """
-    Get trending recommendations based on market momentum and analysis.
+    """Get trending recommendations based on market momentum and analysis."""
+    timeframe_map = {"1h": "1h", "24h": "1d", "7d": "1w", "30d": "1m"}
 
-    Uses RecommendationService to generate data-driven trending picks.
-    """
     try:
-        # Map timeframe to service parameter
-        timeframe_map = {
-            "1h": "1h",
-            "24h": "1d",
-            "7d": "1w",
-            "30d": "1m"
-        }
-        service_timeframe = timeframe_map.get(timeframe, "1d")
-
-        # Get trending recommendations from service
         trending = await rec_service.get_trending(
-            timeframe=service_timeframe,
+            timeframe=timeframe_map.get(timeframe, "1d"),
             limit=limit,
             risk_tolerance=risk_tolerance
         )
-
-        # Add trending metadata (views/saves would come from analytics in production)
         for rec in trending:
             rec["views"] = random.randint(1000, 50000)
             rec["saves"] = random.randint(100, 5000)
             rec["trending_score"] = rec["confidence"] * 100
             rec["timeframe"] = timeframe
-
         return success_response(data=trending)
 
     except Exception as e:
         logger.error(f"Error getting trending recommendations: {e}")
-        # Fallback to mock data
-        trending = []
-        symbols = ["NVDA", "TSLA", "AAPL", "AMD", "GOOGL", "META", "AMZN", "MSFT"]
-
-        for symbol in symbols[:limit]:
-            trending.append({
-                "symbol": symbol,
-                "views": random.randint(1000, 50000),
-                "saves": random.randint(100, 5000),
-                "recommendation_type": random.choice(list(RecommendationType)),
-                "confidence_score": random.uniform(0.7, 0.95),
-                "trending_score": random.uniform(70, 100),
-                "timeframe": timeframe
-            })
-
-        return success_response(data=sorted(trending, key=lambda x: x["trending_score"], reverse=True))
+        fallback = recommendation_service.generate_trending_fallback(
+            symbols=["NVDA", "TSLA", "AAPL", "AMD", "GOOGL", "META", "AMZN", "MSFT"],
+            limit=limit,
+            timeframe=timeframe,
+        )
+        return success_response(data=fallback)
