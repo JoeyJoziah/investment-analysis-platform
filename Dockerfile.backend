@@ -32,6 +32,7 @@ RUN curl -L https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4
     cd ta-lib && \
     curl -o config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess' && \
     curl -o config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub' && \
+    chmod +x config.guess config.sub && \
     ./configure --prefix=/usr/local && \
     make && \
     make install && \
