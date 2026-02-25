@@ -6,21 +6,22 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional, Dict, Any
-import asyncio
 import logging
-import time
 import uuid
 from datetime import datetime, timezone
 
 from backend.analytics.agents import HybridAnalysisEngine, AnalysisMode
-from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
-from backend.analytics.technical_analysis import TechnicalAnalysisEngine
-from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.utils.auth import get_current_user, require_admin
 from backend.utils.rate_limiter import rate_limit
 from backend.utils.llm_budget_manager import BudgetExceededException
-from backend.utils.numpy_serializer import sanitize_numpy
 from backend.models.api_response import ApiResponse, success_response
+from backend.services.agents_service import (
+    ANALYSIS_RUNNERS,
+    run_multi_engine_analysis,
+    log_agent_analysis_metrics,
+    log_analysis_metrics,
+    log_batch_analysis_metrics,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,13 +35,16 @@ async def get_hybrid_engine():
     global hybrid_engine
     if hybrid_engine is None:
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail="Hybrid analysis engine not initialized"
         )
     return hybrid_engine
 
 
+# =======================
 # Request/Response Models
+# =======================
+
 class AgentAnalysisRequest(BaseModel):
     """Request for agent-enhanced stock analysis"""
     ticker: str = Field(..., description="Stock ticker symbol", min_length=1, max_length=10)
@@ -55,18 +59,18 @@ class AgentAnalysisResponse(BaseModel):
     overall_score: float
     confidence: float
     hybrid_score: Optional[float] = None
-    
+
     # Agent-specific fields
     agent_analysis: Optional[Dict[str, Any]] = None
     agent_confidence: Optional[float] = None
     agent_reasoning: Optional[str] = None
     agents_used: List[str] = []
-    
+
     # Cost and performance metadata
     analysis_cost: float
     analysis_duration: float
     complexity_level: str
-    
+
     # Traditional analysis fields
     target_price: float
     risks: List[str]
@@ -258,160 +262,9 @@ class AgentAnalysisResponseV2(BaseModel):
         }
 
 
-# Singleton analysis-engine instances (lazy-initialised)
-_fundamental_engine: Optional[FundamentalAnalysisEngine] = None
-_technical_engine: Optional[TechnicalAnalysisEngine] = None
-_sentiment_engine: Optional[SentimentAnalysisEngine] = None
-
-
-def _get_fundamental_engine() -> FundamentalAnalysisEngine:
-    global _fundamental_engine
-    if _fundamental_engine is None:
-        _fundamental_engine = FundamentalAnalysisEngine()
-    return _fundamental_engine
-
-
-def _get_technical_engine() -> TechnicalAnalysisEngine:
-    global _technical_engine
-    if _technical_engine is None:
-        _technical_engine = TechnicalAnalysisEngine()
-    return _technical_engine
-
-
-def _get_sentiment_engine() -> SentimentAnalysisEngine:
-    global _sentiment_engine
-    if _sentiment_engine is None:
-        _sentiment_engine = SentimentAnalysisEngine()
-    return _sentiment_engine
-
-
-async def _run_fundamental(ticker: str, depth: str) -> AnalysisTypeResult:
-    """Execute fundamental analysis and normalise the output."""
-    engine = _get_fundamental_engine()
-    # Build minimal financials/market_data dicts that the engine expects.
-    # In production these would come from a real data-fetcher; here we
-    # supply empty dicts so the engine still returns a valid structure.
-    financials: Dict[str, Any] = {"ticker": ticker}
-    market_data: Dict[str, Any] = {"ticker": ticker}
-
-    analysis = await engine.analyze_company(
-        ticker=ticker,
-        financials=financials,
-        market_data=market_data,
-        peer_data=None,
-    )
-
-    # Sanitize numpy types from analysis results
-    analysis = sanitize_numpy(analysis)
-
-    composite = analysis.get("composite_score", 0.0)
-    risks = analysis.get("risks", [])
-    opportunities = analysis.get("opportunities", [])
-
-    risk_texts = [r.get("description", str(r)) if isinstance(r, dict) else str(r) for r in risks]
-    opp_texts = [o.get("description", str(o)) if isinstance(o, dict) else str(o) for o in opportunities]
-
-    parts = []
-    if risk_texts:
-        parts.append(f"Risks: {'; '.join(risk_texts[:3])}")
-    if opp_texts:
-        parts.append(f"Opportunities: {'; '.join(opp_texts[:3])}")
-    summary = f"Fundamental score {composite:.1f}/100. " + " ".join(parts) if parts else f"Fundamental score {composite:.1f}/100."
-
-    # For deep analysis include the full payload; standard keeps it lean.
-    details = analysis if depth == "deep" else {
-        "composite_score": composite,
-        "risks": risks[:3],
-        "opportunities": opportunities[:3],
-    }
-
-    return AnalysisTypeResult(score=composite, summary=summary, details=details)
-
-
-async def _run_technical(ticker: str, depth: str) -> AnalysisTypeResult:
-    """Execute technical analysis and normalise the output."""
-    import pandas as pd
-    import numpy as np
-
-    engine = _get_technical_engine()
-
-    # Generate synthetic price data when real market data is unavailable.
-    # In production this would be replaced by actual OHLCV data.
-    np.random.seed(hash(ticker) % (2**31))
-    n = 250
-    base = 150.0
-    returns = np.random.normal(0.0005, 0.02, n)
-    close = base * np.cumprod(1 + returns)
-    high = close * (1 + np.abs(np.random.normal(0, 0.005, n)))
-    low = close * (1 - np.abs(np.random.normal(0, 0.005, n)))
-    open_prices = close * (1 + np.random.normal(0, 0.003, n))
-    volume = np.random.randint(1_000_000, 50_000_000, n).astype(float)
-
-    df = pd.DataFrame({
-        "open": open_prices,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
-
-    analysis = engine.analyze_stock(df)
-
-    # Sanitize numpy types from analysis results
-    analysis = sanitize_numpy(analysis)
-
-    composite = analysis.get("composite_score", 0.0)
-    signals = analysis.get("signals", [])
-    trend = analysis.get("market_structure", {}).get("trend", "unknown")
-
-    signal_strs = [s.get("name", "") for s in signals[:3]]
-    summary = f"Technical score {composite:+.2f} (trend: {trend})."
-    if signal_strs:
-        summary += f" Signals: {', '.join(signal_strs)}."
-
-    details = analysis if depth == "deep" else {
-        "composite_score": composite,
-        "trend": trend,
-        "signals": signals[:5],
-    }
-
-    return AnalysisTypeResult(score=composite, summary=summary, details=details)
-
-
-async def _run_sentiment(ticker: str, depth: str) -> AnalysisTypeResult:
-    """Execute sentiment analysis and normalise the output."""
-    engine = _get_sentiment_engine()
-
-    analysis = await engine.analyze_comprehensive_sentiment(ticker)
-
-    # Sanitize numpy types from analysis results
-    analysis = sanitize_numpy(analysis)
-
-    overall = analysis.get("overall_sentiment", {})
-    score = overall.get("score", 0.0)
-    label = overall.get("label", "neutral")
-    confidence = overall.get("confidence", 0.0)
-
-    summary = f"Sentiment is {label} (score {score:+.2f}, confidence {confidence:.0%})."
-
-    details = analysis if depth == "deep" else {
-        "score": score,
-        "label": label,
-        "confidence": confidence,
-        "sources_analyzed": analysis.get("sources_analyzed", 0),
-    }
-
-    return AnalysisTypeResult(score=score, summary=summary, details=details)
-
-
-_ANALYSIS_RUNNERS = {
-    "fundamental": _run_fundamental,
-    "technical": _run_technical,
-    "sentiment": _run_sentiment,
-}
-
-
+# =======================
 # Routes
+# =======================
 
 @router.post("/analysis")
 @rate_limit(requests_per_minute=10)
@@ -439,88 +292,49 @@ async def run_agent_analysis(
         current_user.get("username", "anonymous"),
     )
 
-    start_time = time.monotonic()
-
     try:
-        # Launch all requested analyses concurrently
-        tasks: Dict[str, asyncio.Task] = {}
-        for analysis_type in analysis_types:
-            runner = _ANALYSIS_RUNNERS.get(analysis_type)
-            if runner is None:
+        # Validate requested analysis types
+        for atype in analysis_types:
+            if atype not in ANALYSIS_RUNNERS:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Unsupported analysis type: {analysis_type}",
+                    detail=f"Unsupported analysis type: {atype}",
                 )
-            tasks[analysis_type] = asyncio.create_task(runner(ticker, depth))
 
-        # Await all tasks, collecting results and handling per-engine errors
-        results: Dict[str, AnalysisTypeResult] = {}
-        errors: Dict[str, str] = {}
+        # Delegate orchestration to service
+        outcome = await run_multi_engine_analysis(ticker, list(analysis_types), depth)
 
-        for analysis_type, task in tasks.items():
-            try:
-                results[analysis_type] = await task
-            except Exception as exc:
-                logger.error(
-                    "Analysis engine %s failed for %s: %s",
-                    analysis_type,
-                    ticker,
-                    exc,
-                )
-                errors[analysis_type] = str(exc)
+        # Convert service result dicts to Pydantic models
+        results: Dict[str, AnalysisTypeResult] = {
+            atype: AnalysisTypeResult(**data)
+            for atype, data in outcome["results"].items()
+        }
 
-        if not results:
-            detail = "; ".join(f"{k}: {v}" for k, v in errors.items())
-            raise HTTPException(
-                status_code=500,
-                detail=f"All analysis engines failed: {detail}",
-            )
-
-        # Calculate aggregate confidence score.
-        # Fundamental: normalise 0-100 to 0-1.
-        # Technical: normalise -1..1 to 0..1.
-        # Sentiment: normalise -1..1 to 0..1.
-        confidence_values: List[float] = []
-        for atype, result in results.items():
-            if atype == "fundamental":
-                confidence_values.append(min(max(result.score / 100.0, 0.0), 1.0))
-            elif atype == "technical":
-                confidence_values.append(min(max((result.score + 1.0) / 2.0, 0.0), 1.0))
-            elif atype == "sentiment":
-                confidence_values.append(min(max((result.score + 1.0) / 2.0, 0.0), 1.0))
-
-        confidence_score = (
-            sum(confidence_values) / len(confidence_values) if confidence_values else 0.0
-        )
-
-        analysis_id = f"agt-{uuid.uuid4().hex[:8]}"
-        timestamp = datetime.now(timezone.utc).isoformat()
-
-        duration = time.monotonic() - start_time
-
-        # Log metrics in the background
+        # Schedule background metrics logging
         background_tasks.add_task(
-            _log_agent_analysis_metrics,
-            analysis_id,
+            log_agent_analysis_metrics,
+            outcome["analysis_id"],
             ticker,
             list(results.keys()),
             depth,
-            confidence_score,
-            duration,
+            outcome["confidence_score"],
+            outcome["duration"],
         )
 
         response = AgentAnalysisResponseV2(
-            analysis_id=analysis_id,
+            analysis_id=outcome["analysis_id"],
             ticker=ticker,
             results=results,
-            confidence_score=round(confidence_score, 4),
-            timestamp=timestamp,
+            confidence_score=outcome["confidence_score"],
+            timestamp=outcome["timestamp"],
         )
 
         return success_response(data=response)
 
     except HTTPException:
         raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
     except Exception as exc:
         logger.error("Agent analysis failed for %s: %s", ticker, exc, exc_info=True)
         raise HTTPException(
@@ -529,36 +343,12 @@ async def run_agent_analysis(
         )
 
 
-async def _log_agent_analysis_metrics(
-    analysis_id: str,
-    ticker: str,
-    analysis_types: List[str],
-    depth: str,
-    confidence_score: float,
-    duration: float,
-) -> None:
-    """Background task to log analysis metrics for monitoring."""
-    try:
-        logger.info(
-            "Agent analysis metrics - ID: %s, Ticker: %s, Types: %s, "
-            "Depth: %s, Confidence: %.4f, Duration: %.2fs",
-            analysis_id,
-            ticker,
-            analysis_types,
-            depth,
-            confidence_score,
-            duration,
-        )
-    except Exception as exc:
-        logger.error("Failed to log agent analysis metrics: %s", exc)
-
-
 @router.post("/analyze")
-@rate_limit(requests_per_minute=10)  # 10 calls per minute
+@rate_limit(requests_per_minute=10)
 async def analyze_stock_with_agents(
     request: AgentAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[AgentAnalysisResponse]:
     """
@@ -566,14 +356,14 @@ async def analyze_stock_with_agents(
     """
     try:
         logger.info(f"Agent analysis requested for {request.ticker} by {current_user.get('username', 'anonymous')}")
-        
+
         # Run hybrid analysis
         result = await engine.analyze_stock(
             ticker=request.ticker,
             force_agents=request.force_agents,
             analysis_timeout=request.analysis_timeout
         )
-        
+
         # Convert to response model
         response = AgentAnalysisResponse(
             ticker=result.ticker,
@@ -592,7 +382,7 @@ async def analyze_stock_with_agents(
             risks=result.risks or [],
             opportunities=result.opportunities or []
         )
-        
+
         # Log analysis for monitoring
         background_tasks.add_task(
             log_analysis_metrics,
@@ -604,7 +394,7 @@ async def analyze_stock_with_agents(
         )
 
         return success_response(data=response)
-        
+
     except BudgetExceededException as e:
         logger.warning(f"Budget exceeded for {request.ticker}: {e}")
         raise HTTPException(
@@ -620,11 +410,11 @@ async def analyze_stock_with_agents(
 
 
 @router.post("/batch-analyze")
-@rate_limit(requests_per_minute=2)  # 2 calls per 5 minutes (limited)
+@rate_limit(requests_per_minute=2)
 async def batch_analyze_stocks(
     request: BatchAnalysisRequest,
     background_tasks: BackgroundTasks,
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[Dict[str, Any]]:
     """
@@ -632,20 +422,20 @@ async def batch_analyze_stocks(
     """
     try:
         logger.info(f"Batch analysis requested for {len(request.tickers)} stocks by {current_user.get('username', 'anonymous')}")
-        
+
         # Run batch analysis
         results = await engine.batch_analyze_stocks(
             tickers=request.tickers,
             max_concurrent=request.max_concurrent,
             prioritize_by_tier=request.prioritize_by_tier
         )
-        
+
         # Convert results to response format
         response_data = {}
         total_cost = 0.0
         total_duration = 0.0
         agents_used_count = 0
-        
+
         for ticker, result in results.items():
             response_data[ticker] = AgentAnalysisResponse(
                 ticker=result.ticker,
@@ -664,12 +454,12 @@ async def batch_analyze_stocks(
                 risks=result.risks or [],
                 opportunities=result.opportunities or []
             )
-            
+
             total_cost += result.analysis_cost
             total_duration += result.analysis_duration
             if result.agents_used:
                 agents_used_count += 1
-        
+
         # Log batch metrics
         background_tasks.add_task(
             log_batch_analysis_metrics,
@@ -690,7 +480,7 @@ async def batch_analyze_stocks(
                 "agents_used_count": agents_used_count
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Batch analysis failed: {e}")
         raise HTTPException(
@@ -701,7 +491,7 @@ async def batch_analyze_stocks(
 
 @router.get("/budget-status")
 async def get_budget_status(
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[BudgetStatusResponse]:
     """
@@ -720,7 +510,7 @@ async def get_budget_status(
             recommended_actions=status['recommended_actions'],
             usage_stats=status['usage_stats']
         ))
-        
+
     except Exception as e:
         logger.error(f"Failed to get budget status: {e}")
         raise HTTPException(
@@ -744,7 +534,7 @@ async def get_agent_capabilities(
             analysis_types=capabilities['analysis_types'],
             current_config=capabilities['current_config']
         ))
-        
+
     except Exception as e:
         logger.error(f"Failed to get agent capabilities: {e}")
         raise HTTPException(
@@ -755,7 +545,7 @@ async def get_agent_capabilities(
 
 @router.get("/status")
 async def get_engine_status(
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[EngineStatusResponse]:
     """
@@ -771,7 +561,7 @@ async def get_engine_status(
             active_analyses=status.get("active_analyses", 0),
             performance_metrics=status.get("performance_metrics", {})
         ))
-        
+
     except Exception as e:
         logger.error(f"Failed to get engine status: {e}")
         raise HTTPException(
@@ -782,7 +572,7 @@ async def get_engine_status(
 
 @router.post("/test-connectivity")
 async def test_agent_connectivity(
-    current_user = Depends(require_admin),
+    current_user=Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[ConnectivityTestResponse]:
     """
@@ -795,7 +585,7 @@ async def test_agent_connectivity(
             test_results=test_results,
             timestamp=datetime.now(timezone.utc).isoformat()
         ))
-        
+
     except Exception as e:
         logger.error(f"Agent connectivity test failed: {e}")
         raise HTTPException(
@@ -807,7 +597,7 @@ async def test_agent_connectivity(
 @router.post("/set-analysis-mode")
 async def set_analysis_mode(
     mode: str,
-    current_user = Depends(require_admin),
+    current_user=Depends(require_admin),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[AnalysisModeResponse]:
     """
@@ -829,7 +619,7 @@ async def set_analysis_mode(
             new_mode=mode,
             timestamp=datetime.now(timezone.utc).isoformat()
         ))
-        
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -842,7 +632,7 @@ async def set_analysis_mode(
 
 @router.get("/selection-stats")
 async def get_agent_selection_stats(
-    current_user = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[SelectionStatsResponse]:
     """
@@ -851,7 +641,7 @@ async def get_agent_selection_stats(
     try:
         stats = await engine.agent_orchestrator.get_selection_stats()
         return success_response(data=SelectionStatsResponse(stats=stats))
-        
+
     except Exception as e:
         logger.error(f"Failed to get selection stats: {e}")
         raise HTTPException(
@@ -860,46 +650,10 @@ async def get_agent_selection_stats(
         )
 
 
-# Background task functions
+# =======================
+# Engine Initialization
+# =======================
 
-async def log_analysis_metrics(
-    ticker: str,
-    complexity_level: str,
-    cost: float,
-    duration: float,
-    agent_count: int
-):
-    """Log analysis metrics for monitoring"""
-    try:
-        # This would typically write to a metrics database
-        logger.info(f"Analysis metrics - Ticker: {ticker}, "
-                   f"Complexity: {complexity_level}, "
-                   f"Cost: ${cost:.4f}, "
-                   f"Duration: {duration:.1f}s, "
-                   f"Agents: {agent_count}")
-    except Exception as e:
-        logger.error(f"Failed to log analysis metrics: {e}")
-
-
-async def log_batch_analysis_metrics(
-    requested: int,
-    completed: int,
-    total_cost: float,
-    total_duration: float,
-    agents_used_count: int
-):
-    """Log batch analysis metrics for monitoring"""
-    try:
-        logger.info(f"Batch analysis metrics - Requested: {requested}, "
-                   f"Completed: {completed}, "
-                   f"Total cost: ${total_cost:.4f}, "
-                   f"Total duration: {total_duration:.1f}s, "
-                   f"Agent analyses: {agents_used_count}")
-    except Exception as e:
-        logger.error(f"Failed to log batch analysis metrics: {e}")
-
-
-# Initialize hybrid engine (this would be done in app startup)
 async def initialize_hybrid_engine():
     """Initialize the hybrid analysis engine"""
     global hybrid_engine
@@ -908,13 +662,13 @@ async def initialize_hybrid_engine():
         from backend.data_ingestion.smart_data_fetcher import SmartDataFetcher
         from backend.utils.cache_manager import CacheManager
         from backend.utils.llm_budget_manager import LLMBudgetManager
-        
+
         # Initialize components (these would be properly injected in production)
         traditional_engine = RecommendationEngine()
         smart_fetcher = SmartDataFetcher()
         cache_manager = CacheManager()
         budget_manager = LLMBudgetManager()
-        
+
         # Create hybrid engine
         hybrid_engine = HybridAnalysisEngine(
             traditional_engine=traditional_engine,
@@ -923,9 +677,9 @@ async def initialize_hybrid_engine():
             budget_manager=budget_manager,
             analysis_mode=AnalysisMode.SELECTIVE_HYBRID
         )
-        
+
         logger.info("Hybrid analysis engine initialized successfully")
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize hybrid engine: {e}")
         hybrid_engine = None

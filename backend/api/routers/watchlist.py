@@ -26,6 +26,10 @@ from backend.models.schemas import (
     WatchlistItemResponse,
 )
 from backend.models.api_response import ApiResponse, success_response
+from backend.services.watchlist_service import (
+    convert_watchlist_to_response,
+    convert_watchlist_to_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,85 +81,6 @@ async def get_watchlist_or_404(
         )
 
     return watchlist
-
-
-def convert_watchlist_to_response(watchlist: Any, items_data: List[Dict] = None) -> WatchlistResponse:
-    """Convert a watchlist model to WatchlistResponse with items."""
-    items = []
-
-    if items_data:
-        # Use pre-fetched items with price data
-        for item in items_data:
-            items.append(WatchlistItemResponse(
-                id=item["id"],
-                watchlist_id=item["watchlist_id"],
-                stock_id=item["stock_id"],
-                target_price=item.get("target_price"),
-                notes=item.get("notes"),
-                alert_enabled=item.get("alert_enabled", False),
-                added_at=item["added_at"],
-                symbol=item["symbol"],
-                company_name=item.get("company_name"),
-                current_price=item.get("current_price"),
-                price_change=item.get("price_change"),
-                price_change_percent=item.get("price_change_percent"),
-                volume=item.get("volume"),
-                market_cap=item.get("market_cap"),
-                sector=item.get("sector"),
-            ))
-    elif hasattr(watchlist, 'items') and watchlist.items:
-        # Use loaded relationship items
-        for item in watchlist.items:
-            stock = item.stock if hasattr(item, 'stock') else None
-            items.append(WatchlistItemResponse(
-                id=item.id,
-                watchlist_id=item.watchlist_id,
-                stock_id=item.stock_id,
-                target_price=float(item.target_price) if item.target_price else None,
-                notes=item.notes,
-                alert_enabled=item.alert_enabled,
-                added_at=item.added_at,
-                symbol=stock.symbol if stock else "UNKNOWN",
-                company_name=stock.name if stock else None,
-                current_price=None,  # Would need price lookup
-                price_change=None,
-                price_change_percent=None,
-                volume=None,
-                market_cap=stock.market_cap if stock else None,
-                sector=stock.sector if stock else None,
-            ))
-
-    return WatchlistResponse(
-        id=watchlist.id,
-        user_id=watchlist.user_id,
-        name=watchlist.name,
-        description=watchlist.description,
-        is_public=watchlist.is_public,
-        created_at=watchlist.created_at,
-        updated_at=watchlist.updated_at,
-        items=items,
-        item_count=len(items)
-    )
-
-
-def convert_watchlist_to_summary(watchlist: Any, summary_data: Dict = None) -> WatchlistSummary:
-    """Convert a watchlist to summary format."""
-    item_count = 0
-    if hasattr(watchlist, 'items') and watchlist.items:
-        item_count = len(watchlist.items)
-    elif summary_data and 'item_count' in summary_data:
-        item_count = summary_data['item_count']
-
-    return WatchlistSummary(
-        id=watchlist.id,
-        name=watchlist.name,
-        description=watchlist.description,
-        item_count=item_count,
-        total_value=summary_data.get('total_value') if summary_data else None,
-        daily_change_percent=summary_data.get('daily_change_percent') if summary_data else None,
-        created_at=watchlist.created_at,
-        updated_at=watchlist.updated_at,
-    )
 
 
 # =======================
@@ -378,7 +303,6 @@ async def update_watchlist(
             update_data["is_public"] = watchlist_data.is_public
 
         if update_data:
-            # Use repository update method if available, otherwise update directly
             for key, value in update_data.items():
                 setattr(watchlist, key, value)
             watchlist.updated_at = datetime.now(timezone.utc)
