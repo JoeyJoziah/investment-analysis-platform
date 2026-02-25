@@ -119,24 +119,12 @@ jobs:
       run: |
         FILES="${{ steps.analyze.outputs.files_changed }}"
         LINES="${{ steps.analyze.outputs.lines_changed }}"
-
-        COMMENT="## 📊 PR Size Analysis
-
-**Files changed**: $FILES
-**Lines changed**: ~$LINES
-
-"
-
+        COMMENT="## PR Size Analysis\n\n**Files changed**: $FILES\n**Lines changed**: ~$LINES\n"
         if [ "$FILES" -gt 20 ] || [ "$LINES" -gt 800 ]; then
-          COMMENT="$COMMENT⚠️  **Large PR detected** - Consider breaking into smaller PRs for easier review.
-
-"
+          COMMENT="$COMMENT\nLarge PR detected - Consider breaking into smaller PRs for easier review.\n"
         fi
-
-        COMMENT="$COMMENT---
-*Automated by PR Automation*"
-
-        gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
+        COMMENT="$COMMENT\n---\n*Automated by PR Automation*"
+        echo -e "$COMMENT" | gh pr comment ${{ github.event.pull_request.number }} --body-file -
 
   # Intelligent reviewer assignment
   assign-reviewers:
@@ -255,28 +243,19 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        COMMENT="## 🏥 PR Health Check
-
-"
+        COMMENT="## PR Health Check\n"
 
         if [ -n "${{ steps.check-title.outputs.title_issues }}" ]; then
-          COMMENT="$COMMENT### Title Issues
-${{ steps.check-title.outputs.title_issues }}
-
-"
+          COMMENT="$COMMENT\n### Title Issues\n${{ steps.check-title.outputs.title_issues }}\n"
         fi
 
         if [ -n "${{ steps.check-description.outputs.issues }}" ]; then
-          COMMENT="$COMMENT### Description Issues
-${{ steps.check-description.outputs.issues }}
-
-"
+          COMMENT="$COMMENT\n### Description Issues\n${{ steps.check-description.outputs.issues }}\n"
         fi
 
-        COMMENT="$COMMENT---
-*Automated PR health check*"
+        COMMENT="$COMMENT\n---\n*Automated PR health check*"
 
-        gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
+        echo -e "$COMMENT" | gh pr comment ${{ github.event.pull_request.number }} --body-file -
 
   # Auto-merge eligible PRs
   auto-merge-check:
@@ -358,15 +337,8 @@ ${{ steps.check-description.outputs.issues }}
         echo "PR is $DAYS_OLD days old"
 
         if [ "$DAYS_OLD" -gt 14 ]; then
-          gh pr comment $PR_NUMBER --body "## ⏰ Stale PR Notice
-
-This PR has been open for $DAYS_OLD days. Please consider:
-- Rebasing on the latest main branch
-- Addressing any pending review comments
-- Closing if no longer relevant
-
----
-*Automated stale PR detection*"
+          STALE_MSG="## Stale PR Notice\n\nThis PR has been open for $DAYS_OLD days. Please consider:\n- Rebasing on the latest main branch\n- Addressing any pending review comments\n- Closing if no longer relevant\n\n---\n*Automated stale PR detection*"
+          echo -e "$STALE_MSG" | gh pr comment $PR_NUMBER --body-file -
 
           gh pr edit $PR_NUMBER --add-label "stale" || true
         fi

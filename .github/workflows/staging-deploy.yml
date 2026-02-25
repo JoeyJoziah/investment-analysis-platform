@@ -68,6 +68,9 @@ jobs:
           type=sha,prefix=staging-
           type=raw,value=staging-latest,enable={{is_default_branch}}
 
+    - name: Prepare build context
+      run: mkdir -p models
+
     - name: Build and push backend image
       id: backend-build
       uses: docker/build-push-action@v5

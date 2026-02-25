@@ -112,26 +112,13 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         LABELS="${{ steps.analyze.outputs.labels }}"
-
-        COMMENT="## 🤖 Automated Triage
-
-Thank you for opening this issue! It has been automatically classified with the following labels:
-
-"
-
+        COMMENT="## Automated Triage\n\nThank you for opening this issue! It has been automatically classified with the following labels:\n"
         IFS=',' read -ra LABEL_ARRAY <<< "$LABELS"
         for label in "${LABEL_ARRAY[@]}"; do
-          COMMENT="$COMMENT- \`$label\`
-"
+          COMMENT="$COMMENT\n- \`$label\`"
         done
-
-        COMMENT="$COMMENT
-A team member will review this issue shortly. If the classification is incorrect, please adjust the labels accordingly.
-
----
-*Automated by Issue Management System*"
-
-        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+        COMMENT="$COMMENT\n\nA team member will review this issue shortly. If the classification is incorrect, please adjust the labels accordingly.\n\n---\n*Automated by Issue Management System*"
+        echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
 
   # Security issue handling
   security-issue-handler:
@@ -153,28 +140,9 @@ A team member will review this issue shortly. If the classification is incorrect
         gh issue edit $ISSUE_NUMBER --add-label "priority:critical" || true
 
         # Add security notice
-        COMMENT="## 🔒 Security Issue Detected
+        COMMENT="## Security Issue Detected\n\nThis issue has been flagged as security-related and has been marked as critical priority.\n\n**Security Team Actions:**\n1. This issue will be reviewed by the security team immediately\n2. If this is a vulnerability, we'll coordinate a private security advisory\n3. Public disclosure will follow responsible disclosure practices\n\n**Reporter:**\n- Please **do not** share exploit code publicly\n- If you have discovered a vulnerability, consider using GitHub Security Advisories instead\n\n**Team:**\n- Treat this with high priority\n- Review within 24 hours\n- Create security advisory if needed\n\n---\n*Automated Security Issue Handler*"
 
-This issue has been flagged as security-related and has been marked as critical priority.
-
-**Security Team Actions:**
-1. This issue will be reviewed by the security team immediately
-2. If this is a vulnerability, we'll coordinate a private security advisory
-3. Public disclosure will follow responsible disclosure practices
-
-**Reporter:**
-- Please **do not** share exploit code publicly
-- If you have discovered a vulnerability, consider using GitHub Security Advisories instead
-
-**Team:**
-- Treat this with high priority
-- Review within 24 hours
-- Create security advisory if needed
-
----
-*Automated Security Issue Handler*"
-
-        gh issue comment $ISSUE_NUMBER --body "$COMMENT"
+        echo -e "$COMMENT" | gh issue comment $ISSUE_NUMBER --body-file -
 
         echo "Security issue $ISSUE_NUMBER has been flagged and team notified"
 
@@ -211,26 +179,17 @@ This issue has been flagged as security-related and has been marked as critical 
       run: |
         SIMILAR="${{ steps.search.outputs.similar_issues }}"
 
-        COMMENT="## 🔍 Potential Duplicate Issues Found
-
-This issue may be similar to existing issues:
-
-"
+        COMMENT="## Potential Duplicate Issues Found\n\nThis issue may be similar to existing issues:\n"
 
         for issue_num in $SIMILAR; do
           if [ "$issue_num" != "${{ github.event.issue.number }}" ]; then
-            COMMENT="$COMMENT- #$issue_num
-"
+            COMMENT="$COMMENT\n- #$issue_num"
           fi
         done
 
-        COMMENT="$COMMENT
-Please check if any of these address your concern. If this is indeed a duplicate, please close this issue and comment on the existing one instead.
+        COMMENT="$COMMENT\n\nPlease check if any of these address your concern. If this is indeed a duplicate, please close this issue and comment on the existing one instead.\n\n---\n*Automated Duplicate Detector*"
 
----
-*Automated Duplicate Detector*"
-
-        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+        echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
 
   # Issue completion verification
   completion-checker:
@@ -251,18 +210,13 @@ Please check if any of these address your concern. If this is indeed a duplicate
         PR_COUNT=$(echo "$LINKED_PRS" | jq '. | length')
 
         if [ "$PR_COUNT" -gt 0 ]; then
-          COMMENT="## ✅ Issue Resolution
-
-This issue was closed with $PR_COUNT linked pull request(s):
-
-"
+          COMMENT="## Issue Resolution\n\nThis issue was closed with $PR_COUNT linked pull request(s):\n"
 
           echo "$LINKED_PRS" | jq -r '.[] | "- #\(.number): \(.title) (\(.state))"' | while read line; do
-            COMMENT="$COMMENT$line
-"
+            COMMENT="$COMMENT\n$line"
           done
 
-          gh issue comment $ISSUE_NUMBER --body "$COMMENT" || true
+          echo -e "$COMMENT" | gh issue comment $ISSUE_NUMBER --body-file - || true
         fi
 
   # Stale issue management
@@ -287,18 +241,8 @@ This issue was closed with $PR_COUNT linked pull request(s):
 
             gh issue edit $issue_num --add-label "stale" || true
 
-            gh issue comment $issue_num --body "## ⏰ Stale Issue Notice
-
-This issue has been inactive for 30 days and has been marked as stale.
-
-**To keep this issue open:**
-- Add a comment with updates or additional context
-- Remove the \`stale\` label
-
-**If no activity occurs within 7 days**, this issue may be automatically closed.
-
----
-*Automated Stale Issue Management*" || true
+            STALE_MSG="## Stale Issue Notice\n\nThis issue has been inactive for 30 days and has been marked as stale.\n\n**To keep this issue open:**\n- Add a comment with updates or additional context\n- Remove the \`stale\` label\n\n**If no activity occurs within 7 days**, this issue may be automatically closed.\n\n---\n*Automated Stale Issue Management*"
+            echo -e "$STALE_MSG" | gh issue comment $issue_num --body-file - || true
           done
 
     - name: Close very stale issues
@@ -314,16 +258,8 @@ This issue has been inactive for 30 days and has been marked as stale.
           while read issue_num; do
             echo "Closing stale issue #$issue_num"
 
-            gh issue comment $issue_num --body "## 🔒 Closing Stale Issue
-
-This issue has been inactive for over 37 days and is being automatically closed.
-
-**If you still need help:**
-- Feel free to reopen this issue with additional context
-- Or create a new issue with updated information
-
----
-*Automated Stale Issue Management*" || true
+            CLOSE_MSG="## Closing Stale Issue\n\nThis issue has been inactive for over 37 days and is being automatically closed.\n\n**If you still need help:**\n- Feel free to reopen this issue with additional context\n- Or create a new issue with updated information\n\n---\n*Automated Stale Issue Management*"
+            echo -e "$CLOSE_MSG" | gh issue comment $issue_num --body-file - || true
 
             gh issue close $issue_num --reason "not planned" || true
           done
@@ -356,26 +292,9 @@ This issue has been inactive for over 37 days and is being automatically closed.
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        COMMENT="## 👋 Welcome to the Investment Analysis Platform!
+        COMMENT="## Welcome to the Investment Analysis Platform!\n\nThank you for opening your first issue! We're excited to have you as part of our community.\n\n**What happens next:**\n1. A team member will review and triage this issue\n2. We'll ask clarifying questions if needed\n3. The issue will be prioritized and assigned\n\n**Want to contribute?**\n- Check out our [Contributing Guidelines](CONTRIBUTING.md)\n- Look for issues labeled \`good first issue\` to get started\n- Join our community discussions\n\nThanks for helping make this project better!\n\n---\n*Automated Welcome Message*"
 
-Thank you for opening your first issue! We're excited to have you as part of our community.
-
-**What happens next:**
-1. A team member will review and triage this issue
-2. We'll ask clarifying questions if needed
-3. The issue will be prioritized and assigned
-
-**Want to contribute?**
-- Check out our [Contributing Guidelines](CONTRIBUTING.md)
-- Look for issues labeled \`good first issue\` to get started
-- Join our community discussions
-
-Thanks for helping make this project better! 🚀
-
----
-*Automated Welcome Message*"
-
-        gh issue comment ${{ github.event.issue.number }} --body "$COMMENT"
+        echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
 
   # Issue metrics and summary
   issue-metrics:
