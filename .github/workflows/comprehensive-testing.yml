@@ -189,7 +189,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-asyncio pytest-mock coverage
+          pip install pytest-cov pytest-mock coverage
 
       - name: Set up test environment
         run: |
@@ -302,7 +302,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio testcontainers
+          pip install testcontainers
 
       - name: Run integration tests
         env:
@@ -372,7 +372,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio psutil memory-profiler
+          pip install psutil memory-profiler
 
       - name: Run performance tests
         env:
@@ -422,7 +422,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest numpy pandas scikit-learn yfinance
+          pip install scikit-learn yfinance
 
       - name: Run financial model validation tests
         env:
@@ -490,7 +490,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio cryptography pyjwt
 
       - name: Run security and compliance tests
         env:
