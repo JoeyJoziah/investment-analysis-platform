@@ -474,7 +474,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20  # Cost optimization
     needs: [backend-test, frontend-test]
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'docker-build'))  # Only build on push or specific PR label
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'docker-build')  # Only on PRs with docker-build label (staging-deploy handles push builds)
     
     steps:
     - name: Checkout code
