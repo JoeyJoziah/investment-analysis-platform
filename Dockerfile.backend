@@ -27,8 +27,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TA-Lib (required for technical analysis)
+# Update config.guess/config.sub for arm64 QEMU compatibility
 RUN curl -L https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4.0-src.tar.gz | tar xz && \
     cd ta-lib && \
+    curl -o config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess' && \
+    curl -o config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub' && \
     ./configure --prefix=/usr/local && \
     make && \
     make install && \

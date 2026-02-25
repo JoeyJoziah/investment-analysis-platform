@@ -440,9 +440,7 @@ jobs:
     name: Sync to Notion
     runs-on: ubuntu-latest
     needs: [update-index]
-    if: |
-      (github.event_name == 'push' || github.event.inputs.force_sync == 'true') &&
-      secrets.NOTION_API_KEY != ''
+    if: github.event_name == 'push' || github.event.inputs.force_sync == 'true'
 
     steps:
       - name: Checkout repository
