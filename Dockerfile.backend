@@ -27,17 +27,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TA-Lib (required for technical analysis)
-# Update config.guess/config.sub for arm64 QEMU compatibility
-RUN curl -L https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4.0-src.tar.gz | tar xz && \
+# Use SourceForge URL and install bash + update autoconf files for arm64 QEMU compatibility
+RUN apt-get update && apt-get install -y --no-install-recommends bash autoconf automake libtool && \
+    curl -L http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz | tar xz && \
     cd ta-lib && \
-    curl -o config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess' && \
-    curl -o config.sub 'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub' && \
-    chmod +x config.guess config.sub && \
+    cp /usr/share/automake-*/config.guess . && \
+    cp /usr/share/automake-*/config.sub . && \
     ./configure --prefix=/usr/local && \
     make && \
     make install && \
     cd .. && \
-    rm -rf ta-lib
+    rm -rf ta-lib && \
+    apt-get purge -y autoconf automake libtool && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
 COPY requirements.txt .
