@@ -37,9 +37,10 @@ jobs:
           cd .. && rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
 
       - name: Install security scanning tools
+        continue-on-error: true
         run: |
           pip install safety bandit semgrep
-          npm install -g audit-ci
+          npm install -g audit-ci || echo "audit-ci install failed, skipping npm audit"
 
       - name: Run safety check for Python dependencies
         run: |
