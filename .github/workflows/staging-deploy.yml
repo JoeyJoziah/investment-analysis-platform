@@ -20,6 +20,10 @@ env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
 
+permissions:
+  contents: read
+  packages: write
+
 concurrency:
   group: staging-deploy-${{ github.ref }}
   cancel-in-progress: false
