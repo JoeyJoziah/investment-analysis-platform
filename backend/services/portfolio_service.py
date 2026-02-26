@@ -12,8 +12,52 @@ from decimal import Decimal
 from datetime import datetime, date, timedelta, timezone
 
 from backend.repositories.portfolio_repository import portfolio_repository
+from backend.repositories import stock_repository
 
 logger = logging.getLogger(__name__)
+
+
+def generate_position_data(symbol: str = None) -> Dict[str, Any]:
+    """
+    Generate a sample position as a dictionary.
+
+    Args:
+        symbol: Optional ticker symbol; picks randomly if omitted.
+
+    Returns:
+        Dictionary with all fields needed for the Position Pydantic model.
+    """
+    if not symbol:
+        symbols = [
+            "AAPL", "GOOGL", "MSFT", "AMZN", "META",
+            "NVDA", "TSLA", "JPM", "V", "JNJ",
+        ]
+        symbol = random.choice(symbols)
+
+    quantity = random.uniform(10, 100)
+    average_cost = random.uniform(50, 300)
+    current_price = average_cost * random.uniform(0.7, 1.5)
+
+    return {
+        "id": str(uuid.uuid4()),
+        "symbol": symbol,
+        "name": f"{symbol} Inc.",
+        "quantity": round(quantity, 2),
+        "average_cost": round(average_cost, 2),
+        "current_price": round(current_price, 2),
+        "market_value": round(quantity * current_price, 2),
+        "cost_basis": round(quantity * average_cost, 2),
+        "unrealized_gain": round((current_price - average_cost) * quantity, 2),
+        "unrealized_gain_percent": round(
+            (current_price - average_cost) / average_cost * 100, 2
+        ),
+        "realized_gain": random.uniform(-1000, 5000),
+        "asset_class": "stocks",
+        "sector": random.choice(
+            ["Technology", "Healthcare", "Finance", "Consumer"]
+        ),
+        "allocation_percent": random.uniform(5, 25),
+    }
 
 
 class PortfolioService:
@@ -455,6 +499,395 @@ class PortfolioService:
         except Exception as e:
             logger.error(f"Error calculating performance metrics: {e}")
             return self._mock_performance_metrics()
+
+    async def compute_portfolio_summaries(
+        self,
+        user_id: int,
+        db,
+    ) -> List[Dict[str, Any]]:
+        """
+        Compute summary data for all portfolios owned by a user.
+
+        Fetches portfolios from the database, creates a default if none exist,
+        then calculates market values, gains, and risk scores using
+        RealtimePriceService for current prices.
+
+        Args:
+            user_id: Authenticated user's ID.
+            db: Async database session.
+
+        Returns:
+            List of dictionaries, each containing all fields for PortfolioSummary.
+        """
+        from backend.services.realtime_price_service import get_realtime_price_service
+        from backend.repositories import portfolio_repository
+
+        price_service = await get_realtime_price_service()
+
+        portfolios = await portfolio_repository.get_user_portfolios(
+            user_id=user_id, session=db
+        )
+
+        if not portfolios:
+            logger.info(
+                f"No portfolios found for user {user_id}, creating default"
+            )
+            default_portfolio = await portfolio_repository.create_default_portfolio(
+                user_id=user_id, session=db
+            )
+            portfolios = [default_portfolio]
+
+        summaries: List[Dict[str, Any]] = []
+
+        for portfolio in portfolios:
+            try:
+                summary = await self._compute_single_summary(
+                    portfolio, price_service, db
+                )
+                summaries.append(summary)
+            except Exception as e:
+                logger.error(
+                    f"Error calculating summary for portfolio {portfolio.id}: {e}"
+                )
+                summaries.append(self._fallback_summary(portfolio))
+
+        logger.info(f"Successfully calculated {len(summaries)} portfolio summaries")
+        return summaries
+
+    async def _compute_single_summary(
+        self, portfolio, price_service, db
+    ) -> Dict[str, Any]:
+        """Compute summary metrics for a single portfolio."""
+        from backend.repositories import portfolio_repository
+
+        positions = await portfolio_repository.get_portfolio_positions(
+            portfolio_id=portfolio.id, session=db
+        )
+
+        symbols = [pos.symbol for pos in positions]
+        prices = await price_service.get_latest_prices_bulk(symbols, db)
+
+        total_value = 0.0
+        total_cost = 0.0
+        day_change = 0.0
+
+        for position in positions:
+            price_update = prices.get(position.symbol)
+            current_price = (
+                price_update.price
+                if price_update
+                else await self.get_current_stock_price(position.symbol, db)
+            )
+
+            position_value = position.quantity * current_price
+            position_cost = position.quantity * position.average_cost
+
+            total_value += position_value
+            total_cost += position_cost
+
+            if price_update and price_update.close:
+                day_change += (
+                    position.quantity
+                    * (price_update.close - position.average_cost)
+                    * 0.01
+                )
+
+        cash_balance = float(portfolio.cash_balance or 0)
+        total_value += cash_balance
+
+        total_gain = total_value - total_cost
+        total_gain_percent = (
+            (total_gain / total_cost * 100) if total_cost > 0 else 0.0
+        )
+        day_change_percent = (
+            (day_change / total_value * 100) if total_value > 0 else 0.0
+        )
+
+        risk_score = await self.calculate_portfolio_risk_score(
+            portfolio.id, positions, db
+        )
+
+        return {
+            "id": str(portfolio.portfolio_id or portfolio.id),
+            "name": portfolio.name or f"Portfolio {portfolio.id}",
+            "total_value": round(total_value, 2),
+            "total_cost": round(total_cost, 2),
+            "total_gain": round(total_gain, 2),
+            "total_gain_percent": round(total_gain_percent, 2),
+            "cash_balance": round(cash_balance, 2),
+            "buying_power": round(cash_balance * 2, 2),
+            "day_change": round(day_change, 2),
+            "day_change_percent": round(day_change_percent, 2),
+            "positions_count": len(positions),
+            "strategy": portfolio.strategy or "balanced",
+            "risk_score": round(risk_score, 2),
+            "created_at": portfolio.created_at,
+            "last_updated": portfolio.updated_at or datetime.now(timezone.utc),
+        }
+
+    @staticmethod
+    def _fallback_summary(portfolio) -> Dict[str, Any]:
+        """Return a safe fallback summary when computation fails."""
+        return {
+            "id": str(portfolio.portfolio_id or portfolio.id),
+            "name": portfolio.name or f"Portfolio {portfolio.id}",
+            "total_value": 100000.0,
+            "total_cost": 95000.0,
+            "total_gain": 5000.0,
+            "total_gain_percent": 5.26,
+            "cash_balance": 10000.0,
+            "buying_power": 20000.0,
+            "day_change": 0.0,
+            "day_change_percent": 0.0,
+            "positions_count": 0,
+            "strategy": "balanced",
+            "risk_score": 50.0,
+            "created_at": portfolio.created_at,
+            "last_updated": datetime.now(timezone.utc),
+        }
+
+    async def compute_portfolio_detail(
+        self,
+        portfolio_id: str,
+        user_id: int,
+        db,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Compute detailed portfolio data with real-time prices.
+
+        Returns None if the portfolio is not found or access is denied.
+
+        Args:
+            portfolio_id: Portfolio string identifier.
+            user_id: Authenticated user's ID.
+            db: Async database session.
+
+        Returns:
+            Dictionary with all fields for PortfolioDetail, or None if not found.
+        """
+        from backend.services.realtime_price_service import get_realtime_price_service
+        from backend.repositories import portfolio_repository
+
+        price_service = await get_realtime_price_service()
+
+        portfolio = await portfolio_repository.get_user_portfolio(
+            portfolio_id=portfolio_id, user_id=user_id, session=db
+        )
+        if not portfolio:
+            return None
+
+        db_positions = await portfolio_repository.get_portfolio_positions(
+            portfolio_id=portfolio.id, session=db
+        )
+
+        symbols = [pos.symbol for pos in db_positions]
+        prices = await price_service.get_latest_prices_bulk(symbols, db)
+
+        positions, total_value, total_cost, day_change = (
+            await self._build_position_list(db_positions, prices, db)
+        )
+
+        cash_balance = float(portfolio.cash_balance or 0)
+        total_value += cash_balance
+
+        # Allocation percentages
+        for pos in positions:
+            pos["allocation_percent"] = (
+                round((pos["market_value"] / total_value) * 100, 2)
+                if total_value > 0
+                else 0.0
+            )
+
+        asset_allocation = self._compute_asset_allocation(
+            positions, cash_balance, total_value
+        )
+        sector_allocation = self._compute_sector_allocation(positions)
+
+        positions_sorted = sorted(
+            positions,
+            key=lambda x: x["unrealized_gain_percent"],
+            reverse=True,
+        )
+        top_performers = (
+            positions_sorted[:3]
+            if len(positions_sorted) >= 3
+            else positions_sorted
+        )
+        worst_performers = (
+            positions_sorted[-3:]
+            if len(positions_sorted) >= 3
+            else []
+        )
+
+        recent_transactions = await portfolio_repository.get_recent_transactions(
+            portfolio_id=portfolio.id, limit=10, session=db
+        )
+        transactions = self._format_transactions(
+            recent_transactions, portfolio_id
+        )
+
+        # Build lightweight position objects for metrics calculation
+        class _Pos:
+            def __init__(self, d):
+                self.unrealized_gain_percent = d["unrealized_gain_percent"]
+        metric_positions = [_Pos(p) for p in positions]
+        metrics_dict = await self.calculate_real_performance_metrics(
+            portfolio.id, metric_positions, db
+        )
+
+        total_gain = total_value - total_cost
+        total_gain_percent = (
+            (total_gain / total_cost * 100) if total_cost > 0 else 0.0
+        )
+        day_change_percent = (
+            (day_change / total_value * 100) if total_value > 0 else 0.0
+        )
+        risk_score = await self.calculate_portfolio_risk_score(
+            portfolio.id, db_positions, db
+        )
+
+        return {
+            "id": portfolio_id,
+            "name": portfolio.name or "Main Portfolio",
+            "total_value": round(total_value, 2),
+            "total_cost": round(total_cost, 2),
+            "total_gain": round(total_gain, 2),
+            "total_gain_percent": round(total_gain_percent, 2),
+            "cash_balance": round(cash_balance, 2),
+            "buying_power": round(cash_balance * 2, 2),
+            "day_change": round(day_change, 2),
+            "day_change_percent": round(day_change_percent, 2),
+            "positions_count": len(positions),
+            "strategy": portfolio.strategy or "balanced",
+            "risk_score": round(risk_score, 2),
+            "created_at": portfolio.created_at,
+            "last_updated": portfolio.updated_at or datetime.now(timezone.utc),
+            "positions": positions,
+            "asset_allocation": asset_allocation,
+            "sector_allocation": sector_allocation,
+            "top_performers": top_performers,
+            "worst_performers": worst_performers,
+            "recent_transactions": transactions,
+            "performance_metrics": metrics_dict,
+        }
+
+    async def _build_position_list(
+        self, db_positions, prices, db
+    ):
+        """Build enriched position list and running totals."""
+        positions: List[Dict[str, Any]] = []
+        total_value = 0.0
+        total_cost = 0.0
+        day_change = 0.0
+
+        for db_pos in db_positions:
+            price_update = prices.get(db_pos.symbol)
+            if price_update:
+                current_price = price_update.price
+                day_change_raw = price_update.change or 0
+            else:
+                current_price = await self.get_current_stock_price(
+                    db_pos.symbol, db
+                )
+                day_change_raw = 0
+
+            market_value = db_pos.quantity * current_price
+            cost_basis = db_pos.quantity * db_pos.average_cost
+            unrealized_gain = market_value - cost_basis
+            unrealized_gain_percent = (
+                (unrealized_gain / cost_basis * 100)
+                if cost_basis > 0
+                else 0.0
+            )
+
+            stock_info = await stock_repository.get_by_symbol(
+                db_pos.symbol, session=db
+            )
+            sector = stock_info.sector if stock_info else "Unknown"
+
+            positions.append({
+                "id": str(db_pos.id),
+                "symbol": db_pos.symbol,
+                "name": (
+                    stock_info.name
+                    if stock_info
+                    else f"{db_pos.symbol} Corp"
+                ),
+                "quantity": float(db_pos.quantity),
+                "average_cost": float(db_pos.average_cost),
+                "current_price": current_price,
+                "market_value": market_value,
+                "cost_basis": cost_basis,
+                "unrealized_gain": unrealized_gain,
+                "unrealized_gain_percent": unrealized_gain_percent,
+                "realized_gain": float(db_pos.realized_gain or 0),
+                "asset_class": "stocks",
+                "sector": sector,
+                "allocation_percent": 0.0,
+            })
+
+            total_value += market_value
+            total_cost += cost_basis
+            day_change += db_pos.quantity * day_change_raw
+
+        return positions, total_value, total_cost, day_change
+
+    @staticmethod
+    def _compute_asset_allocation(
+        positions: List[Dict[str, Any]],
+        cash_balance: float,
+        total_value: float,
+    ) -> Dict[str, float]:
+        """Compute asset class allocation percentages."""
+        stocks_value = sum(p["market_value"] for p in positions)
+        cash_pct = (
+            (cash_balance / total_value * 100) if total_value > 0 else 0
+        )
+        stocks_pct = (
+            (stocks_value / total_value * 100) if total_value > 0 else 0
+        )
+        return {
+            "stocks": round(stocks_pct, 2),
+            "cash": round(cash_pct, 2),
+            "bonds": 0.0,
+            "etf": 0.0,
+        }
+
+    @staticmethod
+    def _compute_sector_allocation(
+        positions: List[Dict[str, Any]],
+    ) -> Dict[str, float]:
+        """Compute sector allocation percentages."""
+        allocation: Dict[str, float] = {}
+        for pos in positions:
+            sector = pos.get("sector")
+            if sector and sector != "Unknown":
+                allocation[sector] = (
+                    allocation.get(sector, 0)
+                    + pos["allocation_percent"]
+                )
+        return allocation
+
+    @staticmethod
+    def _format_transactions(
+        recent_transactions, portfolio_id: str
+    ) -> List[Dict[str, Any]]:
+        """Convert ORM transaction records to response dictionaries."""
+        result: List[Dict[str, Any]] = []
+        for trans in recent_transactions:
+            result.append({
+                "id": str(trans.id),
+                "portfolio_id": portfolio_id,
+                "symbol": trans.symbol,
+                "transaction_type": trans.transaction_type,
+                "quantity": float(trans.quantity),
+                "price": float(trans.price),
+                "total_amount": float(trans.total_amount),
+                "fees": float(trans.fees or 0),
+                "notes": trans.notes,
+                "timestamp": trans.created_at,
+            })
+        return result
 
     def _mock_performance_metrics(self) -> Dict[str, Any]:
         """Return randomly-generated placeholder performance metrics."""

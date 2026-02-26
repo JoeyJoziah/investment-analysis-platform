@@ -506,8 +506,29 @@ async def get_audit_trail(
 
 
 # ---------------------------------------------------------------------------
-# IP Anonymization helper
+# IP / Request helpers
 # ---------------------------------------------------------------------------
+
+def get_client_ip(request) -> Optional[str]:
+    """
+    Extract client IP address from a FastAPI/Starlette Request.
+
+    Checks x-forwarded-for first (proxy/load-balancer scenarios),
+    then falls back to request.client.host.
+
+    Args:
+        request: FastAPI Request object.
+
+    Returns:
+        Client IP string, or None if unavailable.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return None
+
 
 def anonymize_ip(raw_ip: Optional[str]) -> Optional[str]:
     """
@@ -520,3 +541,71 @@ def anonymize_ip(raw_ip: Optional[str]) -> Optional[str]:
         Anonymised IP string, or None if input was None.
     """
     return data_anonymizer.anonymize_ip(raw_ip) if raw_ip else None
+
+
+# ---------------------------------------------------------------------------
+# Deletion response builders
+# ---------------------------------------------------------------------------
+
+DEFAULT_RETAINED_FOR_COMPLIANCE = [
+    "Transaction history (anonymized for SEC compliance - 7 years)",
+    "Audit logs (retained for regulatory requirements - 7 years)",
+    "Consent records (retained for compliance - 10 years)",
+]
+
+
+def build_deletion_request_response(
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Build a structured deletion-request response dict from service result.
+
+    Args:
+        result: Raw dict from data_deletion.request_deletion().
+
+    Returns:
+        Dictionary suitable for DeleteRequestResponse construction.
+    """
+    return {
+        "request_id": result["request_id"],
+        "status": result["status"],
+        "message": result["message"],
+        "estimated_completion": (
+            datetime.fromisoformat(result["estimated_completion"])
+            if result.get("estimated_completion")
+            else None
+        ),
+        "deletion_scheduled_at": datetime.now(timezone.utc),
+        "anonymization_complete": False,
+        "retained_for_compliance": list(DEFAULT_RETAINED_FOR_COMPLIANCE),
+    }
+
+
+def build_deletion_processed_response(
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Build a structured response dict after processing a deletion request.
+
+    Args:
+        result: Raw dict from data_deletion.process_deletion().
+
+    Returns:
+        Dictionary suitable for DeleteRequestResponse construction.
+    """
+    return {
+        "request_id": result["request_id"],
+        "status": result["status"],
+        "message": "Deletion completed successfully",
+        "deletion_scheduled_at": (
+            datetime.fromisoformat(result["completion_date"])
+            if result.get("completion_date")
+            else None
+        ),
+        "anonymization_complete": True,
+        "deleted_records": result.get("deleted_records", {}),
+        "anonymized_records": result.get("anonymized_records", {}),
+        "retained_for_compliance": list(
+            result.get("retained_for_compliance", {}).keys()
+        ),
+    }

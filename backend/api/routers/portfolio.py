@@ -7,28 +7,11 @@ import random
 import uuid
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from decimal import Decimal
 
-# Enhanced imports for real functionality
 from backend.config.database import get_async_db_session
-from backend.repositories import (
-    portfolio_repository,
-    stock_repository,
-    user_repository,
-    FilterCriteria,
-    PaginationParams,
-    SortParams,
-    SortDirection
-)
 from backend.utils.cache import cache_with_ttl
-# from backend.utils.enhanced_error_handling import (
-#     handle_database_error,
-#     validate_stock_symbol,
-#     DatabaseError
-# )
 from backend.auth.oauth2 import get_current_user
-from backend.models.unified_models import User, Portfolio, Position, Transaction as TransactionModel
-from backend.config.settings import settings
+from backend.models.unified_models import User
 from backend.models.api_response import ApiResponse, success_response
 from backend.services.portfolio_service import portfolio_service, PortfolioService
 
@@ -234,30 +217,9 @@ class PortfolioSettings(BaseModel):
 # Helper functions
 def generate_position(symbol: str = None) -> Position:
     """Generate a sample position"""
-    if not symbol:
-        symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
-        symbol = random.choice(symbols)
-
-    quantity = random.uniform(10, 100)
-    average_cost = random.uniform(50, 300)
-    current_price = average_cost * random.uniform(0.7, 1.5)
-
-    return Position(
-        id=str(uuid.uuid4()),
-        symbol=symbol,
-        name=f"{symbol} Inc.",
-        quantity=round(quantity, 2),
-        average_cost=round(average_cost, 2),
-        current_price=round(current_price, 2),
-        market_value=round(quantity * current_price, 2),
-        cost_basis=round(quantity * average_cost, 2),
-        unrealized_gain=round((current_price - average_cost) * quantity, 2),
-        unrealized_gain_percent=round((current_price - average_cost) / average_cost * 100, 2),
-        realized_gain=random.uniform(-1000, 5000),
-        asset_class=AssetClass.STOCKS,
-        sector=random.choice(["Technology", "Healthcare", "Finance", "Consumer"]),
-        allocation_percent=random.uniform(5, 25)
-    )
+    from backend.services.portfolio_service import generate_position_data
+    data = generate_position_data(symbol)
+    return Position(**data)
 
 # Enhanced Endpoints with Real Database Integration
 @router.get("/summary")
@@ -267,126 +229,26 @@ async def get_portfolios_summary(
     db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[List[PortfolioSummary]]:
-    """
-    Get summary of all user portfolios with real-time price data.
-
-    Returns comprehensive portfolio summaries including:
-    - Current market values calculated from real-time prices via RealtimePriceService
-    - Performance metrics and gains/losses
-    - Risk assessment scores
-    - Position counts and allocation data
-    """
+    """Get summary of all user portfolios with real-time price data."""
     try:
-        logger.info(f"Fetching portfolio summaries for user {current_user.id}")
-
-        from backend.services.realtime_price_service import get_realtime_price_service
-        price_service = await get_realtime_price_service()
-
-        # Get user's portfolios from database
-        portfolios = await portfolio_repository.get_user_portfolios(
-            user_id=current_user.id,
-            session=db
+        raw_summaries = await service.compute_portfolio_summaries(
+            user_id=current_user.id, db=db
         )
 
-        if not portfolios:
-            logger.info(f"No portfolios found for user {current_user.id}, creating default portfolio")
-            # Create a default portfolio if none exists
-            default_portfolio = await portfolio_repository.create_default_portfolio(
-                user_id=current_user.id,
-                session=db
+        summaries = [
+            PortfolioSummary(
+                **{
+                    **s,
+                    "strategy": (
+                        PortfolioStrategy(s["strategy"])
+                        if s["strategy"] in [e.value for e in PortfolioStrategy]
+                        else PortfolioStrategy.BALANCED
+                    ),
+                }
             )
-            portfolios = [default_portfolio]
+            for s in raw_summaries
+        ]
 
-        summaries = []
-
-        for portfolio in portfolios:
-            try:
-                # Calculate portfolio metrics
-                positions = await portfolio_repository.get_portfolio_positions(
-                    portfolio_id=portfolio.id,
-                    session=db
-                )
-
-                # Get all prices at once using bulk fetch
-                symbols = [pos.symbol for pos in positions]
-                prices = await price_service.get_latest_prices_bulk(symbols, db)
-
-                # Calculate total values
-                total_value = 0.0
-                total_cost = 0.0
-                day_change = 0.0
-
-                for position in positions:
-                    # Get current price from realtime service
-                    price_update = prices.get(position.symbol)
-                    current_price = (
-                        price_update.price
-                        if price_update
-                        else await service.get_current_stock_price(position.symbol, db)
-                    )
-
-                    position_value = position.quantity * current_price
-                    position_cost = position.quantity * position.average_cost
-
-                    total_value += position_value
-                    total_cost += position_cost
-
-                    # Calculate day change
-                    if price_update and price_update.close:
-                        day_change += position.quantity * (price_update.close - position.average_cost) * 0.01
-
-                # Add cash balance
-                cash_balance = float(portfolio.cash_balance or 0)
-                total_value += cash_balance
-
-                # Calculate metrics
-                total_gain = total_value - total_cost
-                total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
-                day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
-
-                # Calculate risk score via service
-                risk_score = await service.calculate_portfolio_risk_score(portfolio.id, positions, db)
-
-                summaries.append(PortfolioSummary(
-                    id=str(portfolio.portfolio_id or portfolio.id),
-                    name=portfolio.name or f"Portfolio {portfolio.id}",
-                    total_value=round(total_value, 2),
-                    total_cost=round(total_cost, 2),
-                    total_gain=round(total_gain, 2),
-                    total_gain_percent=round(total_gain_percent, 2),
-                    cash_balance=round(cash_balance, 2),
-                    buying_power=round(cash_balance * 2, 2),
-                    day_change=round(day_change, 2),
-                    day_change_percent=round(day_change_percent, 2),
-                    positions_count=len(positions),
-                    strategy=PortfolioStrategy(portfolio.strategy) if portfolio.strategy else PortfolioStrategy.BALANCED,
-                    risk_score=round(risk_score, 2),
-                    created_at=portfolio.created_at,
-                    last_updated=portfolio.updated_at or datetime.now(timezone.utc)
-                ))
-
-            except Exception as e:
-                logger.error(f"Error calculating summary for portfolio {portfolio.id}: {e}")
-                # Add fallback summary
-                summaries.append(PortfolioSummary(
-                    id=str(portfolio.portfolio_id or portfolio.id),
-                    name=portfolio.name or f"Portfolio {portfolio.id}",
-                    total_value=100000.0,
-                    total_cost=95000.0,
-                    total_gain=5000.0,
-                    total_gain_percent=5.26,
-                    cash_balance=10000.0,
-                    buying_power=20000.0,
-                    day_change=0.0,
-                    day_change_percent=0.0,
-                    positions_count=0,
-                    strategy=PortfolioStrategy.BALANCED,
-                    risk_score=50.0,
-                    created_at=portfolio.created_at,
-                    last_updated=datetime.now(timezone.utc)
-                ))
-
-        logger.info(f"Successfully calculated {len(summaries)} portfolio summaries")
         return success_response(data=summaries)
 
     except Exception as e:
@@ -404,186 +266,66 @@ async def get_portfolio_detail(
     db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[PortfolioDetail]:
-    """
-    Get detailed portfolio information with real-time price updates.
-
-    Provides comprehensive portfolio details including:
-    - All positions with current market values from RealtimePriceService
-    - Asset and sector allocation breakdown
-    - Performance metrics and risk analysis
-    - Recent transaction history
-    - Top/worst performing positions
-    """
+    """Get detailed portfolio information with real-time price updates."""
     try:
-        logger.info(f"Fetching detailed portfolio {portfolio_id} for user {current_user.id}")
-
-        from backend.services.realtime_price_service import get_realtime_price_service
-        price_service = await get_realtime_price_service()
-
-        # Get portfolio from database
-        portfolio = await portfolio_repository.get_user_portfolio(
-            portfolio_id=portfolio_id,
-            user_id=current_user.id,
-            session=db
+        detail_data = await service.compute_portfolio_detail(
+            portfolio_id=portfolio_id, user_id=current_user.id, db=db
         )
 
-        if not portfolio:
+        if detail_data is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Portfolio '{portfolio_id}' not found or access denied"
             )
 
-        # Get portfolio positions
-        db_positions = await portfolio_repository.get_portfolio_positions(
-            portfolio_id=portfolio.id,
-            session=db
-        )
+        # Convert raw dicts to Pydantic models
+        positions = [Position(**p) for p in detail_data["positions"]]
+        top_performers = [Position(**p) for p in detail_data["top_performers"]]
+        worst_performers = [Position(**p) for p in detail_data["worst_performers"]]
+        transactions = [Transaction(**t) for t in detail_data["recent_transactions"]]
+        performance_metrics = PerformanceMetrics(**detail_data["performance_metrics"])
 
-        # Bulk fetch all prices at once
-        symbols = [pos.symbol for pos in db_positions]
-        prices = await price_service.get_latest_prices_bulk(symbols, db)
-
-        # Convert to response format and calculate current values
-        positions = []
-        total_value = 0.0
-        total_cost = 0.0
-        day_change = 0.0
-
-        for db_pos in db_positions:
-            # Get current market price from realtime service
-            price_update = prices.get(db_pos.symbol)
-            if price_update:
-                current_price = price_update.price
-                day_change_raw = price_update.change or 0
-            else:
-                current_price = await service.get_current_stock_price(db_pos.symbol, db)
-                day_change_raw = 0
-
-            market_value = db_pos.quantity * current_price
-            cost_basis = db_pos.quantity * db_pos.average_cost
-            unrealized_gain = market_value - cost_basis
-            unrealized_gain_percent = (unrealized_gain / cost_basis * 100) if cost_basis > 0 else 0.0
-
-            # Get stock info for sector
-            stock_info = await stock_repository.get_by_symbol(db_pos.symbol, session=db)
-            sector = stock_info.sector if stock_info else "Unknown"
-
-            position = Position(
-                id=str(db_pos.id),
-                symbol=db_pos.symbol,
-                name=stock_info.name if stock_info else f"{db_pos.symbol} Corp",
-                quantity=float(db_pos.quantity),
-                average_cost=float(db_pos.average_cost),
-                current_price=current_price,
-                market_value=market_value,
-                cost_basis=cost_basis,
-                unrealized_gain=unrealized_gain,
-                unrealized_gain_percent=unrealized_gain_percent,
-                realized_gain=float(db_pos.realized_gain or 0),
-                asset_class=AssetClass.STOCKS,
-                sector=sector,
-                allocation_percent=0.0
-            )
-
-            positions.append(position)
-            total_value += market_value
-            total_cost += cost_basis
-            day_change += db_pos.quantity * day_change_raw
-
-        # Add cash to total value
-        cash_balance = float(portfolio.cash_balance or 0)
-        total_value += cash_balance
-
-        # Calculate allocation percentages
-        for position in positions:
-            position.allocation_percent = round((position.market_value / total_value) * 100, 2) if total_value > 0 else 0.0
-
-        # Asset allocation calculation
-        stocks_value = sum(p.market_value for p in positions)
-        cash_percent = (cash_balance / total_value * 100) if total_value > 0 else 0
-        stocks_percent = (stocks_value / total_value * 100) if total_value > 0 else 0
-
-        asset_allocation = {
-            AssetClass.STOCKS: round(stocks_percent, 2),
-            AssetClass.CASH: round(cash_percent, 2),
-            AssetClass.BONDS: 0.0,
-            AssetClass.ETF: 0.0
+        # Map string keys to AssetClass enums for asset_allocation
+        asset_alloc_enum = {
+            AssetClass(k): v for k, v in detail_data["asset_allocation"].items()
         }
 
-        # Sector allocation
-        sector_allocation = {}
-        for position in positions:
-            if position.sector and position.sector != "Unknown":
-                sector_allocation[position.sector] = sector_allocation.get(position.sector, 0) + position.allocation_percent
-
-        # Top and worst performers
-        positions_sorted = sorted(positions, key=lambda x: x.unrealized_gain_percent, reverse=True)
-        top_performers = positions_sorted[:3] if len(positions_sorted) >= 3 else positions_sorted
-        worst_performers = positions_sorted[-3:] if len(positions_sorted) >= 3 else []
-
-        # Get recent transactions
-        recent_transactions = await portfolio_repository.get_recent_transactions(
-            portfolio_id=portfolio.id,
-            limit=10,
-            session=db
+        strategy_val = detail_data.get("strategy", "balanced")
+        strategy = (
+            PortfolioStrategy(strategy_val)
+            if strategy_val in [e.value for e in PortfolioStrategy]
+            else PortfolioStrategy.BALANCED
         )
 
-        # Convert transactions to response format
-        transactions = []
-        for trans in recent_transactions:
-            transactions.append(Transaction(
-                id=str(trans.id),
-                portfolio_id=portfolio_id,
-                symbol=trans.symbol,
-                transaction_type=TransactionType(trans.transaction_type),
-                quantity=float(trans.quantity),
-                price=float(trans.price),
-                total_amount=float(trans.total_amount),
-                fees=float(trans.fees or 0),
-                notes=trans.notes,
-                timestamp=trans.created_at
-            ))
-
-        # Calculate performance metrics via service
-        metrics_dict = await service.calculate_real_performance_metrics(portfolio.id, positions, db)
-        performance_metrics = PerformanceMetrics(**metrics_dict)
-
-        # Portfolio summary calculations
-        total_gain = total_value - total_cost
-        total_gain_percent = (total_gain / total_cost * 100) if total_cost > 0 else 0.0
-        day_change_percent = (day_change / total_value * 100) if total_value > 0 else 0.0
-        risk_score = await service.calculate_portfolio_risk_score(portfolio.id, db_positions, db)
-
         return success_response(data=PortfolioDetail(
-            id=portfolio_id,
-            name=portfolio.name or "Main Portfolio",
-            total_value=round(total_value, 2),
-            total_cost=round(total_cost, 2),
-            total_gain=round(total_gain, 2),
-            total_gain_percent=round(total_gain_percent, 2),
-            cash_balance=round(cash_balance, 2),
-            buying_power=round(cash_balance * 2, 2),  # 2x leverage approximation
-            day_change=round(day_change, 2),
-            day_change_percent=round(day_change_percent, 2),
-            positions_count=len(positions),
-            strategy=PortfolioStrategy(portfolio.strategy) if portfolio.strategy else PortfolioStrategy.BALANCED,
-            risk_score=round(risk_score, 2),
-            created_at=portfolio.created_at,
-            last_updated=portfolio.updated_at or datetime.now(timezone.utc),
+            id=detail_data["id"],
+            name=detail_data["name"],
+            total_value=detail_data["total_value"],
+            total_cost=detail_data["total_cost"],
+            total_gain=detail_data["total_gain"],
+            total_gain_percent=detail_data["total_gain_percent"],
+            cash_balance=detail_data["cash_balance"],
+            buying_power=detail_data["buying_power"],
+            day_change=detail_data["day_change"],
+            day_change_percent=detail_data["day_change_percent"],
+            positions_count=detail_data["positions_count"],
+            strategy=strategy,
+            risk_score=detail_data["risk_score"],
+            created_at=detail_data["created_at"],
+            last_updated=detail_data["last_updated"],
             positions=positions,
-            asset_allocation=asset_allocation,
-            sector_allocation=sector_allocation,
+            asset_allocation=asset_alloc_enum,
+            sector_allocation=detail_data["sector_allocation"],
             top_performers=top_performers,
             worst_performers=worst_performers,
             recent_transactions=transactions,
-            performance_metrics=performance_metrics
+            performance_metrics=performance_metrics,
         ))
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching portfolio detail {portfolio_id}: {e}")
-        # await handle_database_error(e, f"fetch portfolio detail {portfolio_id}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error fetching portfolio details"

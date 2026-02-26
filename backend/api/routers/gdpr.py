@@ -130,40 +130,14 @@ class RetentionReportResponse(BaseModel):
     categories: Dict[str, Any]
 
 
-# =============================================================================
-# Helper Functions
-# =============================================================================
 
-def get_client_ip(request: Request) -> Optional[str]:
-    """Extract client IP address from request"""
-    # Check for forwarded headers first (for proxy/load balancer scenarios)
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+# get_client_ip lives in gdpr_service; local alias for backward compat
+get_client_ip = gdpr_service.get_client_ip
 
-    if request.client:
-        return request.client.host
-
-    return None
-
-
-# =============================================================================
-# Data Export Endpoints (GDPR Articles 15 & 20)
-# =============================================================================
 
 @router.get(
     "/users/me/data-export",
     summary="Export user data (GDPR Right to Access & Portability)",
-    description="Export all personal data associated with the authenticated user. "
-                "Implements GDPR Article 15 (Right to Access) and Article 20 "
-                "(Right to Data Portability). "
-                "Rate limited to 3 requests per hour to prevent abuse.",
-    responses={
-        200: {"description": "User data exported successfully"},
-        401: {"description": "Not authenticated"},
-        429: {"description": "Rate limit exceeded - max 3 requests per hour"},
-        500: {"description": "Internal server error during export"}
-    }
 )
 @rate_limit(category=RateLimitCategory.API_READ, custom_rule=GDPR_EXPORT_RATE_LIMIT)
 async def export_user_data(
@@ -172,18 +146,7 @@ async def export_user_data(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DataExportFullResponse]:
-    """
-    Export all personal data for the authenticated user.
-
-    GDPR Article 15 - Right of access by the data subject:
-    The data subject shall have the right to obtain from the controller
-    confirmation as to whether or not personal data concerning him or her
-    are being processed.
-
-    GDPR Article 20 - Right to data portability:
-    The data subject shall have the right to receive the personal data
-    in a structured, commonly used and machine-readable format.
-    """
+    """Export all personal data (GDPR Articles 15 & 20)."""
     try:
         result = await gdpr_service.export_user_data(
             user_id=current_user.id,
@@ -208,15 +171,7 @@ async def export_user_data(
         )
 
 
-@router.get(
-    "/users/me/data-export/json",
-    summary="Export user data as JSON",
-    description="Export all personal data as a JSON file.",
-    responses={
-        200: {"description": "JSON data returned"},
-        401: {"description": "Not authenticated"}
-    }
-)
+@router.get("/users/me/data-export/json", summary="Export user data as JSON")
 async def export_user_data_json(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -238,21 +193,9 @@ async def export_user_data_json(
         )
 
 
-# =============================================================================
-# Data Deletion Endpoints (GDPR Article 17)
-# =============================================================================
-
 @router.post(
     "/users/me/delete-request",
     summary="Request account deletion (GDPR Right to Erasure)",
-    description="Initiate the right-to-erasure process. User data will be "
-                "anonymized or deleted based on regulatory requirements.",
-    responses={
-        200: {"description": "Deletion request created successfully"},
-        401: {"description": "Not authenticated"},
-        409: {"description": "Deletion already in progress"},
-        500: {"description": "Internal server error"}
-    }
 )
 async def request_deletion(
     request: Request,
@@ -260,16 +203,7 @@ async def request_deletion(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeleteRequestResponse]:
-    """
-    Initiate account deletion request.
-
-    GDPR Article 17 - Right to erasure ('right to be forgotten'):
-    The data subject shall have the right to obtain from the controller
-    the erasure of personal data concerning him or her without undue delay.
-
-    Note: For SEC and financial regulatory compliance, transaction data is
-    anonymized rather than deleted to maintain audit trails.
-    """
+    """Initiate account deletion (GDPR Article 17 - Right to erasure)."""
     try:
         result = await gdpr_service.request_deletion(
             user_id=current_user.id,
@@ -277,21 +211,8 @@ async def request_deletion(
             reason=reason,
         )
 
-        return success_response(data=DeleteRequestResponse(
-            request_id=result["request_id"],
-            status=result["status"],
-            message=result["message"],
-            estimated_completion=datetime.fromisoformat(
-                result["estimated_completion"]
-            ) if result.get("estimated_completion") else None,
-            deletion_scheduled_at=datetime.now(timezone.utc),
-            anonymization_complete=False,
-            retained_for_compliance=[
-                "Transaction history (anonymized for SEC compliance - 7 years)",
-                "Audit logs (retained for regulatory requirements - 7 years)",
-                "Consent records (retained for compliance - 10 years)"
-            ]
-        ))
+        resp = gdpr_service.build_deletion_request_response(result)
+        return success_response(data=DeleteRequestResponse(**resp))
 
     except Exception as e:
         logger.error(f"Error processing deletion request: {e}")
@@ -304,39 +225,21 @@ async def request_deletion(
 @router.post(
     "/users/me/delete-request/{request_id}/process",
     summary="Process deletion request",
-    description="Process a pending deletion request. Admin only.",
-    responses={
-        200: {"description": "Deletion processed successfully"},
-        404: {"description": "Deletion request not found"},
-        500: {"description": "Internal server error"}
-    }
 )
 async def process_deletion_request(
     request_id: str,
     request: Request,
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeleteRequestResponse]:
-    """Process a pending deletion request"""
+    """Process a pending deletion request."""
     try:
         result = await gdpr_service.process_deletion(
             request_id=request_id,
             session=db,
         )
 
-        return success_response(data=DeleteRequestResponse(
-            request_id=result["request_id"],
-            status=result["status"],
-            message="Deletion completed successfully",
-            deletion_scheduled_at=datetime.fromisoformat(
-                result["completion_date"]
-            ) if result.get("completion_date") else None,
-            anonymization_complete=True,
-            deleted_records=result.get("deleted_records", {}),
-            anonymized_records=result.get("anonymized_records", {}),
-            retained_for_compliance=list(
-                result.get("retained_for_compliance", {}).keys()
-            )
-        ))
+        resp = gdpr_service.build_deletion_processed_response(result)
+        return success_response(data=DeleteRequestResponse(**resp))
 
     except ValueError as e:
         raise HTTPException(
@@ -354,11 +257,6 @@ async def process_deletion_request(
 @router.get(
     "/users/me/delete-request/{request_id}/audit",
     summary="Get deletion audit trail",
-    description="Get the audit trail for a deletion request.",
-    responses={
-        200: {"description": "Audit trail retrieved"},
-        404: {"description": "Request not found"}
-    }
 )
 async def get_deletion_audit(
     request_id: str,
@@ -386,30 +284,13 @@ async def get_deletion_audit(
     ))
 
 
-# =============================================================================
-# Consent Management Endpoints (GDPR Article 7)
-# =============================================================================
-
-@router.get(
-    "/users/me/consent",
-    summary="Get consent status",
-    description="Retrieve current consent status for all consent types.",
-    responses={
-        200: {"description": "Consent status retrieved successfully"},
-        401: {"description": "Not authenticated"}
-    }
-)
+@router.get("/users/me/consent", summary="Get consent status")
 async def get_consent_status(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentStatusResponse]:
-    """
-    Get the current consent status for the authenticated user.
-
-    Returns all consent records including data processing, marketing,
-    analytics, and third-party sharing consents.
-    """
+    """Get current consent status for the authenticated user."""
     try:
         user_id = current_user.id
 
@@ -433,15 +314,7 @@ async def get_consent_status(
         )
 
 
-@router.get(
-    "/users/me/consent/history",
-    summary="Get consent history",
-    description="Retrieve complete consent history for the user.",
-    responses={
-        200: {"description": "Consent history retrieved"},
-        401: {"description": "Not authenticated"}
-    }
-)
+@router.get("/users/me/consent/history", summary="Get consent history")
 async def get_consent_history(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -469,33 +342,14 @@ async def get_consent_history(
         )
 
 
-@router.post(
-    "/users/me/consent",
-    summary="Record consent",
-    description="Record user consent for a specific purpose.",
-    responses={
-        200: {"description": "Consent recorded successfully"},
-        401: {"description": "Not authenticated"},
-        400: {"description": "Invalid consent type"}
-    }
-)
+@router.post("/users/me/consent", summary="Record consent")
 async def record_consent(
     consent_request: ConsentRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentRecordResponse]:
-    """
-    Record user consent for a specific purpose.
-
-    GDPR requires explicit consent for data processing activities.
-    This endpoint records consent with:
-    - Consent type (data_processing, marketing, analytics, etc.)
-    - Whether consent is granted or denied
-    - Legal basis for processing
-    - IP address for audit purposes
-    - Timestamp of consent action
-    """
+    """Record user consent for a specific processing purpose."""
     try:
         user_id = current_user.id
 
@@ -541,16 +395,7 @@ async def record_consent(
         )
 
 
-@router.delete(
-    "/users/me/consent/{consent_type}",
-    summary="Withdraw consent",
-    description="Withdraw previously granted consent for a specific purpose.",
-    responses={
-        200: {"description": "Consent withdrawn successfully"},
-        401: {"description": "Not authenticated"},
-        400: {"description": "Invalid consent type"}
-    }
-)
+@router.delete("/users/me/consent/{consent_type}", summary="Withdraw consent")
 async def withdraw_consent(
     consent_type: Literal[
         "data_processing", "marketing", "analytics",
@@ -560,13 +405,7 @@ async def withdraw_consent(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[ConsentRecordResponse]:
-    """
-    Withdraw consent for a specific purpose.
-
-    GDPR Article 7(3) - The data subject shall have the right to withdraw
-    his or her consent at any time. The withdrawal of consent shall not
-    affect the lawfulness of processing based on consent before its withdrawal.
-    """
+    """Withdraw consent for a specific purpose (GDPR Article 7(3))."""
     try:
         user_id = current_user.id
 
@@ -605,15 +444,7 @@ async def withdraw_consent(
         )
 
 
-@router.get(
-    "/users/me/consent/{consent_type}/check",
-    summary="Check specific consent",
-    description="Check if user has valid consent for a specific purpose.",
-    responses={
-        200: {"description": "Consent check completed"},
-        401: {"description": "Not authenticated"}
-    }
-)
+@router.get("/users/me/consent/{consent_type}/check", summary="Check specific consent")
 async def check_consent(
     consent_type: Literal[
         "data_processing", "marketing", "analytics",
@@ -650,19 +481,7 @@ async def check_consent(
         )
 
 
-# =============================================================================
-# Data Retention Endpoints
-# =============================================================================
-
-@router.get(
-    "/users/me/retention-report",
-    summary="Get data retention report",
-    description="Get a report showing data categories and their retention periods.",
-    responses={
-        200: {"description": "Retention report generated"},
-        401: {"description": "Not authenticated"}
-    }
-)
+@router.get("/users/me/retention-report", summary="Get data retention report")
 async def get_retention_report(
     request: Request,
     current_user: User = Depends(get_current_user),
@@ -691,24 +510,13 @@ async def get_retention_report(
         )
 
 
-@router.post(
-    "/admin/retention/enforce",
-    summary="Enforce retention policies (Admin)",
-    description="Run retention policy enforcement to clean up expired data.",
-    responses={
-        200: {"description": "Retention policies enforced"},
-        403: {"description": "Admin access required"}
-    }
-)
+@router.post("/admin/retention/enforce", summary="Enforce retention policies (Admin)")
 async def enforce_retention_policies(
     request: Request,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
-    """
-    Enforce data retention policies by cleaning up expired data.
-    Admin only endpoint.
-    """
+    """Enforce data retention policies (admin only)."""
     try:
         background_tasks.add_task(
             retention_manager.enforce_retention_policies,
@@ -729,10 +537,6 @@ async def enforce_retention_policies(
         )
 
 
-# =============================================================================
-# Anonymization Endpoints (GDPR Article 17 - Alternative to deletion)
-# =============================================================================
-
 class AnonymizeRequest(BaseModel):
     """Request model for anonymization"""
     confirm: bool = Field(..., description="Confirmation that user wants to anonymize data")
@@ -748,36 +552,14 @@ class AnonymizeResponse(BaseModel):
     anonymized_records: Dict[str, int]
 
 
-@router.post(
-    "/users/me/anonymize",
-    summary="Anonymize user data",
-    description="Anonymize personal data while retaining records for compliance. "
-                "Alternative to full deletion for SEC/regulatory requirements.",
-    responses={
-        200: {"description": "Data anonymization initiated"},
-        401: {"description": "Not authenticated"},
-        400: {"description": "Confirmation required"},
-        500: {"description": "Internal server error"}
-    }
-)
+@router.post("/users/me/anonymize", summary="Anonymize user data")
 async def anonymize_user_data(
     anonymize_request: AnonymizeRequest,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[AnonymizeResponse]:
-    """
-    Anonymize user data while retaining records for compliance.
-
-    This endpoint anonymizes personal identifiable information while keeping
-    transaction and audit data for regulatory compliance (SEC 7-year requirement).
-
-    Unlike deletion, anonymization:
-    - Replaces PII with anonymized values
-    - Keeps financial transaction data intact
-    - Maintains audit trail integrity
-    - Allows continued regulatory compliance
-    """
+    """Anonymize personal data while retaining records for SEC compliance."""
     try:
         if not anonymize_request.confirm:
             raise HTTPException(
@@ -812,10 +594,6 @@ async def anonymize_user_data(
         )
 
 
-# =============================================================================
-# Audit Trail Endpoints (GDPR Article 30 - Records of processing)
-# =============================================================================
-
 class AuditEntry(BaseModel):
     """Model for a single audit entry"""
     id: int
@@ -837,17 +615,7 @@ class AuditTrailResponse(BaseModel):
     limit: int
 
 
-@router.get(
-    "/users/me/audit",
-    summary="Get audit trail",
-    description="Retrieve audit trail of all data processing activities for the user. "
-                "Supports pagination with skip and limit parameters.",
-    responses={
-        200: {"description": "Audit trail retrieved successfully"},
-        401: {"description": "Not authenticated"},
-        500: {"description": "Internal server error"}
-    }
-)
+@router.get("/users/me/audit", summary="Get audit trail")
 async def get_audit_trail(
     request: Request,
     skip: int = 0,
@@ -855,21 +623,7 @@ async def get_audit_trail(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[AuditTrailResponse]:
-    """
-    Get comprehensive audit trail for the authenticated user.
-
-    GDPR Article 30 - Records of processing activities:
-    Controllers must maintain records of processing activities under their responsibility.
-
-    This endpoint provides transparency by showing all data processing activities
-    including:
-    - Data access (exports, views)
-    - Data modifications (updates, edits)
-    - Consent changes (granted, withdrawn)
-    - Account actions (login, logout, settings changes)
-
-    Supports pagination for large audit histories.
-    """
+    """Get audit trail of data processing activities (GDPR Article 30)."""
     try:
         user_id = current_user.id
 
