@@ -5,7 +5,6 @@ Provides user-scoped watchlist management with stock tracking and price alerts.
 
 from fastapi import APIRouter, HTTPException, Depends, status, Path, Query
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +28,9 @@ from backend.models.api_response import ApiResponse, success_response
 from backend.services.watchlist_service import (
     convert_watchlist_to_response,
     convert_watchlist_to_summary,
+    build_item_response,
+    apply_watchlist_updates,
+    find_watchlist_item,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,7 +75,6 @@ async def get_watchlist_or_404(
             detail=f"Watchlist with ID {watchlist_id} not found"
         )
 
-    # Additional ownership check for mutations
     if require_ownership and watchlist.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -81,6 +82,17 @@ async def get_watchlist_or_404(
         )
 
     return watchlist
+
+
+async def _get_stock_or_404(symbol: str, db: AsyncSession) -> Any:
+    """Look up a stock by symbol, raising HTTP 404 if not found."""
+    stock = await stock_repository.get_by_symbol(symbol, session=db)
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock with symbol '{symbol}' not found"
+        )
+    return stock
 
 
 # =======================
@@ -114,14 +126,13 @@ async def get_user_watchlists(
         )
 
         summaries = []
-        for watchlist in watchlists:
+        for wl in watchlists:
             summary_data = None
             if include_items:
                 summary_data = await watchlist_repository.get_watchlist_summary(
-                    watchlist.id,
-                    session=db
+                    wl.id, session=db
                 )
-            summaries.append(convert_watchlist_to_summary(watchlist, summary_data))
+            summaries.append(convert_watchlist_to_summary(wl, summary_data))
 
         return success_response(data=summaries)
 
@@ -161,7 +172,6 @@ async def create_watchlist(
             is_public=watchlist_data.is_public,
             session=db
         )
-
         logger.info(f"Created watchlist '{watchlist.name}' for user {current_user.id}")
         return success_response(data=convert_watchlist_to_response(watchlist))
 
@@ -198,16 +208,11 @@ async def get_default_watchlist(
     """
     try:
         watchlist = await watchlist_repository.get_default_watchlist(
-            user_id=current_user.id,
-            session=db
+            user_id=current_user.id, session=db
         )
-
-        # Get items with price data
         items_data = await watchlist_repository.get_watchlist_items_with_prices(
-            watchlist.id,
-            session=db
+            watchlist.id, session=db
         )
-
         return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
     except Exception as e:
@@ -243,19 +248,15 @@ async def get_watchlist(
             watchlist_id, current_user.id, db, require_ownership=False
         )
 
-        # Verify access (owner or public)
         if watchlist.user_id != current_user.id and not watchlist.is_public:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to access this watchlist"
             )
 
-        # Get items with price data
         items_data = await watchlist_repository.get_watchlist_items_with_prices(
-            watchlist.id,
-            session=db
+            watchlist.id, session=db
         )
-
         return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
     except HTTPException:
@@ -293,28 +294,14 @@ async def update_watchlist(
     try:
         watchlist = await get_watchlist_or_404(watchlist_id, current_user.id, db)
 
-        # Build update dict with only provided fields
-        update_data = {}
-        if watchlist_data.name is not None:
-            update_data["name"] = watchlist_data.name
-        if watchlist_data.description is not None:
-            update_data["description"] = watchlist_data.description
-        if watchlist_data.is_public is not None:
-            update_data["is_public"] = watchlist_data.is_public
-
-        if update_data:
-            for key, value in update_data.items():
-                setattr(watchlist, key, value)
-            watchlist.updated_at = datetime.now(timezone.utc)
-            await db.flush()
-            await db.refresh(watchlist)
-
-        # Get items with price data
-        items_data = await watchlist_repository.get_watchlist_items_with_prices(
-            watchlist.id,
-            session=db
+        await apply_watchlist_updates(
+            watchlist, watchlist_data.name,
+            watchlist_data.description, watchlist_data.is_public, db
         )
 
+        items_data = await watchlist_repository.get_watchlist_items_with_prices(
+            watchlist.id, session=db
+        )
         logger.info(f"Updated watchlist {watchlist_id} for user {current_user.id}")
         return success_response(data=convert_watchlist_to_response(watchlist, items_data))
 
@@ -357,17 +344,13 @@ async def delete_watchlist(
     """
     try:
         deleted = await watchlist_repository.delete_watchlist(
-            watchlist_id=watchlist_id,
-            user_id=current_user.id,
-            session=db
+            watchlist_id=watchlist_id, user_id=current_user.id, session=db
         )
-
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Watchlist with ID {watchlist_id} not found"
             )
-
         logger.info(f"Deleted watchlist {watchlist_id} for user {current_user.id}")
         return None
 
@@ -410,47 +393,17 @@ async def add_watchlist_item(
     Enable alerts to get notified when the target price is reached.
     """
     try:
-        # Verify watchlist ownership
-        watchlist = await get_watchlist_or_404(watchlist_id, current_user.id, db)
+        await get_watchlist_or_404(watchlist_id, current_user.id, db)
 
-        # Look up stock by symbol
-        stock = await stock_repository.get_by_symbol(item_data.symbol, session=db)
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{item_data.symbol}' not found"
-            )
-
-        # Add item to watchlist
+        stock = await _get_stock_or_404(item_data.symbol, db)
         target_price = Decimal(str(item_data.target_price)) if item_data.target_price else None
         item = await watchlist_repository.add_item_to_watchlist(
-            watchlist_id=watchlist_id,
-            stock_id=stock.id,
-            target_price=target_price,
-            notes=item_data.notes,
-            alert_enabled=item_data.alert_enabled,
-            session=db
+            watchlist_id=watchlist_id, stock_id=stock.id,
+            target_price=target_price, notes=item_data.notes,
+            alert_enabled=item_data.alert_enabled, session=db
         )
-
         logger.info(f"Added {item_data.symbol} to watchlist {watchlist_id}")
-
-        return success_response(data=WatchlistItemResponse(
-            id=item.id,
-            watchlist_id=item.watchlist_id,
-            stock_id=item.stock_id,
-            target_price=float(item.target_price) if item.target_price else None,
-            notes=item.notes,
-            alert_enabled=item.alert_enabled,
-            added_at=item.added_at,
-            symbol=stock.symbol,
-            company_name=stock.name,
-            current_price=None,
-            price_change=None,
-            price_change_percent=None,
-            volume=None,
-            market_cap=stock.market_cap,
-            sector=stock.sector,
-        ))
+        return success_response(data=build_item_response(item, stock))
 
     except HTTPException:
         raise
@@ -495,20 +448,12 @@ async def update_watchlist_item(
     Set target_price to 0 to clear the target price.
     """
     try:
-        # Verify watchlist ownership
-        watchlist = await get_watchlist_or_404(watchlist_id, current_user.id, db)
+        await get_watchlist_or_404(watchlist_id, current_user.id, db)
 
-        # Convert target_price to Decimal if provided
-        target_price = None
-        if item_data.target_price is not None:
-            target_price = Decimal(str(item_data.target_price))
-
-        # Update the item
+        target_price = Decimal(str(item_data.target_price)) if item_data.target_price is not None else None
         updated_item = await watchlist_repository.update_item(
-            item_id=item_id,
-            target_price=target_price,
-            notes=item_data.notes,
-            alert_enabled=item_data.alert_enabled,
+            item_id=item_id, target_price=target_price,
+            notes=item_data.notes, alert_enabled=item_data.alert_enabled,
             session=db
         )
 
@@ -518,35 +463,15 @@ async def update_watchlist_item(
                 detail=f"Item with ID {item_id} not found"
             )
 
-        # Verify item belongs to the watchlist
         if updated_item.watchlist_id != watchlist_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Item with ID {item_id} not found in this watchlist"
             )
 
-        # Get stock details
         stock = await stock_repository.get_by_id(updated_item.stock_id, session=db)
-
         logger.info(f"Updated item {item_id} in watchlist {watchlist_id}")
-
-        return success_response(data=WatchlistItemResponse(
-            id=updated_item.id,
-            watchlist_id=updated_item.watchlist_id,
-            stock_id=updated_item.stock_id,
-            target_price=float(updated_item.target_price) if updated_item.target_price else None,
-            notes=updated_item.notes,
-            alert_enabled=updated_item.alert_enabled,
-            added_at=updated_item.added_at,
-            symbol=stock.symbol if stock else "UNKNOWN",
-            company_name=stock.name if stock else None,
-            current_price=None,
-            price_change=None,
-            price_change_percent=None,
-            volume=None,
-            market_cap=stock.market_cap if stock else None,
-            sector=stock.sector if stock else None,
-        ))
+        return success_response(data=build_item_response(updated_item, stock))
 
     except HTTPException:
         raise
@@ -581,33 +506,18 @@ async def remove_watchlist_item(
     This action is irreversible.
     """
     try:
-        # Verify watchlist ownership
-        watchlist = await get_watchlist_or_404(watchlist_id, current_user.id, db)
+        await get_watchlist_or_404(watchlist_id, current_user.id, db)
 
-        # Find the item first to get the stock_id
-        from sqlalchemy import select
-        from backend.models.unified_models import WatchlistItem
-
-        query = select(WatchlistItem).where(
-            WatchlistItem.id == item_id,
-            WatchlistItem.watchlist_id == watchlist_id
-        )
-        result = await db.execute(query)
-        item = result.scalar_one_or_none()
-
+        item = await find_watchlist_item(item_id, watchlist_id, db)
         if not item:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Item with ID {item_id} not found in this watchlist"
             )
 
-        # Remove the item
         removed = await watchlist_repository.remove_item_from_watchlist(
-            watchlist_id=watchlist_id,
-            stock_id=item.stock_id,
-            session=db
+            watchlist_id=watchlist_id, stock_id=item.stock_id, session=db
         )
-
         if not removed:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -647,55 +557,19 @@ async def add_to_default_watchlist(
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
 ) -> ApiResponse[WatchlistItemResponse]:
-    """
-    Quick add a stock to the user's default watchlist.
-
-    Creates the default watchlist if it doesn't exist.
-    This is a convenience endpoint for quickly adding stocks from search results.
-    """
+    """Quick add a stock to the user's default watchlist (auto-creates it)."""
     try:
         symbol = symbol.upper()
-
-        # Get or create default watchlist
         watchlist = await watchlist_repository.get_default_watchlist(
-            user_id=current_user.id,
-            session=db
+            user_id=current_user.id, session=db
         )
 
-        # Look up stock by symbol
-        stock = await stock_repository.get_by_symbol(symbol, session=db)
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{symbol}' not found"
-            )
-
-        # Add item to watchlist
+        stock = await _get_stock_or_404(symbol, db)
         item = await watchlist_repository.add_item_to_watchlist(
-            watchlist_id=watchlist.id,
-            stock_id=stock.id,
-            session=db
+            watchlist_id=watchlist.id, stock_id=stock.id, session=db
         )
-
         logger.info(f"Added {symbol} to default watchlist for user {current_user.id}")
-
-        return success_response(data=WatchlistItemResponse(
-            id=item.id,
-            watchlist_id=item.watchlist_id,
-            stock_id=item.stock_id,
-            target_price=float(item.target_price) if item.target_price else None,
-            notes=item.notes,
-            alert_enabled=item.alert_enabled,
-            added_at=item.added_at,
-            symbol=stock.symbol,
-            company_name=stock.name,
-            current_price=None,
-            price_change=None,
-            price_change_percent=None,
-            volume=None,
-            market_cap=stock.market_cap,
-            sector=stock.sector,
-        ))
+        return success_response(data=build_item_response(item, stock))
 
     except HTTPException:
         raise
@@ -732,48 +606,26 @@ async def remove_from_default_watchlist(
     db: AsyncSession = Depends(get_async_db_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """
-    Quick remove a stock from the user's default watchlist.
-
-    This is a convenience endpoint for quickly removing stocks from the watchlist.
-    """
+    """Quick remove a stock from the user's default watchlist."""
     try:
         symbol = symbol.upper()
-
-        # Get default watchlist
         watchlist = await watchlist_repository.get_default_watchlist(
-            user_id=current_user.id,
-            session=db
+            user_id=current_user.id, session=db
         )
 
-        # Look up stock by symbol
-        stock = await stock_repository.get_by_symbol(symbol, session=db)
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{symbol}' not found"
-            )
-
-        # Check if stock is in watchlist
+        stock = await _get_stock_or_404(symbol, db)
         in_watchlist = await watchlist_repository.is_stock_in_watchlist(
-            watchlist_id=watchlist.id,
-            stock_id=stock.id,
-            session=db
+            watchlist_id=watchlist.id, stock_id=stock.id, session=db
         )
-
         if not in_watchlist:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Stock '{symbol}' is not in your default watchlist"
             )
 
-        # Remove the stock
         await watchlist_repository.remove_item_from_watchlist(
-            watchlist_id=watchlist.id,
-            stock_id=stock.id,
-            session=db
+            watchlist_id=watchlist.id, stock_id=stock.id, session=db
         )
-
         logger.info(f"Removed {symbol} from default watchlist for user {current_user.id}")
         return None
 
@@ -809,33 +661,20 @@ async def check_symbol_in_watchlists(
     try:
         symbol = symbol.upper()
 
-        # Look up stock by symbol
-        stock = await stock_repository.get_by_symbol(symbol, session=db)
-        if not stock:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock with symbol '{symbol}' not found"
-            )
-
-        # Get all user's watchlists
+        stock = await _get_stock_or_404(symbol, db)
         watchlists = await watchlist_repository.get_user_watchlists(
-            user_id=current_user.id,
-            include_items=True,
-            session=db
+            user_id=current_user.id, include_items=True, session=db
         )
 
-        # Check each watchlist
         in_watchlists = []
-        for watchlist in watchlists:
+        for wl in watchlists:
             is_in = await watchlist_repository.is_stock_in_watchlist(
-                watchlist_id=watchlist.id,
-                stock_id=stock.id,
-                session=db
+                watchlist_id=wl.id, stock_id=stock.id, session=db
             )
             if is_in:
                 in_watchlists.append({
-                    "watchlist_id": watchlist.id,
-                    "watchlist_name": watchlist.name
+                    "watchlist_id": wl.id,
+                    "watchlist_name": wl.name
                 })
 
         return success_response(data={

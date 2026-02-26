@@ -9,10 +9,12 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.watchlist_repository import watchlist_repository
 from backend.repositories.stock_repository import stock_repository
+from backend.models.unified_models import WatchlistItem
 from backend.models.schemas import (
     WatchlistItemResponse,
     WatchlistResponse,
@@ -20,6 +22,91 @@ from backend.models.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =======================
+# Pure Helper Functions
+# =======================
+
+def build_item_response(item: Any, stock: Any = None) -> WatchlistItemResponse:
+    """
+    Build a WatchlistItemResponse from a watchlist item and its associated stock.
+
+    This is a pure data-transformation helper shared by multiple router endpoints
+    to eliminate repeated response-building boilerplate.
+    """
+    return WatchlistItemResponse(
+        id=item.id,
+        watchlist_id=item.watchlist_id,
+        stock_id=item.stock_id,
+        target_price=float(item.target_price) if item.target_price else None,
+        notes=item.notes,
+        alert_enabled=item.alert_enabled,
+        added_at=item.added_at,
+        symbol=stock.symbol if stock else "UNKNOWN",
+        company_name=stock.name if stock else None,
+        current_price=None,
+        price_change=None,
+        price_change_percent=None,
+        volume=None,
+        market_cap=stock.market_cap if stock else None,
+        sector=stock.sector if stock else None,
+    )
+
+
+def build_update_data(
+    name: Optional[str],
+    description: Optional[str],
+    is_public: Optional[bool],
+) -> Dict[str, Any]:
+    """Build an update dict from optional fields, including only provided values."""
+    update_data: Dict[str, Any] = {}
+    if name is not None:
+        update_data["name"] = name
+    if description is not None:
+        update_data["description"] = description
+    if is_public is not None:
+        update_data["is_public"] = is_public
+    return update_data
+
+
+async def apply_watchlist_updates(
+    watchlist: Any,
+    name: Optional[str],
+    description: Optional[str],
+    is_public: Optional[bool],
+    db: AsyncSession,
+) -> None:
+    """
+    Apply partial updates to a watchlist object and flush to the database.
+
+    Only modifies fields whose values are not None.
+    """
+    update_data = build_update_data(name, description, is_public)
+    if update_data:
+        for key, value in update_data.items():
+            setattr(watchlist, key, value)
+        watchlist.updated_at = datetime.now(timezone.utc)
+        await db.flush()
+        await db.refresh(watchlist)
+
+
+async def find_watchlist_item(
+    item_id: int,
+    watchlist_id: int,
+    db: AsyncSession,
+) -> Optional[Any]:
+    """
+    Look up a watchlist item by ID, scoped to a specific watchlist.
+
+    Returns the item if found, None otherwise.
+    """
+    query = select(WatchlistItem).where(
+        WatchlistItem.id == item_id,
+        WatchlistItem.watchlist_id == watchlist_id,
+    )
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
 
 
 # =======================
