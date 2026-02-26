@@ -11,6 +11,7 @@ from backend.services.watchlist_service import WatchlistService, watchlist_servi
 from backend.services.stocks_service import StocksService, stocks_service
 import backend.services.gdpr_service as gdpr_service
 import backend.services.agents_service as agents_service
+import backend.services.websocket_service as websocket_service
 
 __all__ = [
     'RecommendationService',
@@ -27,4 +28,5 @@ __all__ = [
     'stocks_service',
     'gdpr_service',
     'agents_service',
+    'websocket_service',
 ]

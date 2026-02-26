@@ -5,7 +5,7 @@ Model Monitoring - Performance tracking, drift detection, and alerting
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Callable, Dict, List, Optional, Any, Tuple
 from enum import Enum
 import numpy as np
 import pandas as pd
