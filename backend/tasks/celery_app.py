@@ -5,7 +5,6 @@ from celery import Celery
 from celery.schedules import crontab
 from kombu import Exchange, Queue
 import os
-from datetime import timedelta
 
 # Get configuration from environment
 # Prefer REDIS_URL env var if set (for Docker), otherwise build from components
@@ -154,7 +153,7 @@ celery_app.conf.update(
         # Portfolio tasks
         'update-portfolio-values': {
             'task': 'backend.tasks.portfolio_tasks.update_all_portfolio_values',
-            'schedule': timedelta(minutes=15),  # Every 15 minutes during market hours
+            'schedule': crontab(minute='*/15', hour='9-16', day_of_week='mon-fri'),  # Every 15 min during market hours
             'options': {'queue': 'default'}
         },
         'check-rebalancing': {
@@ -171,7 +170,7 @@ celery_app.conf.update(
         },
         'check-price-alerts': {
             'task': 'backend.tasks.notification_tasks.check_price_alerts',
-            'schedule': timedelta(minutes=5),  # Every 5 minutes during market hours
+            'schedule': crontab(minute='*/5', hour='9-16', day_of_week='mon-fri'),  # Every 5 min during market hours
             'options': {'queue': 'notifications'}
         },
         'check-watchlist-price-alerts': {

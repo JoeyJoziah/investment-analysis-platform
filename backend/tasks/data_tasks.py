@@ -545,15 +545,111 @@ def update_stock_complete(symbol: str) -> Dict[str, Any]:
 @celery_app.task
 def update_stock_prices(symbol: str, period: str = '1d') -> Dict[str, Any]:
     """
-    Update stock prices for given symbol
+    Update stock prices for given symbol.
 
-    Stub implementation for Phase 2 test fixes.
-    TODO: Implement full price update functionality in future phase.
+    Fetches real-time price data using the market_data_service fallback chain
+    (Finnhub -> Polygon -> Alpha Vantage -> FMP) and persists the result to
+    the PriceHistory table.
+
+    Args:
+        symbol: Stock ticker symbol (e.g., "AAPL").
+        period: Data period hint (currently informational; real-time quote is
+                always fetched regardless of period value).
+
+    Returns:
+        Dict with symbol, period, status, and prices_updated count.
     """
-    # TODO: Implement actual price fetching and storage
+    from backend.services.market_data_service import get_stock_price, update_prices_in_db
+    from backend.utils.database import get_db_sync
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        # Fetch price from the provider chain (async)
+        price_data = loop.run_until_complete(get_stock_price(symbol))
+    except Exception as exc:
+        logger.error(f"update_stock_prices: price fetch error for {symbol}: {exc}")
+        price_data = None
+    finally:
+        loop.close()
+
+    if price_data is None:
+        logger.warning(f"update_stock_prices: no price data available for {symbol}")
+        return {
+            'symbol': symbol,
+            'period': period,
+            'status': 'no_data',
+            'prices_updated': 0,
+        }
+
+    # Persist to DB using sync session (Celery runs in sync context)
+    prices_updated = 0
+    try:
+        with get_db_sync() as db:
+            success = asyncio.run(update_prices_in_db(symbol, price_data, db))
+            # update_prices_in_db is actually synchronous internally;
+            # wrap in run() to handle the async signature cleanly.
+            prices_updated = 1 if success else 0
+    except Exception as exc:
+        # update_prices_in_db is defined as async but uses only sync DB ops.
+        # If asyncio.run fails (already-running loop edge case), fall back to
+        # calling the sync-safe internals directly.
+        logger.warning(
+            f"update_stock_prices: asyncio.run fallback for DB persist ({symbol}): {exc}"
+        )
+        try:
+            with get_db_sync() as db:
+                from backend.models.unified_models import Stock, PriceHistory
+                from sqlalchemy import and_
+                from datetime import date as date_type
+
+                stock = db.query(Stock).filter(Stock.symbol == symbol).first()
+                if stock:
+                    today = date_type.today()
+                    current_price = price_data.get("current_price", 0)
+                    if current_price:
+                        existing = db.query(PriceHistory).filter(
+                            and_(
+                                PriceHistory.stock_id == stock.id,
+                                PriceHistory.date == today,
+                            )
+                        ).first()
+                        if existing:
+                            existing.close = current_price
+                            existing.high = max(existing.high or current_price, current_price)
+                            existing.low = min(existing.low or current_price, current_price)
+                        else:
+                            db.add(PriceHistory(
+                                stock_id=stock.id,
+                                date=today,
+                                open=price_data.get("open", current_price),
+                                high=price_data.get("high", current_price),
+                                low=price_data.get("low", current_price),
+                                close=current_price,
+                                volume=price_data.get("volume", 0),
+                            ))
+                        if hasattr(stock, "last_price_update"):
+                            stock.last_price_update = datetime.now(timezone.utc)
+                        db.commit()
+                        prices_updated = 1
+        except Exception as inner_exc:
+            logger.error(
+                f"update_stock_prices: DB fallback also failed for {symbol}: {inner_exc}"
+            )
+
+    logger.info(
+        f"update_stock_prices: symbol={symbol} period={period} "
+        f"price={price_data.get('current_price')} "
+        f"provider={price_data.get('provider')} "
+        f"prices_updated={prices_updated}"
+    )
+
     return {
         'symbol': symbol,
         'period': period,
-        'status': 'success',
-        'prices_updated': 0
+        'status': 'success' if prices_updated > 0 else 'db_error',
+        'prices_updated': prices_updated,
+        'price': price_data.get('current_price'),
+        'provider': price_data.get('provider'),
     }

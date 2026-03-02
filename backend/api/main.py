@@ -357,9 +357,22 @@ async def get_metrics():
     return export_metrics()
 
 
+# ---------------------------------------------------------------------------
+# Socket.IO – mount alongside FastAPI so both share the same process.
+# The ASGIApp routes /socket.io/ requests to the Socket.IO server and
+# forwards all other requests to the FastAPI app unchanged.
+# ---------------------------------------------------------------------------
+from backend.services.socketio_service import create_socketio_asgi_app
+
+# ``socket_app`` is the top-level ASGI callable that should be passed to the
+# ASGI server (e.g. uvicorn).  The FastAPI ``app`` continues to work normally
+# for all non-Socket.IO paths.
+socket_app = create_socketio_asgi_app(app)
+
+
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        "backend.api.main:socket_app",
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,

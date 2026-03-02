@@ -6,13 +6,14 @@ Provides financial news and sentiment analysis endpoints.
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import logging
 
 from backend.config.database import get_async_db_session
 from backend.models.api_response import ApiResponse, success_response, error_response
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User
+from backend.services.news_service import fetch_news, fetch_sentiment_for_symbol
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -55,6 +56,9 @@ async def get_latest_news(
     """
     Get latest financial news articles.
 
+    Fetches from real news providers (Finnhub -> NewsAPI -> MarketAux) with
+    in-memory caching. Articles include basic sentiment scoring.
+
     Args:
         limit: Number of articles to return (1-100)
         symbols: Filter by stock symbols (comma-separated, e.g., "AAPL,MSFT,GOOGL")
@@ -65,29 +69,31 @@ async def get_latest_news(
         List of news articles with sentiment analysis
     """
     try:
-        # Parse symbols if provided
         symbol_list = [s.strip().upper() for s in symbols.split(",")] if symbols else []
 
-        # TODO: Implement actual news fetching from NewsAPI
-        # For now, return mock data to maintain API contract
-        mock_articles = [
+        raw_articles = await fetch_news(symbols=symbol_list if symbol_list else None, limit=limit)
+
+        articles = [
             NewsArticle(
-                id=f"news_{i}",
-                title=f"Market Update: {'Stock' if symbol_list else 'General Market'} News {i}",
-                description="Latest market developments and analysis",
-                url="https://example.com/news",
-                source="Reuters",
-                published_at=datetime.now(timezone.utc) - timedelta(hours=i),
-                sentiment="neutral",
-                sentiment_score=0.0,
-                related_symbols=symbol_list[:1] if symbol_list else ["SPY"],
-                image_url=None
+                id=article["id"],
+                title=article["title"],
+                description=article.get("description"),
+                url=article["url"],
+                source=article["source"],
+                published_at=article["published_at"],
+                sentiment=article.get("sentiment"),
+                sentiment_score=article.get("sentiment_score"),
+                related_symbols=article.get("related_symbols", []),
+                image_url=article.get("image_url"),
             )
-            for i in range(min(limit, 5))
+            for article in raw_articles
         ]
 
-        logger.info(f"User {current_user.id} fetched {len(mock_articles)} news articles")
-        return success_response(data=mock_articles)
+        logger.info(
+            f"User {current_user.id} fetched {len(articles)} news articles "
+            f"(symbols={symbol_list or 'market-wide'})"
+        )
+        return success_response(data=articles)
 
     except Exception as e:
         logger.error(f"Error fetching news: {e}")
@@ -107,9 +113,12 @@ async def get_news_sentiment(
     """
     Get aggregated news sentiment for a stock symbol.
 
+    Uses Finnhub's news-sentiment endpoint when available, falls back to
+    analysing article headlines with keyword scoring.
+
     Args:
         symbol: Stock symbol (e.g., "AAPL")
-        days: Number of days to analyze (1-30)
+        days: Number of days to analyze (1-30, currently uses provider defaults)
         current_user: Authenticated user
         db: Database session
 
@@ -118,21 +127,20 @@ async def get_news_sentiment(
     """
     try:
         symbol = symbol.upper()
+        sentiment_data = await fetch_sentiment_for_symbol(symbol)
 
-        # TODO: Implement actual sentiment analysis
-        # For now, return mock data
-        mock_sentiment = NewsSentiment(
-            symbol=symbol,
-            overall_sentiment="neutral",
-            sentiment_score=0.0,
-            positive_count=5,
-            negative_count=3,
-            neutral_count=12,
-            analyzed_articles=20
+        result = NewsSentiment(
+            symbol=sentiment_data["symbol"],
+            overall_sentiment=sentiment_data["overall_sentiment"],
+            sentiment_score=sentiment_data["sentiment_score"],
+            positive_count=sentiment_data["positive_count"],
+            negative_count=sentiment_data["negative_count"],
+            neutral_count=sentiment_data["neutral_count"],
+            analyzed_articles=sentiment_data["analyzed_articles"],
         )
 
         logger.info(f"User {current_user.id} fetched sentiment for {symbol}")
-        return success_response(data=mock_sentiment)
+        return success_response(data=result)
 
     except Exception as e:
         logger.error(f"Error fetching sentiment for {symbol}: {e}")
@@ -186,7 +194,24 @@ async def set_news_preferences(
         Confirmation message
     """
     try:
-        # TODO: Store preferences in database
+        from sqlalchemy import select, update
+        from backend.models.unified_models import User as UserModel
+
+        # Merge into existing preferences JSON column
+        stmt = (
+            update(UserModel)
+            .where(UserModel.id == current_user.id)
+            .values(
+                preferences={
+                    **(current_user.preferences or {}),
+                    "news_sources": sources,
+                    "news_topics": topics,
+                }
+            )
+        )
+        await db.execute(stmt)
+        await db.commit()
+
         logger.info(f"User {current_user.id} updated news preferences")
 
         return success_response(data={

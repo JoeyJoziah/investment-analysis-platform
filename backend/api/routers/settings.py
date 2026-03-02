@@ -1,6 +1,7 @@
 """
 User Settings API Router
 Provides user preferences and application settings management.
+Settings are persisted to the database via the settings_service.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -12,6 +13,7 @@ from backend.config.database import get_async_db_session
 from backend.models.api_response import ApiResponse, success_response
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User
+from backend.services import settings_service
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -62,19 +64,18 @@ async def get_preferences(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[UserPreferences]:
     """
-    Get user preferences.
+    Get user preferences from the database.
 
     Args:
         current_user: Authenticated user
         db: Database session
 
     Returns:
-        User preference settings
+        User preference settings (persisted or defaults on first access)
     """
     try:
-        # TODO: Fetch from database
-        # For now, return default preferences
-        preferences = UserPreferences()
+        data = await settings_service.get_preferences(current_user)
+        preferences = UserPreferences(**data)
 
         logger.info(f"User {current_user.id} fetched preferences")
         return success_response(data=preferences)
@@ -94,7 +95,7 @@ async def update_preferences(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[UserPreferences]:
     """
-    Update user preferences.
+    Update and persist user preferences to the database.
 
     Args:
         preferences: Updated preference settings
@@ -105,10 +106,15 @@ async def update_preferences(
         Updated user preferences
     """
     try:
-        # TODO: Save to database
-        logger.info(f"User {current_user.id} updated preferences")
+        updated_data = await settings_service.update_preferences(
+            db=db,
+            user=current_user,
+            data=preferences.model_dump(),
+        )
+        updated = UserPreferences(**updated_data)
 
-        return success_response(data=preferences)
+        logger.info(f"User {current_user.id} updated preferences")
+        return success_response(data=updated)
 
     except Exception as e:
         logger.error(f"Error updating preferences: {e}")
@@ -124,7 +130,7 @@ async def get_display_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DisplaySettings]:
     """
-    Get display and UI settings.
+    Get display and UI settings from the database.
 
     Args:
         current_user: Authenticated user
@@ -134,10 +140,11 @@ async def get_display_settings(
         Display settings
     """
     try:
-        settings = DisplaySettings()
+        data = await settings_service.get_display_settings(current_user)
+        settings_obj = DisplaySettings(**data)
 
         logger.info(f"User {current_user.id} fetched display settings")
-        return success_response(data=settings)
+        return success_response(data=settings_obj)
 
     except Exception as e:
         logger.error(f"Error fetching display settings: {e}")
@@ -154,7 +161,7 @@ async def update_display_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DisplaySettings]:
     """
-    Update display and UI settings.
+    Update and persist display and UI settings to the database.
 
     Args:
         settings: Updated display settings
@@ -165,9 +172,15 @@ async def update_display_settings(
         Updated display settings
     """
     try:
-        logger.info(f"User {current_user.id} updated display settings")
+        updated_data = await settings_service.update_display_settings(
+            db=db,
+            user=current_user,
+            data=settings.model_dump(),
+        )
+        updated = DisplaySettings(**updated_data)
 
-        return success_response(data=settings)
+        logger.info(f"User {current_user.id} updated display settings")
+        return success_response(data=updated)
 
     except Exception as e:
         logger.error(f"Error updating display settings: {e}")
@@ -183,7 +196,7 @@ async def get_trading_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[TradingSettings]:
     """
-    Get trading-related settings.
+    Get trading-related settings from the database.
 
     Args:
         current_user: Authenticated user
@@ -193,10 +206,11 @@ async def get_trading_settings(
         Trading settings
     """
     try:
-        settings = TradingSettings()
+        data = await settings_service.get_trading_settings(current_user)
+        settings_obj = TradingSettings(**data)
 
         logger.info(f"User {current_user.id} fetched trading settings")
-        return success_response(data=settings)
+        return success_response(data=settings_obj)
 
     except Exception as e:
         logger.error(f"Error fetching trading settings: {e}")
@@ -213,7 +227,7 @@ async def update_trading_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[TradingSettings]:
     """
-    Update trading-related settings.
+    Update and persist trading-related settings to the database.
 
     Args:
         settings: Updated trading settings
@@ -224,9 +238,15 @@ async def update_trading_settings(
         Updated trading settings
     """
     try:
-        logger.info(f"User {current_user.id} updated trading settings")
+        updated_data = await settings_service.update_trading_settings(
+            db=db,
+            user=current_user,
+            data=settings.model_dump(),
+        )
+        updated = TradingSettings(**updated_data)
 
-        return success_response(data=settings)
+        logger.info(f"User {current_user.id} updated trading settings")
+        return success_response(data=updated)
 
     except Exception as e:
         logger.error(f"Error updating trading settings: {e}")
@@ -242,7 +262,7 @@ async def get_notification_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[NotificationSettings]:
     """
-    Get notification preferences.
+    Get notification preferences from the database.
 
     Args:
         current_user: Authenticated user
@@ -252,10 +272,11 @@ async def get_notification_settings(
         Notification settings
     """
     try:
-        settings = NotificationSettings()
+        data = await settings_service.get_notification_settings(current_user)
+        settings_obj = NotificationSettings(**data)
 
         logger.info(f"User {current_user.id} fetched notification settings")
-        return success_response(data=settings)
+        return success_response(data=settings_obj)
 
     except Exception as e:
         logger.error(f"Error fetching notification settings: {e}")
@@ -272,7 +293,7 @@ async def update_notification_settings(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[NotificationSettings]:
     """
-    Update notification preferences.
+    Update and persist notification preferences to the database.
 
     Args:
         settings: Updated notification settings
@@ -283,9 +304,15 @@ async def update_notification_settings(
         Updated notification settings
     """
     try:
-        logger.info(f"User {current_user.id} updated notification settings")
+        updated_data = await settings_service.update_notification_settings(
+            db=db,
+            user=current_user,
+            data=settings.model_dump(),
+        )
+        updated = NotificationSettings(**updated_data)
 
-        return success_response(data=settings)
+        logger.info(f"User {current_user.id} updated notification settings")
+        return success_response(data=updated)
 
     except Exception as e:
         logger.error(f"Error updating notification settings: {e}")
@@ -301,7 +328,7 @@ async def reset_to_defaults(
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
     """
-    Reset all settings to default values.
+    Reset all settings to default values and persist the reset to the database.
 
     Args:
         current_user: Authenticated user
@@ -311,14 +338,12 @@ async def reset_to_defaults(
         Confirmation message with reset settings
     """
     try:
-        logger.info(f"User {current_user.id} reset settings to defaults")
+        reset_data = await settings_service.reset_all_settings(db=db, user=current_user)
 
+        logger.info(f"User {current_user.id} reset settings to defaults")
         return success_response(data={
             "message": "All settings reset to defaults",
-            "preferences": UserPreferences().dict(),
-            "display": DisplaySettings().dict(),
-            "trading": TradingSettings().dict(),
-            "notifications": NotificationSettings().dict()
+            **reset_data,
         })
 
     except Exception as e:
