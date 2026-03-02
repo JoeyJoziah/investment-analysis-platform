@@ -25,7 +25,6 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import mutual_info_score
 import redis
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, JSON
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)

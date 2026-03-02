@@ -8,13 +8,15 @@ from sqlalchemy import (
     ForeignKey, Text, JSON, Numeric, Index, UniqueConstraint,
     CheckConstraint, Enum as SQLEnum, DECIMAL, BigInteger, func
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm import DeclarativeBase, relationship, backref
 from datetime import datetime
 import enum
 import uuid
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Canonical declarative base for all ORM models (SQLAlchemy 2.x style)."""
+    pass
 
 # ============================================================================
 # ENUM DEFINITIONS

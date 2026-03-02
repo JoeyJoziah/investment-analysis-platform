@@ -27,7 +27,7 @@ from sqlalchemy.orm import sessionmaker
 from scipy import stats
 
 from backend.utils.cache import CacheManager
-from backend.models.database import SessionLocal
+from backend.utils.database import SessionLocal
 from backend.monitoring.real_time_alerts import RealTimeAlertManager, AlertSeverity, AlertCategory
 
 logger = logging.getLogger(__name__)

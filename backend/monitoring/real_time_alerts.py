@@ -33,7 +33,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.utils.cache import CacheManager
 from backend.utils.cost_monitor import CostMonitor
-from backend.models.database import SessionLocal
+from backend.utils.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
