@@ -12,6 +12,11 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor, V
 from sklearn.preprocessing import StandardScaler, RobustScaler
 from sklearn.model_selection import TimeSeriesSplit
 import xgboost as xgb
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
 from prophet import Prophet
 import optuna
 from typing import Dict, List, Optional, Tuple, Any
@@ -159,6 +164,123 @@ class TransformerModel(nn.Module):
         return output
 
 
+class LightGBMModel:
+    """
+    LightGBM model wrapper for stock prediction.
+    Provides a sklearn-compatible interface around LightGBM's gradient boosting.
+    Falls back gracefully when lightgbm is not installed.
+    """
+
+    def __init__(
+        self,
+        n_estimators: int = 500,
+        max_depth: int = 8,
+        learning_rate: float = 0.05,
+        num_leaves: int = 31,
+        subsample: float = 0.8,
+        colsample_bytree: float = 0.8,
+        reg_alpha: float = 0.1,
+        reg_lambda: float = 0.1,
+        random_state: int = 42,
+    ):
+        if not LIGHTGBM_AVAILABLE:
+            raise ImportError(
+                "lightgbm is not installed. Install with: pip install lightgbm"
+            )
+        self.params = {
+            'n_estimators': n_estimators,
+            'max_depth': max_depth,
+            'learning_rate': learning_rate,
+            'num_leaves': num_leaves,
+            'subsample': subsample,
+            'colsample_bytree': colsample_bytree,
+            'reg_alpha': reg_alpha,
+            'reg_lambda': reg_lambda,
+            'random_state': random_state,
+            'n_jobs': -1,
+            'verbose': -1,
+        }
+        self.model = lgb.LGBMRegressor(**self.params)
+        self._is_fitted = False
+
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        eval_set: Optional[List[Tuple[np.ndarray, np.ndarray]]] = None,
+        early_stopping_rounds: Optional[int] = 50,
+    ) -> 'LightGBMModel':
+        """Train the LightGBM model."""
+        fit_params: Dict[str, Any] = {}
+        if eval_set is not None:
+            fit_params['eval_set'] = eval_set
+            fit_params['callbacks'] = [
+                lgb.early_stopping(stopping_rounds=early_stopping_rounds or 50, verbose=False),
+                lgb.log_evaluation(period=-1),
+            ]
+        self.model.fit(X, y, **fit_params)
+        self._is_fitted = True
+        return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Generate predictions."""
+        if not self._is_fitted:
+            raise RuntimeError("Model has not been fitted yet. Call fit() first.")
+        return self.model.predict(X)
+
+    @property
+    def feature_importances_(self) -> np.ndarray:
+        """Return feature importances from the underlying model."""
+        if not self._is_fitted:
+            raise RuntimeError("Model has not been fitted yet. Call fit() first.")
+        return self.model.feature_importances_
+
+    @staticmethod
+    def is_available() -> bool:
+        """Check whether lightgbm is installed."""
+        return LIGHTGBM_AVAILABLE
+
+    def get_params(self) -> Dict[str, Any]:
+        """Return model parameters."""
+        return {**self.params}
+
+    @staticmethod
+    def create_optuna_objective(
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+    ):
+        """Return an Optuna objective function for hyperparameter tuning."""
+        def objective(trial):
+            params = {
+                'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
+                'max_depth': trial.suggest_int('max_depth', 3, 10),
+                'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3),
+                'num_leaves': trial.suggest_int('num_leaves', 15, 63),
+                'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+                'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+                'reg_alpha': trial.suggest_float('reg_alpha', 0, 1.0),
+                'reg_lambda': trial.suggest_float('reg_lambda', 0, 1.0),
+                'random_state': 42,
+                'n_jobs': -1,
+                'verbose': -1,
+            }
+            model = lgb.LGBMRegressor(**params)
+            model.fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                callbacks=[
+                    lgb.early_stopping(stopping_rounds=50, verbose=False),
+                    lgb.log_evaluation(period=-1),
+                ],
+            )
+            pred = model.predict(X_val)
+            mse = np.mean((pred - y_val) ** 2)
+            return mse
+        return objective
+
+
 class ModelManager:
     """
     Manages all ML models and ensemble predictions
@@ -179,6 +301,7 @@ class ModelManager:
         self.models['lstm'] = LSTMModel(input_dim=100).to(self.device)
         self.models['transformer'] = TransformerModel(input_dim=100).to(self.device)
         self.models['xgboost'] = None  # Will be trained
+        self.models['lightgbm'] = None  # Will be trained if available
         self.models['random_forest'] = None  # Will be trained
         self.models['prophet'] = None  # Will be fitted per stock
         
@@ -193,7 +316,13 @@ class ModelManager:
             
             self.models['xgboost'] = joblib.load('models/xgboost_model.pkl')
             self.models['random_forest'] = joblib.load('models/rf_model.pkl')
-            
+
+            if LIGHTGBM_AVAILABLE:
+                try:
+                    self.models['lightgbm'] = joblib.load('models/lightgbm_model.pkl')
+                except Exception:
+                    logger.info("No pre-trained LightGBM model found")
+
             logger.info("Loaded pre-trained models")
         except:
             logger.info("No pre-trained models found, will train from scratch")
@@ -435,7 +564,27 @@ class ModelManager:
             n_jobs=-1
         )
         self.models['random_forest'].fit(X_train, y_train)
-        
+
+        # LightGBM with Optuna (if available)
+        if LIGHTGBM_AVAILABLE:
+            lgb_objective = LightGBMModel.create_optuna_objective(
+                X_train, y_train, X_val, y_val
+            )
+            study_lgb = optuna.create_study(direction='minimize')
+            study_lgb.optimize(lgb_objective, n_trials=50, show_progress_bar=False)
+
+            best_params_lgb = study_lgb.best_params
+            self.models['lightgbm'] = LightGBMModel(**best_params_lgb)
+            self.models['lightgbm'].fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                early_stopping_rounds=50,
+            )
+            joblib.dump(self.models['lightgbm'], 'models/lightgbm_model.pkl')
+            logger.info("LightGBM model trained and saved")
+        else:
+            logger.info("LightGBM not available, skipping")
+
         # Save models
         joblib.dump(self.models['xgboost'], 'models/xgboost_model.pkl')
         joblib.dump(self.models['random_forest'], 'models/rf_model.pkl')
@@ -516,7 +665,19 @@ class ModelManager:
                 horizon,
                 'random_forest'
             )
-        
+
+        if self.models.get('lightgbm'):
+            lgb_model = self.models['lightgbm']
+            # LightGBMModel wraps predict(), so use the wrapper
+            predictions['lightgbm'] = self._predict_with_tree_model(
+                lgb_model,
+                tree_features,
+                ticker,
+                current_data,
+                horizon,
+                'lightgbm'
+            )
+
         # Time series prediction with Prophet
         predictions['prophet'] = await self._predict_with_prophet(
             ticker,
@@ -742,6 +903,7 @@ class ModelManager:
             'lstm': 0.20,
             'transformer': 0.20,
             'xgboost': 0.15,
+            'lightgbm': 0.15,
             'random_forest': 0.10,
             'prophet': 0.20
         }

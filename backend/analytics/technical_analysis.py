@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta, timezone
-# import talib  # Not available, using simplified calculations
+try:
+    import talib
+    TALIB_AVAILABLE = True
+except ImportError:
+    TALIB_AVAILABLE = False
 from scipy import stats
 from scipy.signal import argrelextrema
 import logging
@@ -83,24 +87,44 @@ class TechnicalAnalysisEngine:
         close = df['close'].values
         high = df['high'].values
         low = df['low'].values
-        
+
         indicators = {}
-        
-        # Moving Averages (simplified calculation without talib)
-        indicators['sma_5'] = np.mean(close[-5:]) if len(close) >= 5 else close[-1]
-        indicators['sma_20'] = np.mean(close[-20:]) if len(close) >= 20 else close[-1]
-        indicators['sma_50'] = np.mean(close[-50:]) if len(close) >= 50 else close[-1]
-        indicators['sma_200'] = np.mean(close[-200:]) if len(close) >= 200 else close[-1]
-        
-        indicators['ema_12'] = self._calculate_ema(close, 12)
-        indicators['ema_26'] = self._calculate_ema(close, 26)
-        indicators['ema_50'] = self._calculate_ema(close, 50)
-        
-        # MACD (simplified calculation)
-        macd_data = self._calculate_macd(close)
-        indicators['macd'] = macd_data['macd']
-        indicators['macd_signal'] = macd_data['signal']
-        indicators['macd_histogram'] = macd_data['histogram']
+
+        if TALIB_AVAILABLE:
+            close_double = close.astype(np.float64)
+            high_double = high.astype(np.float64)
+            low_double = low.astype(np.float64)
+
+            indicators['sma_5'] = talib.SMA(close_double, timeperiod=5)[-1]
+            indicators['sma_20'] = talib.SMA(close_double, timeperiod=20)[-1]
+            indicators['sma_50'] = talib.SMA(close_double, timeperiod=50)[-1]
+            indicators['sma_200'] = talib.SMA(close_double, timeperiod=200)[-1]
+
+            indicators['ema_12'] = talib.EMA(close_double, timeperiod=12)[-1]
+            indicators['ema_26'] = talib.EMA(close_double, timeperiod=26)[-1]
+            indicators['ema_50'] = talib.EMA(close_double, timeperiod=50)[-1]
+
+            macd_line, signal_line, histogram = talib.MACD(
+                close_double, fastperiod=12, slowperiod=26, signalperiod=9
+            )
+            indicators['macd'] = macd_line[-1]
+            indicators['macd_signal'] = signal_line[-1]
+            indicators['macd_histogram'] = histogram[-1]
+        else:
+            # Fallback: simplified calculations
+            indicators['sma_5'] = np.mean(close[-5:]) if len(close) >= 5 else close[-1]
+            indicators['sma_20'] = np.mean(close[-20:]) if len(close) >= 20 else close[-1]
+            indicators['sma_50'] = np.mean(close[-50:]) if len(close) >= 50 else close[-1]
+            indicators['sma_200'] = np.mean(close[-200:]) if len(close) >= 200 else close[-1]
+
+            indicators['ema_12'] = self._calculate_ema(close, 12)
+            indicators['ema_26'] = self._calculate_ema(close, 26)
+            indicators['ema_50'] = self._calculate_ema(close, 50)
+
+            macd_data = self._calculate_macd(close)
+            indicators['macd'] = macd_data['macd']
+            indicators['macd_signal'] = macd_data['signal']
+            indicators['macd_histogram'] = macd_data['histogram']
         
         # ADX (Average Directional Index) - simplified
         adx_data = self._calculate_adx(high, low, close)
@@ -132,42 +156,58 @@ class TechnicalAnalysisEngine:
         high = df['high'].values
         low = df['low'].values
         volume = df['volume'].values
-        
+
         indicators = {}
-        
-        # RSI (Relative Strength Index) - simplified
-        indicators['rsi_14'] = self._calculate_rsi(close, 14)
-        indicators['rsi_9'] = self._calculate_rsi(close, 9)
-        indicators['rsi_25'] = self._calculate_rsi(close, 25)
-        
-        # Stochastic - simplified
-        stoch_data = self._calculate_stochastic(high, low, close)
-        indicators['stoch_k'] = stoch_data['k']
-        indicators['stoch_d'] = stoch_data['d']
-        
-        # Stochastic RSI - simplified
-        stoch_rsi_data = self._calculate_stoch_rsi(close)
-        indicators['stochrsi_k'] = stoch_rsi_data['k']
-        indicators['stochrsi_d'] = stoch_rsi_data['d']
-        
-        # Williams %R - simplified
-        indicators['williams_r'] = self._calculate_williams_r(high, low, close)
-        
-        # CCI (Commodity Channel Index) - simplified
-        indicators['cci'] = self._calculate_cci(high, low, close)
-        
-        # MFI (Money Flow Index) - simplified
-        indicators['mfi'] = self._calculate_mfi(high, low, close, volume)
-        
-        # Ultimate Oscillator - simplified
-        indicators['ultimate_oscillator'] = self._calculate_ultimate_oscillator(high, low, close)
-        
-        # ROC (Rate of Change) - simplified
-        indicators['roc'] = self._calculate_roc(close, 10)
-        
-        # Momentum - simplified
-        indicators['momentum'] = self._calculate_momentum(close, 10)
-        
+
+        if TALIB_AVAILABLE:
+            close_double = close.astype(np.float64)
+            high_double = high.astype(np.float64)
+            low_double = low.astype(np.float64)
+            volume_double = volume.astype(np.float64)
+
+            indicators['rsi_14'] = talib.RSI(close_double, timeperiod=14)[-1]
+            indicators['rsi_9'] = talib.RSI(close_double, timeperiod=9)[-1]
+            indicators['rsi_25'] = talib.RSI(close_double, timeperiod=25)[-1]
+
+            slowk, slowd = talib.STOCH(
+                high_double, low_double, close_double,
+                fastk_period=14, slowk_period=3, slowk_matype=0,
+                slowd_period=3, slowd_matype=0
+            )
+            indicators['stoch_k'] = slowk[-1]
+            indicators['stoch_d'] = slowd[-1]
+
+            fastk, fastd = talib.STOCHRSI(close_double, timeperiod=14, fastk_period=5, fastd_period=3, fastd_matype=0)
+            indicators['stochrsi_k'] = fastk[-1]
+            indicators['stochrsi_d'] = fastd[-1]
+
+            indicators['williams_r'] = talib.WILLR(high_double, low_double, close_double, timeperiod=14)[-1]
+            indicators['cci'] = talib.CCI(high_double, low_double, close_double, timeperiod=20)[-1]
+            indicators['mfi'] = talib.MFI(high_double, low_double, close_double, volume_double, timeperiod=14)[-1]
+            indicators['ultimate_oscillator'] = talib.ULTOSC(high_double, low_double, close_double)[-1]
+            indicators['roc'] = talib.ROC(close_double, timeperiod=10)[-1]
+            indicators['momentum'] = talib.MOM(close_double, timeperiod=10)[-1]
+        else:
+            # Fallback: simplified calculations
+            indicators['rsi_14'] = self._calculate_rsi(close, 14)
+            indicators['rsi_9'] = self._calculate_rsi(close, 9)
+            indicators['rsi_25'] = self._calculate_rsi(close, 25)
+
+            stoch_data = self._calculate_stochastic(high, low, close)
+            indicators['stoch_k'] = stoch_data['k']
+            indicators['stoch_d'] = stoch_data['d']
+
+            stoch_rsi_data = self._calculate_stoch_rsi(close)
+            indicators['stochrsi_k'] = stoch_rsi_data['k']
+            indicators['stochrsi_d'] = stoch_rsi_data['d']
+
+            indicators['williams_r'] = self._calculate_williams_r(high, low, close)
+            indicators['cci'] = self._calculate_cci(high, low, close)
+            indicators['mfi'] = self._calculate_mfi(high, low, close, volume)
+            indicators['ultimate_oscillator'] = self._calculate_ultimate_oscillator(high, low, close)
+            indicators['roc'] = self._calculate_roc(close, 10)
+            indicators['momentum'] = self._calculate_momentum(close, 10)
+
         return indicators
     
     def _calculate_volatility_indicators(self, df: pd.DataFrame) -> Dict:
@@ -175,20 +215,39 @@ class TechnicalAnalysisEngine:
         close = df['close'].values
         high = df['high'].values
         low = df['low'].values
-        
+
         indicators = {}
-        
-        # Bollinger Bands - simplified
-        bb_data = self._calculate_bollinger_bands(close)
-        indicators['bb_upper'] = bb_data['upper']
-        indicators['bb_middle'] = bb_data['middle']
-        indicators['bb_lower'] = bb_data['lower']
-        indicators['bb_width'] = bb_data['width']
-        indicators['bb_percent'] = bb_data['percent']
-        
-        # ATR (Average True Range) - simplified
-        indicators['atr_14'] = self._calculate_atr(high, low, close, 14)
-        indicators['atr_20'] = self._calculate_atr(high, low, close, 20)
+
+        if TALIB_AVAILABLE:
+            close_double = close.astype(np.float64)
+            high_double = high.astype(np.float64)
+            low_double = low.astype(np.float64)
+
+            upper, middle, lower = talib.BBANDS(
+                close_double, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0
+            )
+            indicators['bb_upper'] = upper[-1]
+            indicators['bb_middle'] = middle[-1]
+            indicators['bb_lower'] = lower[-1]
+            bb_width = upper[-1] - lower[-1]
+            indicators['bb_width'] = bb_width
+            indicators['bb_percent'] = (
+                (close[-1] - lower[-1]) / bb_width if bb_width > 0 else 0.5
+            )
+
+            indicators['atr_14'] = talib.ATR(high_double, low_double, close_double, timeperiod=14)[-1]
+            indicators['atr_20'] = talib.ATR(high_double, low_double, close_double, timeperiod=20)[-1]
+        else:
+            # Fallback: simplified calculations
+            bb_data = self._calculate_bollinger_bands(close)
+            indicators['bb_upper'] = bb_data['upper']
+            indicators['bb_middle'] = bb_data['middle']
+            indicators['bb_lower'] = bb_data['lower']
+            indicators['bb_width'] = bb_data['width']
+            indicators['bb_percent'] = bb_data['percent']
+
+            indicators['atr_14'] = self._calculate_atr(high, low, close, 14)
+            indicators['atr_20'] = self._calculate_atr(high, low, close, 20)
         
         # Keltner Channels
         keltner = self._calculate_keltner_channels(df)
@@ -252,24 +311,52 @@ class TechnicalAnalysisEngine:
         high = df['high'].values
         low = df['low'].values
         close = df['close'].values
-        
+
         patterns = {
             'candlestick_patterns': {},
             'chart_patterns': {}
         }
-        
-        # Candlestick patterns (using TA-Lib)
-        candlestick_functions = {
-            # Simplified pattern detection without talib
-            # Basic patterns only for now
-        }
-        
-        # Simplified pattern detection
-        patterns['candlestick_patterns'] = self._detect_simple_patterns(open_prices, high, low, close)
-        
-        # Chart patterns
+
+        if TALIB_AVAILABLE:
+            op = open_prices.astype(np.float64)
+            hi = high.astype(np.float64)
+            lo = low.astype(np.float64)
+            cl = close.astype(np.float64)
+
+            talib_patterns = {
+                'doji': talib.CDLDOJI(op, hi, lo, cl),
+                'hammer': talib.CDLHAMMER(op, hi, lo, cl),
+                'engulfing': talib.CDLENGULFING(op, hi, lo, cl),
+                'morning_star': talib.CDLMORNINGSTAR(op, hi, lo, cl),
+                'evening_star': talib.CDLEVENINGSTAR(op, hi, lo, cl),
+                'shooting_star': talib.CDLSHOOTINGSTAR(op, hi, lo, cl),
+                'hanging_man': talib.CDLHANGINGMAN(op, hi, lo, cl),
+                'three_white_soldiers': talib.CDL3WHITESOLDIERS(op, hi, lo, cl),
+                'three_black_crows': talib.CDL3BLACKCROWS(op, hi, lo, cl),
+                'spinning_top': talib.CDLSPINNINGTOP(op, hi, lo, cl),
+                'marubozu': talib.CDLMARUBOZU(op, hi, lo, cl),
+                'harami': talib.CDLHARAMI(op, hi, lo, cl),
+            }
+
+            detected = {}
+            for name, result in talib_patterns.items():
+                last_val = int(result[-1])
+                if last_val != 0:
+                    detected[name] = {
+                        'detected': True,
+                        'strength': 1 if last_val > 0 else -1,
+                        'position': 0
+                    }
+            patterns['candlestick_patterns'] = detected
+        else:
+            # Fallback: simplified pattern detection
+            patterns['candlestick_patterns'] = self._detect_simple_patterns(
+                open_prices, high, low, close
+            )
+
+        # Chart patterns (geometry-based, no TA-Lib needed)
         patterns['chart_patterns'] = self._detect_chart_patterns(df)
-        
+
         return patterns
     
     def _detect_chart_patterns(self, df: pd.DataFrame) -> Dict:
