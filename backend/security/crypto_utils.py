@@ -1,7 +1,12 @@
 """
 Cryptographic Utilities Module
 
-Stub implementation for Phase 2 test fixes.
+WARNING: This is a STUB module. SecureRandom and CryptoUtils.hash_data are
+functional, but encrypt_data, decrypt_data, sign_data, verify_signature, and
+generate_key_pair are NOT implemented and will raise NotImplementedError.
+Integrate a real cryptographic library (e.g. cryptography, PyCryptodome)
+before using those methods in production.
+
 TODO: Implement full cryptographic functionality in future phase.
 """
 
@@ -55,32 +60,61 @@ class CryptoUtils:
 
     @staticmethod
     def encrypt_data(data: bytes, key: bytes) -> bytes:
-        """Encrypt data (stub - returns base64 encoded)"""
-        # TODO: Implement proper encryption (AES-GCM)
-        return base64.b64encode(data)
+        """Encrypt data with the given key.
+
+        WARNING: Not implemented. The previous stub silently returned base64-
+        encoded plaintext, providing NO encryption. Integrate a real library
+        (e.g. cryptography.fernet or AES-GCM) before calling this method.
+        """
+        raise NotImplementedError(
+            "Stub: encrypt_data is not implemented. "
+            "Integrate a real encryption library (AES-GCM / Fernet) before use."
+        )
 
     @staticmethod
     def decrypt_data(encrypted: bytes, key: bytes) -> bytes:
-        """Decrypt data (stub - returns base64 decoded)"""
-        # TODO: Implement proper decryption
-        return base64.b64decode(encrypted)
+        """Decrypt data with the given key.
+
+        WARNING: Not implemented. See encrypt_data.
+        """
+        raise NotImplementedError(
+            "Stub: decrypt_data is not implemented. "
+            "Integrate a real encryption library (AES-GCM / Fernet) before use."
+        )
 
     @staticmethod
     def generate_key_pair() -> Tuple[bytes, bytes]:
-        """Generate public/private key pair"""
-        # TODO: Implement proper key generation (RSA/ECC)
-        private_key = secrets.token_bytes(32)
-        public_key = secrets.token_bytes(32)
-        return (public_key, private_key)
+        """Generate a public/private key pair.
+
+        WARNING: Not implemented. The previous stub returned random bytes that
+        were not a valid key pair. Integrate a real library (RSA / ECC) before
+        calling this method.
+        """
+        raise NotImplementedError(
+            "Stub: generate_key_pair is not implemented. "
+            "Integrate a real key generation library (RSA / ECC) before use."
+        )
 
     @staticmethod
     def sign_data(data: bytes, private_key: bytes) -> bytes:
-        """Sign data with private key"""
-        # TODO: Implement proper signing
-        return hashlib.sha256(data + private_key).digest()
+        """Sign data with a private key.
+
+        WARNING: Not implemented. The previous stub returned a simple SHA-256
+        hash, which is NOT a cryptographic signature.
+        """
+        raise NotImplementedError(
+            "Stub: sign_data is not implemented. "
+            "Integrate a real signing library (RSA / ECDSA) before use."
+        )
 
     @staticmethod
     def verify_signature(data: bytes, signature: bytes, public_key: bytes) -> bool:
-        """Verify data signature"""
-        # TODO: Implement proper verification
-        return len(signature) == 32  # Stub validation
+        """Verify a data signature.
+
+        WARNING: Not implemented. The previous stub returned True for any
+        32-byte input, providing NO verification.
+        """
+        raise NotImplementedError(
+            "Stub: verify_signature is not implemented. "
+            "Integrate a real verification library (RSA / ECDSA) before use."
+        )

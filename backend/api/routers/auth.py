@@ -5,7 +5,6 @@ from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from typing import Optional, Dict, Any
 import os
 import logging
@@ -17,16 +16,16 @@ from backend.security.jwt_manager import get_jwt_manager, TokenClaims
 from backend.security.secrets_manager import get_secrets_manager
 from backend.security.security_config import SecurityConfig
 from backend.models.api_response import ApiResponse, success_response
+from backend.auth.oauth2 import verify_password, get_password_hash
 
 router = APIRouter(tags=["authentication"])
 
 # Security configurations
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 # JWT settings - use centralized SecurityConfig as single source of truth
 SECRET_KEY = SecurityConfig.JWT_SECRET_KEY
-ALGORITHM = SecurityConfig.JWT_ALGORITHM_FALLBACK  # HS256 for legacy compatibility
+ALGORITHM = SecurityConfig.JWT_ALGORITHM  # RS256 - matches jwt_manager
 ACCESS_TOKEN_EXPIRE_MINUTES = SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 logger = logging.getLogger(__name__)
@@ -47,13 +46,6 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
-
-# Utility functions
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()

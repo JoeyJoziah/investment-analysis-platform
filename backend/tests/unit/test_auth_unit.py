@@ -519,29 +519,23 @@ class TestRBACHasPermission:
 class TestRBACCheckAccess:
     """Tests for RoleBasedAccessControl.check_access()"""
 
-    def test_default_user_can_read(self, rbac):
-        # get_user_roles returns [Role.USER] by default
-        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ) is True
-
-    def test_default_user_can_write(self, rbac):
-        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.WRITE) is True
-
-    def test_default_user_cannot_delete(self, rbac):
-        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.DELETE) is False
-
-    def test_default_user_cannot_admin(self, rbac):
-        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.ADMIN) is False
+    def test_check_access_raises_not_implemented(self, rbac):
+        """check_access depends on get_user_roles which requires DB integration."""
+        with pytest.raises(NotImplementedError, match="requires database integration"):
+            rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ)
 
 
 class TestRBACStubMethods:
-    """Tests for stub methods that will be implemented later."""
+    """Tests for stub methods that raise NotImplementedError (need DB integration)."""
 
-    def test_get_user_roles_returns_user(self, rbac):
-        roles = rbac.get_user_roles(user_id=999)
-        assert roles == [Role.USER]
+    def test_get_user_roles_raises_not_implemented(self, rbac):
+        with pytest.raises(NotImplementedError, match="requires database integration"):
+            rbac.get_user_roles(user_id=999)
 
-    def test_assign_role_returns_true(self, rbac):
-        assert rbac.assign_role(user_id=1, role=Role.ADMIN) is True
+    def test_assign_role_raises_not_implemented(self, rbac):
+        with pytest.raises(NotImplementedError, match="requires database integration"):
+            rbac.assign_role(user_id=1, role=Role.ADMIN)
 
-    def test_revoke_role_returns_true(self, rbac):
-        assert rbac.revoke_role(user_id=1, role=Role.ADMIN) is True
+    def test_revoke_role_raises_not_implemented(self, rbac):
+        with pytest.raises(NotImplementedError, match="requires database integration"):
+            rbac.revoke_role(user_id=1, role=Role.ADMIN)

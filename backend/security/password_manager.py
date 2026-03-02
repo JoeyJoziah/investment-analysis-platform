@@ -26,11 +26,11 @@ class PasswordManager:
 
     def verify_password(self, password: str, hashed: str) -> bool:
         """Verify password against hash"""
-        # TODO: Implement proper verification
         if '$' not in hashed:
             return False
-        salt, _ = hashed.split('$', 1)
-        return self.hash_password(password).split('$')[0] == salt
+        salt, stored_hash = hashed.split('$', 1)
+        computed_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), self._iterations)
+        return computed_hash.hex() == stored_hash
 
     def generate_password(self, length: int = 16) -> str:
         """Generate secure random password"""
