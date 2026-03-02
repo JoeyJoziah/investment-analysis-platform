@@ -274,7 +274,7 @@ spec:
       - name: frontend
         image: investment-analysis/frontend:latest
         env:
-        - name: REACT_APP_API_URL
+        - name: VITE_API_URL
           value: https://api.investment-analysis.com
         ports:
         - containerPort: 80

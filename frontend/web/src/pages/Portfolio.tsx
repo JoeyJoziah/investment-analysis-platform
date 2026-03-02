@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Container,
   Grid,
@@ -23,6 +23,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   TextField,
   MenuItem,
@@ -93,9 +94,12 @@ const Portfolio: React.FC = () => {
   const { positions, transactions, metrics, isLoading, error } = useAppSelector(
     (state) => state.portfolio
   );
+  const user = useAppSelector((state) => state.app.user);
   const [tabValue, setTabValue] = useState(0);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [positionToDelete, setPositionToDelete] = useState<string | null>(null);
   const [transactionForm, setTransactionForm] = useState({
     ticker: '',
     type: 'BUY' as 'BUY' | 'SELL',
@@ -106,7 +110,11 @@ const Portfolio: React.FC = () => {
 
   // Get symbols for WebSocket subscription
   const symbols = useMemo(() => positions.map((p) => p.ticker), [positions]);
-  const portfolioId = useMemo(() => 'default-portfolio', []); // TODO: Get from props or state
+  // Derive portfolio ID from user context, falling back to a default
+  const portfolioId = useMemo(
+    () => (user?.id ? `portfolio-${user.id}` : 'default-portfolio'),
+    [user?.id]
+  );
 
   // Set up WebSocket for real-time price updates
   const { isConnected, priceUpdates, latency, subscribe, unsubscribe } = usePortfolioWebSocket(
@@ -175,7 +183,7 @@ const Portfolio: React.FC = () => {
           date: new Date().toISOString(),
         })
       ).unwrap();
-      
+
       setAddTransactionOpen(false);
       setTransactionForm({
         ticker: '',
@@ -184,14 +192,14 @@ const Portfolio: React.FC = () => {
         price: 0,
         notes: '',
       });
-      
+
       dispatch(
         addNotification({
           type: 'success',
           message: `Transaction added successfully`,
         })
       );
-      
+
       dispatch(fetchPortfolio());
     } catch (error) {
       dispatch(
@@ -203,26 +211,37 @@ const Portfolio: React.FC = () => {
     }
   };
 
-  const handleDeletePosition = async (positionId: string) => {
-    if (window.confirm('Are you sure you want to delete this position?')) {
-      try {
-        await dispatch(deletePosition(positionId)).unwrap();
-        dispatch(
-          addNotification({
-            type: 'success',
-            message: 'Position deleted successfully',
-          })
-        );
-      } catch (error) {
-        dispatch(
-          addNotification({
-            type: 'error',
-            message: 'Failed to delete position',
-          })
-        );
-      }
+  const handleDeleteClick = useCallback((positionId: string) => {
+    setPositionToDelete(positionId);
+    setDeleteConfirmOpen(true);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!positionToDelete) return;
+    setDeleteConfirmOpen(false);
+    try {
+      await dispatch(deletePosition(positionToDelete)).unwrap();
+      dispatch(
+        addNotification({
+          type: 'success',
+          message: 'Position deleted successfully',
+        })
+      );
+    } catch (error) {
+      dispatch(
+        addNotification({
+          type: 'error',
+          message: 'Failed to delete position',
+        })
+      );
     }
-  };
+    setPositionToDelete(null);
+  }, [positionToDelete, dispatch]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteConfirmOpen(false);
+    setPositionToDelete(null);
+  }, []);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -463,13 +482,18 @@ const Portfolio: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell align="center">
-                      <IconButton size="small" onClick={() => setSelectedPosition(position)}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setSelectedPosition(position)}
+                        aria-label={`Edit ${position.ticker} position`}
+                      >
                         <EditIcon fontSize="small" />
                       </IconButton>
                       <IconButton
                         size="small"
-                        onClick={() => handleDeletePosition(position.id)}
+                        onClick={() => handleDeleteClick(position.id)}
                         color="error"
+                        aria-label={`Delete ${position.ticker} position`}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -820,6 +844,29 @@ const Portfolio: React.FC = () => {
             disabled={!transactionForm.ticker || transactionForm.quantity === 0 || transactionForm.price === 0}
           >
             Add Transaction
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog (accessible replacement for window.confirm) */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="delete-confirm-title"
+        aria-describedby="delete-confirm-description"
+      >
+        <DialogTitle id="delete-confirm-title">Delete Position</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-confirm-description">
+            Are you sure you want to delete this position? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} autoFocus>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

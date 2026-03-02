@@ -150,8 +150,8 @@ jobs:
         cache-to: type=gha,mode=max,scope=frontend-${{ inputs.cache-scope }}
         build-args: |
           BUILDKIT_INLINE_CACHE=1
-          REACT_APP_ENV=${{ steps.build-args.outputs.BUILD_ENV }}
-          REACT_APP_API_URL=${{ steps.build-args.outputs.API_URL }}
+          VITE_APP_ENV=${{ steps.build-args.outputs.BUILD_ENV }}
+          VITE_API_URL=${{ steps.build-args.outputs.API_URL }}
 
     - name: Generate build summary
       run: |

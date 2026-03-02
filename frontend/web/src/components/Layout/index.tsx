@@ -46,6 +46,7 @@ import {
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
 import { toggleTheme, toggleSidebar, logout } from '../../store/slices/appSlice';
+import { SkipToMainContent } from '../../utils/accessibility';
 import SearchModal from '../SearchModal';
 import NotificationPanel from '../NotificationPanel';
 import WebSocketIndicator from '../WebSocketIndicator';
@@ -209,6 +210,7 @@ const Layout: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex' }}>
+      <SkipToMainContent />
       <AppBar
         position="fixed"
         sx={{
@@ -303,6 +305,7 @@ const Layout: React.FC = () => {
 
       <Box
         component="main"
+        id="main-content"
         sx={{
           flexGrow: 1,
           p: 3,

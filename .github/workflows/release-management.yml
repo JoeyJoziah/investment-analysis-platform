@@ -365,7 +365,7 @@ jobs:
           --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:latest" \
           --cache-from type=gha,scope=frontend-release \
           --cache-to type=gha,mode=max,scope=frontend-release \
-          --build-arg REACT_APP_VERSION="${VERSION}" \
+          --build-arg VITE_APP_VERSION="${VERSION}" \
           --push \
           .
         

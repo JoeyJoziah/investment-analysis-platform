@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, lazy } from 'react';
+import React, { useEffect, useMemo, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers';
@@ -6,7 +6,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Provider } from 'react-redux';
 
 import { store } from './store';
-import { theme } from './theme';
+import { createAppTheme } from './theme';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import PageSkeleton from './components/common/PageSkeleton';
@@ -148,7 +148,9 @@ const RoutePrefetcher: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
 function AppContent() {
   const dispatch = useAppDispatch();
-  const { isAuthenticated, isInitialized } = useAppSelector((state) => state.app);
+  const { isAuthenticated, isInitialized, themeMode } = useAppSelector((state) => state.app);
+
+  const theme = useMemo(() => createAppTheme(themeMode), [themeMode]);
 
   useEffect(() => {
     dispatch(initializeApp());
@@ -159,134 +161,137 @@ function AppContent() {
   }
 
   return (
-    <Router>
-      <RoutePrefetcher>
-      <Routes>
-        {!isAuthenticated ? (
-          <>
-            <Route
-              path="/login"
-              element={
-                <SuspenseWrapper loadingMessage="Loading login...">
-                  <Login />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <SuspenseWrapper loadingMessage="Loading registration...">
-                  <Register />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="/forgot-password"
-              element={
-                <SuspenseWrapper loadingMessage="Loading...">
-                  <ForgotPassword />
-                </SuspenseWrapper>
-              }
-            />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </>
-        ) : (
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route
-              path="dashboard"
-              element={
-                <SuspenseWrapper skeletonType="dashboard">
-                  <Dashboard />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="recommendations"
-              element={
-                <SuspenseWrapper skeletonType="list">
-                  <Recommendations />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="analysis/:ticker?"
-              element={
-                <SuspenseWrapper skeletonType="analysis">
-                  <Analysis />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="portfolio"
-              element={
-                <SuspenseWrapper skeletonType="portfolio">
-                  <Portfolio />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="market"
-              element={
-                <SuspenseWrapper skeletonType="analysis">
-                  <MarketOverview />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="watchlist"
-              element={
-                <SuspenseWrapper skeletonType="list">
-                  <Watchlist />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="alerts"
-              element={
-                <SuspenseWrapper skeletonType="list">
-                  <Alerts />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="reports"
-              element={
-                <SuspenseWrapper skeletonType="list">
-                  <Reports />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="settings"
-              element={
-                <SuspenseWrapper skeletonType="default">
-                  <Settings />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="help"
-              element={
-                <SuspenseWrapper skeletonType="default">
-                  <Help />
-                </SuspenseWrapper>
-              }
-            />
-            <Route
-              path="thesis/:stockId"
-              element={
-                <SuspenseWrapper loadingMessage="Loading investment thesis...">
-                  <InvestmentThesis />
-                </SuspenseWrapper>
-              }
-            />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Route>
-        )}
-      </Routes>
-      </RoutePrefetcher>
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <RoutePrefetcher>
+        <Routes>
+          {!isAuthenticated ? (
+            <>
+              <Route
+                path="/login"
+                element={
+                  <SuspenseWrapper loadingMessage="Loading login...">
+                    <Login />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <SuspenseWrapper loadingMessage="Loading registration...">
+                    <Register />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="/forgot-password"
+                element={
+                  <SuspenseWrapper loadingMessage="Loading...">
+                    <ForgotPassword />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </>
+          ) : (
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route
+                path="dashboard"
+                element={
+                  <SuspenseWrapper skeletonType="dashboard">
+                    <Dashboard />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="recommendations"
+                element={
+                  <SuspenseWrapper skeletonType="list">
+                    <Recommendations />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="analysis/:ticker?"
+                element={
+                  <SuspenseWrapper skeletonType="analysis">
+                    <Analysis />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="portfolio"
+                element={
+                  <SuspenseWrapper skeletonType="portfolio">
+                    <Portfolio />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="market"
+                element={
+                  <SuspenseWrapper skeletonType="analysis">
+                    <MarketOverview />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="watchlist"
+                element={
+                  <SuspenseWrapper skeletonType="list">
+                    <Watchlist />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="alerts"
+                element={
+                  <SuspenseWrapper skeletonType="list">
+                    <Alerts />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="reports"
+                element={
+                  <SuspenseWrapper skeletonType="list">
+                    <Reports />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="settings"
+                element={
+                  <SuspenseWrapper skeletonType="default">
+                    <Settings />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="help"
+                element={
+                  <SuspenseWrapper skeletonType="default">
+                    <Help />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route
+                path="thesis/:stockId"
+                element={
+                  <SuspenseWrapper loadingMessage="Loading investment thesis...">
+                    <InvestmentThesis />
+                  </SuspenseWrapper>
+                }
+              />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </Route>
+          )}
+        </Routes>
+        </RoutePrefetcher>
+      </Router>
+    </ThemeProvider>
   );
 }
 
@@ -299,12 +304,9 @@ function AppContent() {
 function App() {
   return (
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <CssBaseline />
-          <AppContent />
-        </LocalizationProvider>
-      </ThemeProvider>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <AppContent />
+      </LocalizationProvider>
     </Provider>
   );
 }

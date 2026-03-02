@@ -209,8 +209,8 @@ build_images() {
             -f "${PROJECT_ROOT}/infrastructure/docker/frontend/Dockerfile.optimized" \
             -t "investment-frontend:${VERSION}" \
             -t "investment-frontend:${target_env}" \
-            --build-arg REACT_APP_VERSION="$VERSION" \
-            --build-arg REACT_APP_ENVIRONMENT="$ENVIRONMENT" \
+            --build-arg VITE_APP_VERSION="$VERSION" \
+            --build-arg VITE_APP_ENV="$ENVIRONMENT" \
             "${PROJECT_ROOT}/frontend/web"
     fi
     

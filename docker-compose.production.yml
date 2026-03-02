@@ -170,10 +170,10 @@ services:
       context: .
       dockerfile: ./Dockerfile.frontend
       args:
-        - REACT_APP_API_URL=${API_URL:-https://api.yourdomain.com}
-        - REACT_APP_WS_URL=${WS_URL:-wss://api.yourdomain.com/ws}
-        - REACT_APP_VERSION=${VERSION:-latest}
-        - REACT_APP_ENVIRONMENT=production
+        - VITE_API_URL=${API_URL:-https://api.yourdomain.com}
+        - VITE_WS_URL=${WS_URL:-wss://api.yourdomain.com/ws}
+        - VITE_APP_VERSION=${VERSION:-latest}
+        - VITE_APP_ENV=production
     image: investment-frontend:${VERSION:-latest}
     container_name: investment_web_prod
     <<: *restart-policy

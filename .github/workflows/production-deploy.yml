@@ -239,9 +239,9 @@ jobs:
         cache-to: type=gha,mode=max,scope=frontend-production
         build-args: |
           BUILDKIT_INLINE_CACHE=1
-          REACT_APP_ENV=production
-          REACT_APP_API_URL=https://api.investment-analysis.com
-          REACT_APP_VERSION=${{ needs.validate-release.outputs.version }}
+          VITE_APP_ENV=production
+          VITE_API_URL=https://api.investment-analysis.com
+          VITE_APP_VERSION=${{ needs.validate-release.outputs.version }}
 
     - name: Generate and sign SBOMs
       run: |

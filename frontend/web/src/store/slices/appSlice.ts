@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiService } from '../../services/api.service';
+import { apiConfig } from '../../config/api.config';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -49,8 +50,8 @@ export const initializeApp = createAsyncThunk(
       // Check for stored auth token
       const token = localStorage.getItem('access_token');
       if (token) {
-        // Verify token and get user info
-        const response = await apiService.get('/auth/me');
+        // Verify token and get user info using centralized endpoint config
+        const response = await apiService.get(apiConfig.endpoints.auth.profile);
         return { isAuthenticated: true, user: response.data };
       }
       return { isAuthenticated: false, user: null };
@@ -63,7 +64,7 @@ export const initializeApp = createAsyncThunk(
 export const login = createAsyncThunk(
   'app/login',
   async (credentials: { email: string; password: string }) => {
-    const response = await apiService.post('/auth/login', credentials);
+    const response = await apiService.post(apiConfig.endpoints.auth.login, credentials);
     localStorage.setItem('access_token', response.data.token);
     return response.data.user;
   }
@@ -72,7 +73,7 @@ export const login = createAsyncThunk(
 export const logout = createAsyncThunk(
   'app/logout',
   async () => {
-    await apiService.post('/auth/logout');
+    await apiService.post(apiConfig.endpoints.auth.logout);
     localStorage.removeItem('access_token');
   }
 );

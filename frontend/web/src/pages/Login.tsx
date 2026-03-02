@@ -145,15 +145,17 @@ const Login: React.FC = () => {
               Use Demo Account
             </Button>
 
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Demo credentials:
-                <br />
-                Email: demo@investai.com
-                <br />
-                Password: demo123
-              </Typography>
-            </Box>
+            {import.meta.env.DEV && (
+              <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Demo credentials:
+                  <br />
+                  Email: demo@investai.com
+                  <br />
+                  Password: demo123
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Paper>
 

@@ -105,8 +105,8 @@ jobs:
         cache-to: type=gha,mode=max,scope=frontend-staging
         build-args: |
           BUILDKIT_INLINE_CACHE=1
-          REACT_APP_ENV=staging
-          REACT_APP_API_URL=https://api-staging.investment-analysis.com
+          VITE_APP_ENV=staging
+          VITE_API_URL=https://api-staging.investment-analysis.com
 
     - name: Generate SBOM for backend
       uses: anchore/sbom-action@v0
