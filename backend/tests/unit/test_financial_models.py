@@ -307,13 +307,17 @@ class TestVaRDispatch:
             calc.calculate_parametric_var(returns)
         )
 
-    def test_dispatch_monte_carlo_falls_back(self):
-        """Monte Carlo stub falls back to historical."""
-        returns = np.array([-0.05, -0.03, -0.01, 0.01, 0.03])
+    def test_dispatch_monte_carlo_produces_reasonable_var(self):
+        """Monte Carlo VaR should be negative (a loss) for volatile returns."""
+        rng = np.random.RandomState(42)
+        returns = rng.normal(-0.001, 0.02, 500)
         calc = VaRCalculator(confidence_level=0.95)
-        assert calc.calculate_var(returns, VaRMethod.MONTE_CARLO) == pytest.approx(
-            calc.calculate_historical_var(returns)
-        )
+        mc_var = calc.calculate_var(returns, VaRMethod.MONTE_CARLO, seed=42)
+        # MC VaR should be negative (indicating a loss at 95% confidence)
+        assert mc_var < 0
+        # Should be in the same order of magnitude as historical VaR
+        hist_var = calc.calculate_historical_var(returns)
+        assert abs(mc_var) < abs(hist_var) * 5  # within 5x
 
 
 class TestCVaR:

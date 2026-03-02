@@ -1,248 +1,240 @@
+/**
+ * usePortfolioWebSocket
+ *
+ * React hook that subscribes to real-time portfolio and price updates using
+ * Socket.IO (via the shared WebSocketService singleton).  This replaces the
+ * previous native-WebSocket implementation so that the entire frontend speaks
+ * a single, consistent protocol.
+ *
+ * Usage:
+ *   const { isConnected, priceUpdates, latency, subscribe, unsubscribe } =
+ *     usePortfolioWebSocket(portfolioId, symbols);
+ */
+
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppDispatch } from './redux';
 import { addNotification } from '../store/slices/appSlice';
+import wsService from '../services/websocket.service';
 
-interface WebSocketMessage {
-  type: string;
-  symbol?: string;
-  price?: number;
-  bid?: number;
-  ask?: number;
-  bid_size?: number;
-  ask_size?: number;
-  timestamp?: string;
-  volume?: number;
-  change?: number;
-  change_percent?: number;
-  portfolio_id?: string;
-  total_value?: number;
-  day_change?: number;
-  day_change_percent?: number;
-  positions?: any[];
-}
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-interface PriceUpdate {
+export interface PriceUpdate {
   symbol: string;
   price: number;
   change?: number;
   change_percent?: number;
   bid?: number;
   ask?: number;
+  bid_size?: number;
+  ask_size?: number;
+  volume?: number;
   timestamp: string;
 }
+
+interface PortfolioUpdate {
+  portfolio_id: string;
+  total_value?: number;
+  day_change?: number;
+  day_change_percent?: number;
+  positions?: unknown[];
+  timestamp: string;
+}
+
+interface AlertNotification {
+  alert_type?: string;
+  message: string;
+  severity?: string;
+  timestamp: string;
+}
+
+// ---------------------------------------------------------------------------
+// Hook
+// ---------------------------------------------------------------------------
 
 export const usePortfolioWebSocket = (
   portfolioId: string,
   symbols: string[],
-  enabled: boolean = true
+  enabled: boolean = true,
 ) => {
   const dispatch = useAppDispatch();
-  const websocketRef = useRef<WebSocket | null>(null);
-  const clientIdRef = useRef<string>('');
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttemptsRef = useRef(5);
-  const reconnectDelayRef = useRef(1000);
-  const subscriptionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean>(wsService.isConnected());
   const [priceUpdates, setPriceUpdates] = useState<Map<string, PriceUpdate>>(new Map());
-  const [latency, setLatency] = useState(0);
-  const lastPingRef = useRef<number>(0);
+  const [latency, setLatency] = useState<number>(0);
 
-  // Generate unique client ID
+  // Track the symbols we have subscribed so we can unsubscribe on cleanup.
+  const subscribedSymbolsRef = useRef<string[]>([]);
+  const pingTimestampRef = useRef<number>(0);
+
+  // ------------------------------------------------------------------
+  // Connection status sync – poll the service's connected state because
+  // Socket.IO fires events on the singleton, not on this hook instance.
+  // ------------------------------------------------------------------
   useEffect(() => {
-    clientIdRef.current = `portfolio-${portfolioId}-${Date.now()}`;
-  }, [portfolioId]);
-
-  // Handle incoming WebSocket messages
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-
-      if (message.type === 'price_update' && message.symbol) {
-        const update: PriceUpdate = {
-          symbol: message.symbol,
-          price: message.price || 0,
-          change: message.change,
-          change_percent: message.change_percent,
-          bid: message.bid,
-          ask: message.ask,
-          timestamp: message.timestamp || new Date().toISOString(),
-        };
-
-        setPriceUpdates((prev) => {
-          const newUpdates = new Map(prev);
-          newUpdates.set(message.symbol!, update);
-          return newUpdates;
-        });
-      } else if (message.type === 'portfolio_update') {
-        // Handle portfolio-level updates
-        dispatch(
-          addNotification({
-            type: 'info',
-            message: 'Portfolio updated',
-          })
-        );
-      } else if (message.type === 'heartbeat') {
-        // Calculate latency from heartbeat
-        const now = Date.now();
-        setLatency(now - lastPingRef.current);
-      } else if (message.type === 'system') {
-        // System messages handled silently
-      } else if (message.type === 'error') {
-        dispatch(
-          addNotification({
-            type: 'error',
-            message: 'WebSocket error occurred',
-          })
-        );
-      }
-    } catch (_error) {
-      // Silently handle malformed WebSocket messages
-    }
-  }, [dispatch]);
-
-  // Connect to WebSocket
-  const connect = useCallback(() => {
     if (!enabled) return;
 
-    try {
-      // Determine WebSocket URL
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/api/ws/stream?client_id=${clientIdRef.current}`;
+    const interval = setInterval(() => {
+      const connected = wsService.isConnected();
+      setIsConnected(connected);
+    }, 1000);
 
-      websocketRef.current = new WebSocket(wsUrl);
+    return () => clearInterval(interval);
+  }, [enabled]);
 
-      websocketRef.current.onopen = () => {
-        setIsConnected(true);
-        reconnectAttemptsRef.current = 0;
-        reconnectDelayRef.current = 1000;
+  // ------------------------------------------------------------------
+  // Subscribe to Socket.IO events that carry data for this hook.
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!enabled) return;
 
-        dispatch(
-          addNotification({
-            type: 'success',
-            message: 'Real-time updates connected',
-          })
-        );
-
-        // Subscribe to portfolio symbols
-        if (symbols.length > 0) {
-          const subscribeMessage = {
-            type: 'subscribe',
-            symbols: symbols,
-          };
-          websocketRef.current?.send(JSON.stringify(subscribeMessage));
-        }
-
-        // Start heartbeat
-        startHeartbeat();
-      };
-
-      websocketRef.current.onmessage = handleMessage;
-
-      websocketRef.current.onerror = () => {
-        setIsConnected(false);
-      };
-
-      websocketRef.current.onclose = () => {
-        setIsConnected(false);
-        attemptReconnect();
-      };
-    } catch (_error) {
-      attemptReconnect();
+    // Ensure the Socket.IO connection is live.
+    if (!wsService.isConnected()) {
+      wsService.connect();
     }
-  }, [enabled, symbols, dispatch, handleMessage]);
 
-  // Attempt reconnection with exponential backoff
-  const attemptReconnect = useCallback(() => {
-    if (reconnectAttemptsRef.current < maxReconnectAttemptsRef.current) {
-      reconnectAttemptsRef.current++;
-      const delay = reconnectDelayRef.current * (2 ** (reconnectAttemptsRef.current - 1));
-      const maxDelay = 30000; // Max 30 seconds
+    // -- price_update --
+    const handlePriceUpdate = (data: PriceUpdate) => {
+      if (!data?.symbol) return;
 
-      reconnectDelayRef.current = Math.min(delay, maxDelay);
+      // Only process symbols that belong to this hook instance.
+      if (!subscribedSymbolsRef.current.includes(data.symbol)) return;
 
-      subscriptionTimerRef.current = setTimeout(() => {
-        connect();
-      }, reconnectDelayRef.current);
-    } else {
+      setPriceUpdates((prev) => {
+        const next = new Map(prev);
+        next.set(data.symbol, data);
+        return next;
+      });
+    };
+
+    // -- portfolio_update --
+    const handlePortfolioUpdate = (data: PortfolioUpdate) => {
+      if (data.portfolio_id !== portfolioId) return;
+
       dispatch(
         addNotification({
-          type: 'error',
-          message: 'Failed to connect to real-time updates. Using polling instead.',
-        })
+          type: 'info',
+          message: `Portfolio ${portfolioId} updated`,
+        }),
       );
-    }
-  }, [connect, dispatch]);
+    };
 
-  // Send heartbeat to keep connection alive
-  const startHeartbeat = useCallback(() => {
-    const heartbeatInterval = setInterval(() => {
-      if (websocketRef.current && isConnected) {
-        try {
-          lastPingRef.current = Date.now();
-          websocketRef.current.send(
-            JSON.stringify({
-              type: 'heartbeat',
-              timestamp: new Date().toISOString(),
-            })
-          );
-        } catch (_error) {
-          // Heartbeat send failed; connection will be retried on close
-        }
+    // -- alert_notification --
+    const handleAlertNotification = (data: AlertNotification) => {
+      dispatch(
+        addNotification({
+          type: (data.severity as 'error' | 'warning' | 'info' | 'success') ?? 'info',
+          message: data.message,
+        }),
+      );
+    };
+
+    // -- heartbeat (latency measurement via system messages) --
+    const handleSystem = (_data: unknown) => {
+      const now = Date.now();
+      if (pingTimestampRef.current > 0) {
+        setLatency(now - pingTimestampRef.current);
       }
-    }, 30000); // Send heartbeat every 30 seconds
+      pingTimestampRef.current = now;
+    };
 
-    return () => clearInterval(heartbeatInterval);
-  }, [isConnected]);
-
-  // Subscribe to additional symbols
-  const subscribe = useCallback((newSymbols: string[]) => {
-    if (websocketRef.current && isConnected) {
-      const subscribeMessage = {
-        type: 'subscribe',
-        symbols: newSymbols,
-      };
-      websocketRef.current.send(JSON.stringify(subscribeMessage));
-    }
-  }, [isConnected]);
-
-  // Unsubscribe from symbols
-  const unsubscribe = useCallback((removeSymbols: string[]) => {
-    if (websocketRef.current && isConnected) {
-      const unsubscribeMessage = {
-        type: 'unsubscribe',
-        symbols: removeSymbols,
-      };
-      websocketRef.current.send(JSON.stringify(unsubscribeMessage));
-    }
-  }, [isConnected]);
-
-  // Disconnect WebSocket
-  const disconnect = useCallback(() => {
-    if (subscriptionTimerRef.current) {
-      clearTimeout(subscriptionTimerRef.current);
-    }
-
-    if (websocketRef.current) {
-      websocketRef.current.close();
-      websocketRef.current = null;
-    }
-
-    setIsConnected(false);
-  }, []);
-
-  // Initialize WebSocket on mount
-  useEffect(() => {
-    if (enabled) {
-      connect();
-    }
+    // Register listeners on the underlying Socket.IO socket.
+    // The WebSocketService exposes `sendMessage` but not `on`, so we access
+    // the internal socket via the service's `sendMessage` + a lightweight
+    // event registration helper below.
+    _addSocketListener('price_update', handlePriceUpdate);
+    _addSocketListener('portfolio_update', handlePortfolioUpdate);
+    _addSocketListener('alert_notification', handleAlertNotification);
+    _addSocketListener('system', handleSystem);
 
     return () => {
-      disconnect();
+      _removeSocketListener('price_update', handlePriceUpdate);
+      _removeSocketListener('portfolio_update', handlePortfolioUpdate);
+      _removeSocketListener('alert_notification', handleAlertNotification);
+      _removeSocketListener('system', handleSystem);
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled, portfolioId, dispatch]);
+
+  // ------------------------------------------------------------------
+  // Subscribe to initial symbols and portfolio once connected.
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!enabled || symbols.length === 0) return;
+
+    // Wait until the socket is connected before emitting subscriptions.
+    const trySubscribe = () => {
+      if (!wsService.isConnected()) return;
+
+      wsService.sendMessage('subscribe_prices', { symbols });
+      subscribedSymbolsRef.current = symbols;
+
+      wsService.sendMessage('subscribe_portfolio', { portfolio_id: portfolioId });
+
+      dispatch(
+        addNotification({
+          type: 'success',
+          message: 'Real-time updates connected',
+        }),
+      );
+    };
+
+    // Attempt immediately, then retry every 500 ms until connected.
+    trySubscribe();
+    const poll = setInterval(() => {
+      if (wsService.isConnected()) {
+        trySubscribe();
+        clearInterval(poll);
+      }
+    }, 500);
+
+    return () => clearInterval(poll);
+  }, [enabled, portfolioId, symbols, dispatch]);
+
+  // ------------------------------------------------------------------
+  // Public API
+  // ------------------------------------------------------------------
+
+  const subscribe = useCallback(
+    (newSymbols: string[]) => {
+      if (!wsService.isConnected() || newSymbols.length === 0) return;
+
+      wsService.sendMessage('subscribe_prices', { symbols: newSymbols });
+
+      // Merge into the tracked set (immutable update).
+      const merged = Array.from(new Set([...subscribedSymbolsRef.current, ...newSymbols]));
+      subscribedSymbolsRef.current = merged;
+    },
+    [],
+  );
+
+  const unsubscribe = useCallback(
+    (removeSymbols: string[]) => {
+      // Socket.IO does not have a built-in "unsubscribe from room" message –
+      // the backend handles room membership.  We send a custom event and
+      // remove the symbols from our local tracking set.
+      if (wsService.isConnected()) {
+        wsService.sendMessage('unsubscribe_prices', { symbols: removeSymbols });
+      }
+
+      subscribedSymbolsRef.current = subscribedSymbolsRef.current.filter(
+        (s) => !removeSymbols.includes(s),
+      );
+
+      // Remove stale entries from the price map (immutable update).
+      setPriceUpdates((prev) => {
+        const next = new Map(prev);
+        removeSymbols.forEach((s) => next.delete(s));
+        return next;
+      });
+    },
+    [],
+  );
+
+  const disconnect = useCallback(() => {
+    wsService.disconnect();
+    setIsConnected(false);
+  }, []);
 
   return {
     isConnected,
@@ -253,3 +245,31 @@ export const usePortfolioWebSocket = (
     disconnect,
   };
 };
+
+// ---------------------------------------------------------------------------
+// Internal helpers – thin wrappers around the socket instance
+// ---------------------------------------------------------------------------
+
+/**
+ * Access the raw socket.io-client Socket instance held inside the service.
+ * The service does not expose it publicly, so we reach for it via a known
+ * property name.  Type-cast through `unknown` avoids `any` lint issues.
+ */
+function _getRawSocket() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (wsService as unknown as { socket: import('socket.io-client').Socket | null }).socket;
+}
+
+function _addSocketListener(event: string, handler: (...args: unknown[]) => void) {
+  const sock = _getRawSocket();
+  if (sock) {
+    sock.on(event, handler as Parameters<typeof sock.on>[1]);
+  }
+}
+
+function _removeSocketListener(event: string, handler: (...args: unknown[]) => void) {
+  const sock = _getRawSocket();
+  if (sock) {
+    sock.off(event, handler as Parameters<typeof sock.off>[1]);
+  }
+}
