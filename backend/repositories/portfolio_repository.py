@@ -260,9 +260,6 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
 
             # Execute position update
             if existing_position:
-                # Increment position version
-                existing_position.version += 1
-
                 if transaction_type == 'buy':
                     # Calculate new average cost
                     total_cost = (existing_position.quantity * existing_position.avg_cost_basis) + (quantity * price)

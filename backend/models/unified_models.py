@@ -667,9 +667,6 @@ class Position(Base):
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False, index=True)
     stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False, index=True)
 
-    # Optimistic locking
-    version = Column(Integer, default=1, nullable=False, server_default='1')
-
     # Position details
     quantity = Column(DECIMAL(15, 6), nullable=False)
     avg_cost_basis = Column(DECIMAL(10, 4), nullable=False)

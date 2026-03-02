@@ -612,7 +612,11 @@ async def analyze_stock(
         )
 
 @router.post("/batch")
-async def batch_analysis(request: BatchAnalysisRequest) -> ApiResponse[List[AnalysisResponse]]:
+async def batch_analysis(
+    request: BatchAnalysisRequest,
+    db: AsyncSession = Depends(get_async_db_session),
+    analysis_svc = Depends(get_analysis_service),
+) -> ApiResponse[List[AnalysisResponse]]:
     """Analyze multiple stocks at once"""
 
     results = []
@@ -624,7 +628,7 @@ async def batch_analysis(request: BatchAnalysisRequest) -> ApiResponse[List[Anal
             include_news_sentiment=False
         )
 
-        result = await analyze_stock(analysis_req, BackgroundTasks())
+        result = await analyze_stock(analysis_req, BackgroundTasks(), db=db, analysis_svc=analysis_svc)
         results.append(result.data)
 
     return success_response(data=results)

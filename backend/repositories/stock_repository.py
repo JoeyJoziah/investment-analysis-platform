@@ -308,7 +308,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
             ).where(
                 and_(
                     Stock.is_active == True,
-                    Stock.sector.is_not(None)
+                    Stock.sector_id.is_not(None)
                 )
             ).group_by(
                 Stock.sector
