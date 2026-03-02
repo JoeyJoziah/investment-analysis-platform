@@ -42,7 +42,7 @@ import {
   Assessment,
   Download,
   Refresh,
-  Bluetooth as WebSocketIcon,
+  Cable as WebSocketIcon,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
@@ -50,6 +50,7 @@ import {
   fetchTransactions,
   addTransaction,
   deletePosition,
+  Position,
 } from '../store/slices/portfolioSlice';
 import { addNotification } from '../store/slices/appSlice';
 import {

@@ -88,8 +88,7 @@ export const usePortfolioWebSocket = (
         const now = Date.now();
         setLatency(now - lastPingRef.current);
       } else if (message.type === 'system') {
-        // Log system messages
-        console.log('WebSocket system:', message);
+        // System messages handled silently
       } else if (message.type === 'error') {
         dispatch(
           addNotification({
@@ -98,8 +97,8 @@ export const usePortfolioWebSocket = (
           })
         );
       }
-    } catch (error) {
-      console.error('Error parsing WebSocket message:', error);
+    } catch (_error) {
+      // Silently handle malformed WebSocket messages
     }
   }, [dispatch]);
 
@@ -116,7 +115,6 @@ export const usePortfolioWebSocket = (
       websocketRef.current = new WebSocket(wsUrl);
 
       websocketRef.current.onopen = () => {
-        console.log('WebSocket connected');
         setIsConnected(true);
         reconnectAttemptsRef.current = 0;
         reconnectDelayRef.current = 1000;
@@ -143,18 +141,15 @@ export const usePortfolioWebSocket = (
 
       websocketRef.current.onmessage = handleMessage;
 
-      websocketRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+      websocketRef.current.onerror = () => {
         setIsConnected(false);
       };
 
       websocketRef.current.onclose = () => {
-        console.log('WebSocket disconnected');
         setIsConnected(false);
         attemptReconnect();
       };
-    } catch (error) {
-      console.error('Error connecting to WebSocket:', error);
+    } catch (_error) {
       attemptReconnect();
     }
   }, [enabled, symbols, dispatch, handleMessage]);
@@ -167,10 +162,6 @@ export const usePortfolioWebSocket = (
       const maxDelay = 30000; // Max 30 seconds
 
       reconnectDelayRef.current = Math.min(delay, maxDelay);
-
-      console.log(
-        `Attempting to reconnect in ${reconnectDelayRef.current}ms (attempt ${reconnectAttemptsRef.current})`
-      );
 
       subscriptionTimerRef.current = setTimeout(() => {
         connect();
@@ -197,8 +188,8 @@ export const usePortfolioWebSocket = (
               timestamp: new Date().toISOString(),
             })
           );
-        } catch (error) {
-          console.error('Error sending heartbeat:', error);
+        } catch (_error) {
+          // Heartbeat send failed; connection will be retried on close
         }
       }
     }, 30000); // Send heartbeat every 30 seconds

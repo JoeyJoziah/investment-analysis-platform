@@ -176,5 +176,11 @@ env/
 .claude/settings.json
 .claude/evals/
 .claude/helpers/
+.claude/.board-sync-queue
+.claude/.board-sync.last
+
+# Loki Mode artifacts
+.loki/
+frontend/web/.loki/
 
 excalidraw/

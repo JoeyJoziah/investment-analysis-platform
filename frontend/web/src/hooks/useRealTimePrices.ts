@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useDispatch } from 'react-redux';
+import { env } from '../utils/env';
 
 interface PriceUpdate {
   ticker: string;
@@ -59,8 +60,8 @@ export function useRealTimePrices({
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  // WebSocket URL from environment
-  const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/ws';
+  // WebSocket URL from environment (Vite-compatible)
+  const wsUrl = env.WS_URL;
 
   // Throttle check
   const shouldUpdate = useCallback(
@@ -97,8 +98,8 @@ export function useRealTimePrices({
             onPriceUpdate?.(update);
           }
         }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+      } catch (_error) {
+        // Silently handle malformed WebSocket messages
       }
     },
     [shouldUpdate, onPriceUpdate]
@@ -146,11 +147,11 @@ export function useRealTimePrices({
         }
       };
 
-      wsRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+      wsRef.current.onerror = () => {
+        // Error handling deferred to onclose for reconnection
       };
-    } catch (error) {
-      console.error('Failed to create WebSocket connection:', error);
+    } catch (_error) {
+      // Connection failure; onclose handler will attempt reconnection
     }
   }, [wsUrl, tickers, handleMessage, autoReconnect, maxReconnectAttempts]);
 

@@ -46,6 +46,7 @@ import {
   Article,
   Speed,
   Security,
+  SearchOutlined,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import {
@@ -104,7 +105,7 @@ const Analysis: React.FC = () => {
   const { ticker } = useParams<{ ticker: string }>();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  
+
   const {
     selectedTicker,
     quote,
@@ -117,9 +118,9 @@ const Analysis: React.FC = () => {
     isLoading,
     error,
   } = useAppSelector((state) => state.stock);
-  
+
   const { watchlist } = useAppSelector((state) => state.portfolio);
-  
+
   const [tabValue, setTabValue] = useState(0);
   const [chartInterval, setChartInterval] = useState('1d');
   const [chartType, setChartType] = useState<'line' | 'candle'>('candle');
@@ -223,17 +224,24 @@ const Analysis: React.FC = () => {
     return (
       <Container maxWidth="xl">
         <Box sx={{ textAlign: 'center', py: 8 }}>
+          <Box sx={{ mb: 2, opacity: 0.5 }}>
+            <SearchOutlined sx={{ fontSize: 64, color: 'text.secondary' }} />
+          </Box>
           <Typography variant="h5" gutterBottom>
-            Enter a ticker symbol to analyze
+            Enter a stock ticker above to begin analysis
           </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3 }}>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 480, mx: 'auto' }}>
+            Search for any stock symbol to view detailed charts, technical indicators, fundamentals, news, and more.
+          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
             <TextField
               label="Ticker Symbol"
+              placeholder="e.g. AAPL, MSFT, TSLA"
               value={searchTicker}
               onChange={(e) => setSearchTicker(e.target.value.toUpperCase())}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             />
-            <Button variant="contained" onClick={handleSearch}>
+            <Button variant="contained" onClick={handleSearch} disabled={!searchTicker.trim()}>
               Analyze
             </Button>
           </Box>
@@ -306,7 +314,7 @@ const Analysis: React.FC = () => {
               label="Compare with"
               value={searchTicker}
               onChange={(e) => setSearchTicker(e.target.value.toUpperCase())}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               sx={{ width: 150 }}
             />
             <Button
@@ -709,7 +717,7 @@ const Analysis: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Grid>
-              
+
               <Grid item xs={12} md={4}>
                 <Typography variant="h6" gutterBottom>
                   Valuation Metrics
@@ -749,7 +757,7 @@ const Analysis: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Grid>
-              
+
               <Grid item xs={12} md={4}>
                 <Typography variant="h6" gutterBottom>
                   Financial Health
@@ -789,7 +797,7 @@ const Analysis: React.FC = () => {
                   </Table>
                 </TableContainer>
               </Grid>
-              
+
               {fundamentalData.analystRating && (
                 <Grid item xs={12}>
                   <Paper sx={{ p: 2 }}>

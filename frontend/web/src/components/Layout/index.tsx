@@ -111,11 +111,11 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const dispatch = useAppDispatch();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  
+
   const { themeMode, sidebarOpen, user, notifications } = useAppSelector(
     (state) => state.app
   );
-  
+
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
   const [anchorElNotif, setAnchorElNotif] = useState<null | HTMLElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -230,7 +230,7 @@ const Layout: React.FC = () => {
           >
             <MenuIcon />
           </IconButton>
-          
+
           <Typography variant="h6" noWrap component="div" sx={{ display: { xs: 'none', sm: 'block' } }}>
             {location.pathname.split('/')[1]?.charAt(0).toUpperCase() + location.pathname.split('/')[1]?.slice(1) || 'Dashboard'}
           </Typography>
@@ -240,7 +240,7 @@ const Layout: React.FC = () => {
               <SearchIcon />
             </SearchIconWrapper>
             <StyledInputBase
-              placeholder="Search stocks…"
+              placeholder="Search stocks..."
               inputProps={{ 'aria-label': 'search' }}
               onFocus={(e) => {
                 e.preventDefault();
@@ -253,7 +253,7 @@ const Layout: React.FC = () => {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <WebSocketIndicator />
-            
+
             <Tooltip title="Toggle theme">
               <IconButton onClick={handleThemeToggle} color="inherit">
                 {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
@@ -334,7 +334,7 @@ const Layout: React.FC = () => {
         open={Boolean(anchorElUser)}
         onClose={handleCloseUserMenu}
       >
-        <MenuItem onClick={() => { navigate('/profile'); handleCloseUserMenu(); }}>
+        <MenuItem onClick={() => { navigate('/settings'); handleCloseUserMenu(); }}>
           <ListItemIcon>
             <AccountIcon fontSize="small" />
           </ListItemIcon>

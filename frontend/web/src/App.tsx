@@ -26,6 +26,8 @@ import { initializeApp } from './store/slices/appSlice';
 
 // Authentication - loaded immediately as it's the entry point for unauthenticated users
 const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 
 // Primary pages - most frequently accessed
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -167,6 +169,22 @@ function AppContent() {
               element={
                 <SuspenseWrapper loadingMessage="Loading login...">
                   <Login />
+                </SuspenseWrapper>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <SuspenseWrapper loadingMessage="Loading registration...">
+                  <Register />
+                </SuspenseWrapper>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <SuspenseWrapper loadingMessage="Loading...">
+                  <ForgotPassword />
                 </SuspenseWrapper>
               }
             />

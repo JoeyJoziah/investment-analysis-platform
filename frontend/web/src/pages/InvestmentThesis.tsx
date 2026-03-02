@@ -90,7 +90,7 @@ const InvestmentThesisPage: React.FC = () => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const response = await axios.get(
         `${API_BASE_URL}/thesis/stock/${stockId}`,
         {
@@ -110,7 +110,6 @@ const InvestmentThesisPage: React.FC = () => {
         setError(null);
       } else {
         setError('Failed to load investment thesis');
-        console.error('Error loading thesis:', err);
       }
     } finally {
       setLoading(false);
@@ -125,9 +124,8 @@ const InvestmentThesisPage: React.FC = () => {
       setMarkdownContent(template);
       setTemplateDialogOpen(false);
       setSuccess('Template loaded successfully');
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to load template');
-      console.error('Error loading template:', err);
     }
   };
 
@@ -142,7 +140,7 @@ const InvestmentThesisPage: React.FC = () => {
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token');
       const thesisData: Partial<InvestmentThesis> = {
         stock_id: parseInt(stockId),
         investment_objective: objective,
@@ -176,7 +174,6 @@ const InvestmentThesisPage: React.FC = () => {
       setSuccess('Investment thesis saved successfully');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to save investment thesis');
-      console.error('Error saving thesis:', err);
     } finally {
       setSaving(false);
     }

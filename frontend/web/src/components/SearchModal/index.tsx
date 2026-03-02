@@ -78,8 +78,8 @@ const SearchModal: React.FC<SearchModalProps> = ({ open, onClose }) => {
         setIsSearching(true);
         try {
           await dispatch(searchStocks(query)).unwrap();
-        } catch (error) {
-          console.error('Search failed:', error);
+        } catch (_error) {
+          // Search failure handled silently; UI shows no results
         } finally {
           setIsSearching(false);
         }

@@ -25,7 +25,11 @@ import {
   AttachMoney,
   PieChart,
   Timeline,
-  Refresh
+  Refresh,
+  CloudOff,
+  Lightbulb,
+  NewspaperOutlined,
+  DonutSmallOutlined
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchDashboardData } from '../store/slices/dashboardSlice';
@@ -37,11 +41,41 @@ import PortfolioSummary from '../components/cards/PortfolioSummary';
 import NewsCard from '../components/cards/NewsCard';
 import CostMonitor from '../components/monitoring/CostMonitor';
 
+const EmptyStateBox: React.FC<{
+  icon: React.ReactNode;
+  message: string;
+  submessage?: string;
+  minHeight?: number;
+}> = ({ icon, message, submessage, minHeight = 200 }) => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight,
+      py: 4,
+      px: 2,
+      color: 'text.secondary',
+    }}
+  >
+    <Box sx={{ mb: 1.5, opacity: 0.5 }}>{icon}</Box>
+    <Typography variant="body1" color="text.secondary" textAlign="center">
+      {message}
+    </Typography>
+    {submessage && (
+      <Typography variant="body2" color="text.disabled" textAlign="center" sx={{ mt: 0.5 }}>
+        {submessage}
+      </Typography>
+    )}
+  </Box>
+);
+
 const Dashboard: React.FC = () => {
   const theme = useTheme();
   const dispatch = useAppDispatch();
   const [refreshing, setRefreshing] = useState(false);
-  
+
   const {
     marketOverview,
     topRecommendations,
@@ -131,6 +165,12 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const hasMarketIndices = marketOverview?.indices && marketOverview.indices.length > 0;
+  const hasRecommendations = topRecommendations && topRecommendations.length > 0;
+  const hasPerformanceHistory = portfolioSummary?.performanceHistory && portfolioSummary.performanceHistory.length > 0;
+  const hasNews = recentNews && recentNews.length > 0;
+  const hasSectors = marketOverview?.sectors && marketOverview.sectors.length > 0;
+
   return (
     <Box sx={{ flexGrow: 1, p: 3 }}>
       {/* Header */}
@@ -140,11 +180,11 @@ const Dashboard: React.FC = () => {
             Investment Dashboard
           </Typography>
           <Typography variant="body1" color="textSecondary">
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
+            {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
             })}
           </Typography>
         </Box>
@@ -169,7 +209,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={3}>
           <MetricCard
             title="Portfolio Value"
-            value={portfolioSummary?.totalValue ? 
+            value={portfolioSummary?.totalValue ?
               `$${portfolioSummary.totalValue.toLocaleString()}` : '$0'}
             change={portfolioSummary?.dayChange}
             icon={<AttachMoney sx={{ color: theme.palette.primary.main }} />}
@@ -179,7 +219,7 @@ const Dashboard: React.FC = () => {
         <Grid item xs={12} md={3}>
           <MetricCard
             title="Total Return"
-            value={portfolioSummary?.totalReturn ? 
+            value={portfolioSummary?.totalReturn ?
               `${portfolioSummary.totalReturn.toFixed(2)}%` : '0%'}
             change={portfolioSummary?.totalReturn}
             icon={<Timeline sx={{ color: theme.palette.success.main }} />}
@@ -209,7 +249,7 @@ const Dashboard: React.FC = () => {
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">Market Overview</Typography>
               <Box display="flex" gap={1}>
-                {marketOverview?.indices?.map((index: any) => (
+                {hasMarketIndices && marketOverview.indices.map((index: any) => (
                   <Chip
                     key={index.symbol}
                     label={`${index.symbol}: ${index.change >= 0 ? '+' : ''}${index.change}%`}
@@ -219,7 +259,15 @@ const Dashboard: React.FC = () => {
                 ))}
               </Box>
             </Box>
-            <MarketHeatmap data={marketOverview?.heatmap} />
+            {marketOverview?.heatmap && marketOverview.heatmap.length > 0 ? (
+              <MarketHeatmap data={marketOverview.heatmap} />
+            ) : (
+              <EmptyStateBox
+                icon={<CloudOff sx={{ fontSize: 48 }} />}
+                message="No market data available"
+                submessage="Connect to a data provider to see the market heatmap."
+              />
+            )}
           </Paper>
         </Grid>
 
@@ -228,19 +276,28 @@ const Dashboard: React.FC = () => {
           <Paper sx={{ p: 3, height: '100%' }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">Top Recommendations</Typography>
-              <Button 
-                size="small" 
+              <Button
+                size="small"
                 startIcon={<Assessment />}
                 href="/recommendations"
               >
                 View All
               </Button>
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {topRecommendations?.slice(0, 3).map((rec: any) => (
-                <RecommendationCard key={rec.ticker} recommendation={rec} compact />
-              ))}
-            </Box>
+            {hasRecommendations ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {topRecommendations.slice(0, 3).map((rec: any) => (
+                  <RecommendationCard key={rec.ticker} recommendation={rec} compact />
+                ))}
+              </Box>
+            ) : (
+              <EmptyStateBox
+                icon={<Lightbulb sx={{ fontSize: 48 }} />}
+                message="No recommendations yet"
+                submessage="Recommendations will appear here once market data is available."
+                minHeight={150}
+              />
+            )}
           </Paper>
         </Grid>
 
@@ -250,14 +307,23 @@ const Dashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Portfolio Performance
             </Typography>
-            <StockChart
-              data={portfolioSummary?.performanceHistory?.map((item: { date: string; value: number }) => ({
-                date: item.date,
-                close: item.value,
-              }))}
-              height={300}
-              showVolume={false}
-            />
+            {hasPerformanceHistory ? (
+              <StockChart
+                data={portfolioSummary.performanceHistory.map((item: { date: string; value: number }) => ({
+                  date: item.date,
+                  close: item.value,
+                }))}
+                height={300}
+                showVolume={false}
+              />
+            ) : (
+              <EmptyStateBox
+                icon={<ShowChart sx={{ fontSize: 48 }} />}
+                message="No portfolio performance data"
+                submessage="Add positions to your portfolio to track performance over time."
+                minHeight={300}
+              />
+            )}
           </Paper>
         </Grid>
 
@@ -273,11 +339,19 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6">Market News & Insights</Typography>
               <Button size="small">View All</Button>
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {recentNews?.slice(0, 5).map((news: any, index: number) => (
-                <NewsCard key={index} news={news} />
-              ))}
-            </Box>
+            {hasNews ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {recentNews.slice(0, 5).map((news: any, index: number) => (
+                  <NewsCard key={index} news={news} />
+                ))}
+              </Box>
+            ) : (
+              <EmptyStateBox
+                icon={<NewspaperOutlined sx={{ fontSize: 48 }} />}
+                message="No recent news available"
+                submessage="Market news and insights will appear here once connected to a data provider."
+              />
+            )}
           </Paper>
         </Grid>
 
@@ -292,39 +366,48 @@ const Dashboard: React.FC = () => {
             <Typography variant="h6" gutterBottom>
               Sector Performance
             </Typography>
-            <Grid container spacing={2}>
-              {marketOverview?.sectors?.map((sector: any) => (
-                <Grid item xs={6} sm={4} md={3} key={sector.name}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      borderRadius: 1,
-                      backgroundColor: alpha(
-                        sector.change >= 0 ? 
-                          theme.palette.success.main : 
-                          theme.palette.error.main,
-                        0.1
-                      ),
-                      textAlign: 'center'
-                    }}
-                  >
-                    <Typography variant="body2" color="textSecondary">
-                      {sector.name}
-                    </Typography>
-                    <Typography
-                      variant="h6"
+            {hasSectors ? (
+              <Grid container spacing={2}>
+                {marketOverview.sectors.map((sector: any) => (
+                  <Grid item xs={6} sm={4} md={3} key={sector.name}>
+                    <Box
                       sx={{
-                        color: sector.change >= 0 ? 
-                          theme.palette.success.main : 
-                          theme.palette.error.main
+                        p: 2,
+                        borderRadius: 1,
+                        backgroundColor: alpha(
+                          sector.change >= 0 ?
+                            theme.palette.success.main :
+                            theme.palette.error.main,
+                          0.1
+                        ),
+                        textAlign: 'center'
                       }}
                     >
-                      {sector.change >= 0 ? '+' : ''}{sector.change}%
-                    </Typography>
-                  </Box>
-                </Grid>
-              ))}
-            </Grid>
+                      <Typography variant="body2" color="textSecondary">
+                        {sector.name}
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          color: sector.change >= 0 ?
+                            theme.palette.success.main :
+                            theme.palette.error.main
+                        }}
+                      >
+                        {sector.change >= 0 ? '+' : ''}{sector.change}%
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            ) : (
+              <EmptyStateBox
+                icon={<DonutSmallOutlined sx={{ fontSize: 48 }} />}
+                message="No sector data available"
+                submessage="Sector performance will appear here once connected to a data provider."
+                minHeight={120}
+              />
+            )}
           </Paper>
         </Grid>
       </Grid>

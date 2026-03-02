@@ -64,11 +64,7 @@ apiClient.interceptors.response.use(
       }
     }
     
-    // Handle rate limiting
-    if (error.response?.status === 429) {
-      const retryAfter = error.response.headers['retry-after'];
-      console.error(`Rate limited. Retry after ${retryAfter} seconds`);
-    }
+    // Handle rate limiting (error propagated to caller via reject below)
     
     return Promise.reject(error);
   }

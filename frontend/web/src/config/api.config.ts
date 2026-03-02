@@ -3,9 +3,11 @@
  * Centralized configuration for all API endpoints
  */
 
-// Get environment variables with fallbacks
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+import { env } from '../utils/env';
+
+// Get environment variables with fallbacks (Vite-compatible)
+const API_URL = env.API_URL;
+const WS_URL = env.WS_URL;
 
 export const apiConfig = {
   baseURL: API_URL,

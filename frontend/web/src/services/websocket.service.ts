@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { env } from '../utils/env';
 import { store } from '../store';
 import { setWebSocketConnected, addNotification } from '../store/slices/appSlice';
 import { updateQuote } from '../store/slices/stockSlice';
@@ -16,11 +17,11 @@ class WebSocketService {
       return;
     }
 
-    const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+    const wsUrl = env.WS_URL;
     
     this.socket = io(wsUrl, {
       auth: {
-        token: token || localStorage.getItem('authToken'),
+        token: token || localStorage.getItem('access_token'),
       },
       transports: ['websocket'],
       reconnection: true,
@@ -36,7 +37,6 @@ class WebSocketService {
 
     // Connection events
     this.socket.on('connect', () => {
-      console.log('WebSocket connected');
       store.dispatch(setWebSocketConnected(true));
       this.reconnectAttempts = 0;
       
@@ -45,12 +45,10 @@ class WebSocketService {
     });
 
     this.socket.on('disconnect', () => {
-      console.log('WebSocket disconnected');
       store.dispatch(setWebSocketConnected(false));
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
+    this.socket.on('connect_error', (_error) => {
       this.reconnectAttempts++;
       
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
@@ -242,7 +240,6 @@ class WebSocketService {
 
   sendMessage(event: string, data: unknown) {
     if (!this.socket?.connected) {
-      console.warn('WebSocket not connected');
       return;
     }
     

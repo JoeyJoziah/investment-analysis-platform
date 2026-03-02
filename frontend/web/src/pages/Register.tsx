@@ -9,7 +9,6 @@ import {
   Box,
   Link,
   Alert,
-  Divider,
   IconButton,
   InputAdornment,
 } from '@mui/material';
@@ -18,36 +17,66 @@ import {
   VisibilityOff,
   TrendingUp,
 } from '@mui/icons-material';
-import { useAppDispatch } from '../hooks/redux';
-import { login } from '../store/slices/appSlice';
+import { apiService } from '../services/api.service';
 
-const Login: React.FC = () => {
+const Register: React.FC = () => {
   const navigate = useNavigate();
-  const dispatch = useAppDispatch();
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const validate = (): string | null => {
+    if (!fullName.trim()) {
+      return 'Full name is required';
+    }
+    if (!email.trim()) {
+      return 'Email is required';
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return 'Please enter a valid email address';
+    }
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (password !== confirmPassword) {
+      return 'Passwords do not match';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await dispatch(login({ email, password })).unwrap();
-      navigate('/dashboard');
+      await apiService.auth.register({
+        name: fullName.trim(),
+        email: email.trim(),
+        password,
+      });
+      navigate('/login', { state: { registered: true } });
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      const message =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Registration failed. Please try again.';
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDemoLogin = () => {
-    setEmail('demo@investai.com');
-    setPassword('demo123');
   };
 
   return (
@@ -64,10 +93,10 @@ const Login: React.FC = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
             <TrendingUp sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
             <Typography component="h1" variant="h4" fontWeight="bold">
-              InvestAI Pro
+              Create Account
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Professional Investment Analysis Platform
+              Join InvestAI Pro today
             </Typography>
           </Box>
 
@@ -82,11 +111,22 @@ const Login: React.FC = () => {
               margin="normal"
               required
               fullWidth
+              id="fullName"
+              label="Full Name"
+              name="fullName"
+              autoComplete="name"
+              autoFocus
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
               id="email"
               label="Email Address"
               name="email"
               autoComplete="email"
-              autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -98,9 +138,10 @@ const Login: React.FC = () => {
               label="Password"
               type={showPassword ? 'text' : 'password'}
               id="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              helperText="At least 8 characters"
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
@@ -115,6 +156,18 @@ const Login: React.FC = () => {
                 ),
               }}
             />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="confirmPassword"
+              label="Confirm Password"
+              type={showPassword ? 'text' : 'password'}
+              id="confirmPassword"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
             <Button
               type="submit"
               fullWidth
@@ -122,36 +175,15 @@ const Login: React.FC = () => {
               sx={{ mt: 3, mb: 2 }}
               disabled={isLoading}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Creating Account...' : 'Create Account'}
             </Button>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Link component={RouterLink} to="/forgot-password" variant="body2">
-                Forgot password?
-              </Link>
-              <Link component={RouterLink} to="/register" variant="body2">
-                Create account
-              </Link>
-            </Box>
-
-            <Divider sx={{ my: 2 }}>OR</Divider>
-
-            <Button
-              fullWidth
-              variant="outlined"
-              onClick={handleDemoLogin}
-              sx={{ mb: 2 }}
-            >
-              Use Demo Account
-            </Button>
-
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="caption" color="text.secondary">
-                Demo credentials:
-                <br />
-                Email: demo@investai.com
-                <br />
-                Password: demo123
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Typography variant="body2">
+                Already have an account?{' '}
+                <Link component={RouterLink} to="/login" variant="body2">
+                  Sign in
+                </Link>
               </Typography>
             </Box>
           </Box>
@@ -165,4 +197,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Register;

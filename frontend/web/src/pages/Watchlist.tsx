@@ -638,7 +638,7 @@ const Watchlist: React.FC = () => {
               variant="outlined"
               value={newTicker}
               onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddStock()}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddStock()}
               sx={{ mb: 2 }}
             />
             <TextField
