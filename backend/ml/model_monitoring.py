@@ -1007,14 +1007,14 @@ class ModelMonitor:
                     # Perform automated checks
                     self._automated_model_check(model_name, model_info)
                 
-                # Sleep until next check
+                # Blocking sleep OK: runs in dedicated daemon thread
                 import time
                 time.sleep(self.monitoring_interval_hours * 3600)
-                
+
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
                 import time
-                time.sleep(60)  # Wait 1 minute before retrying
+                time.sleep(60)  # Blocking sleep OK: runs in dedicated daemon thread
     
     def _automated_model_check(self, model_name: str, model_info: Dict[str, Any]):
         """Perform automated checks for a model"""

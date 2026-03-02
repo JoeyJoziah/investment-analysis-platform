@@ -27,7 +27,6 @@ import torch
 import joblib
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import redis
-# from kubernetes import client, config as k8s_config
 import docker
 
 logger = logging.getLogger(__name__)
@@ -758,11 +757,11 @@ class LoadBalancer:
                         circuit_breaker['state'] = 'half_open'
                         logger.info(f"Circuit breaker half-open for worker {worker_id}")
                 
-                time.sleep(self.config.health_check_interval)
-                
+                time.sleep(self.config.health_check_interval)  # Blocking sleep OK: runs in dedicated daemon thread
+
             except Exception as e:
                 logger.error(f"Error in health check loop: {e}")
-                time.sleep(10)
+                time.sleep(10)  # Blocking sleep OK: runs in dedicated daemon thread
     
     def _check_worker_health(self, worker_id: str, worker_info: Dict[str, Any]) -> bool:
         """Check health of a specific worker"""

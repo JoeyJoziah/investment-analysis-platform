@@ -654,11 +654,11 @@ if __name__ == "__main__":
         # Monitor progress
         while processor.is_running:
             stats = processor.get_processor_stats()
-            print(f"Processing: {stats['active_jobs']} active jobs, "
-                  f"{stats['total_tickers_processed']} tickers processed")
+            logger.info(f"Processing: {stats['active_jobs']} active jobs, "
+                        f"{stats['total_tickers_processed']} tickers processed")
             await asyncio.sleep(10)
-        
+
         final_stats = processor.get_processor_stats()
-        print(f"Final stats: {final_stats}")
+        logger.info(f"Final stats: {final_stats}")
     
     asyncio.run(test())

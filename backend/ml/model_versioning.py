@@ -388,12 +388,12 @@ class ModelVersionManager:
                 if self.enable_git_tracking:
                     try:
                         import subprocess
-                        result = subprocess.run(['git', 'rev-parse', 'HEAD'], 
+                        result = subprocess.run(['git', 'rev-parse', 'HEAD'],
                                               capture_output=True, text=True)
                         if result.returncode == 0:
                             git_commit = result.stdout.strip()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to get git commit hash: {e}")
                 
                 # Get dependencies
                 dependencies = self._get_current_dependencies()
@@ -448,10 +448,11 @@ class ModelVersionManager:
                 try:
                     version = pkg_resources.get_distribution(pkg).version
                     dependencies[pkg] = version
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Package '{pkg}' not found: {e}")
             return dependencies
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to get package dependencies: {e}")
             return {}
     
     def _compute_benchmark_metrics(self, metrics: Dict[str, float]) -> Dict[str, float]:

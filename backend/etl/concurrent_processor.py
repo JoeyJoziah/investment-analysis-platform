@@ -196,11 +196,11 @@ class ResourceMonitor:
                         self.high_resource_usage = False
                         logger.info("Resource usage returned to normal levels")
                 
-                time.sleep(5)  # Monitor every 5 seconds
-                
+                time.sleep(5)  # Blocking sleep OK: runs in dedicated daemon thread
+
             except Exception as e:
                 logger.error(f"Resource monitoring error: {e}")
-                time.sleep(10)
+                time.sleep(10)  # Blocking sleep OK: runs in dedicated daemon thread
     
     def should_throttle_processing(self) -> bool:
         """Check if processing should be throttled due to high resource usage"""
@@ -695,7 +695,7 @@ async def test_concurrent_processor():
         import time
         import random
         
-        # Simulate processing time
+        # Simulate processing time (blocking sleep OK: runs in ThreadPoolExecutor worker)
         processing_time = random.uniform(0.1, 2.0)
         time.sleep(processing_time)
         

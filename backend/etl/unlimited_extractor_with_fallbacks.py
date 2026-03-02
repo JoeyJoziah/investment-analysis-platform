@@ -121,10 +121,10 @@ class HealthMonitor:
         while self.monitoring:
             try:
                 self._perform_health_checks()
-                time.sleep(self.check_interval)
+                time.sleep(self.check_interval)  # Blocking sleep OK: runs in dedicated daemon thread
             except Exception as e:
                 logger.error(f"Health monitoring error: {e}")
-                time.sleep(60)  # Wait before retrying
+                time.sleep(60)  # Blocking sleep OK: runs in dedicated daemon thread
     
     def _perform_health_checks(self):
         """Perform health checks on all sources"""

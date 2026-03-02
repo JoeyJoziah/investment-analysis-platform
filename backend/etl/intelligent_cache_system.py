@@ -1256,11 +1256,11 @@ class IntelligentCacheManager:
                     # Persist Bloom filter to disk for recovery
                     self.bloom_filter.save_to_disk()
 
-                    time.sleep(300)  # Run every 5 minutes
+                    time.sleep(300)  # Blocking sleep OK: runs in dedicated daemon thread
 
                 except Exception as e:
                     logger.error(f"Background cleanup task error: {e}")
-                    time.sleep(60)  # Wait before retrying
+                    time.sleep(60)  # Blocking sleep OK: runs in dedicated daemon thread
         
         # Start cleanup thread
         cleanup_thread = threading.Thread(target=cleanup_task, daemon=True)

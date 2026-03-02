@@ -49,16 +49,6 @@ from .model_monitoring import (
     get_model_monitor
 )
 
-# Temporarily disabled due to dask/lightgbm compatibility issues
-# from .online_learning import (
-#     OnlineLearningManager,
-#     IncrementalLearner,
-#     AdaptiveEnsembleWeighter,
-#     LearningMetrics,
-#     EnsembleWeights,
-#     get_online_learning_manager
-# )
-
 from .pipeline_optimization import (
     MLPipelineOptimizer,
     ModelArtifactManager,
@@ -135,14 +125,6 @@ __all__ = [
     "ModelAlert",
     "ModelHealth",
     "get_model_monitor",
-    
-    # Online Learning - Temporarily disabled
-    # "OnlineLearningManager",
-    # "IncrementalLearner", 
-    # "AdaptiveEnsembleWeighter",
-    # "LearningMetrics",
-    # "EnsembleWeights",
-    # "get_online_learning_manager",
     
     # Pipeline Optimization
     "MLPipelineOptimizer",

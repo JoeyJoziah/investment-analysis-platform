@@ -6,12 +6,12 @@ from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Boolean, Text, JSON,
     ForeignKey, Index, UniqueConstraint, CheckConstraint, func
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base  # TODO: Migrate to class Base(DeclarativeBase): pass (SQLAlchemy 2.x)
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import uuid
 
-Base = declarative_base()
+Base = declarative_base()  # TODO: Migrate to class Base(DeclarativeBase): pass (SQLAlchemy 2.x)
 
 
 class Exchange(Base):
@@ -26,7 +26,7 @@ class Exchange(Base):
     timezone = Column(String(50))
     
     # Relationships
-    stocks = relationship("Stock", back_populates="exchange")
+    stocks = relationship("Stock", back_populates="exchange", lazy="selectin")
 
 
 class Sector(Base):
@@ -39,8 +39,8 @@ class Sector(Base):
     name = Column(String(100), unique=True, nullable=False)
     
     # Relationships
-    stocks = relationship("Stock", back_populates="sector")
-    industries = relationship("Industry", back_populates="sector")
+    stocks = relationship("Stock", back_populates="sector", lazy="selectin")
+    industries = relationship("Industry", back_populates="sector", lazy="selectin")
 
 
 class Industry(Base):
@@ -54,8 +54,8 @@ class Industry(Base):
     sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=False)
     
     # Relationships
-    sector = relationship("Sector", back_populates="industries")
-    stocks = relationship("Stock", back_populates="industry")
+    sector = relationship("Sector", back_populates="industries", lazy="selectin")
+    stocks = relationship("Stock", back_populates="industry", lazy="selectin")
 
 
 class Stock(Base):
@@ -78,15 +78,15 @@ class Stock(Base):
     last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
-    exchange = relationship("Exchange", back_populates="stocks")
-    sector = relationship("Sector", back_populates="stocks")
-    industry = relationship("Industry", back_populates="stocks")
-    price_history = relationship("PriceHistory", back_populates="stock", cascade="all, delete-orphan")
-    fundamentals = relationship("Fundamentals", back_populates="stock", cascade="all, delete-orphan")
-    technical_indicators = relationship("TechnicalIndicators", back_populates="stock", cascade="all, delete-orphan")
-    news_sentiment = relationship("NewsSentiment", back_populates="stock", cascade="all, delete-orphan")
-    predictions = relationship("Prediction", back_populates="stock", cascade="all, delete-orphan")
-    recommendations = relationship("Recommendation", back_populates="stock", cascade="all, delete-orphan")
+    exchange = relationship("Exchange", back_populates="stocks", lazy="selectin")
+    sector = relationship("Sector", back_populates="stocks", lazy="selectin")
+    industry = relationship("Industry", back_populates="stocks", lazy="selectin")
+    price_history = relationship("PriceHistory", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    fundamentals = relationship("Fundamentals", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    technical_indicators = relationship("TechnicalIndicators", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    news_sentiment = relationship("NewsSentiment", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    predictions = relationship("Prediction", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
+    recommendations = relationship("Recommendation", back_populates="stock", cascade="all, delete-orphan", lazy="selectin")
     
     __table_args__ = (
         Index('idx_stock_exchange_sector', 'exchange_id', 'sector_id'),
@@ -116,8 +116,8 @@ class PriceHistory(Base):
     vwap = Column(Float)  # Volume Weighted Average Price
     
     # Relationship
-    stock = relationship("Stock", back_populates="price_history")
-    
+    stock = relationship("Stock", back_populates="price_history", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('stock_id', 'date', name='uq_stock_date'),
         Index('idx_price_date', 'date'),
@@ -172,8 +172,8 @@ class Fundamentals(Base):
     net_margin = Column(Float)
     
     # Relationship
-    stock = relationship("Stock", back_populates="fundamentals")
-    
+    stock = relationship("Stock", back_populates="fundamentals", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('stock_id', 'period_date', 'period_type', name='uq_fundamentals'),
         Index('idx_fundamentals_period', 'period_date', 'period_type'),
@@ -228,8 +228,8 @@ class TechnicalIndicators(Base):
     trend_strength = Column(Float)
     
     # Relationship
-    stock = relationship("Stock", back_populates="technical_indicators")
-    
+    stock = relationship("Stock", back_populates="technical_indicators", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('stock_id', 'date', name='uq_technical_indicators'),
         Index('idx_technical_date', 'date'),
@@ -266,8 +266,8 @@ class NewsSentiment(Base):
     entities = Column(JSON)
     
     # Relationship
-    stock = relationship("Stock", back_populates="news_sentiment")
-    
+    stock = relationship("Stock", back_populates="news_sentiment", lazy="selectin")
+
     __table_args__ = (
         Index('idx_sentiment_date', 'published_at'),
         Index('idx_sentiment_stock_date', 'stock_id', 'published_at'),
@@ -331,8 +331,8 @@ class Prediction(Base):
     model_params = Column(JSON)
     
     # Relationship
-    stock = relationship("Stock", back_populates="predictions")
-    
+    stock = relationship("Stock", back_populates="predictions", lazy="selectin")
+
     __table_args__ = (
         Index('idx_prediction_date', 'prediction_date'),
         Index('idx_prediction_target', 'target_date'),
@@ -390,8 +390,8 @@ class Recommendation(Base):
     outcome = Column(String(20))  # success, partial, failure
     
     # Relationship
-    stock = relationship("Stock", back_populates="recommendations")
-    
+    stock = relationship("Stock", back_populates="recommendations", lazy="selectin")
+
     __table_args__ = (
         Index('idx_recommendation_created', 'created_at'),
         Index('idx_recommendation_action', 'action', 'confidence'),
@@ -454,8 +454,8 @@ class User(Base):
     excluded_sectors = Column(JSON)
     
     # Relationships
-    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
-    watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan")
+    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
+    watchlists = relationship("Watchlist", back_populates="user", cascade="all, delete-orphan", lazy="selectin")
     
     __table_args__ = (
         Index('idx_user_email', 'email'),
@@ -481,8 +481,8 @@ class Portfolio(Base):
     total_return_pct = Column(Float, default=0.0)
     
     # Relationships
-    user = relationship("User", back_populates="portfolios")
-    positions = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan")
+    user = relationship("User", back_populates="portfolios", lazy="selectin")
+    positions = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan", lazy="selectin")
     
     __table_args__ = (
         UniqueConstraint('user_id', 'name', name='uq_user_portfolio'),
@@ -515,8 +515,8 @@ class Position(Base):
     last_transaction_date = Column(DateTime)
     
     # Relationships
-    portfolio = relationship("Portfolio", back_populates="positions")
-    
+    portfolio = relationship("Portfolio", back_populates="positions", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('portfolio_id', 'stock_id', name='uq_portfolio_stock'),
     )
@@ -538,8 +538,8 @@ class Watchlist(Base):
     alert_rules = Column(JSON)
     
     # Relationships
-    user = relationship("User", back_populates="watchlists")
-    
+    user = relationship("User", back_populates="watchlists", lazy="selectin")
+
     __table_args__ = (
         UniqueConstraint('user_id', 'stock_id', name='uq_user_watchlist'),
         Index('idx_watchlist_user', 'user_id'),

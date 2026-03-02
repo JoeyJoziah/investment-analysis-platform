@@ -720,8 +720,7 @@ async def main():
     logger.info(f"Testing ETL pipeline with {test_tickers}")
     result = await orchestrator.run_full_pipeline(test_tickers)
     
-    print("\nPipeline Results:")
-    print(json.dumps(result, indent=2, default=str))
+    logger.info("Pipeline Results:\n%s", json.dumps(result, indent=2, default=str))
 
 
 if __name__ == "__main__":

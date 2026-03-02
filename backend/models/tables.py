@@ -6,13 +6,13 @@ from sqlalchemy import (
     ForeignKey, Text, JSON, Numeric, Index, UniqueConstraint,
     CheckConstraint, Enum as SQLEnum, DECIMAL, BigInteger
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base  # TODO: Migrate to class Base(DeclarativeBase): pass (SQLAlchemy 2.x)
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 
-Base = declarative_base()
+Base = declarative_base()  # TODO: Migrate to class Base(DeclarativeBase): pass (SQLAlchemy 2.x)
 
 # Enum classes for database
 class UserRoleEnum(enum.Enum):

@@ -414,10 +414,9 @@ def main():
     success = initializer.initialize()
     
     if success:
-        print("\n✅ Database initialization completed successfully!")
-        print("\nDatabase is ready for use.")
+        logger.info("Database initialization completed successfully. Database is ready for use.")
     else:
-        print("\n❌ Database initialization failed. Please check the logs.")
+        logger.error("Database initialization failed. Please check the logs.")
         sys.exit(1)
 
 

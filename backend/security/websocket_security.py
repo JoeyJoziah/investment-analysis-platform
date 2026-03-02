@@ -682,16 +682,16 @@ class WebSocketSecurityManager:
                             "code": "TIMEOUT"
                         })
                         await client.websocket.close(code=status.WS_1000_NORMAL_CLOSURE)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Error sending timeout to client {client_id}: {e}")
                     
                     break
                 
                 # Send heartbeat ping
                 try:
                     await client.websocket.ping()
-                except:
-                    logger.info(f"Failed to ping client {client_id}")
+                except Exception as e:
+                    logger.info(f"Failed to ping client {client_id}: {e}")
                     break
                 
                 # Wait for next heartbeat check
@@ -749,8 +749,8 @@ class WebSocketSecurityManager:
                     "code": "BLOCKED"
                 })
                 await client.websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Error closing blocked client {client_id}: {e}")
             
             await self.disconnect_client(client_id)
         

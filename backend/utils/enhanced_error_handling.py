@@ -20,7 +20,8 @@ import re
 from pathlib import Path
 from functools import wraps
 
-from .exceptions import *
+# Exception type names are referenced as strings for classification;
+# no direct class usage needed from .exceptions.
 from .structured_logging import StructuredLogger, get_correlation_id
 
 logger = logging.getLogger(__name__)

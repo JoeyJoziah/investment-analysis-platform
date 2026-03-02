@@ -40,6 +40,16 @@ class MessageType(str, Enum):
 
 # ---- Connection manager ----
 
+# ---- Timing constants ----
+
+HEARTBEAT_INTERVAL = 30  # seconds between heartbeat pings
+PRICE_STREAM_MIN_INTERVAL = 0.5  # seconds, minimum delay between price updates
+PRICE_STREAM_MAX_INTERVAL = 3  # seconds, maximum delay between price updates
+STREAM_ERROR_RETRY_DELAY = 5  # seconds to wait after a price stream error
+STALE_CONNECTION_CLEANUP_INTERVAL = 300  # seconds (5 min) between stale-connection sweeps
+CLEANUP_ERROR_RETRY_DELAY = 60  # seconds to wait after a cleanup task error
+
+
 class EnhancedConnectionManager:
     """WebSocket connection manager with error handling and persistence."""
 
@@ -394,20 +404,22 @@ async def stream_price_updates(
                 symbol, json.dumps(price_update)
             )
 
-            await asyncio.sleep(random.uniform(0.5, 3))
+            await asyncio.sleep(
+                random.uniform(PRICE_STREAM_MIN_INTERVAL, PRICE_STREAM_MAX_INTERVAL)
+            )
 
         except asyncio.CancelledError:
             break
         except Exception as e:
             logger.error(f"Error streaming price for {symbol}: {e}")
-            await asyncio.sleep(5)
+            await asyncio.sleep(STREAM_ERROR_RETRY_DELAY)
 
 
 async def send_heartbeat(websocket, client_id: str):
     """Send periodic heartbeat to keep connection alive."""
     while True:
         try:
-            await asyncio.sleep(30)
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
 
             heartbeat = {
                 "type": MessageType.HEARTBEAT,
@@ -553,7 +565,7 @@ async def cleanup_stale_connections_task(
             cleaned = await connection_manager.cleanup_stale_connections()
             if cleaned > 0:
                 logger.info(f"Cleaned up {cleaned} stale WebSocket connections")
-            await asyncio.sleep(300)
+            await asyncio.sleep(STALE_CONNECTION_CLEANUP_INTERVAL)
         except Exception as e:
             logger.error(f"Error in cleanup task: {e}")
-            await asyncio.sleep(60)
+            await asyncio.sleep(CLEANUP_ERROR_RETRY_DELAY)

@@ -214,14 +214,15 @@ class YahooFinanceScraper(WebScraperBase):
         try:
             clean_price = re.sub(r'[^\d.-]', '', price_str)
             return float(clean_price) if clean_price else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse price '{price_str}': {e}")
             return 0.0
-    
+
     def _parse_volume(self, volume_str: str) -> int:
         """Parse volume string to integer"""
         try:
             clean_volume = re.sub(r'[^\d.KMB]', '', volume_str.upper())
-            
+
             if 'K' in clean_volume:
                 return int(float(clean_volume.replace('K', '')) * 1000)
             elif 'M' in clean_volume:
@@ -230,61 +231,63 @@ class YahooFinanceScraper(WebScraperBase):
                 return int(float(clean_volume.replace('B', '')) * 1000000000)
             else:
                 return int(float(clean_volume.replace(',', '')))
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse volume '{volume_str}': {e}")
             return 0
-    
+
     def _parse_market_cap(self, cap_str: str) -> int:
         """Parse market cap string to integer"""
         return self._parse_volume(cap_str)
-    
+
     def _parse_ratio(self, ratio_str: str) -> float:
         """Parse ratio string to float"""
         try:
             clean_ratio = re.sub(r'[^\d.-]', '', ratio_str)
             return float(clean_ratio) if clean_ratio and clean_ratio != 'N/A' else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse ratio '{ratio_str}': {e}")
             return 0.0
 
 
 class MarketWatchScraper(WebScraperBase):
     """Scraper for MarketWatch data"""
-    
+
     def __init__(self):
         super().__init__(base_delay=4.0)
         self.base_url = "https://www.marketwatch.com"
-    
+
     async def scrape_stock_data(self, ticker: str) -> Optional[Dict]:
         """Scrape stock data from MarketWatch"""
         url = f"{self.base_url}/investing/stock/{ticker}"
-        
+
         async with aiohttp.ClientSession() as session:
             soup = await self._make_request(url, session)
-            
+
             if not soup:
                 return None
-            
+
             try:
                 data = {
                     'ticker': ticker,
                     'source': 'marketwatch_scraper',
                     'timestamp': datetime.now(),
                 }
-                
+
                 # Extract price data
                 price_elem = soup.find('bg-quote', class_='value')
                 if price_elem:
                     data['current_price'] = self._parse_price(price_elem.get_text())
-                
+
                 # Extract change data
                 change_elem = soup.find('bg-quote', class_='change--point--q')
                 if change_elem:
                     data['price_change'] = self._parse_price(change_elem.get_text())
-                
+
                 # Extract percentage change
                 pct_elem = soup.find('bg-quote', class_='change--percent--q')
                 if pct_elem:
                     data['price_change_pct'] = self._parse_ratio(pct_elem.get_text())
-                
+
                 # Extract key metrics
                 key_data_section = soup.find('div', class_='element--list')
                 if key_data_section:
@@ -292,37 +295,38 @@ class MarketWatchScraper(WebScraperBase):
                     for item in items:
                         label_elem = item.find('small', class_='kv__label')
                         value_elem = item.find('span', class_='kv__value')
-                        
+
                         if label_elem and value_elem:
                             label = label_elem.get_text().strip().lower()
                             value = value_elem.get_text().strip()
-                            
+
                             if 'volume' in label:
                                 data['volume'] = self._parse_volume(value)
                             elif 'market cap' in label:
                                 data['market_cap'] = self._parse_market_cap(value)
                             elif 'p/e ratio' in label:
                                 data['pe_ratio'] = self._parse_ratio(value)
-                
+
                 return data
-                
+
             except Exception as e:
                 logger.error(f"Error parsing MarketWatch data for {ticker}: {e}")
                 return None
-    
+
     def _parse_price(self, price_str: str) -> float:
         """Parse price string to float"""
         try:
             clean_price = re.sub(r'[^\d.-]', '', price_str)
             return float(clean_price) if clean_price else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse price '{price_str}': {e}")
             return 0.0
-    
+
     def _parse_volume(self, volume_str: str) -> int:
         """Parse volume string to integer"""
         try:
             clean_volume = re.sub(r'[^\d.KMB]', '', volume_str.upper())
-            
+
             if 'K' in clean_volume:
                 return int(float(clean_volume.replace('K', '')) * 1000)
             elif 'M' in clean_volume:
@@ -331,19 +335,21 @@ class MarketWatchScraper(WebScraperBase):
                 return int(float(clean_volume.replace('B', '')) * 1000000000)
             else:
                 return int(float(clean_volume.replace(',', '')))
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse volume '{volume_str}': {e}")
             return 0
-    
+
     def _parse_market_cap(self, cap_str: str) -> int:
         """Parse market cap string to integer"""
         return self._parse_volume(cap_str)
-    
+
     def _parse_ratio(self, ratio_str: str) -> float:
         """Parse ratio string to float"""
         try:
             clean_ratio = re.sub(r'[^\d.-]', '', ratio_str)
             return float(clean_ratio) if clean_ratio and clean_ratio != 'N/A' else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse ratio '{ratio_str}': {e}")
             return 0.0
 
 
@@ -398,15 +404,17 @@ class GoogleFinanceScraper(WebScraperBase):
         try:
             clean_price = re.sub(r'[^\d.-]', '', price_str)
             return float(clean_price) if clean_price else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse price '{price_str}': {e}")
             return 0.0
-    
+
     def _parse_ratio(self, ratio_str: str) -> float:
         """Parse ratio string to float"""
         try:
             clean_ratio = re.sub(r'[^\d.-]', '', ratio_str)
             return float(clean_ratio) if clean_ratio and clean_ratio != 'N/A' else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse ratio '{ratio_str}': {e}")
             return 0.0
 
 
@@ -459,7 +467,8 @@ class FREDScraper(WebScraperBase):
         try:
             clean_price = re.sub(r'[^\d.-]', '', price_str)
             return float(clean_price) if clean_price else 0.0
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse price '{price_str}': {e}")
             return 0.0
 
 

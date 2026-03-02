@@ -106,8 +106,9 @@ class UnlimitedDataExtractor:
         if not self.driver:
             try:
                 self.driver = webdriver.Chrome(options=self.chrome_options)
-            except:
+            except Exception as e:
                 # Fallback to requests if Selenium not available
+                logger.warning(f"Selenium Chrome driver not available, falling back: {e}")
                 self.driver = None
         return self.driver
     
@@ -217,7 +218,8 @@ class UnlimitedDataExtractor:
                     return number * multiplier
             
             return float(cap_text)
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse market cap '{cap_text}': {e}")
             return 0
     
     async def _scrape_yahoo_statistics(self, ticker: str) -> Dict:
@@ -252,18 +254,18 @@ class UnlimitedDataExtractor:
                             if 'Beta' in key:
                                 try:
                                     stats['beta'] = float(value)
-                                except:
-                                    pass
+                                except Exception as e:
+                                    logger.warning(f"Failed to parse beta '{value}': {e}")
                             elif '52 Week High' in key:
                                 try:
                                     stats['52_week_high'] = float(value.replace(',', ''))
-                                except:
-                                    pass
+                                except Exception as e:
+                                    logger.warning(f"Failed to parse 52-week high '{value}': {e}")
                             elif '52 Week Low' in key:
                                 try:
                                     stats['52_week_low'] = float(value.replace(',', ''))
-                                except:
-                                    pass
+                                except Exception as e:
+                                    logger.warning(f"Failed to parse 52-week low '{value}': {e}")
                             elif 'Avg Volume' in key:
                                 stats['avg_volume'] = self._parse_volume(value)
                 
@@ -285,7 +287,8 @@ class UnlimitedDataExtractor:
                     return int(number * multiplier)
             
             return int(float(volume_text))
-        except:
+        except Exception as e:
+            logger.warning(f"Failed to parse volume '{volume_text}': {e}")
             return 0
     
     async def _scrape_yahoo_historical(self, ticker: str, days: int = 30) -> List[Dict]:
@@ -331,7 +334,8 @@ class UnlimitedDataExtractor:
                                     row[header.lower()] = int(values[i])
                                 else:
                                     row[header.lower()] = float(values[i])
-                            except:
+                            except Exception as e:
+                                logger.warning(f"Failed to parse historical value for {header}: {e}")
                                 row[header.lower()] = values[i]
                         data.append(row)
                 

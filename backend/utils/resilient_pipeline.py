@@ -21,7 +21,7 @@ import random
 
 from .enhanced_error_handling import with_error_handling, ErrorSeverity, ErrorCategory
 from .advanced_circuit_breaker import EnhancedCircuitBreaker, AdaptiveThresholds
-from .exceptions import *
+from .exceptions import DataQualityException
 
 logger = logging.getLogger(__name__)
 

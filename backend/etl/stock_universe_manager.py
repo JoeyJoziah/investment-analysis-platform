@@ -290,8 +290,8 @@ if __name__ == "__main__":
     
     # Populate database with all stocks
     count = manager.populate_database_with_all_stocks()
-    print(f"Database now contains {count} active stocks")
-    
+    logger.info(f"Database now contains {count} active stocks")
+
     # Update ETL orchestrator
     update_etl_orchestrator()
-    print("ETL orchestrator updated to use dynamic stock loading")
+    logger.info("ETL orchestrator updated to use dynamic stock loading")

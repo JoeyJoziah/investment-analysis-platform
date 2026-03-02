@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import structlog
-# from pythonjsonlogger import jsonlogger  # TODO: Install python-json-logger
 
 # Context variable for correlation ID
 correlation_id_var: ContextVar[Optional[str]] = ContextVar('correlation_id', default=None)
