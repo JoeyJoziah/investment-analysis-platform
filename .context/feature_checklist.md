@@ -1,163 +1,214 @@
 # Feature Checklist
 
-**Last Updated**: 2026-02-26
-**Overall Completion**: 82% (improved from 78%)
+**Last Updated**: 2026-03-03
+**Overall Completion**: 87% (improved from 82%)
 
 ## Core Features
 
 ### Stock Data Management
 - [x] Database schema for stocks (22 tables created)
 - [x] Price history tables (TimescaleDB optimized)
-- [x] Fundamental data models
+- [x] Fundamental data models (14+ ratios on Fundamentals model)
 - [ ] Stock data loaded (NYSE/NASDAQ/AMEX) - **0 stocks currently**
-- [x] WebSocket real-time updates (framework ready)
-- [x] Data validation pipeline
-- [x] Automated data refresh (Celery scheduled)
-- [ ] ETL code consolidated (6 extractor variants, needs cleanup)
+- [x] WebSocket real-time updates (2-layer: native WS + Socket.IO)
+- [x] Data validation pipeline (schema + range + completeness checks)
+- [x] Automated data refresh (Celery 5-queue schedule)
+- [x] ETL consolidated (canonical extractors + multi-source + unlimited)
+- [x] Multi-tier ETL cache (L1/L2/L3 with analytics)
 
 ### Technical Analysis
-- [x] Technical indicators models
+- [x] Technical indicators models (28 indicators on TechnicalIndicators model)
 - [x] Analysis engine framework
 - [x] RSI, MACD, Moving averages, Bollinger Bands, Volume indicators
-- [x] Custom indicators framework
-- [x] Analysis router split into service layer (clean separation)
+- [x] Custom indicators framework (momentum, volatility, trend, pattern recognition)
+- [x] Analysis router split into service layer
+- [x] TA-Lib integration (NEW)
 
 ### Fundamental Analysis
-- [x] Fundamental data models
-- [x] P/E, Revenue, Earnings, Balance sheet, Cash flow analysis
+- [x] Fundamental data models (income, balance sheet, cash flow)
+- [x] P/E, Revenue, Earnings analysis
 - [x] Industry comparisons
 - [x] DCF valuation model
+- [x] Quality scoring engine
+- [x] Dividend analyzer
 
 ### Machine Learning
-- [x] Model manager framework
+- [x] Model manager framework (48 ML files)
 - [x] ML database tables
-- [x] LSTM model trained (5.1 MB)
-- [x] XGBoost trained (690 KB)
+- [x] XGBoost trained (690 KB on disk)
 - [x] Prophet forecasting (3 stocks: AAPL, ADBE, AMZN)
-- [x] ML pipeline bugs fixed (missing imports, 107 unit tests added)
-- [ ] Online learning updates
+- [x] ML pipeline bugs fixed (missing imports resolved)
+- [x] LightGBM integration (NEW)
+- [x] Monte Carlo VaR calculation (NEW)
+- [x] Drift detection + feature store + model versioning
+- [ ] LSTM model weights not persisted (scaler exists, network absent)
+- [ ] Online learning updates (code exists, not production-active)
 - [ ] Expand Prophet to all stocks
 
 ### Sentiment Analysis
 - [x] News API integration
 - [x] FinBERT framework
+- [x] Sentiment scoring in NewsSentiment model (virality, credibility, relevance)
 - [ ] Social media sentiment
 - [ ] Real-time sentiment scoring
 
 ### Portfolio Management
-- [x] Portfolio CRUD endpoints
+- [x] Portfolio CRUD endpoints (11 endpoints)
 - [x] Transaction tracking
 - [x] Performance tracking
-- [x] Risk metrics framework
+- [x] Risk metrics framework (VaR, CVaR, risk attribution)
 - [x] Rebalancing suggestions
+- [x] Black-Litterman portfolio optimization
+- [x] Modern Portfolio Theory
 - [ ] Tax optimization
-- [ ] Dedicated integration test file missing
+- [ ] Portfolio creation/deletion endpoint (only summary + positions CRUD)
+
+### Trading/Orders
+- [x] Order model fully defined in unified_models.py
+- [x] trading_service.py implemented
+- [ ] **Trading router missing** - Orders not accessible via API
+- [ ] Order placement, cancellation, order book endpoints
 
 ### Recommendations
-- [x] Recommendation engine (2 versions - needs consolidation)
+- [x] Recommendation engine (multi-score: technical/fundamental/sentiment/macro)
 - [x] Daily generation, ranking, confidence scoring
 - [x] Historical tracking, performance validation
-- [ ] Optimized engine untested
+- [x] Backtest endpoint
+- [x] Trending recommendations
 
 ### User Management
 - [x] OAuth2 authentication (RS256 JWT)
-- [x] Role-based access (6 roles)
+- [x] Role-based access (6 roles defined)
 - [x] User registration, profile, preferences
-- [x] Watchlist management (69 tests - well-covered)
-- [x] get_current_user functions properly separated (oauth2.py vs utils/auth.py)
+- [x] Watchlist management (69+ tests)
+- [x] get_current_user properly separated (oauth2.py vs utils/auth.py)
+- [ ] RBAC enforcement stub (assign_role, check_access raise NotImplementedError)
 
-## API Endpoints (~130 total)
+### TradingAgents (LangGraph)
+- [x] Multi-agent trading research graph
+- [x] Fundamentals, market, news, social media analysts
+- [x] Bull/bear researchers + debate agents
+- [x] Risk manager + trader node
+- [ ] **Zero test coverage** (largest uncovered area)
+
+## API Endpoints (150 total: 147 HTTP + 3 WebSocket)
 
 ### Fully Implemented and Tested
-- [x] Health: GET /api/health (7 endpoints)
-- [x] Auth: POST /api/v1/auth/{login,register,refresh,logout} (6 endpoints)
-- [x] Stocks: GET /api/v1/stocks/* (12 endpoints, 5 xfail)
-- [x] Analysis: GET /api/v1/analysis/* (5 endpoints)
-- [x] Recommendations: GET/POST /api/v1/recommendations/* (10 endpoints)
-- [x] Portfolio: GET/POST/PUT/DELETE /api/v1/portfolio/* (11 endpoints)
-- [x] Watchlist: Full CRUD (12 endpoints, 69 tests)
-- [x] News: GET /api/v1/news/* (4 endpoints)
-- [x] Settings: GET/PUT /api/v1/settings/* (9 endpoints)
-- [x] WebSocket: /api/v1/ws/* (6 endpoints)
+- [x] Health: 7 endpoints (root, readiness, liveness, startup, metrics, ping, rate-limiter)
+- [x] Auth: 6 endpoints (register, token, login, me, logout, refresh)
+- [x] Stocks: 12 endpoints (list, search, detail, quote, history, statistics, alerts, sectors)
+- [x] Analysis: 5 endpoints (analyze, batch, compare, technical indicators, sentiment)
+- [x] Recommendations: 10 endpoints (daily, list, filter, portfolio, performance, backtest, trending)
+- [x] Portfolio: 11 endpoints (summary, positions, transactions, performance, rebalance, watchlist)
+- [x] Watchlist: 12 endpoints (full CRUD on lists and items)
+- [x] News: 4 endpoints (latest, sentiment by symbol, sources, preferences)
+- [x] Settings: 9 endpoints (preferences, display, trading, notifications, reset)
+- [x] WebSocket: 3 HTTP + 3 WS (general, market, portfolio streams)
+- [x] GDPR: 14 endpoints (export, deletion, consent CRUD, anonymize, retention, audit)
 
 ### Implemented, Partially Tested
-- [x] Admin: /api/v1/admin/* (18 endpoints)
-- [x] Agents: /api/v1/agents/* (9 endpoints)
-- [x] GDPR: /api/v1/gdpr/* (14 endpoints)
-- [x] Cache: /api/v1/cache/* (8 endpoints)
-- [x] ML: /api/v1/ml/* (2 endpoints)
-- [x] Monitoring: /api/v1/monitoring/* (6 endpoints)
-- [x] Thesis: /api/v1/thesis/* (6 endpoints)
+- [x] Admin: 20 endpoints (users, jobs, config, cache, audit, announcements, maintenance)
+- [x] Agents: 9 endpoints (AI analysis, batch, budget, capabilities, status)
+- [x] Cache: 8 endpoints (metrics, cost, performance, invalidate, warm, health)
+- [x] Thesis: 6 endpoints (CRUD + list by stock)
+- [x] Monitoring: 6 endpoints (health, cost, Grafana, alerts, API usage)
+- [x] ML: 2 endpoints (predictions POST, models GET) - **underdeveloped vs 48-file ML subsystem**
 
-### Legacy (Should Remove)
-- [ ] stocks_legacy.py - superseded by stocks.py
+## Frontend (14 Pages, 54 Components)
+
+### Pages
+- [x] Dashboard (with MarketHeatmap, PerformanceSection, HoldingsTable)
+- [x] Portfolio (positions, transactions, analysis tabs)
+- [x] Recommendations (filterable list with enhanced cards)
+- [x] Analysis (charts, filters, table with optional ticker param)
+- [x] MarketOverview (charts, summary, tickers)
+- [x] Watchlist (CRUD with WatchlistActions + WatchlistTable)
+- [x] Alerts (form + list)
+- [x] Settings (tabbed form)
+- [x] Reports
+- [x] Help
+- [x] InvestmentThesis (per-stock thesis view)
+- [x] Login (email/password, demo credentials)
+- [x] Register (full validation, redirects to login)
+- [x] ForgotPassword (prevents email enumeration)
+
+### Frontend Architecture
+- [x] React 18 + TypeScript + Vite + Material UI v5
+- [x] Code splitting (all 14 pages lazy-loaded with React.lazy)
+- [x] 6 Redux Toolkit slices (app, dashboard, recommendations, portfolio, market, stock)
+- [x] 13 custom hooks (virtual scroll, debounce, throttle, lazy load, Web Worker, prefetch)
+- [x] API service layer (Axios with JWT refresh)
+- [x] Socket.IO + native WebSocket dual-layer
+- [x] Route-based prefetching
+- [x] ErrorBoundary + PageSkeleton wrappers
+- [ ] 15 TypeScript errors (1 type-safety + 14 unused imports)
+- [ ] API service missing typed methods for watchlist/alerts/settings
+- [ ] Redux slices have zero test coverage
+- [ ] Hooks have zero test coverage
 
 ## Infrastructure
 
 ### Docker Services (17 defined, 12 core)
-- [x] PostgreSQL/TimescaleDB
-- [x] Redis Cache
-- [x] Celery Worker + Beat
+- [x] PostgreSQL/TimescaleDB 2.12.1-pg15
+- [x] Redis 7.2-alpine
+- [x] Backend container (multi-stage, non-root, TA-Lib, healthcheck)
+- [x] Celery Worker + Beat (5 queues, memory limits)
 - [x] Prometheus + Grafana + AlertManager
-- [x] Nginx reverse proxy
+- [x] Nginx reverse proxy (SSL config ready, certs missing)
 - [x] 4 metric exporters
 - [x] Apache Airflow
-- [x] Backend container (GDPR compliance verified)
-- [ ] Frontend container (not started)
+- [x] Cost monitor service
+- [ ] Frontend container (path mismatch between CI and local)
+- [ ] SSL certificates not provisioned
 
-### CI/CD (28 Workflows)
-- [x] Core CI pipeline (test matrix across 3 Python versions)
-- [x] Staging deploy (GHCR images, Trivy scan)
-- [x] Production deploy (release-gated, blue-green)
-- [x] Security scan (6 tools: CodeQL, Bandit, Semgrep, etc.)
-- [x] Comprehensive testing, type checking, migration check
-- [x] Documentation validation and sync
-- [x] PR automation, issue management, board sync
+### CI/CD (29 Workflows)
+- [x] Core CI (black, isort, flake8, mypy, pylint, bandit, safety, pip-audit)
+- [x] Backend tests (matrix: Python 3.10/3.11/3.12 x unit/integration/security)
+- [x] Production deploy (blue-green, Trivy scan, multi-arch images)
+- [x] Staging deploy (GHCR images)
+- [x] Security scan (6 tools, SARIF reports)
+- [x] Migration check workflow
+- [x] Dependency updates
+- [ ] Backend test step uses `continue-on-error: true` (non-blocking)
+- [ ] Coverage floor at 35% (target is 80%)
 - [ ] K8s manifests missing (deploy steps will fail)
-- [ ] Quality gates are advisory only (continue-on-error)
-- [ ] Pipeline recently unstable (25 consecutive CI fix commits)
 
 ### Security
-- [x] JWT authentication (RS256 with auto-generated RSA keys)
+- [x] JWT RS256 with auto-generated RSA keys
 - [x] CSRF protection (67 tests)
-- [x] Rate limiting (56 tests)
-- [x] Security headers middleware (102 unit tests)
+- [x] Rate limiting - Redis-backed distributed (56 tests)
+- [x] Security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy)
 - [x] Audit logging
-- [x] Data encryption (at rest and transit)
 - [x] OWASP validation (48 tests)
-- [x] GDPR/SEC compliance features (129 tests added)
-- [ ] Security CI gates are non-blocking
-- [x] Secrets management modules covered by security tests
+- [x] GDPR/SEC compliance (129 tests)
+- [ ] RBAC - STUB (NotImplementedError)
+- [ ] crypto_utils - STUB (NotImplementedError)
+- [ ] password_manager - PBKDF2 (should be bcrypt/argon2)
+- [ ] CSP includes 'unsafe-inline' in production
 
 ### Testing
-- [x] 99 test files (71 original + 28 new service tests), 1,723+ functions
-- [x] Security tests (263 tests + 129 GDPR/SEC tests)
-- [x] Integration tests (305 tests)
-- [x] Middleware tests (102 tests)
-- [x] ML Pipeline tests (107 unit tests)
-- [x] Data Ingestion tests (58 unit tests)
-- [x] Performance tests + Locust load testing
-- [ ] Actual coverage ~50-55% (improved from 35-40%)
-- [ ] ETL: ~30% coverage (improved with new tests)
+- [x] Backend: 4,931 tests (4,929 pass, 1 flaky, 8 skip, 1 xfail)
+- [x] Frontend: 201 tests (197 pass, 4 fixable failures)
+- [x] 110 backend test files (41 unit, 49 top-level, 16 integration, 5 security, 4 middleware)
+- [x] 12 frontend test files (8 pages + 4 components)
+- [ ] TradingAgents: 0% coverage (~20 files untested)
+- [ ] Frontend hooks/slices/services: 0% coverage
 - [ ] Celery tasks: ~5% coverage
-- [ ] TradingAgents: 0% coverage
-- [ ] Monitoring: ~25% coverage (improved)
-- [ ] No E2E tests (Playwright)
-- [ ] 8 test files module-skipped (missing dependencies)
+- [ ] No true E2E tests running in CI (Playwright configured but collides with Vitest)
 
 ## Progress Summary
 
-| Category | Completion |
-|----------|------------|
-| Core Features | 80% |
-| API Endpoints | 90% |
-| Service Layer | 90% (NEW - 10 service files extracted) |
-| Frontend Components | 75% |
-| Data Pipeline | 75% (improved, 58 new tests) |
-| Infrastructure | 85% (improved) |
-| Security | 85% (129 GDPR/SEC tests) |
-| Testing | 70-75% (improved from 35-40%) |
-| Code Quality | 80% (improved from 45%, ORM unified, dead code removed) |
-| CI/CD | 60% |
-| Documentation | 85% |
-| **Overall** | **82%** |
+| Category | Previous (Feb 26) | Current (Mar 3) |
+|----------|-------------------|-----------------|
+| Core Features | 80% | 85% |
+| API Endpoints | 90% | 92% |
+| Service Layer | 90% | 92% |
+| Frontend | 75% | 88% |
+| Data Pipeline | 75% | 78% |
+| Infrastructure | 85% | 85% |
+| Security | 85% | 82% (stubs found) |
+| Testing | 70-75% | 88% |
+| Code Quality | 80% | 90% |
+| CI/CD | 60% | 70% |
+| Documentation | 85% | 85% |
+| **Overall** | **82%** | **87%** |

@@ -1,202 +1,175 @@
 # Identified Issues
 
-**Last Updated**: 2026-02-26
+**Last Updated**: 2026-03-03
 
 ## Issue Summary
 
 | Priority | Count | Status |
 |----------|-------|--------|
-| Critical Blockers | 3 | Configuration only, no code changes needed |
-| Code Quality | 3 | 8 RESOLVED via Loki remediation |
-| CI/CD Issues | 2 | 3 RESOLVED via infrastructure fixes |
-| Testing Gaps | 2 | 4 RESOLVED via test expansion |
-| Previously Resolved | 22 | Docker fixes + Loki Mode extensive cleanup |
+| Critical (Security Stubs) | 3 | NEW - Must fix before production |
+| High (Deployment Blockers) | 4 | 2 existing, 2 new |
+| Medium (Quality/Completeness) | 8 | Mix of new and existing |
+| Low (Tech Debt) | 5 | Tracked |
+| Previously Resolved | 22+ | Loki Mode remediation (Waves 1-14) |
 
 ---
 
-## CRITICAL BLOCKERS (Unchanged)
+## CRITICAL: Security Stubs (NEW - Mar 2026)
 
-### 1. GDPR Encryption Key Missing
-- **Severity**: CRITICAL BLOCKER
-- **Location**: `backend/utils/data_anonymization.py:19`
-- **Error**: `AttributeError: 'NoneType' object has no attribute 'encode'`
-- **Fix**: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` then add to `.env`
+### 1. RBAC Module is a Stub
+- **Severity**: CRITICAL
+- **Location**: `backend/security/rbac.py`
+- **Problem**: `get_user_roles()`, `assign_role()`, `revoke_role()`, `check_access()` all raise `NotImplementedError`
+- **Impact**: No fine-grained permission enforcement. Falls back to `is_admin` boolean on User model. Any authenticated user can access any non-admin endpoint.
+- **Fix**: Implement role-permission mapping with database-backed role assignments
 
-### 2. Database Empty - 0 Stocks
-- **Severity**: CRITICAL BLOCKER
-- **Impact**: Core functionality cannot operate
-- **Fix**: Run `scripts/data/load_stock_universe.py`
+### 2. Crypto Utils Module is a Stub
+- **Severity**: CRITICAL
+- **Location**: `backend/security/crypto_utils.py`
+- **Problem**: `encrypt_data()`, `decrypt_data()`, `sign_data()`, `verify_signature()`, `generate_key_pair()` all raise `NotImplementedError`
+- **Impact**: Any feature requiring field-level encryption silently breaks. PII protection at rest is non-functional.
+- **Fix**: Implement using Fernet symmetric encryption or AES-GCM
 
-### 3. Database User Role Missing
+### 3. Weak Password Hashing
 - **Severity**: HIGH
-- **Fix**: `CREATE USER investment_user WITH PASSWORD '...'`
+- **Location**: `backend/security/password_manager.py`
+- **Problem**: Uses `pbkdf2_hmac` with SHA-256 instead of bcrypt or argon2id. Password policy check is `len >= 8` only.
+- **Impact**: Passwords are less resistant to GPU-based cracking attacks. No complexity requirements.
+- **Fix**: Replace with `bcrypt` or `argon2id`. Add complexity validation (uppercase, digit, special char).
 
 ---
 
-## CODE QUALITY ISSUES RESOLVED (Loki Mode Remediation - Feb 2026)
+## HIGH: Deployment Blockers
 
-### 4. Utils Directory Sprawl - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: 87 files including 24 cache-related files, 6 database variants
-- **Action taken**:
-  - **Round 1**: Deleted 6 dead cache files (cache.py variants, redis optimization duplicates)
-  - **Round 2**: Deleted 8 test artifact files (test_*.py from utils root)
-  - **Round 3**: Deleted 7 duplicate model/validator files (ast_validator, code_validator variants)
-  - **Round 4**: Deleted 7 misc dead files (feature_registry, deprecated modules)
-- **Current state**: 55 files remaining (32 dead files deleted across 4 rounds)
-- **Verification**: All imports updated, no broken references
-
-### 5. Three Competing ORM Base Declarations - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: `tables.py`, `unified_models.py`, `consolidated_models.py` each declared independent Base
-- **Action taken**: Unified to single Base in `unified_models.py`, deleted competing declarations
-- **Impact**: Schema integrity restored, single source of truth for ORM models
-- **Verification**: All routers and services use unified_models Base
-
-### 6. Dead ETL Extractors - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: 6 dead extractors (~2,200 lines total dead code)
-- **Files deleted**: `data_extractor_original_backup.py` (712), `data_extractor_unlimited.py` (508), `simple_unlimited_extractor.py` (375), `unlimited_data_extractor.py` (609)
-- **Action taken**: Removed 4 dead extractors, kept `data_extractor.py` and `multi_source_extractor.py`
-- **Verification**: ETL pipeline functional, all imports updated
-
-### Remaining File Size Issues - CONTEXT NOTED (Not Code Issues)
-- **Severity**: LOW - Cohesive domain code, not sprawl
-- **Note**: `risk_manager.py` (1,481), `resilient_pipeline.py` (1,049), etc. are large but represent single cohesive domains
-- **Decision**: These are acceptable design decisions, not refactoring targets
-- **Rationale**: Code is internally cohesive, well-tested, and serves distinct business domains
-
----
-
-## CI/CD ISSUES RESOLVED (DevOps Remediation - Feb 2026)
-
-### 12. Missing Kubernetes Manifests - STATUS: OPEN (No code change required)
+### 4. SSL Directory Empty (Existing)
 - **Severity**: HIGH
-- **Current status**: K8s manifests still missing, deployment workflows skip kubectl
-- **Impact**: Docker-based deployment used instead (workflows modified to skip k8s apply)
-- **Decision**: Acceptable for current deployment model
+- **Location**: `infrastructure/docker/nginx/nginx-ssl.conf` references `ssl/fullchain.pem`, `ssl/privkey.pem`, `ssl/dhparam.pem`, `ssl/chain.pem`
+- **Problem**: The `ssl/` directory is completely empty. Nginx will fail to start in production.
+- **Fix**: Provision via Let's Encrypt with certbot container, or provide self-signed certs for staging.
 
-### 13. Pipeline Instability - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: Constant `ci:` commit spam, flaky CI builds
-- **Root causes**: TA-Lib cross-compile, docker-compose v1/v2 divergence, missing test deps
-- **Actions taken**:
-  - Added missing deps to `requirements-dev.txt` (celery, testcontainers, sqlparse, etc.)
-  - Fixed docker-compose to v2 only (removed v1 references)
-  - Pinned TimescaleDB to 2.14.2-pg15 (was unpinned)
-  - Added Python 3.11 caching, standardized multi-platform builds
-- **Result**: CI now stable, test pass rate 1548/1556 (99.5%)
+### 5. CI Tests Non-Blocking (Existing)
+- **Severity**: HIGH
+- **Location**: `.github/workflows/ci.yml` lines 311, 457
+- **Problem**: `continue-on-error: true` on backend and frontend test steps. Failing tests do not block deployment.
+- **Fix**: Remove `continue-on-error: true` from test steps. Fix the 5 currently-failing tests first.
 
-### 14. Dockerfile Inconsistencies - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: CI uses `./Dockerfile.backend`, compose uses `./infrastructure/docker/backend/Dockerfile`
-- **Action taken**: Documented both paths in .context/Dockerfile.inventory.md with rationale
-- **Current state**: Both files exist and are maintained separately (CI vs compose workflows)
-- **Verification**: Both Dockerfiles build successfully, consistent Python 3.11, consistent base images
+### 6. Trading Service Has No Router (NEW)
+- **Severity**: MEDIUM-HIGH
+- **Location**: `backend/services/trading_service.py`
+- **Problem**: Order model is fully defined, trading_service.py is implemented, but no router exposes order creation, cancellation, or order book endpoints.
+- **Fix**: Create `backend/api/routers/trading.py` with order CRUD endpoints.
 
-### 15. Duplicate Production Compose Files - RESOLVED
-- **Status**: RESOLVED (previously fixed in Jan 2026)
-- **Action**: Deleted `docker-compose.prod.yml`, standardized on `docker-compose.production.yml`
-- **Verification**: All deploy workflows use production.yml
+### 7. Frontend Dockerfile Path Mismatch (NEW)
+- **Severity**: HIGH
+- **Location**: `.github/workflows/production-deploy.yml` line 234
+- **Problem**: CI references `./frontend/web/Dockerfile` but only `./Dockerfile.frontend` exists at repo root. Production image build will fail.
+- **Fix**: Either move Dockerfile or update the workflow path reference.
 
 ---
 
-## TESTING GAPS RESOLVED (Test Expansion - Feb 2026)
+## MEDIUM: Quality and Completeness
 
-### 17. Test Coverage Significantly Improved - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Original problem**: Actual coverage ~35-40% (1,723 tests, concentrated in few areas)
-- **Achievement**:
-  - **Tests expanded**: 1,723 → 3,569 tests (2.07x growth)
-  - **Test files created**: 28 new comprehensive unit test files
-  - **Test categories**: Unit tests, integration tests, security tests, performance tests
-  - **Coverage targets**: ETL, Tasks, Monitoring, Analytics now significantly covered
-- **Pass rate**: 1,548 passed, 8 module-level skips (infrastructure only), 0 FAILED
-- **Verification**: Coverage now spans all major modules
+### 8. LSTM Model Weights Not Persisted
+- **Severity**: MEDIUM
+- **Location**: `backend/ml/training/train_lstm.py`
+- **Problem**: Training script exists but saved LSTM weights are absent from `ml_models/`. Only the scaler is saved.
+- **Fix**: Run LSTM training and save model weights, or document as deferred.
 
-### 18. Module-Level Test Skips - RESOLVED (Configuration, Not Code)
-- **Status**: RESOLVED - All 8 skipped tests due to missing dependencies ONLY
-- **Skipped files** (all working tests, just need deps):
-  - `test_data_pipeline_integration.py` → needs `celery`
-  - `test_integration_comprehensive.py` → needs `testcontainers`
-  - `test_database_integration.py` → needs `testcontainers`
-  - `test_security_compliance.py` → needs `requests_mock`
-  - `test_performance_load.py` → needs `memory_profiler`
-  - `test_performance_optimizations.py` → needs `objgraph`
-  - `test_financial_model_validation.py` → needs `sqlparse`
-  - `test_resilience_integration.py` → needs `psycopg2`
-- **Action taken**: Added all dependencies to `requirements-dev.txt`
-- **Note**: These are environment-specific (Docker, TA-Lib, etc.) - marked as `xfail` is appropriate
+### 9. Frontend TypeScript Errors (15)
+- **Severity**: MEDIUM
+- **Location**: Multiple frontend files
+- **Details**:
+  - 6 type-safety errors in `usePortfolioWebSocket.ts` (Socket.IO event handler typing)
+  - 9 unused import warnings across 6 files
+- **Fix**: Fix `_addSocketListener`/`_removeSocketListener` generics. Remove unused imports. Install `@types/lodash`.
 
-### 19. Test Infrastructure Patterns - RESOLVED
-- **Status**: RESOLVED (2026-02-26)
-- **Documented in**: `.context/Test_Infrastructure_Patterns.md`
-- **Key patterns**:
-  - `authenticated_client` fixture bypasses JWT entirely (proper for testing)
-  - JWT configuration: RS256 with auto-generated RSA keys
-  - Two `get_current_user` functions properly separated by router type
-  - conftest properly overrides both oauth2 and utils versions
-  - Watchlist/Stock routers properly tested with ApiResponse wrapper handling
-- **Verification**: 1,548 tests pass with proper fixture usage
+### 10. Frontend Test Failures (4)
+- **Severity**: MEDIUM
+- **Location**: `pages/Dashboard.test.tsx` (1 failure), `pages/Portfolio.test.tsx` (3 failures)
+- **Details**:
+  - Dashboard: Test initializes `heatmap: []` but component requires non-empty array
+  - Portfolio: Duplicate `role="tab"` elements with name `/analysis/i` after UI overhaul
+- **Fix**: Update test mock data and use more specific selectors.
 
-### 20. Frontend Testing - CURRENT STATE
-- **Severity**: LOW - Acceptable for backend-focused platform
-- **Current**: 4 frontend test files (Jest/React Testing Library)
-- **Status**: Not a blocker, frontend tests are secondary priority
-- **Decision**: Acceptable ratio for backend-heavy platform
+### 11. Vitest/Playwright Collision
+- **Severity**: MEDIUM
+- **Location**: `frontend/web/tests/e2e/auth.spec.ts`, `portfolio.spec.ts`
+- **Problem**: Playwright E2E files collected by Vitest, causing `test.describe()` errors.
+- **Fix**: Add `exclude: ['**/tests/e2e/**']` to Vitest config.
+
+### 12. TradingAgents Zero Test Coverage
+- **Severity**: MEDIUM
+- **Location**: `backend/TradingAgents/` (~20 files)
+- **Problem**: No dedicated unit tests for trading graph, agent state machines, signal processing.
+- **Fix**: Create test suite covering core agent logic.
+
+### 13. ML Router Underdeveloped
+- **Severity**: MEDIUM
+- **Location**: `backend/api/routers/ml.py`
+- **Problem**: Only 2 endpoints (predictions POST, models GET) despite 48-file ML subsystem. Monitoring, drift detection, artifact management, backtesting all internal-only.
+- **Fix**: Expand ML router to expose key pipeline capabilities.
+
+### 14. Flaky Backend Test
+- **Severity**: LOW-MEDIUM
+- **Location**: `backend/tests/unit/test_data_ingestion.py` line 927
+- **Test**: `TestSECEdgarClient::test_extract_section_returns_none_for_missing_section`
+- **Problem**: Passes in isolation, fails in full suite run. Import-chain state + regex behavior with `\Z` anchor.
+- **Fix**: Refactor to module-level imports or add `@pytest.mark.flaky(reruns=2)`.
+
+### 15. Coverage Floor Misaligned
+- **Severity**: MEDIUM
+- **Location**: `.github/workflows/ci.yml` line 387
+- **Problem**: Blocking coverage floor is 35%, far below the documented 80% target.
+- **Fix**: Raise to 60% blocking, 80% advisory.
 
 ---
 
-## Summary of Loki Mode Remediation (Feb 2026)
+## LOW: Tech Debt
 
-### Code Quality Resolutions
-- [x] Utils directory sprawl: 87 → 55 files (32 dead files deleted across 4 rounds)
-- [x] Three competing ORM Base declarations: Unified to single source in unified_models.py
-- [x] Six dead ETL extractors: 4 files deleted (~2,200 lines)
+### 16. 30+ Files >500 Lines
+- **Files**: Concentrated in `backend/security/` (14 files 500-1141 lines) and `backend/tasks/` (5 files 500-1112 lines)
+- **Largest**: `security_config.py` (1,141 lines), `maintenance_tasks.py` (1,112 lines)
+- **Action**: Not urgent. Security modules are cohesive. Consider extraction if they grow further.
+
+### 17. Slow Tests (>10 seconds)
+- **Tests**: `test_memory_leak_detection` (60s), `test_api_retry_with_circuit_breaker` (60s), `test_batch_inference_performance` (14s)
+- **Fix**: Tag with `@pytest.mark.slow` and exclude from fast CI runs.
+
+### 18. Unawaited Coroutine Warnings
+- **Count**: ~15+ instances across security modules
+- **Files**: `security/rate_limiter.py`, `security/jwt_manager.py`
+- **Fix**: Properly await async mock calls in tests.
+
+### 19. Deprecated API Usage
+- **`get_db()` deprecated**: Should use `get_async_db_session()`
+- **`HTTP_422_UNPROCESSABLE_ENTITY` deprecated**: Renamed to `HTTP_422_UNPROCESSABLE_CONTENT` in Starlette
+
+### 20. Frontend Oversized Components
+- **`EnhancedDashboard.tsx`**: 745 lines, not connected to router (potential dead code)
+- **`SettingsTabs.tsx`**: 586 lines, candidate for extraction
+- **`PortfolioSummary.tsx`**: 534 lines, candidate for extraction
+
+---
+
+## Previously Resolved (Loki Mode Remediation - Feb 2026)
+
+All items from the Feb 26 report remain resolved:
+- [x] Utils directory sprawl: 87 -> 55 files
+- [x] Three competing ORM Base declarations: Unified
+- [x] Six dead ETL extractors: 4 files deleted
 - [x] Triple-nested backend directory: Deleted
-- [x] Oversized routers: All routers now under 750 lines via service extraction
-- [x] JWT_ALGORITHM mismatch: Fixed to RS256 across all configs
-- [x] Duplicate docker-compose files: Consolidated to production.yml only
-
-### Infrastructure & Deployment
-- [x] 10 Docker configuration issues fixed (Jan 2026)
-- [x] Python version standardized to 3.11
-- [x] Redis health check secured
-- [x] Resource limits added to all services
-- [x] Restart policies standardized
-- [x] docker-compose v1 replaced with v2
-- [x] TimescaleDB image pinned to 2.14.2-pg15
-- [x] Dockerfile paths documented (CI vs compose)
-
-### Testing & Quality Assurance
-- [x] Test count expanded: 1,723 → 3,569 tests (2.07x growth)
-- [x] 28 new comprehensive unit test files created
-- [x] Test pass rate: 1,548/1,556 (99.5%)
-- [x] Missing test dependencies added to requirements-dev.txt
-- [x] Test infrastructure patterns documented
-- [x] Module-level skips explained (all infrastructure-related)
-
-### Outstanding Configuration Items (Not Code Issues)
-- [ ] GDPR Encryption Key: Configuration needed, not code issue
-- [ ] Database initialization: Data loading required, not code issue
-- [ ] Database user role: Configuration/admin task, not code issue
-- [ ] Kubernetes manifests: Optional for current Docker-based deployment
+- [x] All routers under 750 lines via service extraction
+- [x] JWT_ALGORITHM mismatch: Fixed to RS256
+- [x] Duplicate docker-compose files: Consolidated
+- [x] CI pipeline instability: Resolved
+- [x] Test infrastructure patterns: Documented
 
 ---
 
 ## Overall Health Summary
 
-**Codebase Quality**: SIGNIFICANTLY IMPROVED
-- Dead code eliminated
-- Architecture unified
-- Test coverage expanded 2x
-- Infrastructure stable
-
-**CI/CD Pipeline**: STABLE
-- 99.5% test pass rate
-- Dependency management fixed
-- Docker infrastructure documented
-
-**Remaining Work**: CONFIGURATION & OPERATIONAL TASKS
-- No critical code issues remaining
-- All configuration items are one-time setup tasks
+**Security**: NEEDS ATTENTION - Three stubs must be implemented before production
+**Testing**: STRONG - 5,132 tests, 99.98% backend pass rate
+**Architecture**: STRONG - Clean service layer, unified ORM, modular design
+**CI/CD**: IMPROVING - Pipeline stable but gates still advisory
+**Frontend**: GOOD - Major refactor complete, minor fixups needed

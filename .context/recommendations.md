@@ -1,140 +1,107 @@
 # Recommendations
 
-**Last Updated**: 2026-02-25
+**Last Updated**: 2026-03-03
+**Previous**: 2026-02-26
 
 ## Executive Summary
 
-This assessment combines findings from 5 specialized analysis agents examining architecture, CI/CD, security, test coverage, and frontend completeness. The platform has strong architectural foundations but needs significant consolidation and quality improvement before production deployment.
+Five parallel analysis agents examined project structure, backend features, frontend status, test suite health, and deployment readiness. The platform has matured significantly since Feb 26 (88% -> 91%), but three critical security stubs and operational gaps must be addressed before production.
 
 ## Priority Matrix
 
-### P0: Immediate Blockers (Day 1)
+### P0: Security Hardening (Immediate - Days 1-3)
 
 | # | Action | Time | Impact |
 |---|--------|------|--------|
-| 1 | Add GDPR_ENCRYPTION_KEY to .env | 5 min | Unblocks backend startup |
-| 2 | Create investment_user DB role | 5 min | Unblocks DB auth |
-| 3 | Load stock data (min 100) | 1-2 hrs | Enables core features |
-| 4 | Start backend + frontend containers | 10 min | Application accessible |
+| 1 | Implement `security/rbac.py` — replace NotImplementedError stubs with DB-backed role management | 2-3 days | Enables fine-grained access control |
+| 2 | Implement `security/crypto_utils.py` — Fernet/AES encryption for PII at rest | 1 day | Unblocks GDPR field encryption |
+| 3 | Upgrade `security/password_manager.py` to bcrypt/argon2id with complexity rules | 4 hrs | Prevents GPU-based password cracking |
+| 4 | Remove `'unsafe-inline'` from CSP `script-src` in `security/security_headers.py:516` | 2 hrs | Closes XSS vector |
+| 5 | Provision SSL certificates (certbot container or manual Let's Encrypt) | 2 hrs | Unblocks HTTPS in production |
 
-### P1: Dead Code Cleanup (Days 2-5)
+### P1: Fix Failing Tests and CI Gates (Days 3-5)
 
-| # | Action | Lines Removed | Impact |
-|---|--------|--------------|--------|
-| 5 | Delete dead ETL extractors (4 files) | ~2,200 | Eliminate confusion |
-| 6 | Delete `stocks_legacy.py` router | ~260 | Remove dead endpoint |
-| 7 | Delete `backend/backend/backend/` nested copy | ~varies | Remove accidental copy |
-| 8 | Delete `data_extractor_original_backup.py` | ~712 | Remove backup file |
-| 9 | Consolidate duplicate compose files | N/A | Single prod config |
-| 10 | Remove unused domain contracts from code (or integrate them) | N/A | Reduce dead abstraction |
-
-### P2: Model Unification (Week 1)
-
-| # | Action | Risk | Impact |
+| # | Action | Time | Impact |
 |---|--------|------|--------|
-| 11 | Choose `unified_models.py` as canonical ORM Base | HIGH | Schema integrity |
-| 12 | Migrate all imports from `tables.py` and `consolidated_models.py` | HIGH | Breaking change |
-| 13 | Unify dual `get_current_user` into single function | MEDIUM | Auth consistency |
-| 14 | Merge `recommendation_engine.py` + `_optimized.py` | LOW | Reduce duplication |
+| 6 | Fix 4 frontend test failures (Dashboard heatmap mock, Portfolio tab selectors) | 2 hrs | Green frontend CI |
+| 7 | Fix Vitest/Playwright collision — add `exclude: ['**/tests/e2e/**']` to Vitest config | 15 min | Stop E2E collection errors |
+| 8 | Fix flaky SEC Edgar test — refactor import pattern or add `@pytest.mark.flaky` | 1 hr | Eliminate false failures |
+| 9 | Remove `continue-on-error: true` from CI test steps | 15 min | Make tests blocking |
+| 10 | Raise coverage floor from 35% to 60% | 15 min | Enforce quality gate |
+| 11 | Fix Dockerfile path mismatch — align CI (`./frontend/web/Dockerfile`) with repo (`./Dockerfile.frontend`) | 15 min | Unblock production image build |
 
-### P3: Utils Consolidation (Week 1-2)
+### P2: API Completion (Week 1)
 
-| # | Action | Target |
-|---|--------|--------|
-| 15 | Extract 24 cache files into `backend/cache/` | 87 -> ~50 files |
-| 16 | Extract 6 database files into `backend/config/` | Consolidate DB access |
-| 17 | Extract error handling into `backend/exceptions/` | Clean error patterns |
-| 18 | Move auth utility to `backend/auth/` | Unify auth location |
-| 19 | Delete truly unused utils | Target: <40 files in utils/ |
+| # | Action | Time | Impact |
+|---|--------|------|--------|
+| 12 | Create `backend/api/routers/trading.py` — expose order CRUD from trading_service.py | 1 day | Complete trading feature |
+| 13 | Expand `backend/api/routers/ml.py` — add drift detection, model management, backtesting endpoints | 1 day | Expose ML capabilities |
+| 14 | Fix 15 frontend TypeScript errors (Socket.IO types, unused imports, @types/lodash) | 2 hrs | Clean TS build |
+| 15 | Add typed methods for watchlist/alerts/settings to `services/api.service.ts` | 1 hr | Complete API integration |
 
-### P4: CI/CD Stabilization (Week 1-2)
-
-| # | Action | Impact |
-|---|--------|--------|
-| 20 | Create K8s manifests OR remove K8s steps from workflows | Fix deploy pipeline |
-| 21 | Pre-build TA-Lib in cached Docker base image | Eliminate 5-min CI flakiness |
-| 22 | Standardize Dockerfile references (CI vs compose) | Consistent builds |
-| 23 | Enable hard gate on CRITICAL security findings | Block vulnerable code |
-| 24 | Make coverage check blocking at 60% threshold | Enforce quality |
-| 25 | Fix .env.example JWT_ALGORITHM (says HS256, code uses RS256) | Prevent confusion |
-| 26 | Add MASTER_SECRET_KEY to .env.example | CI compatibility |
-| 27 | Pin TimescaleDB image tag (remove `latest`) | Reproducible builds |
-
-### P5: Test Coverage Improvement (Weeks 2-4)
+### P3: Test Coverage Expansion (Weeks 1-2)
 
 | # | Action | Coverage Impact |
 |---|--------|----------------|
-| 28 | Add missing deps to requirements-dev.txt (un-skip 8 files) | +5-8% |
-| 29 | Create ETL core tests (extractor, loader, transformer, validator) | +5% |
-| 30 | Create Celery task tests using eager mode | +3% |
-| 31 | Create monitoring module tests | +3% |
-| 32 | Create repository tests (alert, recommendation, base) | +2% |
-| 33 | Fix 5 xfail tests (StockResponse.from_orm, get_previous_price) | Fix real bugs |
-| 34 | Add portfolio router dedicated integration test | +2% |
-| 35 | Add E2E tests for auth, portfolio, stock analysis | E2E coverage |
-| 36 | Organize unit/ directory with proper test files | Structure |
+| 16 | Create TradingAgents test suite (~20 untested files) | +5-8% |
+| 17 | Add frontend hook tests (useRealTimePrices, usePortfolioWebSocket, etc.) | +3% frontend |
+| 18 | Add Redux slice tests (6 slices, zero coverage) | +5% frontend |
+| 19 | Tag slow tests (>10s) with `@pytest.mark.slow` | Faster CI feedback |
+| 20 | Fix 8 infrastructure-skipped tests (install celery, testcontainers, etc. in CI) | +2% |
+| 21 | Add auth page tests (Login, Register, ForgotPassword) | +2% frontend |
 
-### P6: Service Layer Thickening (Weeks 3-4)
+### P4: Deployment & Operations (Weeks 2-3)
 
 | # | Action | Impact |
 |---|--------|--------|
-| 37 | Move analysis logic from router (1,113 lines) to service | Testability |
-| 38 | Move recommendation logic from router (1,114 lines) to service | Testability |
-| 39 | Move portfolio logic from router (1,039 lines) to service | Testability |
-| 40 | Move GDPR logic from router (1,075 lines) to service | Testability |
-| 41 | Move admin logic from router (890 lines) to service | Testability |
+| 22 | Add certbot container to docker-compose.production.yml for auto-renewal | Automated SSL |
+| 23 | Add log aggregation (Loki + Promtail for Grafana) | Queryable logs |
+| 24 | Define SLOs (availability 99.9%, latency p95 < 500ms, error rate < 0.5%) | Error budgets |
+| 25 | Add prometheus-remote-storage container or configure external TSDB | Metric retention > 7 days |
+| 26 | Load stock data (NYSE/NASDAQ/AMEX) + create investment_user role | Enable core functionality |
+| 27 | Add GDPR_ENCRYPTION_KEY to .env | Unblock backend startup |
+
+### P5: Frontend Polish (Week 2-3)
+
+| # | Action | Impact |
+|---|--------|--------|
+| 28 | Investigate `EnhancedDashboard.tsx` (745 lines, not routed) — delete if dead code | Reduce bloat |
+| 29 | Extract `SettingsTabs.tsx` (586 lines) into sub-components | Maintainability |
+| 30 | Extract `PortfolioSummary.tsx` (534 lines) into sub-components | Maintainability |
+| 31 | Resolve 4 unorganized root components (CorrelationMatrix, EfficientFrontier, etc.) | Clean structure |
 
 ## Architecture Recommendations
 
 ### Keep (Excellent Patterns)
-- **Repository layer**: Generic base with CRUD, locking, upsert - A-grade
-- **Middleware stack**: Priority-based design with testing skip support - A-grade
-- **Domain contracts**: Well-designed ABC pattern - integrate into production code
-- **Data ingestion clients**: Clean per-provider pattern with base class
-- **Security middleware**: 12-layer stack with proper ordering
+- **Repository layer**: Generic async CRUD with locking and upsert — A-grade
+- **Middleware stack**: Priority-based (10000 down to 1000) with testing skip — A-grade
+- **Service layer**: 19 dedicated service files with clean router separation
+- **Frontend code splitting**: Lazy loading with typed skeletons and route prefetching
+- **Frontend hooks library**: 13 performance-oriented hooks (virtual scroll, Web Worker, etc.)
 
-### Improve (Good Foundation, Needs Work)
-- **Service layer**: Thicken by moving logic from routers
-- **Analytics modules**: Good sub-packages, consolidate duplicates
-- **Security modules**: Comprehensive but reduce overlap (2 rate limiters, 2 injection preventors)
-- **ML pipeline**: Consolidate 36 files into cleaner structure
+### Improve
+- **RBAC**: Must move from boolean `is_admin` to role-permission matrix
+- **ML API surface**: 48-file subsystem exposed through only 2 endpoints
+- **Frontend service layer**: Missing typed methods for 3 endpoint groups
+- **Password security**: Upgrade from PBKDF2 to bcrypt/argon2id
+- **Monitoring**: Add SLOs, distributed tracing, log aggregation
 
-### Replace/Remove
-- **utils/ catch-all**: Must be broken up (87 files is unmaintainable)
-- **Dead ETL extractors**: Delete 4 files immediately
-- **Legacy stocks router**: Delete, all traffic uses new router
-- **Triple-nested test copy**: Delete `backend/backend/backend/`
+### Watch
+- **Security module file sizes**: 14 files >500 lines in `backend/security/` — cohesive but large
+- **Task module sizes**: `maintenance_tasks.py` (1,112 lines) — candidate for splitting
+- **4 charting libraries in frontend**: Recharts + Plotly + Chart.js + Lightweight Charts (overkill)
 
-## Strategic Recommendations
+## Success Metrics (Updated)
 
-### Smart API Usage (Unchanged, Still Valid)
-```
-Tier 1 (Real-time): Top 100 most active stocks - hourly updates
-Tier 2 (Frequent): Next 400 stocks - 4x daily updates
-Tier 3 (Daily): Remaining stocks - daily batch updates
-```
-
-### Deployment Strategy
-1. **Short-term**: Docker Compose single-host deployment (scripts exist)
-2. **Medium-term**: Create proper K8s manifests for staging/production
-3. **Long-term**: Terraform for infrastructure provisioning
-
-### Quality Gates Enforcement
-1. Coverage threshold: 60% blocking (now), 80% blocking (month 2)
-2. Security: CRITICAL findings block merge immediately
-3. Type checking: mypy strict mode for new code
-4. File size: Lint rule for >800 line files
-
-## Success Metrics
-
-| Metric | Current | Target (30 days) | Target (60 days) |
-|--------|---------|-------------------|-------------------|
-| Test coverage | 35-40% | 60% | 80% |
-| Utils files | 87 | 50 | <40 |
-| Oversized files | 19 | 10 | 5 |
-| Dead code files | ~30+ | 0 | 0 |
-| CI fix commits ratio | 100% (last 25) | <20% | <10% |
-| ORM Base declarations | 3 | 1 | 1 |
-| ETL extractor variants | 6 | 2 | 1 |
-| Stocks loaded | 0 | 1,000+ | 6,000+ |
-| Security gate failures | Advisory only | CRITICAL blocks | HIGH blocks |
+| Metric | Feb 26 | Mar 3 | Target (30 days) |
+|--------|--------|-------|-------------------|
+| Test count | 3,569 | 5,132 | 6,000+ |
+| Backend pass rate | 99.5% | 99.98% | 100% |
+| Frontend pass rate | N/A | 98.0% | 100% |
+| TS errors | Unknown | 15 | 0 |
+| Security stubs | Unknown | 3 | 0 |
+| CI test gates | Advisory | Advisory | Blocking |
+| Coverage floor | 35% | 35% | 60% blocking |
+| Deployment readiness | 75% | 78.5% | 90% |
+| Stocks loaded | 0 | 0 | 1,000+ |
+| SSL provisioned | No | No | Yes |

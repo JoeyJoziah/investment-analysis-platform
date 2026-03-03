@@ -1,156 +1,135 @@
 # Overall Project Status Report
 
 **Project**: Investment Analysis Platform
-**Date**: 2026-02-26
-**Overall Completion**: 88%
-**Previous Assessment**: 78% (2026-02-25) - Substantially improved after Loki Mode Remediation (Waves 1-14)
-**Status**: DEVELOPMENT - Significant progress on code quality and testing gaps from Waves 1-14
+**Date**: 2026-03-03
+**Overall Completion**: 91%
+**Previous Assessment**: 88% (2026-02-26)
+**Status**: PRODUCTION-APPROACHING - Major gains in testing, frontend, and backend modularization
 
 ## Executive Summary
 
-Extensive Loki Mode remediation (Waves 1-14) has transformed the platform from a feature-complete but technically-debt-laden system into a well-consolidated, thoroughly-tested codebase. The previous assessment identified critical gaps; this update documents the systematic resolution of those issues. Key improvements: test suite expanded from 1,723 to 3,569 tests (107% growth), utils consolidation from 87 to 55 files (37% reduction), all routers brought under 750 lines, service layer thickened with 12 dedicated services, and unified ORM model structure. The infrastructure layer remains strong, and the application layer is now production-ready.
+Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/-17,434 lines). Key improvements: test suite expanded from 3,569 to 5,132 tests (backend 4,931 + frontend 201), frontend refactored into 54 extracted components with 14 lazy-loaded pages and complete auth flows, backend files split into sub-modules (Waves 4-6), and ML capabilities expanded with LightGBM, TA-Lib, and Monte Carlo VaR. Three critical security stubs (RBAC, crypto_utils, password_manager) were identified as requiring implementation before production.
 
 ## Revised Completion Assessment
 
-| Category | Previous | Current | Notes |
-|----------|----------|---------|-------|
-| Architecture | 75% | 88% | Unified ORM (single Base), 28 dead files deleted, services extracted |
-| Backend API | 82% | 90% | All routers under 750 lines (max 657), service layer thickened |
-| Frontend UI | 75% | 78% | Components consolidated, integration verified via integration tests |
-| Database | 75% | 80% | Schema unified, migrations stable, performance optimizations applied |
-| Security | 85% | 90% | Consolidated modules, hard gates enabled in CI, OWASP coverage complete |
-| Infrastructure | 80% | 88% | Docker compose consolidated, K8s planning underway, staging stable |
-| ML/AI | 65% | 75% | Missing import bugs fixed, pipeline consolidated, 9+ model tests |
-| Data Pipeline | 55% | 75% | Dead ETL extractors removed, legacy stock router deleted, core active |
-| Documentation | 85% | 88% | Architecture map current, API docs auto-generated, integration guides added |
-| Testing | 35-40% | 82% | 3,569 tests passing (1,548 integration, 2,021 unit), 28 unit test files |
-| CI/CD | 60% | 85% | Stabilized workflows, hard quality gates enabled, staging-deploy optimized |
-| Code Quality | 45% | 88% | No oversized routers (max 657 lines), utils organized, zero dead code in core |
+| Category | Previous (Feb 26) | Current (Mar 3) | Notes |
+|----------|-------------------|-----------------|-------|
+| Architecture | 88% | 92% | Backend files split into sub-modules, frontend components extracted |
+| Backend API | 90% | 92% | 150 endpoints (147 HTTP + 3 WS), 19 services, all routers <750 lines |
+| Frontend UI | 78% | 88% | 14 pages, 54 components, auth flows, code splitting, lazy loading |
+| Database | 80% | 82% | 13 migrations, TimescaleDB-ready, unified ORM |
+| Security | 90% | 85% | DOWNGRADED: RBAC stub, crypto_utils stub, weak password hashing found |
+| Infrastructure | 88% | 88% | Docker solid, SSL still empty, K8s still missing |
+| ML/AI | 75% | 80% | LightGBM + TA-Lib + Monte Carlo VaR added, LSTM weights still absent |
+| Data Pipeline | 75% | 78% | ETL consolidated, Celery well-structured with 5 queues |
+| Documentation | 88% | 88% | Stable |
+| Testing | 82% | 90% | 5,132 total tests (4,931 backend + 201 frontend), 122 test files |
+| CI/CD | 85% | 87% | 29 workflows, but tests still non-blocking (continue-on-error) |
+| Code Quality | 88% | 90% | Wave 4-6 splits complete, frontend extracted |
 
-## Key Improvements from Waves 1-14
+## Key Improvements Since Feb 26
 
-### Testing (35-40% → 82%)
-- **Test suite**: 1,723 → 3,569 tests (107% growth)
-- **Unit tests**: 28 dedicated files covering all services and utils
-- **Integration tests**: 1,548 passing (auth, portfolio, stocks, analysis flows)
-- **Coverage areas**: Services, repos, middleware, security, ETL, monitoring, tasks
-- **Result**: 82% completion vs. previous 35-40% target
+### Testing (82% -> 90%)
+- **Backend tests**: 3,569 -> 4,931 (+38% growth, 110 test files)
+- **Frontend tests**: 0 -> 201 tests across 12 test files (NEW)
+- **Total tests**: 5,132 across 122 test files
+- **Backend pass rate**: 99.98% (4,929 pass, 1 flaky, 8 infra-skip, 1 xfail)
+- **Frontend pass rate**: 98.0% (197 pass, 4 fixable failures)
 
-### Code Quality (45% → 88%)
-- **Utils consolidation**: 87 → 55 files (28 dead files deleted across 4 audit rounds)
-- **Router refactoring**: All 17 routers under 750 lines (max 657 for analysis.py)
-- **Service extraction**: 10 dedicated service files + 2 specialized services = 12 total
-- **Dead code removal**: 4 ETL extractor variants, legacy stocks router, triple-nested backend/
-- **Result**: Clean, maintainable architecture ready for production
+### Frontend (78% -> 88%)
+- **Pages**: 12 -> 14 (added Login, Register, ForgotPassword)
+- **Components**: extracted to 54 domain-organized component files
+- **Code splitting**: All 14 pages lazy-loaded with typed skeleton fallbacks
+- **State management**: 6 Redux Toolkit slices with typed hooks
+- **Performance hooks**: Virtual scroll, debounce, throttle, Web Worker, prefetch
+- **Auth flows**: Complete Login, Register, ForgotPassword with security best practices
 
-### Architecture (75% → 88%)
-- **ORM unification**: Single canonical Base in unified_models.py
-- **Model consolidation**: Eliminated tables.py and consolidated_models.py (schema conflicts resolved)
-- **Service layer**: Thickened with extraction of business logic from routers
-- **Repository pattern**: Validated and in use across all data access
-- **Result**: Cohesive, consistent architecture
+### Backend Modularization (Waves 4-6)
+- **Wave 4**: Split 5 largest backend files into sub-modules
+- **Wave 5**: Split 7 large backend files into sub-modules
+- **Wave 6**: Extracted frontend components + added 8 test files
+- **ML additions**: LightGBM, TA-Lib indicators, Monte Carlo VaR
+- **Real-time**: Socket.IO service + Celery optimization
 
-### Infrastructure & CI/CD (80% → 88%)
-- **Docker**: All services with healthchecks, consolidated compose files
-- **CI stability**: 28 workflows optimized, hard quality gates enabled
-- **Staging deploy**: Optimized to skip Docker build on push
-- **Integration tests**: Non-blocking but comprehensive (critical paths covered)
-- **Result**: Stable, repeatable deployment pipeline
-
-### Data Pipeline (55% → 75%)
-- **Dead code elimination**: 4 ETL extractor variants deleted, core pipeline retained
-- **Legacy cleanup**: Stocks router replaced with consolidated stocks_service
-- **Triple-nest fix**: Removed backend/backend/ directory structure
-- **Celery integration**: Tested and stable
-- **Result**: Single source of truth for data ingestion
+### Security Regression (90% -> 85%)
+- **RBAC stub found**: `assign_role()`, `revoke_role()`, `check_access()` raise `NotImplementedError`
+- **crypto_utils stub found**: `encrypt_data()`, `decrypt_data()`, `sign_data()` raise `NotImplementedError`
+- **Password manager weakness**: Uses PBKDF2 (not bcrypt/argon2), policy is length >= 8 only
 
 ## Component Status Summary
 
 | Component | Status | Completion | Priority |
 |-----------|--------|------------|----------|
-| Code Quality/Dead Code | Cleaned | 88% | DONE |
-| Test Coverage | Production-Ready | 82% | DONE |
-| CI Pipeline Stability | Stable | 85% | DONE |
-| K8s Deployment Manifests | Planned | 60% | MEDIUM |
-| Utils Consolidation | Complete | 88% | DONE |
-| Model Unification | Complete | 88% | DONE |
-| ETL Cleanup | Complete | 90% | DONE |
-| Service Layer | Thickened | 90% | DONE |
-| GDPR Encryption Key | Configured | 95% | DONE |
-| Stock Data Loading | Ready | 85% | MEDIUM |
+| Backend Test Suite | Production-Ready | 90% | DONE |
+| Frontend Test Suite | MVP | 78% | MEDIUM |
+| Code Quality/Dead Code | Cleaned | 90% | DONE |
+| Frontend UI/UX | Strong MVP | 88% | DONE |
+| Service Layer | Complete | 92% | DONE |
+| CI Pipeline | Stable (advisory gates) | 87% | MEDIUM |
+| RBAC Implementation | STUB | 10% | HIGH |
+| Crypto Utils | STUB | 30% | HIGH |
+| Trading Router | Missing | 20% | MEDIUM |
+| K8s Deployment | Not Started | 12% | LOW |
+| SSL/TLS Provisioning | Configured, not provisioned | 65% | HIGH |
 
-## Codebase Statistics (Updated 2026-02-26)
+## Codebase Statistics (Updated 2026-03-03)
 
-| Metric | Count | Notes |
-|--------|-------|-------|
-| Python source files | 328 | -37 files (dead code removed) |
-| Test files | 96 | +25 files (unit tests added) |
-| Test functions (passing) | 3,569 | +1,846 tests (1,548 integration + 2,021 unit) |
-| Lines of test code | 142,000+ | Nearly doubled from previous |
-| API routers | 17 active | All under 750 lines |
-| API endpoints | 140+ | Well-organized by domain |
-| CI/CD workflows | 28 | Stable with hard gates |
-| Docker services | 17 defined | All with healthchecks |
-| Database migrations | 18 | Schema unified and stable |
-| Security modules | 22 | Consolidated and tested |
-| Oversized files (>800 lines) | 0 | All routers refactored |
-| Dead/duplicate code files | <5 | Massive cleanup completed |
-| Service files | 12 | 10 domain + 2 specialized |
-| Estimated test coverage | 82% | Up from 35-40% |
+| Metric | Feb 26 | Mar 3 | Change |
+|--------|--------|-------|--------|
+| Python source files | 328 | 493 | +165 (sub-module splits) |
+| Frontend components (TSX) | ~30 | 54 | +24 (extracted) |
+| Frontend pages | 12 | 14 | +2 (auth flows) |
+| Backend test files | 96 | 110 | +14 |
+| Frontend test files | 4 | 12 | +8 |
+| Backend tests (passing) | 3,569 | 4,929 | +1,360 |
+| Frontend tests (passing) | 0 | 197 | +197 (NEW) |
+| Total tests | 3,569 | 5,132 | +1,563 (+44%) |
+| API endpoints | 140+ | 150 | +10 |
+| Service files | 12 | 19 | +7 |
+| Security modules | 22 | 24 | +2 |
+| Oversized files (>800 lines) | 0 routers | 0 routers | Stable |
+| Files >500 lines (security/) | ~10 | 30+ | Identified (security + tasks) |
+| CI/CD workflows | 28 | 29 | +1 |
 
 ## Risk Assessment (Updated)
 
-| Risk | Previous Level | Current Level | Resolution |
-|------|---|---|---|
-| Utils sprawl causing maintenance burden | CRITICAL | RESOLVED | Reduced from 87 to 55 files |
-| 3 competing ORM bases causing schema drift | HIGH | RESOLVED | Single unified Base implemented |
-| CI pipeline instability | HIGH | RESOLVED | Stabilized, hard gates enabled |
-| Zero test coverage on ETL/Tasks/TradingAgents | HIGH | MITIGATED | 25+ new unit tests, 2,021 unit tests total |
-| Missing K8s manifests | HIGH | MEDIUM | Not blocking (staging stable, K8s planned) |
-| Advisory-only security gates in CI | MEDIUM | RESOLVED | Hard gates enabled |
-| Oversized router files (9 over 800 lines) | MEDIUM | RESOLVED | All under 750 lines |
+| Risk | Previous Level | Current Level | Notes |
+|------|---------------|---------------|-------|
+| RBAC stub in production | Not identified | CRITICAL | No fine-grained permissions enforcement |
+| crypto_utils stub | Not identified | HIGH | encrypt/decrypt/sign raise NotImplementedError |
+| SSL directory empty | HIGH | HIGH | Nginx will fail to start in production |
+| Trading service unreachable | Not identified | MEDIUM | Order model built, no router exposes it |
+| Frontend TS errors (15) | Not identified | MEDIUM | 1 type-safety issue + 14 unused imports |
+| CI tests non-blocking | MEDIUM | MEDIUM | continue-on-error still true |
+| LSTM weights absent | MEDIUM | MEDIUM | Training code exists, no saved model |
+| K8s manifests missing | MEDIUM | LOW | Docker-compose deployment stable |
+| Password hashing weak | Not identified | HIGH | PBKDF2 instead of bcrypt/argon2 |
 
 ## Path Forward
 
-### Phase 1: Production Deployment (In Progress)
-1. ✅ **DELETE DEAD CODE** - 28 files removed, 4 ETL variants consolidated
-2. ✅ **UNIFY ORM** - Single Base in unified_models.py, no schema conflicts
-3. ✅ **FIX CI PIPELINE** - All 28 workflows stable, hard gates enabled
-4. ⏳ **CREATE K8s MANIFESTS** - Staging stable, production manifests needed
-5. ✅ **CONFIGURE SECRETS** - GDPR_ENCRYPTION_KEY and others set
+### Phase 1: Security Hardening (Immediate)
+1. Implement RBAC (`security/rbac.py`) — replace stubs with actual role management
+2. Implement crypto_utils (`security/crypto_utils.py`) — replace stubs with Fernet/AES
+3. Upgrade password_manager to bcrypt or argon2id
+4. Provision SSL certificates (Let's Encrypt + certbot container)
+5. Remove `'unsafe-inline'` from CSP `script-src`
 
-### Phase 2: Scale & Monitor (Upcoming)
-1. Load stock data (ready to go)
-2. Set up production monitoring (Prometheus + Grafana ready)
-3. Configure SSL and TLS
-4. Set up database replication for high availability
-5. Implement circuit breaker for external APIs
+### Phase 2: API Completion (1 week)
+1. Create trading/orders router to expose `trading_service.py`
+2. Expand ML router beyond 2 endpoints
+3. Fix 15 frontend TypeScript errors
+4. Fix 4 frontend test failures + 1 flaky backend test
 
-### Phase 3: Operational Excellence (Next)
-1. Performance tuning (caching, query optimization)
-2. Disaster recovery testing
-3. Load testing and capacity planning
-4. Documentation for operational runbooks
-5. Training for operations team
+### Phase 3: Production Deployment (1-2 weeks)
+1. Make CI test gates blocking (remove `continue-on-error: true`)
+2. Raise coverage floor from 35% to 60%
+3. Load stock data (NYSE/NASDAQ/AMEX)
+4. Configure GDPR encryption key + DB user role
+5. Add log aggregation (Loki + Promtail) and distributed tracing
 
-## Wave Completion Summary (Waves 1-14)
+## Confidence Level: 91%
 
-| Wave | Focus | Key Deliverables | Status |
-|------|-------|------------------|--------|
-| 1-4 | Utils Cleanup | 28 files deleted, consolidated to 55 | ✅ COMPLETE |
-| 5-7 | Service Extraction | 10 service files + 2 specialized | ✅ COMPLETE |
-| 8-10 | Testing & Coverage | 2,021 unit tests, 1,548 integration tests | ✅ COMPLETE |
-| 11-12 | ORM Unification | Single Base, eliminated tables.py/consolidated_models.py | ✅ COMPLETE |
-| 13-14 | CI/Infrastructure | Workflows stable, hard gates, Docker compose optimized | ✅ COMPLETE |
+The platform is architecturally sound with comprehensive test coverage. Three security stubs and missing SSL are the primary blockers to production readiness.
 
-## Confidence Level: 94%
-
-The platform is now production-ready with high confidence:
-- Comprehensive test coverage (82%, target 80%)
-- No code quality issues (all routers <750 lines)
-- Unified architecture (single ORM model)
-- Stable CI/CD pipeline (28 workflows, hard gates)
-- Clean codebase (28 dead files removed)
-
-**Ready for**: Production deployment, scaling, team onboarding
-**Waiting for**: K8s manifests (if needed), stock data load, final staging validation
+**Ready for**: Staging deployment, feature demos, team onboarding
+**Blocking production**: RBAC implementation, crypto_utils implementation, SSL provisioning, password hashing upgrade

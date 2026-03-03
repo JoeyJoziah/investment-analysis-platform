@@ -1,7 +1,7 @@
 # Project Structure
 
-**Last Updated**: 2026-02-26
-**Previous Analysis**: 2026-02-25
+**Last Updated**: 2026-03-03
+**Previous Analysis**: 2026-02-26
 
 ## Directory Tree Overview
 
@@ -9,147 +9,197 @@
 investment-analysis-platform/
 ├── .context/                    # Analysis reports (this directory)
 ├── .github/
-│   └── workflows/               # 28 CI/CD workflows (+14 since Jan)
+│   └── workflows/               # 29 CI/CD workflows
 ├── agents/                      # 5 YAML agent definitions
-├── backend/
-│   ├── analytics/               # 25 files - analysis engines
-│   │   ├── agents/              # 4 files - cache-aware agents, hybrid engine
-│   │   ├── fundamental/         # 2 files - valuation (DCF)
-│   │   ├── portfolio/           # 2 files - Black-Litterman, MPT
-│   │   ├── risk/                # 2 files - VaR, risk attribution
-│   │   └── statistical/         # 1 file - cointegration
+├── backend/                     # 493 Python files
+│   ├── analytics/               # 26 files - analysis engines
+│   │   ├── agents/              # Cache-aware agents, hybrid engine
+│   │   ├── fundamental/         # DCF valuation, ratio analysis
+│   │   ├── portfolio/           # Black-Litterman, MPT
+│   │   ├── risk/                # VaR, risk attribution
+│   │   └── statistical/         # Cointegration
 │   ├── api/
 │   │   ├── main.py              # FastAPI app with 12-layer middleware stack
-│   │   ├── routers/             # 17 active routers (~130 endpoints)
-│   │   ├── security_integration.py
-│   │   └── versioning.py        # V1 deprecation middleware
-│   ├── auth/                    # 3 files - OAuth2, password validation
-│   ├── compliance/              # 3 files - GDPR, SEC
-│   ├── config/                  # 4 files - settings, database, monitoring
-│   ├── data_ingestion/          # 9 files - API clients per provider
-│   ├── domain/contracts/        # 7 files - domain contracts (unused in prod)
-│   ├── etl/                     # 13 files - ETL pipeline (dead extractors removed)
-│   ├── middleware/              # 5 files - priority-based stack
-│   ├── migrations/              # 15 files - Alembic migrations
-│   ├── ml/                      # 36 files - ML models, training, pipeline
-│   │   ├── pipeline/            # 9 files
-│   │   ├── training/            # 5 files - LSTM, XGBoost, Prophet
-│   │   └── models/              # 1 file - voting classifier
-│   ├── models/                  # 9 files - unified ORM Base declaration
-│   ├── monitoring/              # 16 files - health, alerts, metrics
-│   ├── repositories/            # 10 files - async CRUD pattern (excellent)
-│   ├── scanner/                 # 1 file - daily scanner
-│   ├── security/                # 22 files - comprehensive security
-│   ├── services/                # 11 files - service layer (NEW expanded)
-│   │   ├── stocks_service.py
-│   │   ├── portfolio_service.py
-│   │   ├── recommendation_service.py
-│   │   ├── analysis_service.py
-│   │   ├── admin_service.py
-│   │   ├── gdpr_service.py
-│   │   ├── watchlist_service.py
-│   │   ├── agents_service.py
-│   │   ├── trading_service.py
-│   │   ├── websocket_service.py
-│   │   └── realtime_price_service.py
+│   │   └── routers/             # 17 routers (150 endpoints: 147 HTTP + 3 WS)
+│   ├── auth/                    # 6 files - OAuth2, JWT (RS256), enhanced auth
+│   ├── compliance/              # 10 files - GDPR, consent, data export
+│   ├── config/                  # 7 files - settings, database (632 lines)
+│   ├── data_ingestion/          # 15 files - API clients per provider, scrapers
+│   ├── domain/                  # 5 files - contracts, abstractions
+│   ├── etl/                     # 24 files - pipeline, cache (6 cache modules), rate limiting
+│   ├── middleware/              # 9 files - priority-based stack
+│   ├── migrations/              # 13 Alembic versions
+│   ├── ml/                      # 48 files - full ML pipeline
+│   │   ├── data_prep/           # Training data generation
+│   │   ├── models/              # Ensemble voting classifier
+│   │   ├── pipeline/            # Deployment, optimization
+│   │   └── training/            # LSTM, XGBoost, Prophet trainers
+│   ├── models/                  # 12 files - unified_models.py (canonical ORM Base)
+│   ├── monitoring/              # 19 files - Prometheus, alerts, dashboards
+│   ├── repositories/            # 13 files - async CRUD pattern
+│   ├── scanner/                 # 4 files - market scanning
+│   ├── security/                # 24 files - comprehensive security stack
+│   ├── services/                # 19 files - business logic layer (NEW: expanded)
 │   ├── streaming/               # 2 files - Kafka client
-│   ├── tasks/                   # 11 files - Celery tasks
-│   ├── tests/                   # 99+ test files, ~130K lines, 3,569+ functions
+│   ├── tasks/                   # 14 files - Celery (5 queues, beat schedule)
+│   ├── tests/                   # 110 test files, 4,931 tests
+│   │   ├── unit/                # 41 files
 │   │   ├── integration/         # 16 files
-│   │   ├── security/            # 5 files (263 tests)
-│   │   ├── middleware/          # 4 files (102 tests)
-│   │   ├── unit/                # 29 files (NEW - service/utils unit tests)
-│   │   └── fixtures/            # 4 fixture files
-│   ├── TradingAgents/           # 39 files - embedded LangGraph trading system
-│   └── utils/                   # 55 files - reduced from 87
+│   │   ├── security/            # 5 files
+│   │   ├── middleware/          # 4 files
+│   │   ├── fixtures/            # 4 fixture files
+│   │   └── *.py                 # 49 top-level test files
+│   ├── TradingAgents/           # 14 files - LangGraph trading system (UNTESTED)
+│   └── utils/                   # 61 files (55 active, reduced from 87)
 ├── frontend/
-│   └── web/                     # React 18 + TypeScript + Material-UI
+│   └── web/                     # React 18 + TypeScript + Vite + MUI v5
 │       └── src/
-│           ├── components/      # 30+ components
-│           ├── pages/           # 12 pages
+│           ├── components/      # 54 files across 15 subdirectories
+│           │   ├── alerts/      # AlertForm, AlertsList
+│           │   ├── analysis/    # AnalysisCharts, AnalysisFilters, AnalysisTable
+│           │   ├── cards/       # Recommendation cards, portfolio summary, news
+│           │   ├── charts/      # MarketHeatmap, Sparkline, StockChart
+│           │   ├── common/      # ErrorBoundary, LoadingSpinner, PageSkeleton
+│           │   ├── dashboard/   # Layout, Holdings, Metrics, Performance
+│           │   ├── market/      # MarketCharts, MarketSummary, MarketTickers
+│           │   ├── monitoring/  # CostMonitor
+│           │   ├── panels/      # Allocation, MarketOverview, NewsFeed, Recs
+│           │   ├── portfolio/   # PortfolioActions, PortfolioChart, PortfolioTabs
+│           │   ├── recommendations/ # Filter, List
+│           │   ├── settings/    # SettingsForm, SettingsTabs
+│           │   ├── watchlist/   # WatchlistActions, WatchlistTable
+│           │   ├── Layout/      # App shell
+│           │   ├── NotificationPanel/
+│           │   ├── SearchModal/
+│           │   └── WebSocketIndicator/
+│           ├── pages/           # 14 pages (all lazy-loaded)
 │           ├── store/slices/    # 6 Redux slices
-│           ├── services/        # API + WebSocket services
-│           ├── hooks/           # Performance + utility hooks
-│           └── utils/           # Accessibility utilities
+│           ├── services/        # API (Axios) + WebSocket (Socket.IO)
+│           ├── hooks/           # 13 custom hooks (performance-oriented)
+│           ├── types/           # TypeScript definitions
+│           ├── theme/           # MUI theming + design tokens
+│           ├── utils/           # Accessibility, env helpers
+│           ├── config/          # API endpoint registry
+│           └── design/          # Design system
+│       └── tests/e2e/           # 2 Playwright spec files
 ├── infrastructure/
-│   ├── docker/                  # 4 backend + 3 frontend Dockerfiles
-│   ├── monitoring/              # Prometheus, Grafana configs
-│   └── nginx/                   # Reverse proxy + security headers
-├── scripts/                     # 50+ shell scripts
-│   └── deployment/              # Blue-green deploy, rollback
+│   ├── docker/                  # Dockerfiles (backend, frontend, ML)
+│   ├── monitoring/              # Prometheus, Grafana, alerts configs
+│   └── nginx/                   # Reverse proxy + SSL config + security headers
+├── scripts/                     # 100+ scripts across 8 subdirectories
+│   ├── deployment/              # Blue-green deploy, rollback
+│   ├── testing/                 # Test execution, coverage
+│   ├── monitoring/              # Performance, cost monitoring
+│   ├── models/                  # ML model management
+│   ├── optimization/            # Performance optimization
+│   ├── security/                # Security scanning, validation
+│   ├── setup/                   # Environment, dependency setup
+│   └── data/                    # Data management, ETL scripts
+├── data_pipelines/              # Airflow DAGs
+├── datasets/                    # Dataset definitions
+├── docs/                        # 18 documentation subdirectories
+├── ml_models/                   # Trained model artifacts (XGBoost, Prophet x3)
 ├── docker-compose.yml           # Base (17 services)
 ├── docker-compose.production.yml # Production stack (canonical)
 ├── docker-compose.dev.yml       # Development overrides
-└── docker-compose.test.yml      # Test overrides
+├── docker-compose.test.yml      # Test overrides
+└── docker-compose.ml-production.yml # ML-specific production
 ```
 
 ## Key Metrics
 
-| Metric | Feb 25 | Feb 26 | Change |
-|--------|--------|--------|--------|
-| Python source files (non-test) | 365 | ~330 | -35 (dead code removed) |
-| Test files | 71 | 99+ | +28 unit test files |
-| Test functions | 1,723 | 3,569+ | +107% (comprehensive coverage) |
-| Test lines of code | 75,012 | ~130,000+ | NEW metric |
-| Test results | 1543 pass, 8 skip, 5 xfail, 0 fail | 3569+ pass, 8 skip | +131% |
-| API routers | 17 active | 16 active | -1 (legacy deleted) |
-| API endpoints | ~130 | ~128 | Stable |
-| CI/CD workflows | 28 | 28 | Stable |
-| Docker services defined | 17 | 17 | Stable |
-| Security modules | 22 | 22 | Stable |
-| Utils files | 87 | 55 | -32 (cleaned up) |
-| Service files | 0 | 11 | NEW (expanded) |
-| Oversized routers (>800 lines) | 9 | 0 | ALL resolved |
-| Dead/duplicate files removed | 0 | ~35 | Loki remediation |
+| Metric | Feb 26 | Mar 3 | Change |
+|--------|--------|-------|--------|
+| Total project files | ~27,000 | 27,580 | +580 |
+| Python source files | ~330 | 493 | +163 (sub-module splits) |
+| Frontend TSX components | ~30 | 54 | +24 (extracted) |
+| Frontend pages | 12 | 14 | +2 (auth flows) |
+| Backend test files | 96 | 110 | +14 |
+| Frontend test files | 4 | 12 | +8 |
+| Backend tests (passing) | 3,569 | 4,929 | +1,360 |
+| Frontend tests (passing) | 0 | 197 | +197 (NEW) |
+| API endpoints | ~140 | 150 | +10 |
+| Service files | 12 | 19 | +7 |
+| Security modules | 22 | 24 | +2 |
+| CI/CD workflows | 28 | 29 | +1 |
+| Docker compose files | 4 | 5 | +1 (ML production) |
+| ML modules | 36 | 48 | +12 |
+| Utils files | 55 | 61 | +6 (sub-module splits) |
+| Database migrations | 9 | 13 | +4 |
 
-## Frontend Stack (from analysis)
+## Technology Stack
 
+### Backend
 | Technology | Version | Notes |
 |------------|---------|-------|
-| React | 18.2.0 | 12 pages, 30+ components |
-| TypeScript | 5.3.3 | Strict mode enabled |
+| Python | 3.10/3.11/3.12 | CI matrix across 3 versions |
+| FastAPI | Latest | 12-layer middleware stack |
+| SQLAlchemy | 2.x | DeclarativeBase, async sessions |
+| PostgreSQL | 15 | TimescaleDB 2.12.1 extension |
+| Redis | 7.2-alpine | Cache + distributed rate limiting |
+| Celery | Latest | 5 queues, beat scheduler, prefork pool |
+| Alembic | Latest | 13 migration versions |
+| Prometheus | Latest | Metrics + alerting |
+
+### Frontend
+| Technology | Version | Notes |
+|------------|---------|-------|
+| React | 18.2.0 | 14 pages, 54 components |
+| TypeScript | 5.3.3 | Strict mode (15 errors remaining) |
 | Vite | 7.3.1 | 18 manual vendor chunks |
-| Redux Toolkit | - | 6 domain slices |
+| Redux Toolkit | Latest | 6 domain slices |
 | Material-UI | 5.14 | Full theming + design tokens |
-| Recharts | - | Primary charting |
-| Plotly, Chart.js, Lightweight Charts | - | 3 additional chart libs (overkill) |
-| Playwright | 1.40 | E2E config (2 test files only) |
-| Vitest | 4.0.16 | Unit testing (4 test files only) |
+| Recharts | Latest | Primary charting |
+| Plotly, Chart.js, Lightweight Charts | Latest | 3 additional chart libs |
+| Vitest | 4.0.16 | 12 test files, 201 tests |
+| Playwright | 1.40 | 2 E2E specs (not yet in CI) |
 
-**Frontend Rating**: Strong MVP (8/10) - features complete, testing sparse
+### ML
+| Technology | Notes |
+|------------|-------|
+| XGBoost | Trained model on disk (690 KB) |
+| Prophet | 3 models (AAPL, ADBE, AMZN) |
+| LightGBM | NEW - integrated |
+| TA-Lib | NEW - technical indicators |
+| LSTM | Training code exists, weights not saved |
+| FinBERT | Sentiment analysis framework |
 
-## Changes Since Last Analysis (2026-02-25)
+## Changes Since Last Analysis (2026-02-26)
 
-### Loki Mode Remediation (Feb 26)
-**Status**: COMPLETE - All structural issues resolved
+### 30 Commits, 130 Files Changed (+39,830/-17,434 lines)
 
-Deletions:
-- `backend/backend/` (triple-nested directory) - DELETED
-- `docker-compose.prod.yml` - DELETED (consolidated)
-- 4 dead ETL extractors - DELETED
-- Legacy stocks router - DELETED
-- ~30+ other dead/duplicate files
+**Backend Modularization (Waves 4-6)**:
+- Wave 4: Split 5 largest backend files into sub-modules
+- Wave 5: Split 7 large backend files into sub-modules
+- Wave 6: Extracted frontend components + added 8 test files
 
-Expansions:
-- `backend/services/` - Expanded from 6 to 11 files with clear domain separation
-- `backend/tests/unit/` - NEW 29 test files providing 80%+ unit coverage
-- Test suite growth: +107% functions, 1543 → 3569+ passing
+**Testing Expansion (Waves 1-3)**:
+- Wave 1: ETL layer extended coverage (+307 tests)
+- Wave 2: Monitoring layer extended coverage (+331 tests)
+- Wave 3: ML and analytics extended coverage (+564 tests)
 
-Consolidations:
-- `backend/models/` - Unified to single `Base` declaration (tables.py, unified_models.py, schemas.py)
-- `backend/utils/` - Reduced from 87 to 55 files (removed cache variants, db clutter)
-- `backend/etl/` - Reduced from 18 to 13 files (removed dead extractors)
+**Feature Additions**:
+- ML: LightGBM, TA-Lib indicators, Monte Carlo VaR
+- Real-time: Socket.IO service, Celery optimization
+- Frontend: UI overhaul, expanded pages, auth flows (Login, Register, ForgotPassword), seed script
+- ORM: DeclarativeBase migration, legacy shims
+- Security: P0 fixes — password verification, crypto stubs, JWT unification
 
-Code Quality:
-- 9 oversized routers (>800 lines) - ALL refactored to <500 lines
-- Service layer architecture - CLARIFIED with dedicated service classes
-- Test infrastructure - IMPROVED with comprehensive fixtures and async support
+**Frontend Extraction**:
+- 14 pages -> all lazy-loaded with typed skeletons
+- Monolithic pages split into 54 domain-organized components
+- 13 custom performance hooks
+- 8 new page-level test files
 
-### Historical Concerns (RESOLVED)
-1. ✅ `backend/backend/backend/tests/` - triple-nested directory copy - DELETED
-2. ✅ `backend/utils/` - 87 files sprawl - REDUCED to 55 focused files
-3. ✅ `backend/etl/` - 6 data extractor variants - REDUCED to 1 canonical extractor
-4. ✅ `backend/models/` - 3 competing `Base = declarative_base()` - UNIFIED to 1
-5. ✅ `docker-compose.production.yml` - canonical production stack - CONFIRMED
-6. ⚠️ `infrastructure/kubernetes/` - referenced by CI, does not exist - STILL MISSING
-7. ⚠️ Frontend: 4 charting libraries - STILL PRESENT (Recharts, Plotly, Chart.js, Lightweight Charts)
+## Files Over 500 Lines (Identified)
+
+| Category | Count | Largest |
+|----------|-------|---------|
+| Security modules | 14 | `security_config.py` (1,141 lines) |
+| Task modules | 5 | `maintenance_tasks.py` (1,112 lines) |
+| ETL modules | 2 | `unlimited_extractor_with_fallbacks.py` (904 lines) |
+| Config | 1 | `database.py` (632 lines) |
+| Frontend | 4 | `EnhancedDashboard.tsx` (745 lines) |
+| **Total** | **26+** | |
+
+Note: Security and task modules are cohesive domain code, not sprawl. Frontend oversized files are candidates for extraction.
