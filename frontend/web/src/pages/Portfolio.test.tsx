@@ -147,7 +147,8 @@ describe('Portfolio', () => {
       expect(screen.getByRole('tab', { name: /performance/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /allocation/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /transactions/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /analysis/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /^analysis$/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /risk analysis/i })).toBeInTheDocument();
     });
 
     it('shows positions tab by default', async () => {
@@ -305,10 +306,10 @@ describe('Portfolio', () => {
       renderWithProviders(<Portfolio />, { preloadedState: defaultState });
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /analysis/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /^analysis$/i })).toBeInTheDocument();
       });
 
-      const analysisTab = screen.getByRole('tab', { name: /analysis/i });
+      const analysisTab = screen.getByRole('tab', { name: /^analysis$/i });
       await user.click(analysisTab);
 
       expect(analysisTab).toHaveAttribute('aria-selected', 'true');
@@ -319,10 +320,10 @@ describe('Portfolio', () => {
       renderWithProviders(<Portfolio />, { preloadedState: defaultState });
 
       await waitFor(() => {
-        expect(screen.getByRole('tab', { name: /analysis/i })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: /^analysis$/i })).toBeInTheDocument();
       });
 
-      const analysisTab = screen.getByRole('tab', { name: /analysis/i });
+      const analysisTab = screen.getByRole('tab', { name: /^analysis$/i });
       await user.click(analysisTab);
 
       await waitFor(() => {

@@ -52,7 +52,7 @@ describe('Dashboard', () => {
           { symbol: 'SPY', value: 480, change: 1.2, changePercent: 0.25 },
           { symbol: 'QQQ', value: 400, change: -0.8, changePercent: -0.20 },
         ],
-        heatmap: [],
+        heatmap: [{ symbol: 'AAPL', change: 2.1 }],
         sectors: [
           { name: 'Technology', change: 1.5, volume: 1000000 },
           { name: 'Healthcare', change: -0.5, volume: 500000 },
