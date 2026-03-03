@@ -356,7 +356,7 @@ jobs:
         MASTER_SECRET_KEY: test-master-secret-key-for-ci
         APP_ENV: testing
 
-    - name: Check coverage floor (blocking at 35%)
+    - name: Check coverage floor (blocking at 60%)
       if: always()
       run: |
         if [ -f coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml ]; then
@@ -374,30 +374,30 @@ jobs:
           echo "| Line coverage | ${COVERAGE}% |" >> $GITHUB_STEP_SUMMARY
           echo "| Python version | ${{ matrix.python-version }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Test suite | ${{ matrix.test-suite }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Floor threshold (BLOCKS)** | **35%** |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Floor threshold (BLOCKS)** | **60%** |" >> $GITHUB_STEP_SUMMARY
           echo "| Target threshold (advisory) | 80% |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # HARD GATE: Fail if coverage drops below 35% floor
+          # HARD GATE: Fail if coverage drops below 60% floor
           python -c "
           import sys
           coverage = float('${COVERAGE}')
-          if coverage < 35.0:
-              print(f'BLOCKING: Coverage {coverage}% is below the 35% floor. Coverage must not regress.')
+          if coverage < 60.0:
+              print(f'BLOCKING: Coverage {coverage}% is below the 60% floor. Coverage must not regress.')
               sys.exit(1)
           elif coverage < 80.0:
-              print(f'WARNING: Coverage {coverage}% is above 35% floor but below 80% target. Please add tests.')
+              print(f'WARNING: Coverage {coverage}% is above 60% floor but below 80% target. Please add tests.')
           else:
               print(f'Coverage {coverage}% meets the 80% target.')
           "
 
           # Summary annotation
-          BELOW_FLOOR=$(python -c "print('true' if float('${COVERAGE}') < 35.0 else 'false')")
+          BELOW_FLOOR=$(python -c "print('true' if float('${COVERAGE}') < 60.0 else 'false')")
           BELOW_TARGET=$(python -c "print('true' if float('${COVERAGE}') < 80.0 else 'false')")
           if [ "$BELOW_FLOOR" = "true" ]; then
-            echo "> **BLOCKED:** Coverage is below the 35% floor. This must be fixed before merging." >> $GITHUB_STEP_SUMMARY
+            echo "> **BLOCKED:** Coverage is below the 60% floor. This must be fixed before merging." >> $GITHUB_STEP_SUMMARY
           elif [ "$BELOW_TARGET" = "true" ]; then
-            echo "> **Warning:** Coverage is above the 35% floor but below the 80% target. Please add tests." >> $GITHUB_STEP_SUMMARY
+            echo "> **Warning:** Coverage is above the 60% floor but below the 80% target. Please add tests." >> $GITHUB_STEP_SUMMARY
           else
             echo "> Coverage meets the 80% target." >> $GITHUB_STEP_SUMMARY
           fi
