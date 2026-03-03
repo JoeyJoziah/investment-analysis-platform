@@ -104,10 +104,32 @@ export const apiConfig = {
     // User Settings
     settings: {
       preferences: '/api/settings/preferences',
+      display: '/api/settings/display',
+      trading: '/api/settings/trading',
       notifications: '/api/settings/notifications',
+      reset: '/api/settings/reset',
       apiKeys: '/api/settings/api-keys',
     },
-    
+
+    // Trading
+    trading: {
+      validateOrder: '/api/trading/orders/validate',
+      execute: (portfolioId: number) => `/api/trading/orders/${portfolioId}`,
+      impact: (portfolioId: number) => `/api/trading/orders/${portfolioId}/impact`,
+    },
+
+    // ML
+    ml: {
+      predict: '/api/ml/predictions',
+      models: '/api/ml/models',
+      driftDetect: '/api/ml/drift/detect',
+      driftStatus: '/api/ml/drift/status',
+      versions: '/api/ml/versions',
+      promote: (modelName: string) => `/api/ml/versions/${modelName}/promote`,
+      rollback: (modelName: string) => `/api/ml/versions/${modelName}/rollback`,
+      backtest: '/api/ml/backtest',
+    },
+
     // Metrics
     metrics: {
       usage: '/api/metrics/usage',

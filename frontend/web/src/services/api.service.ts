@@ -169,11 +169,148 @@ export const api = {
       api.get(apiConfig.endpoints.news.market),
   },
   
+  // Watchlist
+  watchlist: {
+    getAll: () =>
+      api.get(apiConfig.endpoints.watchlist.list),
+
+    create: (data: { name: string; description?: string }) =>
+      api.post(apiConfig.endpoints.watchlist.create, data),
+
+    getDefault: () =>
+      api.get(apiConfig.endpoints.watchlist.default),
+
+    get: (watchlistId: number) =>
+      api.get(apiConfig.endpoints.watchlist.get(watchlistId)),
+
+    update: (watchlistId: number, data: { name?: string; description?: string }) =>
+      api.put(apiConfig.endpoints.watchlist.update(watchlistId), data),
+
+    remove: (watchlistId: number) =>
+      api.delete(apiConfig.endpoints.watchlist.delete(watchlistId)),
+
+    addItem: (watchlistId: number, data: { symbol: string; notes?: string }) =>
+      api.post(apiConfig.endpoints.watchlist.addItem(watchlistId), data),
+
+    updateItem: (watchlistId: number, itemId: number, data: { notes?: string }) =>
+      api.put(apiConfig.endpoints.watchlist.updateItem(watchlistId, itemId), data),
+
+    removeItem: (watchlistId: number, itemId: number) =>
+      api.delete(apiConfig.endpoints.watchlist.removeItem(watchlistId, itemId)),
+
+    addToDefault: (symbol: string) =>
+      api.post(apiConfig.endpoints.watchlist.addToDefault(symbol)),
+
+    removeFromDefault: (symbol: string) =>
+      api.delete(apiConfig.endpoints.watchlist.removeFromDefault(symbol)),
+  },
+
+  // Settings
+  settings: {
+    getPreferences: () =>
+      api.get(apiConfig.endpoints.settings.preferences),
+
+    updatePreferences: (data: Record<string, unknown>) =>
+      api.put(apiConfig.endpoints.settings.preferences, data),
+
+    getDisplay: () =>
+      api.get(apiConfig.endpoints.settings.display),
+
+    updateDisplay: (data: Record<string, unknown>) =>
+      api.put(apiConfig.endpoints.settings.display, data),
+
+    getTradingPrefs: () =>
+      api.get(apiConfig.endpoints.settings.trading),
+
+    updateTradingPrefs: (data: Record<string, unknown>) =>
+      api.put(apiConfig.endpoints.settings.trading, data),
+
+    getNotifications: () =>
+      api.get(apiConfig.endpoints.settings.notifications),
+
+    updateNotifications: (data: Record<string, unknown>) =>
+      api.put(apiConfig.endpoints.settings.notifications, data),
+
+    reset: () =>
+      api.post(apiConfig.endpoints.settings.reset),
+  },
+
+  // Trading
+  trading: {
+    validateOrder: (portfolioId: number, order: {
+      symbol: string;
+      side: 'buy' | 'sell';
+      order_type: 'market' | 'limit' | 'stop' | 'stop_limit';
+      quantity: number;
+      price?: number;
+      stop_price?: number;
+    }) =>
+      api.post(apiConfig.endpoints.trading.validateOrder, order, {
+        params: { portfolio_id: portfolioId },
+      }),
+
+    executeTrade: (portfolioId: number, trade: {
+      symbol: string;
+      side: 'buy' | 'sell';
+      order_type: 'market' | 'limit' | 'stop' | 'stop_limit';
+      quantity: number;
+      price: number;
+    }) =>
+      api.post(apiConfig.endpoints.trading.execute(portfolioId), trade),
+
+    calculateImpact: (portfolioId: number, data: {
+      symbol: string;
+      side: 'buy' | 'sell';
+      quantity: number;
+      price: number;
+    }) =>
+      api.post(apiConfig.endpoints.trading.impact(portfolioId), data),
+  },
+
+  // ML
+  ml: {
+    predict: (data: { tickers: string[]; model?: string }) =>
+      api.post(apiConfig.endpoints.ml.predict, data),
+
+    getModels: () =>
+      api.get(apiConfig.endpoints.ml.models),
+
+    detectDrift: (modelName: string) =>
+      api.post(apiConfig.endpoints.ml.driftDetect, null, {
+        params: { model_name: modelName },
+      }),
+
+    getDriftStatus: () =>
+      api.get(apiConfig.endpoints.ml.driftStatus),
+
+    getVersions: () =>
+      api.get(apiConfig.endpoints.ml.versions),
+
+    promoteModel: (modelName: string, version: string, targetStage?: string) =>
+      api.post(apiConfig.endpoints.ml.promote(modelName), null, {
+        params: { version, target_stage: targetStage || 'production' },
+      }),
+
+    rollbackModel: (modelName: string, targetVersion: string) =>
+      api.post(apiConfig.endpoints.ml.rollback(modelName), null, {
+        params: { target_version: targetVersion },
+      }),
+
+    backtest: (data: {
+      tickers: string[];
+      start_date: string;
+      end_date: string;
+      initial_capital?: number;
+      benchmark?: string;
+    }) =>
+      api.post(apiConfig.endpoints.ml.backtest, data),
+  },
+
   // Metrics
   metrics: {
     getUsage: () =>
       api.get(apiConfig.endpoints.metrics.usage),
-    
+
     getCosts: () =>
       api.get(apiConfig.endpoints.metrics.costs),
   },
