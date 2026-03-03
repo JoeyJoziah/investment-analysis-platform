@@ -1,11 +1,11 @@
 # Recommendations
 
-**Last Updated**: 2026-03-03
+**Last Updated**: 2026-03-03 (Refreshed with deep audit)
 **Previous**: 2026-02-26
 
 ## Executive Summary
 
-Five parallel analysis agents examined project structure, backend features, frontend status, test suite health, and deployment readiness. The platform has matured significantly since Feb 26 (88% -> 91%), but three critical security stubs and operational gaps must be addressed before production.
+Three parallel deep-audit agents examined security stubs, backend API surface, and frontend state. The platform remains at 91% overall completion. Key corrections: endpoints are 153 (not 150), service files are 20 (not 19), components are 55 (not 54). The Dockerfile path mismatch has been RESOLVED. `EnhancedDashboard.tsx` confirmed as dead code. Three critical security stubs and SSL remain the primary production blockers.
 
 ## Priority Matrix
 
@@ -13,9 +13,9 @@ Five parallel analysis agents examined project structure, backend features, fron
 
 | # | Action | Time | Impact |
 |---|--------|------|--------|
-| 1 | Implement `security/rbac.py` — replace NotImplementedError stubs with DB-backed role management | 2-3 days | Enables fine-grained access control |
-| 2 | Implement `security/crypto_utils.py` — Fernet/AES encryption for PII at rest | 1 day | Unblocks GDPR field encryption |
-| 3 | Upgrade `security/password_manager.py` to bcrypt/argon2id with complexity rules | 4 hrs | Prevents GPU-based password cracking |
+| 1 | Implement `security/rbac.py` (L48-91) — replace 4 NotImplementedError stubs with DB-backed role management. `has_permission()` already works. | 2-3 days | Enables fine-grained access control |
+| 2 | Implement `security/crypto_utils.py` (L62-120) — 5 stubs need Fernet/AES + RSA/ECDSA. Random generation + hashing already work. | 1 day | Unblocks GDPR field encryption |
+| 3 | Upgrade `security/password_manager.py` (L24) from PBKDF2-HMAC-SHA256 to bcrypt/argon2id. Add complexity rules beyond `len >= 8`. | 4 hrs | Prevents GPU-based password cracking |
 | 4 | Remove `'unsafe-inline'` from CSP `script-src` in `security/security_headers.py:516` | 2 hrs | Closes XSS vector |
 | 5 | Provision SSL certificates (certbot container or manual Let's Encrypt) | 2 hrs | Unblocks HTTPS in production |
 
@@ -28,7 +28,7 @@ Five parallel analysis agents examined project structure, backend features, fron
 | 8 | Fix flaky SEC Edgar test — refactor import pattern or add `@pytest.mark.flaky` | 1 hr | Eliminate false failures |
 | 9 | Remove `continue-on-error: true` from CI test steps | 15 min | Make tests blocking |
 | 10 | Raise coverage floor from 35% to 60% | 15 min | Enforce quality gate |
-| 11 | Fix Dockerfile path mismatch — align CI (`./frontend/web/Dockerfile`) with repo (`./Dockerfile.frontend`) | 15 min | Unblock production image build |
+| 11 | ~~Fix Dockerfile path mismatch~~ | RESOLVED | `frontend/web/Dockerfile` now exists |
 
 ### P2: API Completion (Week 1)
 
@@ -36,14 +36,14 @@ Five parallel analysis agents examined project structure, backend features, fron
 |---|--------|------|--------|
 | 12 | Create `backend/api/routers/trading.py` — expose order CRUD from trading_service.py | 1 day | Complete trading feature |
 | 13 | Expand `backend/api/routers/ml.py` — add drift detection, model management, backtesting endpoints | 1 day | Expose ML capabilities |
-| 14 | Fix 15 frontend TypeScript errors (Socket.IO types, unused imports, @types/lodash) | 2 hrs | Clean TS build |
+| 14 | Run `tsc --noEmit` to quantify TS errors. Fix Socket.IO types. Zero @ts-ignore suppressions (good). | 2 hrs | Clean TS build |
 | 15 | Add typed methods for watchlist/alerts/settings to `services/api.service.ts` | 1 hr | Complete API integration |
 
 ### P3: Test Coverage Expansion (Weeks 1-2)
 
 | # | Action | Coverage Impact |
 |---|--------|----------------|
-| 16 | Create TradingAgents test suite (~20 untested files) | +5-8% |
+| 16 | Expand TradingAgents test suite (3 tests for 39 files — graph, signals, analysts) | +5-8% |
 | 17 | Add frontend hook tests (useRealTimePrices, usePortfolioWebSocket, etc.) | +3% frontend |
 | 18 | Add Redux slice tests (6 slices, zero coverage) | +5% frontend |
 | 19 | Tag slow tests (>10s) with `@pytest.mark.slow` | Faster CI feedback |
@@ -65,7 +65,7 @@ Five parallel analysis agents examined project structure, backend features, fron
 
 | # | Action | Impact |
 |---|--------|--------|
-| 28 | Investigate `EnhancedDashboard.tsx` (745 lines, not routed) — delete if dead code | Reduce bloat |
+| 28 | Delete `EnhancedDashboard.tsx` (746 lines, CONFIRMED dead code — not imported anywhere) | -746 lines dead code |
 | 29 | Extract `SettingsTabs.tsx` (586 lines) into sub-components | Maintainability |
 | 30 | Extract `PortfolioSummary.tsx` (534 lines) into sub-components | Maintainability |
 | 31 | Resolve 4 unorganized root components (CorrelationMatrix, EfficientFrontier, etc.) | Clean structure |
@@ -90,18 +90,22 @@ Five parallel analysis agents examined project structure, backend features, fron
 - **Security module file sizes**: 14 files >500 lines in `backend/security/` — cohesive but large
 - **Task module sizes**: `maintenance_tasks.py` (1,112 lines) — candidate for splitting
 - **4 charting libraries in frontend**: Recharts + Plotly + Chart.js + Lightweight Charts (overkill)
+- **30 files >800 lines in backend**: Most cohesive, but largest (recommendation_service 1,234 lines) growing
 
-## Success Metrics (Updated)
+## Success Metrics (Updated with Deep Audit)
 
-| Metric | Feb 26 | Mar 3 | Target (30 days) |
-|--------|--------|-------|-------------------|
+| Metric | Feb 26 | Mar 3 (Verified) | Target (30 days) |
+|--------|--------|-------------------|-------------------|
 | Test count | 3,569 | 5,132 | 6,000+ |
-| Backend pass rate | 99.5% | 99.98% | 100% |
+| Backend pass rate | 99.5% | 99.98% (1 flaky) | 100% |
 | Frontend pass rate | N/A | 98.0% | 100% |
-| TS errors | Unknown | 15 | 0 |
+| TS suppressions | Unknown | 0 (@ts-ignore) | 0 |
 | Security stubs | Unknown | 3 | 0 |
 | CI test gates | Advisory | Advisory | Blocking |
 | Coverage floor | 35% | 35% | 60% blocking |
-| Deployment readiness | 75% | 78.5% | 90% |
+| Deployment readiness | 75% | 79.5% | 90% |
+| API endpoints | ~140 | 153 (verified) | 160+ |
+| Dockerfile path | Broken | RESOLVED | Resolved |
+| Dead code (frontend) | Unknown | 746 lines | 0 |
 | Stocks loaded | 0 | 0 | 1,000+ |
 | SSL provisioned | No | No | Yes |

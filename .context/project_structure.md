@@ -1,6 +1,6 @@
 # Project Structure
 
-**Last Updated**: 2026-03-03
+**Last Updated**: 2026-03-03 (Refreshed with deep audit)
 **Previous Analysis**: 2026-02-26
 
 ## Directory Tree Overview
@@ -20,7 +20,7 @@ investment-analysis-platform/
 │   │   └── statistical/         # Cointegration
 │   ├── api/
 │   │   ├── main.py              # FastAPI app with 12-layer middleware stack
-│   │   └── routers/             # 17 routers (150 endpoints: 147 HTTP + 3 WS)
+│   │   └── routers/             # 18 routers (153 endpoints: 150 HTTP + 3 WS, 8,112 total lines)
 │   ├── auth/                    # 6 files - OAuth2, JWT (RS256), enhanced auth
 │   ├── compliance/              # 10 files - GDPR, consent, data export
 │   ├── config/                  # 7 files - settings, database (632 lines)
@@ -38,8 +38,8 @@ investment-analysis-platform/
 │   ├── monitoring/              # 19 files - Prometheus, alerts, dashboards
 │   ├── repositories/            # 13 files - async CRUD pattern
 │   ├── scanner/                 # 4 files - market scanning
-│   ├── security/                # 24 files - comprehensive security stack
-│   ├── services/                # 19 files - business logic layer (NEW: expanded)
+│   ├── security/                # 20 files - comprehensive security stack (3 stubs: rbac, crypto, passwords)
+│   ├── services/                # 20 files - business logic layer (10,241 total lines)
 │   ├── streaming/               # 2 files - Kafka client
 │   ├── tasks/                   # 14 files - Celery (5 queues, beat schedule)
 │   ├── tests/                   # 110 test files, 4,931 tests
@@ -49,12 +49,12 @@ investment-analysis-platform/
 │   │   ├── middleware/          # 4 files
 │   │   ├── fixtures/            # 4 fixture files
 │   │   └── *.py                 # 49 top-level test files
-│   ├── TradingAgents/           # 14 files - LangGraph trading system (UNTESTED)
+│   ├── TradingAgents/           # 39 files - LangGraph trading system (3 test files, low coverage)
 │   └── utils/                   # 61 files (55 active, reduced from 87)
 ├── frontend/
 │   └── web/                     # React 18 + TypeScript + Vite + MUI v5
 │       └── src/
-│           ├── components/      # 54 files across 15 subdirectories
+│           ├── components/      # 55 files across 15 subdirectories (1 dead: EnhancedDashboard.tsx)
 │           │   ├── alerts/      # AlertForm, AlertsList
 │           │   ├── analysis/    # AnalysisCharts, AnalysisFilters, AnalysisTable
 │           │   ├── cards/       # Recommendation cards, portfolio summary, news
@@ -112,16 +112,18 @@ investment-analysis-platform/
 |--------|--------|-------|--------|
 | Total project files | ~27,000 | 27,580 | +580 |
 | Python source files | ~330 | 493 | +163 (sub-module splits) |
-| Frontend TSX components | ~30 | 54 | +24 (extracted) |
+| Frontend TSX components | ~30 | 55 | +25 (extracted, 1 dead code) |
 | Frontend pages | 12 | 14 | +2 (auth flows) |
 | Backend test files | 96 | 110 | +14 |
 | Frontend test files | 4 | 12 | +8 |
 | Backend tests (passing) | 3,569 | 4,929 | +1,360 |
 | Frontend tests (passing) | 0 | 197 | +197 (NEW) |
-| API endpoints | ~140 | 150 | +10 |
-| Service files | 12 | 19 | +7 |
-| Security modules | 22 | 24 | +2 |
-| CI/CD workflows | 28 | 29 | +1 |
+| Frontend TS/TSX files (total) | ~60 | 106 | +46 |
+| API endpoints | ~140 | 153 | +13 (78 GET, 48 POST, 8 PUT, 7 DEL, 2 PATCH, 3 WS) |
+| Router files | 15 | 18 | +3 (8,112 total lines) |
+| Service files | 12 | 20 | +8 (10,241 total lines) |
+| Security modules | 22 | 20 | Consolidated |
+| CI/CD workflows | 28 | 28 | Stable |
 | Docker compose files | 4 | 5 | +1 (ML production) |
 | ML modules | 36 | 48 | +12 |
 | Utils files | 55 | 61 | +6 (sub-module splits) |
@@ -191,15 +193,30 @@ investment-analysis-platform/
 - 13 custom performance hooks
 - 8 new page-level test files
 
-## Files Over 500 Lines (Identified)
+## Files Over 800 Lines (Verified by Deep Audit)
 
-| Category | Count | Largest |
-|----------|-------|---------|
-| Security modules | 14 | `security_config.py` (1,141 lines) |
-| Task modules | 5 | `maintenance_tasks.py` (1,112 lines) |
-| ETL modules | 2 | `unlimited_extractor_with_fallbacks.py` (904 lines) |
-| Config | 1 | `database.py` (632 lines) |
-| Frontend | 4 | `EnhancedDashboard.tsx` (745 lines) |
-| **Total** | **26+** | |
+**30 backend files exceed 800 lines. Top 10:**
 
-Note: Security and task modules are cohesive domain code, not sprawl. Frontend oversized files are candidates for extraction.
+| File | Lines | Category |
+|------|-------|----------|
+| `services/recommendation_service.py` | 1,234 | Services |
+| `data_ingestion/market_scanner.py` | 1,211 | Data |
+| `models/ml_models.py` | 1,191 | Models |
+| `models/unified_models.py` | 1,168 | Models |
+| `services/portfolio_service.py` | 1,162 | Services |
+| `security/security_config.py` | 1,140 | Security |
+| `tasks/maintenance_tasks.py` | 1,111 | Tasks |
+| `TradingAgents/cli/main.py` | 1,105 | TradingAgents |
+| `monitoring/health_checks.py` | 1,102 | Monitoring |
+| `ml/online_learning.py` | 1,082 | ML |
+
+**Distribution**: Services (2), Security (6), ML (5), Monitoring (4), ETL (2), Utils (3), Data (1), Models (2), TradingAgents (1), API (1), Tasks (1), Config (1)
+
+**Frontend files >500 lines:**
+| File | Lines | Status |
+|------|-------|--------|
+| `EnhancedDashboard.tsx` | 746 | DEAD CODE (not imported) |
+| `SettingsTabs.tsx` | 586 | Candidate for extraction |
+| `PortfolioSummary.tsx` | 534 | Candidate for extraction |
+
+Note: Most backend large files are cohesive domain code, not sprawl. Frontend `EnhancedDashboard.tsx` should be deleted or integrated.

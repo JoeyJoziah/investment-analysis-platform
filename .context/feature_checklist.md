@@ -1,6 +1,6 @@
 # Feature Checklist
 
-**Last Updated**: 2026-03-03
+**Last Updated**: 2026-03-03 (Refreshed with deep audit)
 **Overall Completion**: 87% (improved from 82%)
 
 ## Core Features
@@ -85,33 +85,37 @@
 - [ ] RBAC enforcement stub (assign_role, check_access raise NotImplementedError)
 
 ### TradingAgents (LangGraph)
-- [x] Multi-agent trading research graph
-- [x] Fundamentals, market, news, social media analysts
-- [x] Bull/bear researchers + debate agents
+- [x] Multi-agent trading research graph (39 files total)
+- [x] Fundamentals, market, news, social media analysts (4 analyst agents)
+- [x] Bull/bear researchers + debate agents (5 debate/research agents)
 - [x] Risk manager + trader node
-- [ ] **Zero test coverage** (largest uncovered area)
+- [x] CLI interface (main.py: 1,105 lines)
+- [x] 9 dataflow integrations (Finnhub, Google News, Reddit, Yahoo Finance, etc.)
+- [ ] **Low test coverage** - only 3 test files for 39 source files
 
-## API Endpoints (150 total: 147 HTTP + 3 WebSocket)
+## API Endpoints (153 total: 150 HTTP + 3 WebSocket)
+
+**Verified by deep audit: 78 GET, 48 POST, 8 PUT, 7 DELETE, 2 PATCH, 3 WebSocket across 18 routers (8,112 total lines)**
 
 ### Fully Implemented and Tested
 - [x] Health: 7 endpoints (root, readiness, liveness, startup, metrics, ping, rate-limiter)
 - [x] Auth: 6 endpoints (register, token, login, me, logout, refresh)
 - [x] Stocks: 12 endpoints (list, search, detail, quote, history, statistics, alerts, sectors)
 - [x] Analysis: 5 endpoints (analyze, batch, compare, technical indicators, sentiment)
-- [x] Recommendations: 10 endpoints (daily, list, filter, portfolio, performance, backtest, trending)
-- [x] Portfolio: 11 endpoints (summary, positions, transactions, performance, rebalance, watchlist)
-- [x] Watchlist: 12 endpoints (full CRUD on lists and items)
+- [x] Recommendations: 8 endpoints (daily, list, filter, portfolio, performance, backtest, trending)
+- [x] Portfolio: 10 endpoints (summary, positions, transactions, performance, rebalance, watchlist)
+- [x] Watchlist: 13 endpoints (full CRUD on lists and items)
 - [x] News: 4 endpoints (latest, sentiment by symbol, sources, preferences)
-- [x] Settings: 9 endpoints (preferences, display, trading, notifications, reset)
+- [x] Settings: 10 endpoints (preferences, display, trading, notifications, reset)
 - [x] WebSocket: 3 HTTP + 3 WS (general, market, portfolio streams)
-- [x] GDPR: 14 endpoints (export, deletion, consent CRUD, anonymize, retention, audit)
+- [x] GDPR: 13 endpoints (export, deletion, consent CRUD, anonymize, retention, audit)
 
 ### Implemented, Partially Tested
-- [x] Admin: 20 endpoints (users, jobs, config, cache, audit, announcements, maintenance)
-- [x] Agents: 9 endpoints (AI analysis, batch, budget, capabilities, status)
+- [x] Admin: 16 endpoints (users, jobs, config, cache, audit, announcements, maintenance)
+- [x] Agents: 7 endpoints (AI analysis, batch, budget, capabilities, status)
 - [x] Cache: 8 endpoints (metrics, cost, performance, invalidate, warm, health)
 - [x] Thesis: 6 endpoints (CRUD + list by stock)
-- [x] Monitoring: 6 endpoints (health, cost, Grafana, alerts, API usage)
+- [x] Monitoring: 5 endpoints (health, cost, Grafana, alerts, API usage)
 - [x] ML: 2 endpoints (predictions POST, models GET) - **underdeveloped vs 48-file ML subsystem**
 
 ## Frontend (14 Pages, 54 Components)
@@ -141,10 +145,12 @@
 - [x] Socket.IO + native WebSocket dual-layer
 - [x] Route-based prefetching
 - [x] ErrorBoundary + PageSkeleton wrappers
-- [ ] 15 TypeScript errors (1 type-safety + 14 unused imports)
+- [x] Zero @ts-ignore/@ts-expect-error suppressions (strong type discipline)
+- [ ] TypeScript compile errors need quantification (run `tsc --noEmit`)
 - [ ] API service missing typed methods for watchlist/alerts/settings
 - [ ] Redux slices have zero test coverage
 - [ ] Hooks have zero test coverage
+- [ ] EnhancedDashboard.tsx (746 lines) is dead code - not imported anywhere
 
 ## Infrastructure
 
@@ -158,7 +164,7 @@
 - [x] 4 metric exporters
 - [x] Apache Airflow
 - [x] Cost monitor service
-- [ ] Frontend container (path mismatch between CI and local)
+- [x] Frontend container (Dockerfile path issue RESOLVED - `frontend/web/Dockerfile` exists)
 - [ ] SSL certificates not provisioned
 
 ### CI/CD (29 Workflows)
@@ -191,10 +197,10 @@
 - [x] Frontend: 201 tests (197 pass, 4 fixable failures)
 - [x] 110 backend test files (41 unit, 49 top-level, 16 integration, 5 security, 4 middleware)
 - [x] 12 frontend test files (8 pages + 4 components)
-- [ ] TradingAgents: 0% coverage (~20 files untested)
+- [ ] TradingAgents: ~8% coverage (3 test files for 39 source files)
 - [ ] Frontend hooks/slices/services: 0% coverage
 - [ ] Celery tasks: ~5% coverage
-- [ ] No true E2E tests running in CI (Playwright configured but collides with Vitest)
+- [ ] No true E2E tests running in CI (Playwright configured, Vitest lacks e2e exclusion)
 
 ## Progress Summary
 

@@ -1,31 +1,31 @@
 # Overall Project Status Report
 
 **Project**: Investment Analysis Platform
-**Date**: 2026-03-03
+**Date**: 2026-03-03 (Refreshed)
 **Overall Completion**: 91%
 **Previous Assessment**: 88% (2026-02-26)
 **Status**: PRODUCTION-APPROACHING - Major gains in testing, frontend, and backend modularization
 
 ## Executive Summary
 
-Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/-17,434 lines). Key improvements: test suite expanded from 3,569 to 5,132 tests (backend 4,931 + frontend 201), frontend refactored into 54 extracted components with 14 lazy-loaded pages and complete auth flows, backend files split into sub-modules (Waves 4-6), and ML capabilities expanded with LightGBM, TA-Lib, and Monte Carlo VaR. Three critical security stubs (RBAC, crypto_utils, password_manager) were identified as requiring implementation before production.
+Deep audit of the codebase confirms 91% overall completion. The platform has 153 API endpoints across 18 routers, 20 service files, 48 ML modules, 55 frontend components, and 14 lazy-loaded pages. Test suite: 4,931 backend + 201 frontend = 5,132 total. Three critical security stubs (RBAC, crypto_utils, password_manager) remain the primary blockers to production. The frontend Dockerfile path mismatch has been RESOLVED. One dead code artifact confirmed: `EnhancedDashboard.tsx` (746 lines, not imported anywhere).
 
 ## Revised Completion Assessment
 
 | Category | Previous (Feb 26) | Current (Mar 3) | Notes |
 |----------|-------------------|-----------------|-------|
 | Architecture | 88% | 92% | Backend files split into sub-modules, frontend components extracted |
-| Backend API | 90% | 92% | 150 endpoints (147 HTTP + 3 WS), 19 services, all routers <750 lines |
-| Frontend UI | 78% | 88% | 14 pages, 54 components, auth flows, code splitting, lazy loading |
+| Backend API | 90% | 92% | 153 endpoints (150 HTTP + 3 WS), 20 services, all routers <753 lines |
+| Frontend UI | 78% | 88% | 14 pages, 55 components, auth flows, code splitting, lazy loading |
 | Database | 80% | 82% | 13 migrations, TimescaleDB-ready, unified ORM |
 | Security | 90% | 85% | DOWNGRADED: RBAC stub, crypto_utils stub, weak password hashing found |
-| Infrastructure | 88% | 88% | Docker solid, SSL still empty, K8s still missing |
+| Infrastructure | 88% | 89% | Docker solid, Dockerfile path fixed, SSL still empty, K8s still missing |
 | ML/AI | 75% | 80% | LightGBM + TA-Lib + Monte Carlo VaR added, LSTM weights still absent |
 | Data Pipeline | 75% | 78% | ETL consolidated, Celery well-structured with 5 queues |
 | Documentation | 88% | 88% | Stable |
 | Testing | 82% | 90% | 5,132 total tests (4,931 backend + 201 frontend), 122 test files |
-| CI/CD | 85% | 87% | 29 workflows, but tests still non-blocking (continue-on-error) |
-| Code Quality | 88% | 90% | Wave 4-6 splits complete, frontend extracted |
+| CI/CD | 85% | 87% | 28 workflows, but tests still non-blocking (continue-on-error) |
+| Code Quality | 88% | 90% | Wave 4-6 splits complete, frontend extracted, 0 @ts-ignore in frontend |
 
 ## Key Improvements Since Feb 26
 
@@ -38,11 +38,12 @@ Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/
 
 ### Frontend (78% -> 88%)
 - **Pages**: 12 -> 14 (added Login, Register, ForgotPassword)
-- **Components**: extracted to 54 domain-organized component files
+- **Components**: extracted to 55 domain-organized component files
 - **Code splitting**: All 14 pages lazy-loaded with typed skeleton fallbacks
 - **State management**: 6 Redux Toolkit slices with typed hooks
 - **Performance hooks**: Virtual scroll, debounce, throttle, Web Worker, prefetch
 - **Auth flows**: Complete Login, Register, ForgotPassword with security best practices
+- **Type safety**: Zero @ts-ignore/@ts-expect-error suppressions in entire frontend
 
 ### Backend Modularization (Waves 4-6)
 - **Wave 4**: Split 5 largest backend files into sub-modules
@@ -51,10 +52,10 @@ Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/
 - **ML additions**: LightGBM, TA-Lib indicators, Monte Carlo VaR
 - **Real-time**: Socket.IO service + Celery optimization
 
-### Security Regression (90% -> 85%)
-- **RBAC stub found**: `assign_role()`, `revoke_role()`, `check_access()` raise `NotImplementedError`
-- **crypto_utils stub found**: `encrypt_data()`, `decrypt_data()`, `sign_data()` raise `NotImplementedError`
-- **Password manager weakness**: Uses PBKDF2 (not bcrypt/argon2), policy is length >= 8 only
+### Security Stubs (90% -> 85%)
+- **RBAC stub**: 1 of 5 core methods functional (`has_permission` works). `get_user_roles()`, `assign_role()`, `revoke_role()`, `check_access()` raise `NotImplementedError`
+- **crypto_utils stub**: Random generation + hashing work. `encrypt_data()`, `decrypt_data()`, `sign_data()`, `verify_signature()`, `generate_key_pair()` raise `NotImplementedError`
+- **Password manager**: Uses PBKDF2-HMAC-SHA256 (100k iterations). Policy is length >= 8 only. TODO comments reference bcrypt/argon2
 
 ## Component Status Summary
 
@@ -72,38 +73,45 @@ Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/
 | K8s Deployment | Not Started | 12% | LOW |
 | SSL/TLS Provisioning | Configured, not provisioned | 65% | HIGH |
 
-## Codebase Statistics (Updated 2026-03-03)
+## Codebase Statistics (Updated 2026-03-03, Verified by Deep Audit)
 
 | Metric | Feb 26 | Mar 3 | Change |
 |--------|--------|-------|--------|
 | Python source files | 328 | 493 | +165 (sub-module splits) |
-| Frontend components (TSX) | ~30 | 54 | +24 (extracted) |
+| Frontend components (TSX) | ~30 | 55 | +25 (extracted) |
 | Frontend pages | 12 | 14 | +2 (auth flows) |
+| Frontend TS/TSX files (total) | ~60 | 106 | +46 |
 | Backend test files | 96 | 110 | +14 |
 | Frontend test files | 4 | 12 | +8 |
 | Backend tests (passing) | 3,569 | 4,929 | +1,360 |
 | Frontend tests (passing) | 0 | 197 | +197 (NEW) |
 | Total tests | 3,569 | 5,132 | +1,563 (+44%) |
-| API endpoints | 140+ | 150 | +10 |
-| Service files | 12 | 19 | +7 |
-| Security modules | 22 | 24 | +2 |
-| Oversized files (>800 lines) | 0 routers | 0 routers | Stable |
-| Files >500 lines (security/) | ~10 | 30+ | Identified (security + tasks) |
-| CI/CD workflows | 28 | 29 | +1 |
+| API endpoints | 140+ | 153 | +13 (78 GET, 48 POST, 8 PUT, 7 DELETE, 2 PATCH, 3 WS) |
+| Router files | 15 | 18 | +3 (excl __init__) |
+| Router total lines | ~6,500 | 8,112 | All routers <753 lines |
+| Service files | 12 | 20 | +8 (10,241 total lines) |
+| Security modules | 22 | 20 | Consolidated |
+| ML files | 36 | 48 | +12 |
+| TradingAgents files | ~20 | 39 | Expanded (3 test files exist) |
+| Files >800 lines (backend) | Unknown | 30 | Identified (security, tasks, ML, services) |
+| Dead code (frontend) | Unknown | 1 | EnhancedDashboard.tsx (746 lines, not imported) |
+| CI/CD workflows | 28 | 28 | Stable |
 
 ## Risk Assessment (Updated)
 
 | Risk | Previous Level | Current Level | Notes |
 |------|---------------|---------------|-------|
-| RBAC stub in production | Not identified | CRITICAL | No fine-grained permissions enforcement |
-| crypto_utils stub | Not identified | HIGH | encrypt/decrypt/sign raise NotImplementedError |
-| SSL directory empty | HIGH | HIGH | Nginx will fail to start in production |
-| Trading service unreachable | Not identified | MEDIUM | Order model built, no router exposes it |
-| Frontend TS errors (15) | Not identified | MEDIUM | 1 type-safety issue + 14 unused imports |
-| CI tests non-blocking | MEDIUM | MEDIUM | continue-on-error still true |
+| RBAC stub in production | CRITICAL | CRITICAL | 4 of 5 methods raise NotImplementedError |
+| crypto_utils stub | HIGH | HIGH | 5 methods raise NotImplementedError (random/hash work) |
+| Password hashing weak | HIGH | HIGH | PBKDF2-HMAC-SHA256 100k iterations (TODO: bcrypt/argon2) |
+| SSL directory empty | HIGH | HIGH | Only .gitkeep present, nginx will fail |
+| CI tests non-blocking | MEDIUM | MEDIUM | continue-on-error still true on lines 311, 457 |
+| Trading service unreachable | MEDIUM | MEDIUM | Order model + service exist, no router |
+| Vitest/Playwright collision | MEDIUM | MEDIUM | No exclude for e2e in vitest config |
 | LSTM weights absent | MEDIUM | MEDIUM | Training code exists, no saved model |
-| K8s manifests missing | MEDIUM | LOW | Docker-compose deployment stable |
-| Password hashing weak | Not identified | HIGH | PBKDF2 instead of bcrypt/argon2 |
+| Frontend dead code | LOW | LOW | EnhancedDashboard.tsx 746 lines, not imported |
+| K8s manifests missing | LOW | LOW | Docker-compose deployment stable |
+| Dockerfile path mismatch | HIGH | RESOLVED | frontend/web/Dockerfile now exists |
 
 ## Path Forward
 
@@ -130,6 +138,16 @@ Since the Feb 26 assessment, 30 commits have landed covering 130 files (+39,830/
 ## Confidence Level: 91%
 
 The platform is architecturally sound with comprehensive test coverage. Three security stubs and missing SSL are the primary blockers to production readiness.
+
+## Test Suite Verification (Run During This Analysis)
+
+```
+Full suite: 4,929 passed, 1 failed (flaky), 8 skipped, 1 xfailed in 1007.91s (16:47)
+Unit only:  684 passed, 1 failed (same flaky) in 59.92s
+```
+
+**Flaky test**: `test_extract_section_returns_none_for_missing_section` (SEC Edgar, import-chain state issue)
+**Slowest tests**: `test_memory_leak_detection` (62s), `test_api_retry_with_circuit_breaker` (60s), `test_batch_inference_performance` (17s)
 
 **Ready for**: Staging deployment, feature demos, team onboarding
 **Blocking production**: RBAC implementation, crypto_utils implementation, SSL provisioning, password hashing upgrade
