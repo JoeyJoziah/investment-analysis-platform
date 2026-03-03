@@ -209,6 +209,7 @@ class TestMLModelInference:
         assert metrics.error_rate < 0.01, f"Error rate too high: {metrics.error_rate}"
         assert metrics.cache_hit_rate > 0.3, f"Cache hit rate too low: {metrics.cache_hit_rate}"
 
+    @pytest.mark.slow
     @pytest.mark.performance
     @pytest.mark.asyncio
     async def test_batch_inference_performance(self):
@@ -394,6 +395,7 @@ class TestMLMemoryProfiling:
         assert memory_per_inference_kb < 100, f"Memory per inference too high: {memory_per_inference_kb:.1f}KB"
         assert metrics.peak_memory_mb < 2048, f"Peak memory too high: {metrics.peak_memory_mb:.1f}MB"
 
+    @pytest.mark.slow
     @pytest.mark.performance
     def test_memory_leak_detection(self):
         """Test for memory leaks during inference"""
@@ -550,6 +552,7 @@ class TestCacheHitRate:
 class TestInferenceLatencyDistribution:
     """Test inference latency distribution"""
 
+    @pytest.mark.slow
     @pytest.mark.performance
     @pytest.mark.asyncio
     async def test_latency_percentiles(self):

@@ -569,6 +569,7 @@ class TestThreadSafety:
 class TestIntegrationScenarios:
     """Test real-world integration scenarios"""
     
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_api_retry_with_circuit_breaker(self):
         """Test API retry logic with circuit breaker"""

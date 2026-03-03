@@ -51,6 +51,7 @@ async def test_cache_warmer_initialization(cache_warmer):
     assert "SPY" in cache_warmer.etf_list
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_warm_top_stocks(cache_warmer, mock_data_fetchers):
     """Test warming cache for top stocks"""
@@ -116,6 +117,7 @@ async def test_prevent_concurrent_warming(cache_warmer, mock_data_fetchers):
     assert stats["status"] == "already_running"
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_warming_status_is_reset(cache_warmer, mock_data_fetchers):
     """Test that is_warming flag is reset after completion"""
@@ -230,6 +232,7 @@ async def test_warm_all_symbol_types(cache_warmer, mock_data_fetchers):
         assert any(etf in warmed_symbols for etf in cache_warmer.etf_list)
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_warming_statistics_complete(cache_warmer, mock_data_fetchers):
     """Test that warming statistics are complete"""
