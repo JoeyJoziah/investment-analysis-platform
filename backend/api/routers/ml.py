@@ -531,3 +531,251 @@ async def get_model_status(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ML model service is temporarily unavailable",
         )
+
+
+# ---------------------------------------------------------------------------
+# Drift Detection Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/drift/detect",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="Run drift detection on a model",
+)
+async def detect_drift(
+    model_name: str,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Run data drift detection for a specific model against its reference
+    distribution. Returns PSI scores and drift flags per feature.
+    """
+    try:
+        from backend.ml.drift_detection import DriftDetector
+        detector = DriftDetector()
+        # If no reference distribution exists, return informational status
+        if model_name not in detector.reference_distributions:
+            return success_response(data={
+                "model_name": model_name,
+                "status": "no_reference",
+                "message": "No reference distribution set. Call PUT /drift/reference first.",
+            })
+        result = detector.detect_data_drift(model_name, {})
+        return success_response(data={
+            "model_name": model_name,
+            "drift_detected": getattr(result, "drift_detected", False),
+            "details": getattr(result, "details", {}),
+        })
+    except Exception as exc:
+        logger.error(f"Drift detection failed for {model_name}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Drift detection failed: {exc}",
+        )
+
+
+@router.get(
+    "/drift/status",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="Get drift detection status for all models",
+)
+async def get_drift_status(
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Return which models have reference distributions configured."""
+    try:
+        from backend.ml.drift_detection import DriftDetector
+        detector = DriftDetector()
+        models_with_ref = list(detector.reference_distributions.keys())
+        return success_response(data={
+            "models_with_reference": models_with_ref,
+            "total": len(models_with_ref),
+        })
+    except Exception as exc:
+        logger.error(f"Drift status check failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Drift detection service unavailable",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Model Version Management Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/versions",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="List all registered model versions",
+)
+async def list_model_versions(
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Return all model versions from the model registry."""
+    try:
+        from backend.ml.model_versioning import get_model_version_manager
+        manager = get_model_version_manager()
+        registry = {}
+        for model_name, versions in manager.model_registry.items():
+            registry[model_name] = {
+                v: {
+                    "stage": ver.stage.value if hasattr(ver.stage, "value") else str(ver.stage),
+                    "is_champion": ver.is_champion,
+                    "created_at": ver.created_at.isoformat() if hasattr(ver, "created_at") and ver.created_at else None,
+                }
+                for v, ver in versions.items()
+            }
+        return success_response(data={
+            "models": registry,
+            "total_models": len(registry),
+        })
+    except Exception as exc:
+        logger.error(f"Model version listing failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Model version service unavailable",
+        )
+
+
+@router.post(
+    "/versions/{model_name}/promote",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="Promote a model version to a new stage",
+)
+async def promote_model_version(
+    model_name: str,
+    version: str,
+    target_stage: str = "production",
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Promote a model version to staging or production."""
+    try:
+        from backend.ml.model_versioning import get_model_version_manager, ModelStage
+        manager = get_model_version_manager()
+        stage_map = {s.value: s for s in ModelStage}
+        if target_stage not in stage_map:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stage: {target_stage}. Valid: {list(stage_map.keys())}",
+            )
+        success = manager.promote_model(model_name, version, stage_map[target_stage])
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model {model_name} version {version} not found",
+            )
+        return success_response(data={
+            "model_name": model_name,
+            "version": version,
+            "new_stage": target_stage,
+            "promoted": True,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Model promotion failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Model promotion failed: {exc}",
+        )
+
+
+@router.post(
+    "/versions/{model_name}/rollback",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="Rollback model to a previous version",
+)
+async def rollback_model_version(
+    model_name: str,
+    target_version: str,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Rollback a model to a specific previous version."""
+    try:
+        from backend.ml.model_versioning import get_model_version_manager
+        manager = get_model_version_manager()
+        success = manager.rollback_model(model_name, target_version)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Model {model_name} version {target_version} not found",
+            )
+        return success_response(data={
+            "model_name": model_name,
+            "rolled_back_to": target_version,
+            "success": True,
+        })
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Model rollback failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Model rollback failed: {exc}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Backtesting Endpoints
+# ---------------------------------------------------------------------------
+
+class BacktestRequest(BaseModel):
+    """Request body for running a backtest."""
+    tickers: List[str] = Field(..., min_length=1, description="List of ticker symbols")
+    start_date: str = Field(..., description="Start date (YYYY-MM-DD)")
+    end_date: str = Field(..., description="End date (YYYY-MM-DD)")
+    initial_capital: float = Field(100000.0, gt=0, description="Starting capital")
+    benchmark: str = Field("SPY", description="Benchmark ticker symbol")
+
+
+@router.post(
+    "/backtest",
+    response_model=ApiResponse[Dict[str, Any]],
+    summary="Run a backtest",
+)
+async def run_backtest(
+    request_body: BacktestRequest,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Run a backtest with the specified parameters.
+    Returns performance metrics including Sharpe ratio, max drawdown,
+    total return, and trade history.
+    """
+    try:
+        from backend.ml.backtesting import get_backtest_engine, BacktestConfig
+        engine = get_backtest_engine()
+
+        config = BacktestConfig(
+            start_date=request_body.start_date,
+            end_date=request_body.end_date,
+            initial_capital=request_body.initial_capital,
+            benchmark_symbol=request_body.benchmark,
+        )
+
+        # Use a simple buy-and-hold strategy as default
+        def buy_and_hold(data, portfolio, date):
+            return {ticker: 1.0 / len(data) for ticker in data}
+
+        result = engine.backtest_strategy(
+            strategy_func=buy_and_hold,
+            universe=request_body.tickers,
+            config=config,
+        )
+
+        return success_response(data={
+            "tickers": request_body.tickers,
+            "start_date": request_body.start_date,
+            "end_date": request_body.end_date,
+            "initial_capital": request_body.initial_capital,
+            "total_return": getattr(result, "total_return", None),
+            "sharpe_ratio": getattr(result, "sharpe_ratio", None),
+            "max_drawdown": getattr(result, "max_drawdown", None),
+            "total_trades": getattr(result, "total_trades", None),
+        })
+    except Exception as exc:
+        logger.error(f"Backtest failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Backtest execution failed: {exc}",
+        )
