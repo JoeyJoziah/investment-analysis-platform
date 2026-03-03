@@ -1,23 +1,22 @@
 """
 Cryptographic Utilities Module
 
-WARNING: This is a STUB module. SecureRandom and CryptoUtils.hash_data are
-functional, but encrypt_data, decrypt_data, sign_data, verify_signature, and
-generate_key_pair are NOT implemented and will raise NotImplementedError.
-Integrate a real cryptographic library (e.g. cryptography, PyCryptodome)
-before using those methods in production.
-
-TODO: Implement full cryptographic functionality in future phase.
+Provides symmetric encryption (Fernet/AES-128-CBC), asymmetric key generation
+(RSA-2048), digital signatures (RSA-PSS + SHA-256), and secure random generation.
+All cryptographic operations use the ``cryptography`` library.
 """
 
 import secrets
 import hashlib
-import base64
 from typing import Optional, Tuple
+
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes, serialization
 
 
 class SecureRandom:
-    """Cryptographically secure random number generation (stub implementation)"""
+    """Cryptographically secure random number generation"""
 
     @staticmethod
     def generate_token(length: int = 32) -> str:
@@ -46,7 +45,7 @@ class SecureRandom:
 
 
 class CryptoUtils:
-    """Cryptographic utility functions (stub implementation)"""
+    """Cryptographic utility functions using the ``cryptography`` library."""
 
     @staticmethod
     def hash_data(data: bytes, algorithm: str = "sha256") -> str:
@@ -60,61 +59,75 @@ class CryptoUtils:
 
     @staticmethod
     def encrypt_data(data: bytes, key: bytes) -> bytes:
-        """Encrypt data with the given key.
+        """Encrypt data using Fernet symmetric encryption (AES-128-CBC + HMAC).
 
-        WARNING: Not implemented. The previous stub silently returned base64-
-        encoded plaintext, providing NO encryption. Integrate a real library
-        (e.g. cryptography.fernet or AES-GCM) before calling this method.
+        ``key`` must be a 32-byte URL-safe base64-encoded Fernet key.
+        Generate one with ``Fernet.generate_key()``.
         """
-        raise NotImplementedError(
-            "Stub: encrypt_data is not implemented. "
-            "Integrate a real encryption library (AES-GCM / Fernet) before use."
-        )
+        f = Fernet(key)
+        return f.encrypt(data)
 
     @staticmethod
     def decrypt_data(encrypted: bytes, key: bytes) -> bytes:
-        """Decrypt data with the given key.
-
-        WARNING: Not implemented. See encrypt_data.
-        """
-        raise NotImplementedError(
-            "Stub: decrypt_data is not implemented. "
-            "Integrate a real encryption library (AES-GCM / Fernet) before use."
-        )
+        """Decrypt Fernet-encrypted data."""
+        f = Fernet(key)
+        return f.decrypt(encrypted)
 
     @staticmethod
     def generate_key_pair() -> Tuple[bytes, bytes]:
-        """Generate a public/private key pair.
+        """Generate an RSA-2048 key pair.
 
-        WARNING: Not implemented. The previous stub returned random bytes that
-        were not a valid key pair. Integrate a real library (RSA / ECC) before
-        calling this method.
+        Returns (private_key_pem, public_key_pem) as PEM-encoded bytes.
         """
-        raise NotImplementedError(
-            "Stub: generate_key_pair is not implemented. "
-            "Integrate a real key generation library (RSA / ECC) before use."
+        private_key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048,
         )
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        public_pem = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return private_pem, public_pem
 
     @staticmethod
     def sign_data(data: bytes, private_key: bytes) -> bytes:
-        """Sign data with a private key.
+        """Sign data with an RSA private key using PSS padding + SHA-256.
 
-        WARNING: Not implemented. The previous stub returned a simple SHA-256
-        hash, which is NOT a cryptographic signature.
+        ``private_key`` must be PEM-encoded (as returned by generate_key_pair).
         """
-        raise NotImplementedError(
-            "Stub: sign_data is not implemented. "
-            "Integrate a real signing library (RSA / ECDSA) before use."
+        key = serialization.load_pem_private_key(private_key, password=None)
+        return key.sign(
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
         )
 
     @staticmethod
     def verify_signature(data: bytes, signature: bytes, public_key: bytes) -> bool:
-        """Verify a data signature.
+        """Verify an RSA-PSS signature.
 
-        WARNING: Not implemented. The previous stub returned True for any
-        32-byte input, providing NO verification.
+        ``public_key`` must be PEM-encoded (as returned by generate_key_pair).
+        Returns True if valid, False otherwise.
         """
-        raise NotImplementedError(
-            "Stub: verify_signature is not implemented. "
-            "Integrate a real verification library (RSA / ECDSA) before use."
-        )
+        key = serialization.load_pem_public_key(public_key)
+        try:
+            key.verify(
+                signature,
+                data,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+            return True
+        except Exception:
+            return False

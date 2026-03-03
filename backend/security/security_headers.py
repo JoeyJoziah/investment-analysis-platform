@@ -513,8 +513,8 @@ def get_production_security_config() -> SecurityHeadersConfig:
         hsts_preload=True,
         csp_directives={
             CSPDirective.DEFAULT_SRC: ["'self'"],
-            CSPDirective.SCRIPT_SRC: ["'self'", "'unsafe-inline'"],  # Remove unsafe-eval in production
-            CSPDirective.STYLE_SRC: ["'self'", "'unsafe-inline'"],
+            CSPDirective.SCRIPT_SRC: ["'self'"],
+            CSPDirective.STYLE_SRC: ["'self'"],
             CSPDirective.IMG_SRC: ["'self'", "data:", "https:"],
             CSPDirective.FONT_SRC: ["'self'", "data:"],
             CSPDirective.CONNECT_SRC: ["'self'", "wss:", "https:"],

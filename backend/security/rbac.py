@@ -1,15 +1,15 @@
 """
 Role-Based Access Control (RBAC) Module
 
-WARNING: This is a STUB module. The in-memory role-permission mapping and
-has_permission() work correctly for static checks. However, get_user_roles(),
-assign_role(), revoke_role(), and check_access() are NOT implemented and will
-raise NotImplementedError. See backend/auth/oauth2.py for production auth.
+Provides in-memory role-permission management with support for multi-role
+assignment per user. The has_permission() check uses a static role→permission
+map. get_user_roles(), assign_role(), revoke_role(), and check_access() use
+an in-memory user→roles store that can be populated at startup from the DB.
 
-TODO: Implement full RBAC functionality with database integration in future phase.
+For JWT-based authentication see backend/auth/oauth2.py.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Set
 from enum import Enum
 
 
@@ -29,16 +29,21 @@ class Permission(str, Enum):
     ADMIN = "admin"
 
 
+# Default role→permission mapping
+ROLE_PERMISSIONS: Dict[str, List[str]] = {
+    Role.ADMIN: [Permission.READ, Permission.WRITE, Permission.DELETE, Permission.ADMIN],
+    Role.ANALYST: [Permission.READ, Permission.WRITE],
+    Role.USER: [Permission.READ, Permission.WRITE],
+    Role.VIEWER: [Permission.READ],
+}
+
+
 class RoleBasedAccessControl:
-    """Role-Based Access Control manager (stub implementation)"""
+    """Role-Based Access Control manager with in-memory user-role store."""
 
     def __init__(self):
-        self._roles: Dict[str, List[str]] = {
-            Role.ADMIN: [Permission.READ, Permission.WRITE, Permission.DELETE, Permission.ADMIN],
-            Role.ANALYST: [Permission.READ, Permission.WRITE],
-            Role.USER: [Permission.READ, Permission.WRITE],
-            Role.VIEWER: [Permission.READ],
-        }
+        self._roles: Dict[str, List[str]] = dict(ROLE_PERMISSIONS)
+        self._user_roles: Dict[int, Set[str]] = {}
 
     def has_permission(self, role: str, permission: str) -> bool:
         """Check if role has permission"""
@@ -46,46 +51,44 @@ class RoleBasedAccessControl:
         return permission in role_permissions or Permission.ADMIN in role_permissions
 
     def get_user_roles(self, user_id: int) -> List[str]:
-        """Get roles for user.
+        """Get roles assigned to a user.
 
-        Raises NotImplementedError because this stub has no database backing.
-        See backend/auth/oauth2.py for production auth.
+        Returns an empty list if the user has no assigned roles.
         """
-        raise NotImplementedError(
-            "Stub: requires database integration. "
-            "See backend/auth/oauth2.py for production auth."
-        )
+        return sorted(self._user_roles.get(user_id, set()))
 
     def assign_role(self, user_id: int, role: str) -> bool:
-        """Assign role to user.
+        """Assign a role to a user.
 
-        Raises NotImplementedError because this stub has no database backing.
-        See backend/auth/oauth2.py for production auth.
+        Returns True if the role was newly assigned, False if already present.
         """
-        raise NotImplementedError(
-            "Stub: requires database integration. "
-            "See backend/auth/oauth2.py for production auth."
-        )
+        if user_id not in self._user_roles:
+            self._user_roles[user_id] = set()
+        if role in self._user_roles[user_id]:
+            return False
+        self._user_roles[user_id].add(role)
+        return True
 
     def revoke_role(self, user_id: int, role: str) -> bool:
-        """Revoke role from user.
+        """Revoke a role from a user.
 
-        Raises NotImplementedError because this stub has no database backing.
-        See backend/auth/oauth2.py for production auth.
+        Returns True if the role was removed, False if user didn't have it.
         """
-        raise NotImplementedError(
-            "Stub: requires database integration. "
-            "See backend/auth/oauth2.py for production auth."
-        )
+        user_roles = self._user_roles.get(user_id)
+        if user_roles is None or role not in user_roles:
+            return False
+        user_roles.discard(role)
+        if not user_roles:
+            del self._user_roles[user_id]
+        return True
 
     def check_access(self, user_id: int, resource: str, action: str) -> bool:
-        """Check if user has access to resource/action.
+        """Check if user has access to perform action on resource.
 
-        Raises NotImplementedError because this depends on get_user_roles()
-        which requires database integration.
-        See backend/auth/oauth2.py for production auth.
+        Resolves user roles via get_user_roles(), then checks each role
+        for the requested permission.
         """
-        raise NotImplementedError(
-            "Stub: requires database integration. "
-            "See backend/auth/oauth2.py for production auth."
-        )
+        user_roles = self.get_user_roles(user_id)
+        if not user_roles:
+            return False
+        return any(self.has_permission(role, action) for role in user_roles)

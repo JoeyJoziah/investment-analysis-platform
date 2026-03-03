@@ -324,10 +324,15 @@ class TestRoleBasedAccessControl:
         assert rbac.has_permission("nonexistent_role", Permission.READ) is False
         assert rbac.has_permission("nonexistent_role", Permission.WRITE) is False
 
-    def test_check_access_raises_not_implemented(self, rbac):
-        """check_access depends on get_user_roles which requires DB integration."""
-        with pytest.raises(NotImplementedError, match="requires database integration"):
-            rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ)
+    def test_check_access_without_roles_returns_false(self, rbac):
+        """check_access returns False when user has no assigned roles."""
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ) is False
+
+    def test_check_access_with_role(self, rbac):
+        """check_access returns True when user has a role with the permission."""
+        rbac.assign_role(1, Role.USER)
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ) is True
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.DELETE) is False
 
     def test_role_enum_values(self):
         """Role enum should expose the expected string values."""

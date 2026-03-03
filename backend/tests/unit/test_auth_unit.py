@@ -519,23 +519,56 @@ class TestRBACHasPermission:
 class TestRBACCheckAccess:
     """Tests for RoleBasedAccessControl.check_access()"""
 
-    def test_check_access_raises_not_implemented(self, rbac):
-        """check_access depends on get_user_roles which requires DB integration."""
-        with pytest.raises(NotImplementedError, match="requires database integration"):
-            rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ)
+    def test_check_access_no_roles_returns_false(self, rbac):
+        """User with no assigned roles should be denied access."""
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ) is False
+
+    def test_check_access_with_matching_role(self, rbac):
+        """User with role that has the permission should be granted access."""
+        rbac.assign_role(1, Role.USER)
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.READ) is True
+
+    def test_check_access_with_insufficient_role(self, rbac):
+        """User without delete permission should be denied delete access."""
+        rbac.assign_role(1, Role.VIEWER)
+        assert rbac.check_access(user_id=1, resource="portfolio", action=Permission.DELETE) is False
 
 
-class TestRBACStubMethods:
-    """Tests for stub methods that raise NotImplementedError (need DB integration)."""
+class TestRBACRoleManagement:
+    """Tests for RBAC role assignment and revocation."""
 
-    def test_get_user_roles_raises_not_implemented(self, rbac):
-        with pytest.raises(NotImplementedError, match="requires database integration"):
-            rbac.get_user_roles(user_id=999)
+    def test_get_user_roles_empty(self, rbac):
+        """User with no roles returns empty list."""
+        assert rbac.get_user_roles(user_id=999) == []
 
-    def test_assign_role_raises_not_implemented(self, rbac):
-        with pytest.raises(NotImplementedError, match="requires database integration"):
-            rbac.assign_role(user_id=1, role=Role.ADMIN)
+    def test_assign_role_returns_true(self, rbac):
+        """Assigning a new role returns True."""
+        assert rbac.assign_role(user_id=1, role=Role.ADMIN) is True
 
-    def test_revoke_role_raises_not_implemented(self, rbac):
-        with pytest.raises(NotImplementedError, match="requires database integration"):
-            rbac.revoke_role(user_id=1, role=Role.ADMIN)
+    def test_assign_role_duplicate_returns_false(self, rbac):
+        """Assigning an already-assigned role returns False."""
+        rbac.assign_role(user_id=1, role=Role.ADMIN)
+        assert rbac.assign_role(user_id=1, role=Role.ADMIN) is False
+
+    def test_get_user_roles_after_assign(self, rbac):
+        """Assigned roles appear in get_user_roles."""
+        rbac.assign_role(user_id=1, role=Role.ADMIN)
+        rbac.assign_role(user_id=1, role=Role.ANALYST)
+        roles = rbac.get_user_roles(user_id=1)
+        assert Role.ADMIN in roles
+        assert Role.ANALYST in roles
+
+    def test_revoke_role_returns_true(self, rbac):
+        """Revoking an assigned role returns True."""
+        rbac.assign_role(user_id=1, role=Role.ADMIN)
+        assert rbac.revoke_role(user_id=1, role=Role.ADMIN) is True
+
+    def test_revoke_role_not_assigned_returns_false(self, rbac):
+        """Revoking a role the user doesn't have returns False."""
+        assert rbac.revoke_role(user_id=1, role=Role.ADMIN) is False
+
+    def test_revoke_role_removes_from_list(self, rbac):
+        """Revoked role no longer appears in get_user_roles."""
+        rbac.assign_role(user_id=1, role=Role.ADMIN)
+        rbac.revoke_role(user_id=1, role=Role.ADMIN)
+        assert rbac.get_user_roles(user_id=1) == []
