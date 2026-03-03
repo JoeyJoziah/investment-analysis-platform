@@ -7,41 +7,19 @@ import {
   Box,
   Card,
   CardContent,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Button,
-  IconButton,
-  Chip,
   Tabs,
   Tab,
   LinearProgress,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  TextField,
-  MenuItem,
   Alert,
   Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
   TrendingUp,
   TrendingDown,
   AccountBalance,
   ShowChart,
-  PieChart,
-  Timeline,
-  Assessment,
-  Download,
   Refresh,
   Cable as WebSocketIcon,
 } from '@mui/icons-material';
@@ -54,25 +32,19 @@ import {
   Position,
 } from '../store/slices/portfolioSlice';
 import { addNotification } from '../store/slices/appSlice';
-import {
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Legend,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Area,
-  AreaChart,
-} from 'recharts';
 import { usePortfolioWebSocket } from '../hooks/usePortfolioWebSocket';
-import CorrelationMatrix from '../components/CorrelationMatrix';
-import EfficientFrontier from '../components/EfficientFrontier';
-import RiskDecomposition from '../components/RiskDecomposition';
+import {
+  PositionsTabContent,
+  PerformanceTabContent,
+  TransactionsTabContent,
+  AnalysisTabContent,
+} from '../components/portfolio/PortfolioTabs';
+import { AllocationTabContent, RiskAnalysisTabContent } from '../components/portfolio/PortfolioChart';
+import {
+  AddTransactionDialog,
+  DeleteConfirmDialog,
+  TransactionFormData,
+} from '../components/portfolio/PortfolioActions';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -97,12 +69,12 @@ const Portfolio: React.FC = () => {
   const user = useAppSelector((state) => state.app.user);
   const [tabValue, setTabValue] = useState(0);
   const [addTransactionOpen, setAddTransactionOpen] = useState(false);
-  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
+  const [, setSelectedPosition] = useState<Position | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [positionToDelete, setPositionToDelete] = useState<string | null>(null);
-  const [transactionForm, setTransactionForm] = useState({
+  const [transactionForm, setTransactionForm] = useState<TransactionFormData>({
     ticker: '',
-    type: 'BUY' as 'BUY' | 'SELL',
+    type: 'BUY',
     quantity: 0,
     price: 0,
     notes: '',
@@ -110,14 +82,13 @@ const Portfolio: React.FC = () => {
 
   // Get symbols for WebSocket subscription
   const symbols = useMemo(() => positions.map((p) => p.ticker), [positions]);
-  // Derive portfolio ID from user context, falling back to a default
   const portfolioId = useMemo(
     () => (user?.id ? `portfolio-${user.id}` : 'default-portfolio'),
     [user?.id]
   );
 
   // Set up WebSocket for real-time price updates
-  const { isConnected, priceUpdates, latency, subscribe, unsubscribe } = usePortfolioWebSocket(
+  const { isConnected, priceUpdates, latency } = usePortfolioWebSocket(
     portfolioId,
     symbols,
     true
@@ -201,7 +172,7 @@ const Portfolio: React.FC = () => {
       );
 
       dispatch(fetchPortfolio());
-    } catch (error) {
+    } catch {
       dispatch(
         addNotification({
           type: 'error',
@@ -227,7 +198,7 @@ const Portfolio: React.FC = () => {
           message: 'Position deleted successfully',
         })
       );
-    } catch (error) {
+    } catch {
       dispatch(
         addNotification({
           type: 'error',
@@ -253,8 +224,6 @@ const Portfolio: React.FC = () => {
   const formatPercent = (value: number) => {
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
   if (isLoading) {
     return <LinearProgress />;
@@ -433,443 +402,63 @@ const Portfolio: React.FC = () => {
           <Tab label="Risk Analysis" />
         </Tabs>
 
-        {/* Positions Tab */}
         <TabPanel value={tabValue} index={0}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Symbol</TableCell>
-                  <TableCell>Company</TableCell>
-                  <TableCell align="right">Quantity</TableCell>
-                  <TableCell align="right">Avg Cost</TableCell>
-                  <TableCell align="right">Current Price</TableCell>
-                  <TableCell align="right">Market Value</TableCell>
-                  <TableCell align="right">Total Gain</TableCell>
-                  <TableCell align="right">Day Gain</TableCell>
-                  <TableCell align="center">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {updatedPositions.map((position) => (
-                  <TableRow key={position.id}>
-                    <TableCell>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        {position.ticker}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{position.companyName}</TableCell>
-                    <TableCell align="right">{position.quantity}</TableCell>
-                    <TableCell align="right">{formatCurrency(position.averagePrice)}</TableCell>
-                    <TableCell align="right">{formatCurrency(position.currentPrice)}</TableCell>
-                    <TableCell align="right">{formatCurrency(position.marketValue)}</TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ color: position.totalGain >= 0 ? 'success.main' : 'error.main' }}>
-                        {formatCurrency(position.totalGain)}
-                        <br />
-                        <Typography variant="caption">
-                          {formatPercent(position.totalGainPercent)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Box sx={{ color: position.dayGain >= 0 ? 'success.main' : 'error.main' }}>
-                        {formatCurrency(position.dayGain)}
-                        <br />
-                        <Typography variant="caption">
-                          {formatPercent(position.dayGainPercent)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={() => setSelectedPosition(position)}
-                        aria-label={`Edit ${position.ticker} position`}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDeleteClick(position.id)}
-                        color="error"
-                        aria-label={`Delete ${position.ticker} position`}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <PositionsTabContent
+            positions={updatedPositions}
+            formatCurrency={formatCurrency}
+            formatPercent={formatPercent}
+            onEdit={setSelectedPosition}
+            onDelete={handleDeleteClick}
+          />
         </TabPanel>
 
-        {/* Performance Tab */}
         <TabPanel value={tabValue} index={1}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>
-                Portfolio Performance
-              </Typography>
-              <ResponsiveContainer width="100%" height={400}>
-                <AreaChart data={metrics?.performance?.daily || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Area type="monotone" dataKey="value" stroke="#8884d8" fill="#8884d8" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Risk Metrics
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography>Sharpe Ratio</Typography>
-                    <Typography fontWeight="bold">
-                      {metrics?.riskMetrics?.sharpeRatio?.toFixed(2) || '-'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography>Beta</Typography>
-                    <Typography fontWeight="bold">
-                      {metrics?.riskMetrics?.beta?.toFixed(2) || '-'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography>Alpha</Typography>
-                    <Typography fontWeight="bold">
-                      {metrics?.riskMetrics?.alpha?.toFixed(2) || '-'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography>Standard Deviation</Typography>
-                    <Typography fontWeight="bold">
-                      {metrics?.riskMetrics?.standardDeviation?.toFixed(2) || '-'}%
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography>Max Drawdown</Typography>
-                    <Typography fontWeight="bold" color="error.main">
-                      {metrics?.riskMetrics?.maxDrawdown?.toFixed(2) || '-'}%
-                    </Typography>
-                  </Box>
-                </Box>
-              </Paper>
-            </Grid>
-          </Grid>
+          <PerformanceTabContent metrics={updatedMetrics} />
         </TabPanel>
 
-        {/* Allocation Tab */}
         <TabPanel value={tabValue} index={2}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                Sector Allocation
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <RechartsPieChart>
-                  <Pie
-                    data={Object.entries(metrics?.diversification?.sector || {}).map(
-                      ([sector, value]) => ({ name: sector, value })
-                    )}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {Object.entries(metrics?.diversification?.sector || {}).map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                  <Legend />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="h6" gutterBottom>
-                Asset Type Allocation
-              </Typography>
-              <ResponsiveContainer width="100%" height={300}>
-                <RechartsPieChart>
-                  <Pie
-                    data={Object.entries(metrics?.diversification?.asset || {}).map(
-                      ([asset, value]) => ({ name: asset, value })
-                    )}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#82ca9d"
-                    dataKey="value"
-                  >
-                    {Object.entries(metrics?.diversification?.asset || {}).map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                  <Legend />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </Grid>
-          </Grid>
+          <AllocationTabContent metrics={updatedMetrics} />
         </TabPanel>
 
-        {/* Transactions Tab */}
         <TabPanel value={tabValue} index={3}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Date</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Symbol</TableCell>
-                  <TableCell align="right">Quantity</TableCell>
-                  <TableCell align="right">Price</TableCell>
-                  <TableCell align="right">Total Amount</TableCell>
-                  <TableCell>Notes</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
-                      {new Date(transaction.date).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={transaction.type}
-                        color={transaction.type === 'BUY' ? 'success' : 'error'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>{transaction.ticker}</TableCell>
-                    <TableCell align="right">{transaction.quantity}</TableCell>
-                    <TableCell align="right">{formatCurrency(transaction.price)}</TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(transaction.totalAmount)}
-                    </TableCell>
-                    <TableCell>{transaction.notes || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <TransactionsTabContent
+            transactions={transactions}
+            formatCurrency={formatCurrency}
+          />
         </TabPanel>
 
-        {/* Analysis Tab */}
         <TabPanel value={tabValue} index={4}>
-          <Typography variant="h6" gutterBottom>
-            Portfolio Analysis
-          </Typography>
-          <Grid container spacing={3}>
-            <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Top Performers
-                </Typography>
-                {[...updatedPositions]
-                  .sort((a, b) => b.totalGainPercent - a.totalGainPercent)
-                  .slice(0, 5)
-                  .map((position) => (
-                    <Box
-                      key={position.id}
-                      sx={{ display: 'flex', justifyContent: 'space-between', py: 1 }}
-                    >
-                      <Typography>{position.ticker}</Typography>
-                      <Typography color="success.main">
-                        {formatPercent(position.totalGainPercent)}
-                      </Typography>
-                    </Box>
-                  ))}
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Worst Performers
-                </Typography>
-                {[...updatedPositions]
-                  .sort((a, b) => a.totalGainPercent - b.totalGainPercent)
-                  .slice(0, 5)
-                  .map((position) => (
-                    <Box
-                      key={position.id}
-                      sx={{ display: 'flex', justifyContent: 'space-between', py: 1 }}
-                    >
-                      <Typography>{position.ticker}</Typography>
-                      <Typography color="error.main">
-                        {formatPercent(position.totalGainPercent)}
-                      </Typography>
-                    </Box>
-                  ))}
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Largest Positions
-                </Typography>
-                {[...updatedPositions]
-                  .sort((a, b) => b.marketValue - a.marketValue)
-                  .slice(0, 5)
-                  .map((position) => (
-                    <Box
-                      key={position.id}
-                      sx={{ display: 'flex', justifyContent: 'space-between', py: 1 }}
-                    >
-                      <Typography>{position.ticker}</Typography>
-                      <Typography>{formatCurrency(position.marketValue)}</Typography>
-                    </Box>
-                  ))}
-              </Paper>
-            </Grid>
-          </Grid>
+          <AnalysisTabContent
+            positions={updatedPositions}
+            formatCurrency={formatCurrency}
+            formatPercent={formatPercent}
+          />
         </TabPanel>
 
-        {/* Risk Analysis Tab */}
         <TabPanel value={tabValue} index={5}>
-          <Grid container spacing={3}>
-            {/* Correlation Matrix */}
-            <Grid item xs={12} lg={6}>
-              <CorrelationMatrix
-                correlations={metrics?.correlationMatrix || {}}
-                title="Asset Correlation Matrix"
-              />
-            </Grid>
-
-            {/* Efficient Frontier */}
-            <Grid item xs={12} lg={6}>
-              <EfficientFrontier
-                frontier={metrics?.efficientFrontier?.points || []}
-                currentPortfolio={metrics?.efficientFrontier?.currentPosition || { risk: 0.15, return: 0.12 }}
-                optimalPortfolio={metrics?.efficientFrontier?.optimalPosition}
-                title="ML-Based Efficient Frontier"
-              />
-            </Grid>
-
-            {/* Risk Decomposition */}
-            <Grid item xs={12}>
-              <RiskDecomposition
-                components={updatedPositions.map((p) => ({
-                  symbol: p.ticker,
-                  riskContribution: p.marketValue / (updatedMetrics?.totalValue || 1),
-                  volatility: (p.currentPrice * 0.15) / 100, // Estimated volatility
-                  beta: 1.0, // Placeholder
-                }))}
-                totalRisk={0.15}
-                diversificationScore={metrics?.diversificationScore || 65}
-                title="Risk Decomposition Analysis"
-              />
-            </Grid>
-          </Grid>
+          <RiskAnalysisTabContent
+            metrics={updatedMetrics}
+            positions={updatedPositions}
+            totalValue={updatedMetrics?.totalValue || 0}
+            diversificationScore={(metrics as any)?.diversificationScore || 65}
+          />
         </TabPanel>
       </Paper>
 
-      {/* Add Transaction Dialog */}
-      <Dialog open={addTransactionOpen} onClose={() => setAddTransactionOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Transaction</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label="Ticker Symbol"
-              value={transactionForm.ticker}
-              onChange={(e) =>
-                setTransactionForm({ ...transactionForm, ticker: e.target.value.toUpperCase() })
-              }
-              fullWidth
-            />
-            <TextField
-              select
-              label="Type"
-              value={transactionForm.type}
-              onChange={(e) =>
-                setTransactionForm({ ...transactionForm, type: e.target.value as 'BUY' | 'SELL' })
-              }
-              fullWidth
-            >
-              <MenuItem value="BUY">Buy</MenuItem>
-              <MenuItem value="SELL">Sell</MenuItem>
-            </TextField>
-            <TextField
-              label="Quantity"
-              type="number"
-              value={transactionForm.quantity}
-              onChange={(e) =>
-                setTransactionForm({ ...transactionForm, quantity: Number(e.target.value) })
-              }
-              fullWidth
-            />
-            <TextField
-              label="Price per Share"
-              type="number"
-              value={transactionForm.price}
-              onChange={(e) =>
-                setTransactionForm({ ...transactionForm, price: Number(e.target.value) })
-              }
-              fullWidth
-              InputProps={{
-                startAdornment: '$',
-              }}
-            />
-            <TextField
-              label="Notes (Optional)"
-              value={transactionForm.notes}
-              onChange={(e) =>
-                setTransactionForm({ ...transactionForm, notes: e.target.value })
-              }
-              fullWidth
-              multiline
-              rows={2}
-            />
-            <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Total Amount: {formatCurrency(transactionForm.quantity * transactionForm.price)}
-              </Typography>
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddTransactionOpen(false)}>Cancel</Button>
-          <Button
-            onClick={handleAddTransaction}
-            variant="contained"
-            disabled={!transactionForm.ticker || transactionForm.quantity === 0 || transactionForm.price === 0}
-          >
-            Add Transaction
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <AddTransactionDialog
+        open={addTransactionOpen}
+        onClose={() => setAddTransactionOpen(false)}
+        onSubmit={handleAddTransaction}
+        transactionForm={transactionForm}
+        onFormChange={setTransactionForm}
+        formatCurrency={formatCurrency}
+      />
 
-      {/* Delete Confirmation Dialog (accessible replacement for window.confirm) */}
-      <Dialog
+      <DeleteConfirmDialog
         open={deleteConfirmOpen}
-        onClose={handleDeleteCancel}
-        aria-labelledby="delete-confirm-title"
-        aria-describedby="delete-confirm-description"
-      >
-        <DialogTitle id="delete-confirm-title">Delete Position</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-confirm-description">
-            Are you sure you want to delete this position? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleDeleteCancel} autoFocus>
-            Cancel
-          </Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onCancel={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+      />
     </Container>
   );
 };

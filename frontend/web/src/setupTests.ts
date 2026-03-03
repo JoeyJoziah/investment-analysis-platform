@@ -20,20 +20,22 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// Mock ResizeObserver for charts
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// Mock ResizeObserver for charts and MUI Tabs (must be a class for `new`)
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-  takeRecords: vi.fn().mockReturnValue([]),
-})) as unknown as typeof IntersectionObserver;
+// Mock IntersectionObserver (must be a class for `new`)
+class MockIntersectionObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+  takeRecords = vi.fn().mockReturnValue([]);
+}
+global.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
 
 // Mock scrollTo
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
