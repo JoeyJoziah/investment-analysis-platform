@@ -11,7 +11,6 @@ import {
   Button,
   useTheme,
   useMediaQuery,
-  alpha,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -82,8 +81,6 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'lg'));
-  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
 
   const [refreshing, setRefreshing] = useState(false);
 

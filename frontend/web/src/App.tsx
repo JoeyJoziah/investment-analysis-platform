@@ -119,7 +119,6 @@ interface SuspenseWrapperProps {
 
 const SuspenseWrapper: React.FC<SuspenseWrapperProps> = ({
   children,
-  loadingMessage = 'Loading...',
   skeletonType = 'default',
 }) => (
   <ErrorBoundary>

@@ -18,7 +18,6 @@ import {
   Error as ErrorIcon,
   CheckCircle as SuccessIcon,
   Close as CloseIcon,
-  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useAppDispatch, useAppSelector } from '../../hooks/redux';
@@ -84,7 +83,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ anchorEl, open, o
         )}
       </Box>
       <Divider />
-      
+
       {notifications.length === 0 ? (
         <Box sx={{ p: 4, textAlign: 'center' }}>
           <Typography color="text.secondary">

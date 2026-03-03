@@ -23,8 +23,6 @@ import {
 import {
   Save,
   Download,
-  Upload,
-  History,
   Description,
   ArrowBack,
   Info,

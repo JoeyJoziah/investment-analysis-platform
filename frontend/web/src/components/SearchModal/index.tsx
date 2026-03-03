@@ -15,7 +15,6 @@ import {
   InputAdornment,
   CircularProgress,
   IconButton,
-  Paper,
   Divider,
 } from '@mui/material';
 import {
@@ -91,7 +90,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ open, onClose }) => {
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const query = event.target.value;
     setSearchQuery(query);
-    
+
     if (query.length === 0) {
       dispatch(clearSearchResults());
     } else {
@@ -104,7 +103,7 @@ const SearchModal: React.FC<SearchModalProps> = ({ open, onClose }) => {
     const updated = [ticker, ...recentSearches.filter(t => t !== ticker)].slice(0, 5);
     setRecentSearches(updated);
     localStorage.setItem('recentSearches', JSON.stringify(updated));
-    
+
     // Navigate to stock analysis page
     navigate(`/analysis/${ticker}`);
     onClose();

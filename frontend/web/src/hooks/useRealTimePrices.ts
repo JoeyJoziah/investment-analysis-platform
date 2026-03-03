@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useDispatch } from 'react-redux';
 import { env } from '../utils/env';
 
 interface PriceUpdate {

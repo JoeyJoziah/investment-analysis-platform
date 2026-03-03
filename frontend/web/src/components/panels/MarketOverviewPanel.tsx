@@ -5,7 +5,6 @@ import {
   Skeleton,
   useTheme,
   alpha,
-  Grid,
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,

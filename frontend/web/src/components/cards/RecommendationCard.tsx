@@ -19,7 +19,6 @@ import {
   TrendingUp,
   TrendingDown,
   Star,
-  InfoOutlined,
   ShoppingCart,
   Visibility,
   Schedule,
@@ -123,7 +122,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
 
   if (compact) {
     return (
-      <Card sx={{ 
+      <Card sx={{
         cursor: 'pointer',
         transition: 'all 0.3s',
         '&:hover': {
@@ -136,7 +135,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         <CardContent sx={{ p: 2 }}>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Box display="flex" alignItems="center" gap={1}>
-              <Avatar sx={{ 
+              <Avatar sx={{
                 bgcolor: alpha(getActionColor(recommendation.action), 0.1),
                 color: getActionColor(recommendation.action),
                 width: 32,
@@ -177,8 +176,8 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
               <Typography
                 variant="body2"
                 sx={{
-                  color: recommendation.potential_return >= 0 
-                    ? theme.palette.success.main 
+                  color: recommendation.potential_return >= 0
+                    ? theme.palette.success.main
                     : theme.palette.error.main
                 }}
               >
@@ -197,7 +196,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
       <CardContent sx={{ flexGrow: 1 }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Box display="flex" alignItems="center" gap={2}>
-            <Avatar sx={{ 
+            <Avatar sx={{
               bgcolor: alpha(getActionColor(recommendation.action), 0.1),
               color: getActionColor(recommendation.action),
               width: 48,
@@ -278,8 +277,8 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
                 <Typography
                   variant="h5"
                   sx={{
-                    color: recommendation.potential_return >= 0 
-                      ? theme.palette.success.main 
+                    color: recommendation.potential_return >= 0
+                      ? theme.palette.success.main
                       : theme.palette.error.main
                   }}
                 >
@@ -291,8 +290,8 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
           )}
         </Box>
 
-        {(recommendation.technical_score !== undefined || 
-          recommendation.fundamental_score !== undefined || 
+        {(recommendation.technical_score !== undefined ||
+          recommendation.fundamental_score !== undefined ||
           recommendation.sentiment_score !== undefined) && (
           <Box mb={2}>
             <Typography variant="body2" color="textSecondary" gutterBottom>
@@ -385,7 +384,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
             <Typography variant="body2" color="textSecondary" gutterBottom>
               Key Insights
             </Typography>
-            <Typography variant="body2" sx={{ 
+            <Typography variant="body2" sx={{
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
@@ -433,7 +432,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         <IconButton
           size="small"
           onClick={handleAddToPortfolio}
-          sx={{ 
+          sx={{
             bgcolor: alpha(theme.palette.primary.main, 0.1),
             '&:hover': {
               bgcolor: alpha(theme.palette.primary.main, 0.2)
@@ -447,7 +446,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         <IconButton
           size="small"
           onClick={handleAddToWatchlist}
-          sx={{ 
+          sx={{
             bgcolor: alpha(theme.palette.secondary.main, 0.1),
             '&:hover': {
               bgcolor: alpha(theme.palette.secondary.main, 0.2)

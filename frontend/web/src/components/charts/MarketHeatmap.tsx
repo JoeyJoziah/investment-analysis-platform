@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Typography, Tooltip, Paper, useTheme, alpha } from '@mui/material';
+import { Box, Typography, Tooltip, useTheme, alpha } from '@mui/material';
 import { Treemap, ResponsiveContainer } from 'recharts';
 
 interface MarketHeatmapProps {
@@ -87,7 +87,7 @@ const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
 
     // Group data by the specified criteria
     const grouped: { [key: string]: any[] } = {};
-    
+
     data.forEach(item => {
       const groupKey = item.sector || 'Other';
       if (!grouped[groupKey]) {
@@ -113,7 +113,7 @@ const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
 
   const getColor = (change: number) => {
     const intensity = Math.min(Math.abs(change) / 5, 1); // Cap at 5% for max intensity
-    
+
     if (change > 0) {
       // Green gradient for positive changes
       return alpha(theme.palette.success.main, 0.3 + intensity * 0.7);
@@ -126,20 +126,18 @@ const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
     }
   };
 
-  const CustomTreemapContent = ({ 
-    root, 
-    depth, 
-    x, 
-    y, 
-    width, 
-    height, 
-    name, 
+  const CustomTreemapContent = ({
+    x,
+    y,
+    width,
+    height,
+    name,
     change,
     ticker
   }: any) => {
     const fontSize = width > 80 && height > 40 ? 12 : 10;
     const showDetails = width > 60 && height > 50;
-    
+
     return (
       <Tooltip
         title={
@@ -224,7 +222,7 @@ const MarketHeatmap: React.FC<MarketHeatmapProps> = ({
           </Box>
         </Box>
       </Box>
-      
+
       <ResponsiveContainer width="100%" height={height}>
         <Treemap
           data={[processedData]}

@@ -8,7 +8,6 @@ import {
   Grid,
 } from '@mui/material';
 import {
-  ScatterChart,
   Scatter,
   XAxis,
   YAxis,
@@ -16,7 +15,6 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
-  Line,
   ComposedChart,
 } from 'recharts';
 

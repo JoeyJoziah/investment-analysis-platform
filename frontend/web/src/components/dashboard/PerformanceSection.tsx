@@ -11,7 +11,6 @@ import {
   alpha,
 } from '@mui/material';
 import {
-  AreaChart,
   Area,
   XAxis,
   YAxis,

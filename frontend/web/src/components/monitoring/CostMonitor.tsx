@@ -7,7 +7,6 @@ import {
   LinearProgress,
   Chip,
   Alert,
-  AlertTitle,
   Grid,
   List,
   ListItem,
@@ -32,13 +31,9 @@ import {
   ExpandLess,
   Refresh,
   Settings,
-  Speed,
   DataUsage,
-  CloudQueue,
   Api,
-  Storage,
   Schedule,
-  ShowChart
 } from '@mui/icons-material';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 
@@ -234,8 +229,8 @@ const CostMonitor: React.FC<CostMetricsProps> = ({ metrics, onRefresh, onSetting
         {metrics.alerts && metrics.alerts.length > 0 && (
           <Box mb={2}>
             {metrics.alerts.map((alert, index) => (
-              <Alert 
-                key={index} 
+              <Alert
+                key={index}
                 severity={alert.type}
                 sx={{ mb: 1 }}
                 icon={alert.type === 'warning' ? <Warning /> : alert.type === 'error' ? <Error /> : <Info />}
@@ -347,7 +342,7 @@ const CostMonitor: React.FC<CostMetricsProps> = ({ metrics, onRefresh, onSetting
           >
             {expanded ? 'Hide Details' : 'Show Details'}
           </Button>
-          
+
           <Collapse in={expanded}>
             <Box mt={2}>
               {/* Cost breakdown pie chart */}
@@ -367,7 +362,7 @@ const CostMonitor: React.FC<CostMetricsProps> = ({ metrics, onRefresh, onSetting
                         paddingAngle={2}
                         dataKey="amount"
                       >
-                        {metrics.costBreakdown.map((entry, index) => (
+                        {metrics.costBreakdown.map((_entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
@@ -400,19 +395,19 @@ const CostMonitor: React.FC<CostMetricsProps> = ({ metrics, onRefresh, onSetting
                   <ResponsiveContainer width="100%" height={150}>
                     <BarChart data={metrics.costTrend}>
                       <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-                      <XAxis 
-                        dataKey="date" 
+                      <XAxis
+                        dataKey="date"
                         tick={{ fontSize: 10 }}
                         stroke={theme.palette.text.secondary}
                       />
-                      <YAxis 
+                      <YAxis
                         tick={{ fontSize: 10 }}
                         stroke={theme.palette.text.secondary}
                         tickFormatter={(value) => `$${value}`}
                       />
                       <RechartsTooltip content={<CustomTooltip />} />
-                      <Bar 
-                        dataKey="cost" 
+                      <Bar
+                        dataKey="cost"
                         fill={theme.palette.primary.main}
                         radius={[4, 4, 0, 0]}
                       />

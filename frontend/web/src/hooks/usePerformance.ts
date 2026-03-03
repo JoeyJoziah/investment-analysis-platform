@@ -3,16 +3,16 @@
  * Includes memoization, virtual scrolling, and lazy loading utilities
  */
 
-import { 
-  useCallback, 
-  useEffect, 
-  useMemo, 
-  useRef, 
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
   useState,
-  DependencyList 
+  DependencyList
 } from 'react';
 import { useInView } from 'react-intersection-observer';
-import { debounce, throttle } from 'lodash';
+import { throttle } from 'lodash';
 
 /**
  * Virtual scrolling hook for large lists
@@ -29,14 +29,14 @@ export const useVirtualScroll = <T,>({
   overscan?: number;
 }) => {
   const [scrollTop, setScrollTop] = useState(0);
-  
+
   const visibleRange = useMemo(() => {
     const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - overscan);
     const endIndex = Math.min(
       items.length - 1,
       Math.ceil((scrollTop + containerHeight) / itemHeight) + overscan
     );
-    
+
     return {
       startIndex,
       endIndex,
@@ -45,11 +45,11 @@ export const useVirtualScroll = <T,>({
       totalHeight: items.length * itemHeight,
     };
   }, [scrollTop, items, itemHeight, containerHeight, overscan]);
-  
+
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     setScrollTop(e.currentTarget.scrollTop);
   }, []);
-  
+
   return {
     ...visibleRange,
     handleScroll,
@@ -61,17 +61,17 @@ export const useVirtualScroll = <T,>({
  */
 export const useDebouncedValue = <T,>(value: T, delay: number = 300): T => {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(value);
     }, delay);
-    
+
     return () => {
       clearTimeout(handler);
     };
   }, [value, delay]);
-  
+
   return debouncedValue;
 };
 
@@ -84,10 +84,10 @@ export const useThrottledCallback = <T extends (...args: unknown[]) => unknown>(
   deps: DependencyList = []
 ): T => {
   return useMemo(
-    () => throttle(callback, delay),
+    () => throttle(callback, delay) as unknown as T,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [...deps, delay]
-  ) as T;
+  );
 };
 
 /**
@@ -102,15 +102,15 @@ export const useLazyLoad = (
     rootMargin,
     triggerOnce: true,
   });
-  
+
   const [hasLoaded, setHasLoaded] = useState(false);
-  
+
   useEffect(() => {
     if (inView && !hasLoaded) {
       setHasLoaded(true);
     }
   }, [inView, hasLoaded]);
-  
+
   return {
     ref,
     shouldLoad: hasLoaded,
@@ -129,16 +129,16 @@ export const useMemoizedAsync = <T,>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  
+
   const memoizedFunction = useCallback(asyncFunction, deps);
-  
+
   useEffect(() => {
     let cancelled = false;
-    
+
     const fetchData = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         const result = await memoizedFunction();
         if (!cancelled) {
@@ -154,14 +154,14 @@ export const useMemoizedAsync = <T,>(
         }
       }
     };
-    
+
     fetchData();
-    
+
     return () => {
       cancelled = true;
     };
   }, [memoizedFunction]);
-  
+
   return { data, loading, error };
 };
 
@@ -182,13 +182,13 @@ export const useInfiniteScroll = ({
   const [sentinelRef, inView] = useInView({
     threshold,
   });
-  
+
   useEffect(() => {
     if (inView && hasMore && !loading) {
       onLoadMore();
     }
   }, [inView, hasMore, loading, onLoadMore]);
-  
+
   return { sentinelRef };
 };
 
@@ -201,7 +201,7 @@ export const useLazyImage = (src: string, placeholder?: string) => {
     triggerOnce: true,
     threshold: 0.1,
   });
-  
+
   useEffect(() => {
     if (isInView && src) {
       const img = new Image();
@@ -211,7 +211,7 @@ export const useLazyImage = (src: string, placeholder?: string) => {
       };
     }
   }, [isInView, src]);
-  
+
   return {
     imageSrc,
     imageRef,
@@ -229,7 +229,7 @@ export const useWebWorker = <T, R>(
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
-  
+
   useEffect(() => {
     return () => {
       if (workerRef.current) {
@@ -237,42 +237,42 @@ export const useWebWorker = <T, R>(
       }
     };
   }, []);
-  
+
   const runWorker = useCallback((data: T) => {
     setLoading(true);
     setError(null);
-    
+
     const workerCode = `
       self.onmessage = function(e) {
         const result = (${workerFunction.toString()})(e.data);
         self.postMessage(result);
       }
     `;
-    
+
     const blob = new Blob([workerCode], { type: 'application/javascript' });
     const workerUrl = URL.createObjectURL(blob);
-    
+
     if (workerRef.current) {
       workerRef.current.terminate();
     }
-    
+
     workerRef.current = new Worker(workerUrl);
-    
+
     workerRef.current.onmessage = (e) => {
       setResult(e.data);
       setLoading(false);
       URL.revokeObjectURL(workerUrl);
     };
-    
-    workerRef.current.onerror = (err) => {
+
+    workerRef.current.onerror = (_err) => {
       setError(new Error('Worker error'));
       setLoading(false);
       URL.revokeObjectURL(workerUrl);
     };
-    
+
     workerRef.current.postMessage(data);
   }, [workerFunction]);
-  
+
   return {
     result,
     error,
@@ -311,11 +311,11 @@ export const usePrefetch = () => {
     }
     return cache.current.get(key);
   }, []);
-  
+
   const getCached = useCallback((key: string) => {
     return cache.current.get(key);
   }, []);
-  
+
   const clearCache = useCallback((key?: string) => {
     if (key) {
       cache.current.delete(key);
@@ -323,7 +323,7 @@ export const usePrefetch = () => {
       cache.current.clear();
     }
   }, []);
-  
+
   return {
     prefetch,
     getCached,

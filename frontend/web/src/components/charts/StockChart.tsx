@@ -2,9 +2,7 @@ import React, { useMemo } from 'react';
 import {
   LineChart,
   Line,
-  AreaChart,
   Area,
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -12,7 +10,6 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine,
   Brush,
   ComposedChart
 } from 'recharts';
@@ -58,7 +55,7 @@ const StockChart: React.FC<StockChartProps> = ({
 
   const filteredData = useMemo(() => {
     if (!data || data.length === 0) return [];
-    
+
     let days = data.length;
     switch (selectedPeriod) {
       case '1D': days = 1; break;
@@ -69,7 +66,7 @@ const StockChart: React.FC<StockChartProps> = ({
       case '1Y': days = 365; break;
       case 'ALL': days = data.length; break;
     }
-    
+
     return data.slice(-days);
   }, [data, selectedPeriod]);
 
@@ -140,7 +137,7 @@ const StockChart: React.FC<StockChartProps> = ({
           <ToggleButtonGroup
             value={selectedPeriod}
             exclusive
-            onChange={(e, newPeriod) => newPeriod && setSelectedPeriod(newPeriod)}
+            onChange={(_e, newPeriod) => newPeriod && setSelectedPeriod(newPeriod)}
             size="small"
           >
             {periodOptions.map(period => (
@@ -156,12 +153,12 @@ const StockChart: React.FC<StockChartProps> = ({
         {chartType === 'line' ? (
           <LineChart data={filteredData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               tickFormatter={formatXAxisTick}
               stroke={theme.palette.text.secondary}
             />
-            <YAxis 
+            <YAxis
               domain={['auto', 'auto']}
               stroke={theme.palette.text.secondary}
               tickFormatter={(value) => `$${value}`}
@@ -224,12 +221,12 @@ const StockChart: React.FC<StockChartProps> = ({
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               tickFormatter={formatXAxisTick}
               stroke={theme.palette.text.secondary}
             />
-            <YAxis 
+            <YAxis
               yAxisId="price"
               orientation="left"
               domain={['auto', 'auto']}
@@ -295,7 +292,9 @@ const StockChart: React.FC<StockChartProps> = ({
               tickFormatter={formatXAxisTick}
             />
           </ComposedChart>
-        ) : null}
+        ) : (
+          <LineChart data={[]}><XAxis /><YAxis /></LineChart>
+        )}
       </ResponsiveContainer>
 
       {showIndicators && (
@@ -305,7 +304,7 @@ const StockChart: React.FC<StockChartProps> = ({
           </Typography>
           <ToggleButtonGroup
             value={selectedIndicators}
-            onChange={(e, newIndicators) => setSelectedIndicators(newIndicators)}
+            onChange={(_e, newIndicators) => setSelectedIndicators(newIndicators)}
             size="small"
           >
             {indicatorOptions.map(indicator => (

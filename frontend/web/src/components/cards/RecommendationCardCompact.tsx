@@ -14,7 +14,6 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
-  StarOutline as StarIcon,
 } from '@mui/icons-material';
 
 interface RecommendationCardCompactProps {

@@ -260,14 +260,16 @@ function _getRawSocket() {
   return (wsService as unknown as { socket: import('socket.io-client').Socket | null }).socket;
 }
 
-function _addSocketListener(event: string, handler: (...args: unknown[]) => void) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _addSocketListener(event: string, handler: (...args: any[]) => void) {
   const sock = _getRawSocket();
   if (sock) {
     sock.on(event, handler as Parameters<typeof sock.on>[1]);
   }
 }
 
-function _removeSocketListener(event: string, handler: (...args: unknown[]) => void) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function _removeSocketListener(event: string, handler: (...args: any[]) => void) {
   const sock = _getRawSocket();
   if (sock) {
     sock.off(event, handler as Parameters<typeof sock.off>[1]);

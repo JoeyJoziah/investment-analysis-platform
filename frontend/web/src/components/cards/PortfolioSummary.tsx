@@ -14,7 +14,6 @@ import {
   Chip,
   Button,
   IconButton,
-  Tooltip,
   useTheme,
   alpha,
   Grid,
@@ -23,10 +22,7 @@ import {
 import {
   TrendingUp,
   TrendingDown,
-  AccountBalance,
-  PieChart,
   ShowChart,
-  Timeline,
   AttachMoney,
   ArrowUpward,
   ArrowDownward,
@@ -212,7 +208,7 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
               {formatCurrency(summary.totalValue)}
             </Typography>
           </Box>
-          
+
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
             <Box display="flex" alignItems="center" gap={1}>
               {summary.dayChange >= 0 ? (
@@ -232,7 +228,7 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
                 </Typography>
               </Box>
             </Box>
-            
+
             <Box textAlign="right">
               <Typography
                 variant="body1"
@@ -340,7 +336,7 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
                   paddingAngle={2}
                   dataKey="percentage"
                 >
-                  {pieChartData.map((entry, index) => (
+                  {pieChartData.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -371,7 +367,7 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
             <Typography variant="subtitle2" gutterBottom>
               Top Movers
             </Typography>
-            
+
             {summary.topGainers && summary.topGainers.length > 0 && (
               <Box mb={2}>
                 <Typography variant="caption" color="textSecondary">
@@ -381,12 +377,12 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
                   {summary.topGainers.slice(0, 3).map((gainer) => (
                     <ListItem key={gainer.ticker} disableGutters>
                       <ListItemAvatar>
-                        <Avatar sx={{ 
+                        <Avatar sx={{
                           bgcolor: alpha(theme.palette.success.main, 0.1),
                           width: 32,
                           height: 32
                         }}>
-                          <ArrowUpward sx={{ 
+                          <ArrowUpward sx={{
                             color: theme.palette.success.main,
                             fontSize: 18
                           }} />
@@ -419,12 +415,12 @@ const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({ summary, compact = 
                   {summary.topLosers.slice(0, 3).map((loser) => (
                     <ListItem key={loser.ticker} disableGutters>
                       <ListItemAvatar>
-                        <Avatar sx={{ 
+                        <Avatar sx={{
                           bgcolor: alpha(theme.palette.error.main, 0.1),
                           width: 32,
                           height: 32
                         }}>
-                          <ArrowDownward sx={{ 
+                          <ArrowDownward sx={{
                             color: theme.palette.error.main,
                             fontSize: 18
                           }} />

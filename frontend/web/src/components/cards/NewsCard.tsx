@@ -7,18 +7,13 @@ import {
   Box,
   Typography,
   Chip,
-  Avatar,
   IconButton,
   Tooltip,
-  Link,
   useTheme,
   alpha
 } from '@mui/material';
 import {
   AccessTime,
-  TrendingUp,
-  TrendingDown,
-  TrendingFlat,
   Share,
   BookmarkBorder,
   Bookmark,
@@ -81,23 +76,6 @@ const NewsCard: React.FC<NewsCardProps> = ({
     }
   };
 
-  const getSentimentColor = (sentiment?: string) => {
-    switch (sentiment) {
-      case 'very_positive':
-        return theme.palette.success.dark;
-      case 'positive':
-        return theme.palette.success.main;
-      case 'neutral':
-        return theme.palette.info.main;
-      case 'negative':
-        return theme.palette.error.main;
-      case 'very_negative':
-        return theme.palette.error.dark;
-      default:
-        return theme.palette.text.secondary;
-    }
-  };
-
   const getImpactColor = (impact?: string) => {
     switch (impact) {
       case 'high':
@@ -142,7 +120,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
 
   if (variant === 'compact') {
     return (
-      <Card sx={{ 
+      <Card sx={{
         display: 'flex',
         cursor: 'pointer',
         transition: 'all 0.3s',
@@ -156,9 +134,9 @@ const NewsCard: React.FC<NewsCardProps> = ({
         <CardContent sx={{ flex: 1, p: 2 }}>
           <Box display="flex" justifyContent="space-between" alignItems="flex-start" gap={2}>
             <Box flex={1}>
-              <Typography 
-                variant="subtitle2" 
-                sx={{ 
+              <Typography
+                variant="subtitle2"
+                sx={{
                   fontWeight: 600,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -252,9 +230,9 @@ const NewsCard: React.FC<NewsCardProps> = ({
           </Typography>
 
           {news.summary && (
-            <Typography 
-              variant="body2" 
-              color="textSecondary" 
+            <Typography
+              variant="body2"
+              color="textSecondary"
               paragraph
               sx={{
                 overflow: 'hidden',
@@ -282,7 +260,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
                 </Typography>
               )}
             </Box>
-            
+
             {news.sentiment && (
               <Box display="flex" alignItems="center" gap={1}>
                 <Typography variant="caption" color="textSecondary">
@@ -312,7 +290,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
             </Box>
           )}
         </CardContent>
-        
+
         <CardActionArea onClick={handleClick} sx={{ p: 2, pt: 0 }}>
           <Box display="flex" alignItems="center" justifyContent="center" gap={0.5}>
             <Typography variant="button" color="primary">
@@ -327,7 +305,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
 
   // Default variant
   return (
-    <Card sx={{ 
+    <Card sx={{
       display: 'flex',
       cursor: 'pointer',
       transition: 'all 0.3s',
@@ -349,7 +327,7 @@ const NewsCard: React.FC<NewsCardProps> = ({
       <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         <CardContent>
           <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
-            <Typography variant="h6" sx={{ 
+            <Typography variant="h6" sx={{
               fontWeight: 600,
               fontSize: '1rem',
               overflow: 'hidden',
@@ -363,8 +341,8 @@ const NewsCard: React.FC<NewsCardProps> = ({
             </Typography>
             <Box display="flex" gap={0.5} ml={2}>
               <IconButton size="small" onClick={handleBookmark}>
-                {isBookmarked ? 
-                  <Bookmark sx={{ fontSize: 18 }} /> : 
+                {isBookmarked ?
+                  <Bookmark sx={{ fontSize: 18 }} /> :
                   <BookmarkBorder sx={{ fontSize: 18 }} />
                 }
               </IconButton>
@@ -375,9 +353,9 @@ const NewsCard: React.FC<NewsCardProps> = ({
           </Box>
 
           {news.summary && (
-            <Typography 
-              variant="body2" 
-              color="textSecondary" 
+            <Typography
+              variant="body2"
+              color="textSecondary"
               sx={{
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
