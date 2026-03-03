@@ -10,20 +10,75 @@ analysis platform, including:
 - Stress Testing (historical scenarios and custom shocks)
 - Portfolio risk decomposition
 - Risk limits and alerts
+
+Sub-modules (extracted for maintainability):
+- var_utils      -- VaR / CVaR calculation functions and VaRMethod / VaRResult
+- risk_metrics   -- Drawdown, beta, tracking-error, Sharpe, scoring, decomposition
+- risk_stress    -- Historical scenario catalog and stress-test functions
+
+All public names from those sub-modules are re-exported here so that existing
+``from backend.utils.risk_manager import ...`` statements continue to work
+without any changes.
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple, Any, Union
 from datetime import datetime, timezone
-import numpy as np
-import pandas as pd
 from dataclasses import dataclass, field
 from enum import Enum
+
+import numpy as np
+import pandas as pd
 from scipy import stats
-from scipy.optimize import minimize
+from scipy.optimize import minimize  # kept for any future use; preserves original imports
+
+# ---------------------------------------------------------------------------
+# Sub-module re-exports (backward-compatibility)
+# ---------------------------------------------------------------------------
+
+from backend.utils.var_utils import (          # noqa: F401
+    VaRMethod,
+    VaRResult,
+    var_historical,
+    var_parametric,
+    var_monte_carlo,
+    calculate_var,
+    calculate_var_all_methods,
+    calculate_cvar,
+    calculate_cvar_parametric,
+)
+
+from backend.utils.risk_metrics import (       # noqa: F401
+    RiskDecomposition,
+    calculate_max_drawdown,
+    calculate_drawdown_series,
+    calculate_all_drawdowns,
+    calculate_beta,
+    calculate_tracking_error,
+    calculate_sortino_ratio,
+    calculate_risk_score,
+    identify_risk_factors,
+    identify_portfolio_risk_factors,
+    decompose_portfolio_risk,
+    decompose_risk_by_sector,
+)
+
+from backend.utils.risk_stress import (        # noqa: F401
+    StressTestResult,
+    HISTORICAL_SCENARIOS,
+    stress_test,
+    stress_test_custom,
+    stress_test_all_scenarios,
+    get_available_scenarios,
+    create_custom_scenario,
+)
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Enums and dataclasses that live in this module
+# ---------------------------------------------------------------------------
 
 class RiskLevel(Enum):
     """Risk level classification."""
@@ -32,13 +87,6 @@ class RiskLevel(Enum):
     MODERATE = "moderate"
     HIGH = "high"
     VERY_HIGH = "very_high"
-
-
-class VaRMethod(Enum):
-    """VaR calculation methods."""
-    HISTORICAL = "historical"
-    PARAMETRIC = "parametric"
-    MONTE_CARLO = "monte_carlo"
 
 
 @dataclass
@@ -58,101 +106,9 @@ class RiskAssessment:
     assessed_at: datetime
 
 
-@dataclass
-class VaRResult:
-    """Result of a VaR calculation."""
-    var_value: float
-    confidence_level: float
-    method: VaRMethod
-    horizon_days: int
-    additional_metrics: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class StressTestResult:
-    """Result of a stress test."""
-    scenario_name: str
-    portfolio_loss: float
-    asset_impacts: Dict[str, float]
-    var_breach: bool
-    description: str
-    historical_date: Optional[str] = None
-
-
-@dataclass
-class RiskDecomposition:
-    """Risk decomposition by asset or sector."""
-    total_risk: float
-    marginal_contributions: Dict[str, float]
-    percentage_contributions: Dict[str, float]
-    diversification_benefit: float
-
-
-# Historical stress scenarios with typical asset class impacts
-HISTORICAL_SCENARIOS = {
-    "2008_financial_crisis": {
-        "name": "2008 Financial Crisis",
-        "description": "Global financial crisis triggered by subprime mortgage collapse",
-        "date": "2008-09-15",
-        "equity_shock": -0.50,
-        "bond_shock": 0.05,
-        "commodity_shock": -0.35,
-        "volatility_multiplier": 3.0,
-        "correlation_shock": 0.3,  # Correlations increase in crisis
-    },
-    "2020_covid_crash": {
-        "name": "COVID-19 March 2020 Crash",
-        "description": "Rapid market decline due to pandemic fears",
-        "date": "2020-03-16",
-        "equity_shock": -0.34,
-        "bond_shock": 0.02,
-        "commodity_shock": -0.40,
-        "volatility_multiplier": 4.0,
-        "correlation_shock": 0.4,
-    },
-    "2000_dotcom_burst": {
-        "name": "Dot-Com Bubble Burst",
-        "description": "Technology sector collapse",
-        "date": "2000-03-10",
-        "equity_shock": -0.40,
-        "tech_shock": -0.75,
-        "bond_shock": 0.08,
-        "commodity_shock": -0.15,
-        "volatility_multiplier": 2.5,
-        "correlation_shock": 0.2,
-    },
-    "2011_european_debt": {
-        "name": "European Debt Crisis",
-        "description": "Sovereign debt crisis in Europe",
-        "date": "2011-08-05",
-        "equity_shock": -0.20,
-        "bond_shock": -0.05,
-        "commodity_shock": -0.15,
-        "volatility_multiplier": 2.0,
-        "correlation_shock": 0.25,
-    },
-    "1987_black_monday": {
-        "name": "Black Monday 1987",
-        "description": "Largest single-day stock market crash",
-        "date": "1987-10-19",
-        "equity_shock": -0.22,
-        "bond_shock": 0.03,
-        "commodity_shock": -0.10,
-        "volatility_multiplier": 5.0,
-        "correlation_shock": 0.5,
-    },
-    "2022_rate_hike": {
-        "name": "2022 Rate Hike Cycle",
-        "description": "Aggressive Fed rate hikes to combat inflation",
-        "date": "2022-06-13",
-        "equity_shock": -0.25,
-        "bond_shock": -0.15,
-        "commodity_shock": -0.10,
-        "volatility_multiplier": 2.0,
-        "correlation_shock": 0.3,
-    },
-}
-
+# ---------------------------------------------------------------------------
+# RiskManager class
+# ---------------------------------------------------------------------------
 
 class RiskManager:
     """
@@ -197,7 +153,7 @@ class RiskManager:
         logger.info("RiskManager initialized")
 
     # =========================================================================
-    # VaR Calculations
+    # VaR Calculations (delegate to var_utils)
     # =========================================================================
 
     def calculate_var(
@@ -219,39 +175,9 @@ class RiskManager:
         Returns:
             VaRResult with VaR value and additional metrics
         """
-        returns = self._ensure_array(returns)
         horizon_days = horizon_days or self.var_horizon_days
-
-        if len(returns) < 30:
-            logger.warning("Insufficient data for VaR calculation, using parametric method")
-            method = 'parametric'
-
-        method_enum = VaRMethod(method.lower())
-
-        if method_enum == VaRMethod.HISTORICAL:
-            var_value = self._var_historical(returns, confidence, horizon_days)
-        elif method_enum == VaRMethod.PARAMETRIC:
-            var_value = self._var_parametric(returns, confidence, horizon_days)
-        elif method_enum == VaRMethod.MONTE_CARLO:
-            var_value = self._var_monte_carlo(returns, confidence, horizon_days)
-        else:
-            raise ValueError(f"Unknown VaR method: {method}")
-
-        # Additional metrics
-        additional = {
-            'mean_return': float(np.mean(returns)),
-            'std_return': float(np.std(returns)),
-            'skewness': float(stats.skew(returns)),
-            'kurtosis': float(stats.kurtosis(returns)),
-            'data_points': len(returns),
-        }
-
-        return VaRResult(
-            var_value=var_value,
-            confidence_level=confidence,
-            method=method_enum,
-            horizon_days=horizon_days,
-            additional_metrics=additional
+        return calculate_var(
+            returns, confidence, method, horizon_days, self.monte_carlo_simulations
         )
 
     def _var_historical(
@@ -260,27 +186,8 @@ class RiskManager:
         confidence: float,
         horizon_days: int
     ) -> float:
-        """
-        Historical simulation VaR.
-
-        Uses the empirical distribution of returns to estimate VaR.
-        """
-        # Scale returns to the specified horizon
-        if horizon_days > 1:
-            # Use overlapping window returns for multi-day horizon
-            if len(returns) >= horizon_days:
-                rolling_returns = pd.Series(returns).rolling(horizon_days).sum().dropna().values
-            else:
-                # Fallback: scale by square root of time
-                rolling_returns = returns * np.sqrt(horizon_days)
-        else:
-            rolling_returns = returns
-
-        # VaR is the (1 - confidence) percentile of returns (losses are negative)
-        var_percentile = (1 - confidence) * 100
-        var_value = np.percentile(rolling_returns, var_percentile)
-
-        return float(var_value)
+        """Historical simulation VaR (internal helper, delegates to var_utils)."""
+        return var_historical(returns, confidence, horizon_days)
 
     def _var_parametric(
         self,
@@ -288,25 +195,8 @@ class RiskManager:
         confidence: float,
         horizon_days: int
     ) -> float:
-        """
-        Parametric (Variance-Covariance) VaR.
-
-        Assumes returns are normally distributed.
-        """
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
-
-        # Scale to horizon (square root of time rule)
-        mean_scaled = mean_return * horizon_days
-        std_scaled = std_return * np.sqrt(horizon_days)
-
-        # Z-score for confidence level
-        z_score = stats.norm.ppf(1 - confidence)
-
-        # VaR = mean - z * std (negative value represents loss)
-        var_value = mean_scaled + z_score * std_scaled
-
-        return float(var_value)
+        """Parametric VaR (internal helper, delegates to var_utils)."""
+        return var_parametric(returns, confidence, horizon_days)
 
     def _var_monte_carlo(
         self,
@@ -314,27 +204,8 @@ class RiskManager:
         confidence: float,
         horizon_days: int
     ) -> float:
-        """
-        Monte Carlo VaR.
-
-        Simulates many possible return paths and estimates VaR from the distribution.
-        """
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
-
-        # Simulate returns
-        np.random.seed(42)  # For reproducibility
-        simulated_returns = np.random.normal(
-            mean_return * horizon_days,
-            std_return * np.sqrt(horizon_days),
-            self.monte_carlo_simulations
-        )
-
-        # VaR from simulated distribution
-        var_percentile = (1 - confidence) * 100
-        var_value = np.percentile(simulated_returns, var_percentile)
-
-        return float(var_value)
+        """Monte Carlo VaR (internal helper, delegates to var_utils)."""
+        return var_monte_carlo(returns, confidence, horizon_days, self.monte_carlo_simulations)
 
     def calculate_var_all_methods(
         self,
@@ -353,19 +224,13 @@ class RiskManager:
         Returns:
             Dictionary mapping method name to VaRResult
         """
-        results = {}
-        for method in ['historical', 'parametric', 'monte_carlo']:
-            try:
-                results[method] = self.calculate_var(
-                    returns, confidence, method, horizon_days
-                )
-            except Exception as e:
-                logger.error(f"Error calculating {method} VaR: {e}")
-
-        return results
+        horizon_days = horizon_days or self.var_horizon_days
+        return calculate_var_all_methods(
+            returns, confidence, horizon_days, self.monte_carlo_simulations
+        )
 
     # =========================================================================
-    # CVaR / Expected Shortfall
+    # CVaR / Expected Shortfall (delegate to var_utils)
     # =========================================================================
 
     def calculate_cvar(
@@ -386,20 +251,7 @@ class RiskManager:
         Returns:
             CVaR value (negative indicates loss)
         """
-        returns = self._ensure_array(returns)
-
-        # Calculate VaR threshold
-        var_threshold = self._var_historical(returns, confidence, 1)
-
-        # CVaR is the mean of returns below VaR
-        tail_returns = returns[returns <= var_threshold]
-
-        if len(tail_returns) == 0:
-            # No returns below VaR threshold, use VaR as CVaR
-            return var_threshold
-
-        cvar = np.mean(tail_returns)
-        return float(cvar)
+        return calculate_cvar(returns, confidence)
 
     def calculate_cvar_parametric(
         self,
@@ -416,21 +268,10 @@ class RiskManager:
         Returns:
             CVaR value
         """
-        returns = self._ensure_array(returns)
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
-
-        # For normal distribution, CVaR has a closed-form solution
-        alpha = 1 - confidence
-        z_alpha = stats.norm.ppf(alpha)
-        pdf_z = stats.norm.pdf(z_alpha)
-
-        cvar = mean_return - std_return * pdf_z / alpha
-
-        return float(cvar)
+        return calculate_cvar_parametric(returns, confidence)
 
     # =========================================================================
-    # Maximum Drawdown
+    # Maximum Drawdown (delegate to risk_metrics)
     # =========================================================================
 
     def calculate_max_drawdown(
@@ -446,25 +287,7 @@ class RiskManager:
         Returns:
             Tuple of (max_drawdown, peak_index, trough_index)
         """
-        prices = self._ensure_array(prices)
-
-        if len(prices) < 2:
-            return 0.0, 0, 0
-
-        # Calculate running maximum
-        running_max = np.maximum.accumulate(prices)
-
-        # Calculate drawdown at each point
-        drawdown = (prices - running_max) / running_max
-
-        # Find maximum drawdown
-        max_dd = np.min(drawdown)
-        trough_idx = int(np.argmin(drawdown))
-
-        # Find the peak before the trough
-        peak_idx = int(np.argmax(prices[:trough_idx + 1]))
-
-        return float(max_dd), peak_idx, trough_idx
+        return calculate_max_drawdown(prices)
 
     def calculate_drawdown_series(
         self,
@@ -479,29 +302,7 @@ class RiskManager:
         Returns:
             DataFrame with drawdown metrics at each point
         """
-        prices = self._ensure_array(prices)
-
-        running_max = np.maximum.accumulate(prices)
-        drawdown = (prices - running_max) / running_max
-
-        # Calculate drawdown duration
-        in_drawdown = drawdown < 0
-        drawdown_start = np.zeros(len(prices), dtype=int)
-        current_start = 0
-
-        for i in range(len(prices)):
-            if not in_drawdown[i]:
-                current_start = i
-            drawdown_start[i] = current_start
-
-        drawdown_duration = np.arange(len(prices)) - drawdown_start
-
-        return pd.DataFrame({
-            'price': prices,
-            'running_max': running_max,
-            'drawdown': drawdown,
-            'drawdown_duration': drawdown_duration
-        })
+        return calculate_drawdown_series(prices)
 
     def calculate_all_drawdowns(
         self,
@@ -518,51 +319,10 @@ class RiskManager:
         Returns:
             List of drawdown dictionaries with start, end, depth, and duration
         """
-        prices = self._ensure_array(prices)
-        dd_series = self.calculate_drawdown_series(prices)
-
-        drawdowns = []
-        in_dd = False
-        dd_start = 0
-        peak_value = prices[0]
-
-        for i in range(len(prices)):
-            if dd_series['drawdown'].iloc[i] < threshold and not in_dd:
-                in_dd = True
-                dd_start = i - 1 if i > 0 else 0
-                peak_value = dd_series['running_max'].iloc[i]
-            elif dd_series['drawdown'].iloc[i] >= 0 and in_dd:
-                in_dd = False
-                trough_idx = int(np.argmin(dd_series['drawdown'].iloc[dd_start:i])) + dd_start
-                drawdowns.append({
-                    'start_idx': dd_start,
-                    'trough_idx': trough_idx,
-                    'end_idx': i,
-                    'peak_value': peak_value,
-                    'trough_value': prices[trough_idx],
-                    'max_drawdown': float(dd_series['drawdown'].iloc[trough_idx]),
-                    'duration': i - dd_start,
-                    'recovery_time': i - trough_idx
-                })
-
-        # Handle ongoing drawdown
-        if in_dd:
-            trough_idx = int(np.argmin(dd_series['drawdown'].iloc[dd_start:])) + dd_start
-            drawdowns.append({
-                'start_idx': dd_start,
-                'trough_idx': trough_idx,
-                'end_idx': len(prices) - 1,
-                'peak_value': peak_value,
-                'trough_value': prices[trough_idx],
-                'max_drawdown': float(dd_series['drawdown'].iloc[trough_idx]),
-                'duration': len(prices) - dd_start,
-                'recovery_time': None  # Still in drawdown
-            })
-
-        return drawdowns
+        return calculate_all_drawdowns(prices, threshold)
 
     # =========================================================================
-    # Beta and Tracking Error
+    # Beta and Tracking Error (delegate to risk_metrics)
     # =========================================================================
 
     def calculate_beta(
@@ -582,50 +342,7 @@ class RiskManager:
         Returns:
             Dictionary with beta, alpha, r_squared, and correlation
         """
-        returns = self._ensure_array(returns)
-        benchmark_returns = self._ensure_array(benchmark_returns)
-
-        # Align lengths
-        min_len = min(len(returns), len(benchmark_returns))
-        returns = returns[-min_len:]
-        benchmark_returns = benchmark_returns[-min_len:]
-
-        if len(returns) < 30:
-            logger.warning("Insufficient data for beta calculation")
-            return {
-                'beta': 1.0,
-                'alpha': 0.0,
-                'r_squared': 0.0,
-                'correlation': 0.0,
-                'data_points': len(returns)
-            }
-
-        # Calculate covariance and variance
-        cov_matrix = np.cov(returns, benchmark_returns)
-        covariance = cov_matrix[0, 1]
-        benchmark_variance = cov_matrix[1, 1]
-
-        # Beta = Cov(r, rm) / Var(rm)
-        beta = covariance / benchmark_variance if benchmark_variance > 0 else 1.0
-
-        # Alpha = mean(r) - beta * mean(rm)
-        alpha = np.mean(returns) - beta * np.mean(benchmark_returns)
-
-        # Annualize alpha (assuming daily returns)
-        alpha_annualized = alpha * 252
-
-        # R-squared
-        correlation = np.corrcoef(returns, benchmark_returns)[0, 1]
-        r_squared = correlation ** 2
-
-        return {
-            'beta': float(beta),
-            'alpha': float(alpha),
-            'alpha_annualized': float(alpha_annualized),
-            'r_squared': float(r_squared),
-            'correlation': float(correlation),
-            'data_points': len(returns)
-        }
+        return calculate_beta(returns, benchmark_returns)
 
     def calculate_tracking_error(
         self,
@@ -644,49 +361,10 @@ class RiskManager:
         Returns:
             Dictionary with tracking error metrics
         """
-        returns = self._ensure_array(returns)
-        benchmark_returns = self._ensure_array(benchmark_returns)
-
-        # Align lengths
-        min_len = min(len(returns), len(benchmark_returns))
-        returns = returns[-min_len:]
-        benchmark_returns = benchmark_returns[-min_len:]
-
-        # Active returns (excess over benchmark)
-        active_returns = returns - benchmark_returns
-
-        # Tracking error is the std of active returns
-        tracking_error = np.std(active_returns)
-
-        # Annualize if requested (assuming daily returns)
-        if annualize:
-            tracking_error_annualized = tracking_error * np.sqrt(252)
-        else:
-            tracking_error_annualized = tracking_error
-
-        # Information ratio
-        mean_active_return = np.mean(active_returns)
-        if annualize:
-            mean_active_return_annualized = mean_active_return * 252
-        else:
-            mean_active_return_annualized = mean_active_return
-
-        information_ratio = (
-            mean_active_return_annualized / tracking_error_annualized
-            if tracking_error_annualized > 0 else 0
-        )
-
-        return {
-            'tracking_error': float(tracking_error),
-            'tracking_error_annualized': float(tracking_error_annualized),
-            'mean_active_return': float(mean_active_return),
-            'mean_active_return_annualized': float(mean_active_return_annualized),
-            'information_ratio': float(information_ratio),
-            'data_points': len(returns)
-        }
+        return calculate_tracking_error(returns, benchmark_returns, annualize)
 
     # =========================================================================
-    # Stress Testing
+    # Stress Testing (delegate to risk_stress)
     # =========================================================================
 
     def stress_test(
@@ -708,47 +386,8 @@ class RiskManager:
         Returns:
             StressTestResult with scenario impact details
         """
-        if scenario not in HISTORICAL_SCENARIOS:
-            available = ", ".join(HISTORICAL_SCENARIOS.keys())
-            raise ValueError(f"Unknown scenario: {scenario}. Available: {available}")
-
-        scenario_data = HISTORICAL_SCENARIOS[scenario]
-        asset_betas = asset_betas or {}
-        sector_mappings = sector_mappings or {}
-
-        asset_impacts = {}
-        portfolio_loss = 0.0
-
-        for ticker, weight in portfolio.items():
-            beta = asset_betas.get(ticker, 1.0)
-            sector = sector_mappings.get(ticker, 'equity')
-
-            # Determine base shock based on sector
-            if sector.lower() == 'tech' and 'tech_shock' in scenario_data:
-                base_shock = scenario_data['tech_shock']
-            elif sector.lower() == 'bond':
-                base_shock = scenario_data['bond_shock']
-            elif sector.lower() == 'commodity':
-                base_shock = scenario_data['commodity_shock']
-            else:
-                base_shock = scenario_data['equity_shock']
-
-            # Adjust shock by beta
-            adjusted_shock = base_shock * beta
-
-            asset_impacts[ticker] = adjusted_shock
-            portfolio_loss += weight * adjusted_shock
-
-        # Check if VaR is breached
-        var_breach = abs(portfolio_loss) > self.max_portfolio_var
-
-        return StressTestResult(
-            scenario_name=scenario_data['name'],
-            portfolio_loss=float(portfolio_loss),
-            asset_impacts=asset_impacts,
-            var_breach=var_breach,
-            description=scenario_data['description'],
-            historical_date=scenario_data['date']
+        return stress_test(
+            portfolio, scenario, self.max_portfolio_var, asset_betas, sector_mappings
         )
 
     def stress_test_custom(
@@ -770,23 +409,8 @@ class RiskManager:
         Returns:
             StressTestResult with custom scenario impact
         """
-        asset_impacts = {}
-        portfolio_loss = 0.0
-
-        for ticker, weight in portfolio.items():
-            shock = shocks.get(ticker, 0.0)
-            asset_impacts[ticker] = shock
-            portfolio_loss += weight * shock
-
-        var_breach = abs(portfolio_loss) > self.max_portfolio_var
-
-        return StressTestResult(
-            scenario_name=scenario_name,
-            portfolio_loss=float(portfolio_loss),
-            asset_impacts=asset_impacts,
-            var_breach=var_breach,
-            description=description,
-            historical_date=None
+        return stress_test_custom(
+            portfolio, shocks, self.max_portfolio_var, scenario_name, description
         )
 
     def stress_test_all_scenarios(
@@ -806,20 +430,9 @@ class RiskManager:
         Returns:
             List of StressTestResult for all scenarios
         """
-        results = []
-        for scenario_name in HISTORICAL_SCENARIOS.keys():
-            try:
-                result = self.stress_test(
-                    portfolio, scenario_name, asset_betas, sector_mappings
-                )
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Error in stress test {scenario_name}: {e}")
-
-        # Sort by portfolio loss (worst first)
-        results.sort(key=lambda x: x.portfolio_loss)
-
-        return results
+        return stress_test_all_scenarios(
+            portfolio, self.max_portfolio_var, asset_betas, sector_mappings
+        )
 
     # =========================================================================
     # Portfolio Risk Aggregation
@@ -975,24 +588,10 @@ class RiskManager:
         target_return: float = 0.0
     ) -> float:
         """Calculate Sortino ratio (penalizes only downside volatility)."""
-        excess_returns = returns - target_return
-        downside_returns = excess_returns[excess_returns < 0]
-
-        if len(downside_returns) == 0:
-            return float('inf')
-
-        downside_std = np.sqrt(np.mean(downside_returns ** 2))
-
-        if downside_std == 0:
-            return float('inf')
-
-        mean_excess = np.mean(returns) - self.risk_free_rate / 252
-        sortino = mean_excess * 252 / (downside_std * np.sqrt(252))
-
-        return float(sortino)
+        return calculate_sortino_ratio(returns, self.risk_free_rate, target_return)
 
     # =========================================================================
-    # Risk Decomposition
+    # Risk Decomposition (delegate to risk_metrics)
     # =========================================================================
 
     def _decompose_portfolio_risk(
@@ -1014,36 +613,7 @@ class RiskManager:
         Returns:
             RiskDecomposition with contribution details
         """
-        # Total portfolio variance
-        portfolio_variance = weights @ cov_matrix @ weights
-        portfolio_volatility = np.sqrt(portfolio_variance)
-
-        # Marginal contribution to risk
-        # MCR_i = (Cov @ w)_i / portfolio_vol
-        mcr = (cov_matrix @ weights) / portfolio_volatility
-
-        # Component contribution to risk
-        # CCR_i = w_i * MCR_i
-        ccr = weights * mcr
-
-        # Create dictionaries
-        marginal_contributions = dict(zip(tickers, mcr.tolist()))
-        percentage_contributions = dict(zip(
-            tickers,
-            (ccr / portfolio_volatility).tolist()
-        ))
-
-        # Diversification benefit
-        individual_vols = np.sqrt(np.diag(cov_matrix))
-        undiversified_risk = np.sum(weights * individual_vols)
-        diversification_benefit = 1 - portfolio_volatility / undiversified_risk
-
-        return RiskDecomposition(
-            total_risk=float(portfolio_volatility),
-            marginal_contributions=marginal_contributions,
-            percentage_contributions=percentage_contributions,
-            diversification_benefit=float(diversification_benefit)
-        )
+        return decompose_portfolio_risk(weights, cov_matrix, tickers)
 
     def decompose_risk_by_sector(
         self,
@@ -1064,16 +634,7 @@ class RiskManager:
         Returns:
             Dictionary mapping sectors to risk contributions
         """
-        asset_decomp = self._decompose_portfolio_risk(weights, cov_matrix, tickers)
-
-        sector_contributions = {}
-        for ticker, pct_contrib in asset_decomp.percentage_contributions.items():
-            sector = sector_mappings.get(ticker, 'Unknown')
-            sector_contributions[sector] = (
-                sector_contributions.get(sector, 0) + pct_contrib
-            )
-
-        return sector_contributions
+        return decompose_risk_by_sector(weights, cov_matrix, tickers, sector_mappings)
 
     # =========================================================================
     # Individual Stock Risk Assessment
@@ -1240,7 +801,7 @@ class RiskManager:
         results['volatility_target'] = float(np.clip(vol_based_size, 0, 1))
 
         # VaR-based sizing
-        var_95 = abs(self._var_parametric(returns, 0.95, 1))
+        var_95 = abs(var_parametric(returns, 0.95, 1))
         var_based_size = target_var / var_95 if var_95 > 0 else 1
 
         results['var_target'] = float(np.clip(var_based_size, 0, 1))
@@ -1255,7 +816,47 @@ class RiskManager:
         return results
 
     # =========================================================================
-    # Helper Methods
+    # Scenario Analysis Utilities (delegate to risk_stress)
+    # =========================================================================
+
+    def get_available_scenarios(self) -> List[Dict[str, str]]:
+        """Get list of available stress test scenarios."""
+        return get_available_scenarios()
+
+    def create_custom_scenario(
+        self,
+        name: str,
+        equity_shock: float,
+        bond_shock: float = 0.0,
+        commodity_shock: float = 0.0,
+        tech_shock: Optional[float] = None,
+        volatility_multiplier: float = 2.0,
+        correlation_shock: float = 0.2,
+        description: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Create a custom stress scenario.
+
+        Args:
+            name: Scenario name
+            equity_shock: Shock to equity prices (e.g., -0.20 for 20% decline)
+            bond_shock: Shock to bond prices
+            commodity_shock: Shock to commodity prices
+            tech_shock: Optional separate shock for tech stocks
+            volatility_multiplier: How much volatility increases
+            correlation_shock: How much correlations increase
+            description: Scenario description
+
+        Returns:
+            Scenario dictionary that can be used with stress_test()
+        """
+        return create_custom_scenario(
+            name, equity_shock, bond_shock, commodity_shock,
+            tech_shock, volatility_multiplier, correlation_shock, description
+        )
+
+    # =========================================================================
+    # Private helper methods
     # =========================================================================
 
     def _ensure_array(self, data: Union[np.ndarray, pd.Series]) -> np.ndarray:
@@ -1272,21 +873,7 @@ class RiskManager:
         sharpe_ratio: float
     ) -> float:
         """Calculate composite risk score (0-1, higher is riskier)."""
-        # Normalize components
-        vol_score = min(volatility / 0.5, 1.0)  # 50% annual vol = max
-        beta_score = min(abs(beta - 1) / 1.0, 1.0)  # Distance from market beta
-        dd_score = min(abs(max_drawdown) / 0.3, 1.0)  # 30% drawdown = max
-        sharpe_score = max(0, 1 - sharpe_ratio / 2)  # Higher Sharpe = lower risk
-
-        # Weighted average
-        risk_score = (
-            0.35 * vol_score +
-            0.15 * beta_score +
-            0.25 * dd_score +
-            0.25 * sharpe_score
-        )
-
-        return min(1.0, max(0.0, risk_score))
+        return calculate_risk_score(volatility, beta, max_drawdown, sharpe_ratio)
 
     def _classify_risk_level(self, risk_score: float) -> RiskLevel:
         """Classify risk level based on score."""
@@ -1309,20 +896,7 @@ class RiskManager:
         sharpe_ratio: float
     ) -> List[str]:
         """Identify specific risk factors."""
-        factors = []
-
-        if volatility > 0.4:
-            factors.append(f"High volatility ({volatility:.0%} annualized)")
-        if beta > 1.5:
-            factors.append(f"High market sensitivity (beta: {beta:.2f})")
-        if beta < 0.5:
-            factors.append(f"Low correlation to market (beta: {beta:.2f})")
-        if max_drawdown < -0.25:
-            factors.append(f"Significant historical drawdown ({max_drawdown:.0%})")
-        if sharpe_ratio < 0.5:
-            factors.append(f"Poor risk-adjusted returns (Sharpe: {sharpe_ratio:.2f})")
-
-        return factors
+        return identify_risk_factors(volatility, beta, max_drawdown, sharpe_ratio)
 
     def _identify_portfolio_risk_factors(
         self,
@@ -1333,20 +907,9 @@ class RiskManager:
         hhi: float
     ) -> List[str]:
         """Identify portfolio-level risk factors."""
-        factors = []
-
-        if volatility > 0.25:
-            factors.append(f"Elevated portfolio volatility ({volatility:.0%} annualized)")
-        if max_drawdown < -0.15:
-            factors.append(f"Significant drawdown risk ({max_drawdown:.0%})")
-        if sharpe_ratio < self.min_sharpe_ratio:
-            factors.append(f"Below minimum Sharpe ratio ({sharpe_ratio:.2f} < {self.min_sharpe_ratio})")
-        if beta > 1.2:
-            factors.append(f"High market exposure (beta: {beta:.2f})")
-        if hhi > 0.2:
-            factors.append(f"Concentrated portfolio (HHI: {hhi:.2f})")
-
-        return factors
+        return identify_portfolio_risk_factors(
+            volatility, max_drawdown, sharpe_ratio, beta, hhi, self.min_sharpe_ratio
+        )
 
     def _generate_risk_recommendations(
         self,
@@ -1420,62 +983,3 @@ class RiskManager:
             'data_points': 0,
             'assessed_at': datetime.now(timezone.utc).isoformat()
         }
-
-    # =========================================================================
-    # Scenario Analysis Utilities
-    # =========================================================================
-
-    def get_available_scenarios(self) -> List[Dict[str, str]]:
-        """Get list of available stress test scenarios."""
-        return [
-            {
-                'id': scenario_id,
-                'name': data['name'],
-                'description': data['description'],
-                'date': data['date']
-            }
-            for scenario_id, data in HISTORICAL_SCENARIOS.items()
-        ]
-
-    def create_custom_scenario(
-        self,
-        name: str,
-        equity_shock: float,
-        bond_shock: float = 0.0,
-        commodity_shock: float = 0.0,
-        tech_shock: Optional[float] = None,
-        volatility_multiplier: float = 2.0,
-        correlation_shock: float = 0.2,
-        description: str = ""
-    ) -> Dict[str, Any]:
-        """
-        Create a custom stress scenario.
-
-        Args:
-            name: Scenario name
-            equity_shock: Shock to equity prices (e.g., -0.20 for 20% decline)
-            bond_shock: Shock to bond prices
-            commodity_shock: Shock to commodity prices
-            tech_shock: Optional separate shock for tech stocks
-            volatility_multiplier: How much volatility increases
-            correlation_shock: How much correlations increase
-            description: Scenario description
-
-        Returns:
-            Scenario dictionary that can be used with stress_test()
-        """
-        scenario = {
-            'name': name,
-            'description': description or f"Custom scenario: {name}",
-            'date': datetime.now(timezone.utc).strftime('%Y-%m-%d'),
-            'equity_shock': equity_shock,
-            'bond_shock': bond_shock,
-            'commodity_shock': commodity_shock,
-            'volatility_multiplier': volatility_multiplier,
-            'correlation_shock': correlation_shock,
-        }
-
-        if tech_shock is not None:
-            scenario['tech_shock'] = tech_shock
-
-        return scenario
