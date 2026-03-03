@@ -9,10 +9,9 @@ import hashlib
 # SECURITY: Removed pickle import - using JSON/joblib to prevent code execution
 import logging
 from typing import Dict, List, Optional, Any, Union, Callable, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from enum import Enum
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
@@ -30,339 +29,33 @@ from sqlalchemy.orm import sessionmaker
 logger = logging.getLogger(__name__)
 
 
-class FeatureType(Enum):
-    """Feature data types"""
-    NUMERICAL = "numerical"
-    CATEGORICAL = "categorical"
-    BOOLEAN = "boolean"
-    DATETIME = "datetime"
-    TEXT = "text"
+# Import types from extracted sub-module
+try:
+    from backend.ml.feature_types import (
+        FeatureType, ComputeMode, FeatureStatus,
+        FeatureDefinition, FeatureValue, FeatureDriftMetrics,
+    )
+except ImportError:
+    from .feature_types import (
+        FeatureType, ComputeMode, FeatureStatus,
+        FeatureDefinition, FeatureValue, FeatureDriftMetrics,
+    )
 
+# Import validator from extracted sub-module
+try:
+    from backend.ml.feature_validation import FeatureValidator as _FeatureValidator
+except ImportError:
+    from .feature_validation import FeatureValidator as _FeatureValidator
 
-class ComputeMode(Enum):
-    """Feature computation modes"""
-    BATCH = "batch"
-    STREAMING = "streaming"
-    ON_DEMAND = "on_demand"
+# Import drift detector from extracted sub-module
+try:
+    from backend.ml.feature_drift import FeatureDriftDetector as _FeatureDriftDetector
+except ImportError:
+    from .feature_drift import FeatureDriftDetector as _FeatureDriftDetector
 
-
-class FeatureStatus(Enum):
-    """Feature lifecycle status"""
-    DEVELOPMENT = "development"
-    TESTING = "testing"
-    PRODUCTION = "production"
-    DEPRECATED = "deprecated"
-    RETIRED = "retired"
-
-
-@dataclass
-class FeatureDefinition:
-    """Feature definition and metadata"""
-    name: str
-    description: str
-    feature_type: FeatureType
-    compute_mode: ComputeMode
-    status: FeatureStatus
-    version: str
-    created_at: datetime
-    updated_at: datetime
-    created_by: str
-    dependencies: List[str]  # Other features this depends on
-    source_tables: List[str]
-    computation_logic: str  # SQL or Python code
-    validation_rules: Dict[str, Any]
-    tags: List[str]
-    business_context: str
-    sla_hours: Optional[float] = None  # Max staleness allowed
-    monitoring_config: Optional[Dict[str, Any]] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
-        data = asdict(self)
-        data['feature_type'] = self.feature_type.value
-        data['compute_mode'] = self.compute_mode.value
-        data['status'] = self.status.value
-        data['created_at'] = self.created_at.isoformat()
-        data['updated_at'] = self.updated_at.isoformat()
-        return data
-
-
-@dataclass
-class FeatureValue:
-    """Individual feature value with metadata"""
-    feature_name: str
-    entity_id: str  # e.g., ticker symbol
-    timestamp: datetime
-    value: Any
-    version: str
-    quality_score: float = 1.0
-    is_valid: bool = True
-    validation_errors: List[str] = None
-
-
-@dataclass
-class FeatureDriftMetrics:
-    """Feature drift detection metrics"""
-    feature_name: str
-    timestamp: datetime
-    population_stability_index: float
-    kolmogorov_smirnov_statistic: float
-    jensen_shannon_distance: float
-    mean_shift: float
-    std_shift: float
-    distribution_shift_detected: bool
-    drift_score: float  # 0-1, higher = more drift
-
-
-class FeatureValidator:
-    """Feature validation and quality scoring"""
-    
-    def __init__(self):
-        self.validation_rules = {
-            'numerical': self._validate_numerical,
-            'categorical': self._validate_categorical, 
-            'boolean': self._validate_boolean,
-            'datetime': self._validate_datetime
-        }
-    
-    def validate_feature(self, feature_def: FeatureDefinition, values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Validate feature values and return quality scores"""
-        errors = []
-        quality_scores = pd.Series(1.0, index=values.index)
-        
-        # Type validation
-        if feature_def.feature_type in self.validation_rules:
-            type_valid, type_errors = self.validation_rules[feature_def.feature_type](values)
-            errors.extend(type_errors)
-            quality_scores = quality_scores * type_valid.astype(float)
-        
-        # Custom validation rules
-        for rule_name, rule_config in feature_def.validation_rules.items():
-            rule_valid, rule_errors = self._apply_validation_rule(rule_name, rule_config, values)
-            errors.extend(rule_errors)
-            quality_scores = quality_scores * rule_valid.astype(float)
-        
-        return quality_scores, errors
-    
-    def _validate_numerical(self, values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Validate numerical features"""
-        errors = []
-        valid = pd.Series(True, index=values.index)
-        
-        # Check for non-numeric values
-        non_numeric = ~pd.to_numeric(values, errors='coerce').notna()
-        if non_numeric.any():
-            errors.append(f"Found {non_numeric.sum()} non-numeric values")
-            valid = valid & ~non_numeric
-        
-        # Check for infinite values
-        numeric_values = pd.to_numeric(values, errors='coerce')
-        infinite_mask = np.isinf(numeric_values)
-        if infinite_mask.any():
-            errors.append(f"Found {infinite_mask.sum()} infinite values")
-            valid = valid & ~infinite_mask
-        
-        return valid, errors
-    
-    def _validate_categorical(self, values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Validate categorical features"""
-        errors = []
-        valid = pd.Series(True, index=values.index)
-        
-        # Check for null values
-        null_mask = values.isna()
-        if null_mask.any():
-            errors.append(f"Found {null_mask.sum()} null values")
-            valid = valid & ~null_mask
-        
-        return valid, errors
-    
-    def _validate_boolean(self, values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Validate boolean features"""
-        errors = []
-        valid = pd.Series(True, index=values.index)
-        
-        # Check for valid boolean values
-        boolean_values = values.isin([True, False, 0, 1, 'true', 'false', 'True', 'False'])
-        if not boolean_values.all():
-            errors.append(f"Found {(~boolean_values).sum()} invalid boolean values")
-            valid = valid & boolean_values
-        
-        return valid, errors
-    
-    def _validate_datetime(self, values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Validate datetime features"""
-        errors = []
-        valid = pd.Series(True, index=values.index)
-        
-        try:
-            pd.to_datetime(values)
-        except:
-            errors.append("Invalid datetime format detected")
-            valid = pd.Series(False, index=values.index)
-        
-        return valid, errors
-    
-    def _apply_validation_rule(self, rule_name: str, rule_config: Dict[str, Any], 
-                             values: pd.Series) -> Tuple[pd.Series, List[str]]:
-        """Apply custom validation rule"""
-        errors = []
-        valid = pd.Series(True, index=values.index)
-        
-        if rule_name == "range":
-            min_val = rule_config.get('min')
-            max_val = rule_config.get('max')
-            
-            if min_val is not None:
-                below_min = values < min_val
-                if below_min.any():
-                    errors.append(f"Found {below_min.sum()} values below minimum {min_val}")
-                    valid = valid & ~below_min
-            
-            if max_val is not None:
-                above_max = values > max_val
-                if above_max.any():
-                    errors.append(f"Found {above_max.sum()} values above maximum {max_val}")
-                    valid = valid & ~above_max
-        
-        elif rule_name == "allowed_values":
-            allowed = rule_config.get('values', [])
-            not_allowed = ~values.isin(allowed)
-            if not_allowed.any():
-                errors.append(f"Found {not_allowed.sum()} values not in allowed set")
-                valid = valid & ~not_allowed
-        
-        elif rule_name == "not_null":
-            if rule_config.get('required', True):
-                null_mask = values.isna()
-                if null_mask.any():
-                    errors.append(f"Found {null_mask.sum()} null values")
-                    valid = valid & ~null_mask
-        
-        return valid, errors
-
-
-class FeatureDriftDetector:
-    """Feature drift detection and monitoring"""
-    
-    def __init__(self, reference_window_days: int = 30, detection_window_days: int = 7):
-        self.reference_window_days = reference_window_days
-        self.detection_window_days = detection_window_days
-    
-    def detect_drift(self, feature_name: str, 
-                    reference_data: pd.Series, 
-                    current_data: pd.Series) -> FeatureDriftMetrics:
-        """Detect drift between reference and current data"""
-        
-        # Population Stability Index (PSI)
-        psi = self._calculate_psi(reference_data, current_data)
-        
-        # Kolmogorov-Smirnov test
-        ks_stat = self._calculate_ks_statistic(reference_data, current_data)
-        
-        # Jensen-Shannon distance
-        js_distance = self._calculate_js_distance(reference_data, current_data)
-        
-        # Mean and std shift
-        mean_shift = abs(current_data.mean() - reference_data.mean()) / reference_data.std() if reference_data.std() > 0 else 0
-        std_shift = abs(current_data.std() - reference_data.std()) / reference_data.std() if reference_data.std() > 0 else 0
-        
-        # Overall drift score (weighted combination)
-        drift_score = 0.4 * psi + 0.3 * ks_stat + 0.2 * js_distance + 0.1 * (mean_shift + std_shift)
-        
-        # Drift detection thresholds
-        drift_threshold = 0.25
-        distribution_shift_detected = drift_score > drift_threshold
-        
-        return FeatureDriftMetrics(
-            feature_name=feature_name,
-            timestamp=datetime.now(timezone.utc),
-            population_stability_index=psi,
-            kolmogorov_smirnov_statistic=ks_stat,
-            jensen_shannon_distance=js_distance,
-            mean_shift=mean_shift,
-            std_shift=std_shift,
-            distribution_shift_detected=distribution_shift_detected,
-            drift_score=drift_score
-        )
-    
-    def _calculate_psi(self, reference: pd.Series, current: pd.Series, bins: int = 10) -> float:
-        """Calculate Population Stability Index"""
-        try:
-            # Handle edge cases
-            if len(reference) == 0 or len(current) == 0:
-                return 1.0
-            
-            # Create bins based on reference data
-            _, bin_edges = np.histogram(reference.dropna(), bins=bins)
-            bin_edges[0] = -np.inf
-            bin_edges[-1] = np.inf
-            
-            # Calculate frequencies
-            ref_freq = pd.cut(reference, bins=bin_edges).value_counts().values
-            cur_freq = pd.cut(current, bins=bin_edges).value_counts().values
-            
-            # Convert to percentages
-            ref_pct = ref_freq / ref_freq.sum()
-            cur_pct = cur_freq / cur_freq.sum()
-            
-            # Avoid division by zero
-            ref_pct = np.where(ref_pct == 0, 0.0001, ref_pct)
-            cur_pct = np.where(cur_pct == 0, 0.0001, cur_pct)
-            
-            # Calculate PSI
-            psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
-            
-            return min(psi, 1.0)  # Cap at 1.0
-            
-        except Exception as e:
-            logger.error(f"Error calculating PSI: {e}")
-            return 0.0
-    
-    def _calculate_ks_statistic(self, reference: pd.Series, current: pd.Series) -> float:
-        """Calculate Kolmogorov-Smirnov statistic"""
-        try:
-            from scipy import stats
-            
-            ref_clean = reference.dropna()
-            cur_clean = current.dropna()
-            
-            if len(ref_clean) == 0 or len(cur_clean) == 0:
-                return 0.0
-            
-            ks_stat, _ = stats.ks_2samp(ref_clean, cur_clean)
-            return ks_stat
-            
-        except Exception as e:
-            logger.error(f"Error calculating KS statistic: {e}")
-            return 0.0
-    
-    def _calculate_js_distance(self, reference: pd.Series, current: pd.Series, bins: int = 50) -> float:
-        """Calculate Jensen-Shannon distance"""
-        try:
-            # Create histograms
-            min_val = min(reference.min(), current.min())
-            max_val = max(reference.max(), current.max())
-            
-            ref_hist, _ = np.histogram(reference.dropna(), bins=bins, range=(min_val, max_val), density=True)
-            cur_hist, _ = np.histogram(current.dropna(), bins=bins, range=(min_val, max_val), density=True)
-            
-            # Normalize to probabilities
-            ref_prob = ref_hist / ref_hist.sum() if ref_hist.sum() > 0 else ref_hist
-            cur_prob = cur_hist / cur_hist.sum() if cur_hist.sum() > 0 else cur_hist
-            
-            # Calculate JS distance
-            m = 0.5 * (ref_prob + cur_prob)
-            
-            def kl_divergence(p, q):
-                return np.sum(p * np.log(p / q + 1e-10))
-            
-            js_distance = 0.5 * kl_divergence(ref_prob, m) + 0.5 * kl_divergence(cur_prob, m)
-            return min(js_distance, 1.0)
-            
-        except Exception as e:
-            logger.error(f"Error calculating JS distance: {e}")
-            return 0.0
+# Re-export for backward compatibility
+FeatureValidator = _FeatureValidator
+FeatureDriftDetector = _FeatureDriftDetector
 
 
 class FeatureStore:
