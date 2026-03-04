@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta, date, timezone
 from enum import Enum
-import random
 import logging
 import statistics
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -199,7 +198,7 @@ class ComparisonResult(BaseModel):
     comparison_metrics: Dict[str, Dict[str, Any]]
     best_performer: str
     recommendations: Dict[str, SignalStrength]
-    correlation_matrix: Optional[Dict[str, Dict[str, float]]] = None
+    correlation_matrix: Optional[Dict[str, Dict[str, Optional[float]]]] = None
 
 
 def _determine_recommendation(overall_score: float) -> SignalStrength:
@@ -416,7 +415,7 @@ async def analyze_stock(
                     enterprise_value=float(fundamental_data.get('EVToRevenue', 0)) * float(fundamental_data.get('RevenueTTM', 0)) if fundamental_data and fundamental_data.get('EVToRevenue') and fundamental_data.get('RevenueTTM') else None,
                     book_value=float(fundamental_data.get('BookValue', 0)) if fundamental_data and fundamental_data.get('BookValue') else None,
                     intrinsic_value=None,
-                    valuation_score=random.uniform(60, 85)
+                    valuation_score=None
                 )
 
             except Exception as e:
@@ -598,7 +597,7 @@ async def analyze_stock(
             confidence=confidence,
             key_insights=insights,
             warnings=["High volatility detected in recent price action"] if risk_metrics and risk_metrics.overall_risk_score > 60 else None,
-            next_earnings_date=datetime.now(timezone.utc).date() + timedelta(days=random.randint(10, 90)),
+            next_earnings_date=None,
             last_updated=datetime.now(timezone.utc)
         ))
 
@@ -645,24 +644,17 @@ async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[Compariso
 
     for symbol in request.symbols:
         comparison_metrics[symbol] = {
-            "score": random.uniform(50, 90),
-            "pe_ratio": random.uniform(10, 40),
-            "rsi": random.uniform(30, 70),
-            "sentiment": random.uniform(-0.5, 0.5),
-            "risk_score": random.uniform(20, 80),
-            "expected_return": random.uniform(-0.1, 0.3)
+            "score": None,
+            "pe_ratio": None,
+            "rsi": None,
+            "sentiment": None,
+            "risk_score": None,
+            "expected_return": None
         }
+        recommendations[symbol] = SignalStrength.NEUTRAL
 
-        score = comparison_metrics[symbol]["score"]
-        if score >= 75:
-            recommendations[symbol] = SignalStrength.BUY
-        elif score >= 50:
-            recommendations[symbol] = SignalStrength.NEUTRAL
-        else:
-            recommendations[symbol] = SignalStrength.SELL
-
-    best_performer = max(comparison_metrics.keys(),
-                        key=lambda x: comparison_metrics[x]["score"])
+    # No real data available — use the first symbol as placeholder best performer
+    best_performer = request.symbols[0]
 
     correlation_matrix = None
     if len(request.symbols) <= 10:
@@ -670,10 +662,7 @@ async def compare_stocks(request: BatchAnalysisRequest) -> ApiResponse[Compariso
         for symbol1 in request.symbols:
             correlation_matrix[symbol1] = {}
             for symbol2 in request.symbols:
-                if symbol1 == symbol2:
-                    correlation_matrix[symbol1][symbol2] = 1.0
-                else:
-                    correlation_matrix[symbol1][symbol2] = random.uniform(-0.5, 0.9)
+                correlation_matrix[symbol1][symbol2] = 1.0 if symbol1 == symbol2 else None
 
     return success_response(data=ComparisonResult(
         symbols=request.symbols,
@@ -698,17 +687,17 @@ async def get_technical_indicators(
     for indicator in indicators:
         if indicator == Indicator.RSI:
             result["rsi"] = {
-                "value": random.uniform(30, 70),
-                "signal": "neutral",
+                "value": None,
+                "signal": "unavailable",
                 "overbought": 70,
                 "oversold": 30
             }
         elif indicator == Indicator.MACD:
             result["macd"] = {
-                "macd": random.uniform(-2, 2),
-                "signal": random.uniform(-2, 2),
-                "histogram": random.uniform(-1, 1),
-                "trend": "bullish" if random.random() > 0.5 else "bearish"
+                "macd": None,
+                "signal": None,
+                "histogram": None,
+                "trend": "unavailable"
             }
         elif indicator == Indicator.BOLLINGER_BANDS:
             result["bollinger_bands"] = {
@@ -740,13 +729,13 @@ async def get_sentiment_analysis(symbol: str) -> ApiResponse[SentimentAnalysis]:
     """Get detailed sentiment analysis for a stock"""
 
     return success_response(data=SentimentAnalysis(
-        overall_sentiment=random.uniform(-0.5, 0.5),
-        sentiment_label="Positive" if random.random() > 0.5 else "Neutral",
-        news_sentiment=random.uniform(-0.5, 0.5),
-        social_sentiment=random.uniform(-0.5, 0.5),
-        analyst_sentiment=random.uniform(-0.5, 0.5),
-        insider_sentiment=random.uniform(-0.5, 0.5),
-        sentiment_momentum="improving" if random.random() > 0.5 else "stable",
-        key_topics=["earnings", "product launch", "market conditions"],
-        sentiment_sources={"news": 100, "social": 5000, "analysts": 20}
+        overall_sentiment=0.0,
+        sentiment_label="Unavailable",
+        news_sentiment=None,
+        social_sentiment=None,
+        analyst_sentiment=None,
+        insider_sentiment=None,
+        sentiment_momentum="unavailable",
+        key_topics=[],
+        sentiment_sources={"news": 0, "social": 0, "analysts": 0}
     ))

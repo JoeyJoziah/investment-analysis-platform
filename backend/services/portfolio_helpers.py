@@ -4,7 +4,6 @@ Utility functions and static helpers for portfolio service operations.
 """
 
 import logging
-import random
 import uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
@@ -14,44 +13,33 @@ logger = logging.getLogger(__name__)
 
 def generate_position_data(symbol: str = None) -> Dict[str, Any]:
     """
-    Generate a sample position as a dictionary.
+    Generate a placeholder position skeleton as a dictionary.
 
     Args:
-        symbol: Optional ticker symbol; picks randomly if omitted.
+        symbol: Ticker symbol; defaults to "UNKNOWN" if omitted.
 
     Returns:
         Dictionary with all fields needed for the Position Pydantic model.
+        All numeric fields are set to 0.0 / None to avoid fake data.
     """
     if not symbol:
-        symbols = [
-            "AAPL", "GOOGL", "MSFT", "AMZN", "META",
-            "NVDA", "TSLA", "JPM", "V", "JNJ",
-        ]
-        symbol = random.choice(symbols)
-
-    quantity = random.uniform(10, 100)
-    average_cost = random.uniform(50, 300)
-    current_price = average_cost * random.uniform(0.7, 1.5)
+        symbol = "UNKNOWN"
 
     return {
         "id": str(uuid.uuid4()),
         "symbol": symbol,
         "name": f"{symbol} Inc.",
-        "quantity": round(quantity, 2),
-        "average_cost": round(average_cost, 2),
-        "current_price": round(current_price, 2),
-        "market_value": round(quantity * current_price, 2),
-        "cost_basis": round(quantity * average_cost, 2),
-        "unrealized_gain": round((current_price - average_cost) * quantity, 2),
-        "unrealized_gain_percent": round(
-            (current_price - average_cost) / average_cost * 100, 2
-        ),
-        "realized_gain": random.uniform(-1000, 5000),
+        "quantity": 0.0,
+        "average_cost": 0.0,
+        "current_price": 0.0,
+        "market_value": 0.0,
+        "cost_basis": 0.0,
+        "unrealized_gain": 0.0,
+        "unrealized_gain_percent": 0.0,
+        "realized_gain": 0.0,
         "asset_class": "stocks",
-        "sector": random.choice(
-            ["Technology", "Healthcare", "Finance", "Consumer"]
-        ),
-        "allocation_percent": random.uniform(5, 25),
+        "sector": None,
+        "allocation_percent": 0.0,
     }
 
 
@@ -139,19 +127,20 @@ def format_transactions(
 
 
 def mock_performance_metrics() -> Dict[str, Any]:
-    """Return randomly-generated placeholder performance metrics."""
+    """Return a null-value stub for performance metrics (data not yet available)."""
     return {
-        "total_return": random.uniform(-0.1, 0.3),
-        "annualized_return": random.uniform(0.05, 0.15),
-        "volatility": random.uniform(0.1, 0.3),
-        "sharpe_ratio": random.uniform(0.5, 2.0),
-        "sortino_ratio": random.uniform(0.7, 2.5),
-        "max_drawdown": random.uniform(-0.3, -0.05),
-        "beta": random.uniform(0.8, 1.2),
-        "alpha": random.uniform(-0.02, 0.05),
-        "treynor_ratio": random.uniform(0.1, 0.3),
-        "calmar_ratio": random.uniform(0.5, 2.0),
-        "win_rate": random.uniform(0.4, 0.7),
-        "profit_factor": random.uniform(1.2, 2.5),
-        "risk_adjusted_return": random.uniform(0.08, 0.20),
+        "total_return": None,
+        "annualized_return": None,
+        "volatility": None,
+        "sharpe_ratio": None,
+        "sortino_ratio": None,
+        "max_drawdown": None,
+        "beta": None,
+        "alpha": None,
+        "treynor_ratio": None,
+        "calmar_ratio": None,
+        "win_rate": None,
+        "profit_factor": None,
+        "risk_adjusted_return": None,
+        "mock": True,
     }

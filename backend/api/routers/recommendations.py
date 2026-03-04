@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta, timezone
 from enum import Enum
-import random
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -510,8 +509,8 @@ async def get_trending_recommendations(
             risk_tolerance=risk_tolerance
         )
         for rec in trending:
-            rec["views"] = random.randint(1000, 50000)
-            rec["saves"] = random.randint(100, 5000)
+            rec["views"] = None
+            rec["saves"] = None
             rec["trending_score"] = rec["confidence"] * 100
             rec["timeframe"] = timeframe
         return success_response(data=trending)

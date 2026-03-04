@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta, timezone
 from enum import Enum
-import random
 import uuid
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -159,27 +158,27 @@ class RemovePositionRequest(BaseModel):
     price: Optional[float] = Field(None, gt=0)
 
 class PerformanceMetrics(BaseModel):
-    total_return: float
-    annualized_return: float
-    volatility: float
-    sharpe_ratio: float
-    sortino_ratio: float
-    max_drawdown: float
-    beta: float
-    alpha: float
-    treynor_ratio: float
-    calmar_ratio: float
-    win_rate: float
-    profit_factor: float
-    risk_adjusted_return: float
+    total_return: Optional[float] = None
+    annualized_return: Optional[float] = None
+    volatility: Optional[float] = None
+    sharpe_ratio: Optional[float] = None
+    sortino_ratio: Optional[float] = None
+    max_drawdown: Optional[float] = None
+    beta: Optional[float] = None
+    alpha: Optional[float] = None
+    treynor_ratio: Optional[float] = None
+    calmar_ratio: Optional[float] = None
+    win_rate: Optional[float] = None
+    profit_factor: Optional[float] = None
+    risk_adjusted_return: Optional[float] = None
 
 class PortfolioAnalysis(BaseModel):
     portfolio_id: str
     analysis_date: date
     risk_analysis: Dict[str, Any]
     diversification_score: float = Field(..., ge=0, le=100)
-    concentration_risk: Dict[str, float]
-    correlation_matrix: Dict[str, Dict[str, float]]
+    concentration_risk: Dict[str, Any]
+    correlation_matrix: Dict[str, Any]
     efficient_frontier: Dict[str, Any]
     optimization_suggestions: List[str]
     rebalancing_needed: bool
@@ -341,9 +340,12 @@ async def add_position(
 ) -> ApiResponse[Dict[str, Any]]:
     """Add a new position or add to existing position"""
 
-    # Get current price if not provided
+    # Price is required; reject if not provided
     if not request.price:
-        request.price = random.uniform(50, 300)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A price must be provided to add a position"
+        )
 
     # Create transaction record
     transaction = Transaction(
@@ -354,7 +356,7 @@ async def add_position(
         quantity=request.quantity,
         price=request.price,
         total_amount=request.quantity * request.price,
-        fees=random.uniform(0, 10),
+        fees=0.0,
         notes=request.notes,
         timestamp=datetime.now(timezone.utc)
     )
@@ -379,13 +381,21 @@ async def remove_position(
 ) -> ApiResponse[Dict[str, Any]]:
     """Remove or reduce a position"""
 
-    # Get current price if not provided
+    # Price is required; reject if not provided
     if not request.price:
-        request.price = random.uniform(50, 300)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A price must be provided to remove a position"
+        )
 
     # Determine quantity to sell
     if request.sell_all:
-        quantity_to_sell = random.uniform(10, 100)  # Simulated current position
+        if not request.quantity:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="quantity must be provided when sell_all is true"
+            )
+        quantity_to_sell = request.quantity
     else:
         quantity_to_sell = request.quantity or 0
 
@@ -398,7 +408,7 @@ async def remove_position(
         quantity=quantity_to_sell,
         price=request.price,
         total_amount=quantity_to_sell * request.price,
-        fees=random.uniform(0, 10),
+        fees=0.0,
         notes=f"Sold {'all' if request.sell_all else request.quantity} shares",
         timestamp=datetime.now(timezone.utc)
     )
@@ -410,7 +420,7 @@ async def remove_position(
         "message": f"Successfully sold {quantity_to_sell} shares of {symbol}",
         "transaction": transaction.dict(),
         "portfolio_id": portfolio_id,
-        "realized_gain": random.uniform(-1000, 5000)
+        "realized_gain": None
     })
 
 @router.get("/{portfolio_id}/transactions")
@@ -513,23 +523,8 @@ async def rebalance_portfolio(
 async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
     """Get portfolio watchlist"""
 
-    watchlist = []
-    symbols = ["DIS", "NFLX", "BA", "GS", "WMT", "PG", "KO", "PEP"]
-
-    for symbol in symbols[:5]:
-        current_price = random.uniform(50, 300)
-        watchlist.append(WatchlistItem(
-            symbol=symbol,
-            name=f"{symbol} Corporation",
-            current_price=round(current_price, 2),
-            target_price=round(current_price * random.uniform(0.9, 1.2), 2),
-            notes="Watching for entry point",
-            alert_enabled=random.choice([True, False]),
-            alert_conditions={"price_below": current_price * 0.95} if random.choice([True, False]) else None,
-            added_date=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
-        ))
-
-    return success_response(data=watchlist)
+    # Watchlist is stored in the database; return an empty list until DB integration is complete.
+    return success_response(data=[])
 
 @router.post("/{portfolio_id}/watchlist")
 async def add_to_watchlist(

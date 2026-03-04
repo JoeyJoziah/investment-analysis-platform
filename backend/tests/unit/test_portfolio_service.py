@@ -74,7 +74,7 @@ class TestGetCurrentStockPrice:
 
     @pytest.mark.asyncio
     async def test_get_current_stock_price_unknown_symbol(self, service):
-        """When no price record exists, a fallback float is returned."""
+        """When no price record exists, 0.0 is returned as a safe fallback."""
         mock_repo = AsyncMock()
         mock_repo.get_latest_price = AsyncMock(return_value=None)
 
@@ -85,11 +85,11 @@ class TestGetCurrentStockPrice:
             result = await service.get_current_stock_price("ZZZZ", db=AsyncMock())
 
         assert isinstance(result, float)
-        assert 50 <= result <= 500
+        assert result == 0.0
 
     @pytest.mark.asyncio
     async def test_get_current_stock_price_api_failure(self, service):
-        """On exception, a fallback float in [50, 500] is returned."""
+        """On exception, 0.0 is returned as a safe fallback."""
         mock_repo = AsyncMock()
         mock_repo.get_latest_price = AsyncMock(side_effect=RuntimeError("DB down"))
 
@@ -100,7 +100,7 @@ class TestGetCurrentStockPrice:
             result = await service.get_current_stock_price("AAPL", db=AsyncMock())
 
         assert isinstance(result, float)
-        assert 50 <= result <= 500
+        assert result == 0.0
 
 
 # =========================================================================
@@ -211,18 +211,20 @@ class TestCalculateRealPerformanceMetrics:
 
     @pytest.mark.asyncio
     async def test_no_positions_returns_mock_metrics(self, service):
-        """Empty positions list falls back to mock metrics."""
-        random.seed(42)  # deterministic
+        """Empty positions list falls back to null-stub mock metrics."""
         metrics = await service.calculate_real_performance_metrics(
             portfolio_id=1, positions=[], db=None,
         )
-        # Mock metrics always have all 13 keys
+        # Mock metrics have all 13 numeric keys plus a "mock" flag
         expected_keys = {
             "total_return", "annualized_return", "volatility", "sharpe_ratio",
             "sortino_ratio", "max_drawdown", "beta", "alpha", "treynor_ratio",
             "calmar_ratio", "win_rate", "profit_factor", "risk_adjusted_return",
+            "mock",
         }
         assert expected_keys == set(metrics.keys())
+        assert metrics["mock"] is True
+        assert metrics["total_return"] is None
 
     @pytest.mark.asyncio
     async def test_single_position_volatility(self, service):
@@ -269,7 +271,6 @@ class TestGeneratePerformanceDataPoints:
 
     def test_valid_period_1M(self, service):
         """1M period should return 30 data points."""
-        random.seed(1)
         result = service.generate_performance_data_points("p1", period="1M")
         assert result["portfolio_id"] == "p1"
         assert result["period"] == "1M"
@@ -279,19 +280,16 @@ class TestGeneratePerformanceDataPoints:
 
     def test_valid_period_1Y(self, service):
         """1Y period should return 252 data points."""
-        random.seed(1)
         result = service.generate_performance_data_points("p2", period="1Y")
         assert len(result["data_points"]) == 252
 
     def test_unknown_period_defaults(self, service):
         """Unknown period defaults to 365 data points."""
-        random.seed(1)
         result = service.generate_performance_data_points("p3", period="ALL")
         assert len(result["data_points"]) == 365
 
     def test_data_point_structure(self, service):
         """Each data point should have date, value, and benchmark_value."""
-        random.seed(1)
         result = service.generate_performance_data_points("p4", period="1W")
         dp = result["data_points"][0]
         assert "date" in dp
@@ -300,16 +298,13 @@ class TestGeneratePerformanceDataPoints:
         # Date should be a valid ISO date string
         date.fromisoformat(dp["date"])
 
-    def test_metrics_include_total_return(self, service):
-        """Metrics dict should include total_return computed from data."""
-        random.seed(1)
+    def test_metrics_are_null_stubs(self, service):
+        """Metrics dict values should be None (not-yet-implemented stubs)."""
         result = service.generate_performance_data_points("p5", period="1D")
         assert "total_return" in result["metrics"]
-        # total_return = (end - start) / start
-        start = result["data_points"][0]["value"]
-        end = result["data_points"][-1]["value"]
-        expected = round((end - start) / start, 4)
-        assert result["metrics"]["total_return"] == expected
+        assert result["metrics"]["total_return"] is None
+        assert result["metrics"]["volatility"] is None
+        assert result["vs_benchmark"]["excess_return"] is None
 
 
 # =========================================================================
@@ -355,9 +350,8 @@ class TestBuildPortfolioAnalysis:
 
 class TestGenerateRebalancingTrades:
 
-    def test_trades_generated_for_imbalanced_allocation(self, service):
-        """Trades should be generated when target differs from current by >1%."""
-        random.seed(0)
+    def test_trades_generated_for_each_asset_class(self, service):
+        """One stub trade entry is generated per asset class."""
         target = {"Equities": 60, "Bonds": 30, "Cash": 10}
         result = service.generate_rebalancing_trades(
             portfolio_id="p1",
@@ -369,12 +363,10 @@ class TestGenerateRebalancingTrades:
         assert result["portfolio_id"] == "p1"
         assert result["execution_status"] == "pending"
         assert isinstance(result["rebalancing_plan"], list)
-        # At least one trade should be generated
-        assert len(result["rebalancing_plan"]) >= 1
+        assert len(result["rebalancing_plan"]) == 3
 
     def test_max_trades_limit(self, service):
         """Number of trades should not exceed max_trades."""
-        random.seed(0)
         target = {f"Asset{i}": 10 for i in range(20)}
         result = service.generate_rebalancing_trades(
             portfolio_id="p1",
@@ -385,9 +377,8 @@ class TestGenerateRebalancingTrades:
         )
         assert len(result["rebalancing_plan"]) <= 3
 
-    def test_estimated_cost_calculation(self, service):
-        """Estimated cost should be 0.1% of total trade amounts."""
-        random.seed(0)
+    def test_estimated_cost_is_none(self, service):
+        """Estimated cost should be None (real data not available)."""
         target = {"Equities": 80}
         result = service.generate_rebalancing_trades(
             portfolio_id="p1",
@@ -396,13 +387,10 @@ class TestGenerateRebalancingTrades:
             min_trade_value=0,
             tax_efficient=False,
         )
-        trades = result["rebalancing_plan"]
-        expected_cost = sum(t["amount"] * 0.001 for t in trades)
-        assert result["estimated_cost"] == pytest.approx(expected_cost)
+        assert result["estimated_cost"] is None
 
-    def test_tax_impact_when_tax_efficient(self, service):
-        """Tax impact should be a negative number when tax_efficient=True."""
-        random.seed(0)
+    def test_tax_impact_is_none(self, service):
+        """Tax impact should be None (real data not available)."""
         target = {"Equities": 50}
         result = service.generate_rebalancing_trades(
             portfolio_id="p1",
@@ -411,20 +399,7 @@ class TestGenerateRebalancingTrades:
             min_trade_value=0,
             tax_efficient=True,
         )
-        assert result["tax_impact"] < 0
-
-    def test_no_tax_impact_when_not_tax_efficient(self, service):
-        """Tax impact should be 0 when tax_efficient=False."""
-        random.seed(0)
-        target = {"Equities": 50}
-        result = service.generate_rebalancing_trades(
-            portfolio_id="p1",
-            target_allocation=target,
-            max_trades=10,
-            min_trade_value=0,
-            tax_efficient=False,
-        )
-        assert result["tax_impact"] == 0
+        assert result["tax_impact"] is None
 
     def test_empty_target_allocation(self, service):
         """Empty target allocation produces no trades."""
@@ -436,7 +411,7 @@ class TestGenerateRebalancingTrades:
             tax_efficient=False,
         )
         assert result["rebalancing_plan"] == []
-        assert result["estimated_cost"] == 0
+        assert result["estimated_cost"] is None
 
 
 # =========================================================================
@@ -445,9 +420,8 @@ class TestGenerateRebalancingTrades:
 
 class TestGenerateTransactionList:
 
-    def test_with_default_params(self, service):
-        """Should return a list of transactions up to limit."""
-        random.seed(42)
+    def test_always_returns_empty_list(self, service):
+        """generate_transaction_list always returns [] (DB query not implemented here)."""
         txns = service.generate_transaction_list(
             portfolio_id="p1",
             limit=10,
@@ -456,71 +430,21 @@ class TestGenerateTransactionList:
             symbol_filter=None,
             start_date=None,
             end_date=None,
-        )
-        assert isinstance(txns, list)
-        assert len(txns) <= 10
-        if txns:
-            assert "id" in txns[0]
-            assert "symbol" in txns[0]
-            assert "transaction_type" in txns[0]
-
-    def test_empty_with_impossible_date_range(self, service):
-        """Date range in the far future should yield an empty list."""
-        txns = service.generate_transaction_list(
-            portfolio_id="p1",
-            limit=10,
-            offset=0,
-            transaction_type_filter=None,
-            symbol_filter=None,
-            start_date=date(2099, 1, 1),
-            end_date=date(2099, 12, 31),
         )
         assert txns == []
 
-    def test_symbol_filter(self, service):
-        """All returned transactions should match the symbol filter."""
-        random.seed(42)
+    def test_returns_list_type(self, service):
+        """Return value is always a list regardless of parameters."""
         txns = service.generate_transaction_list(
             portfolio_id="p1",
             limit=50,
-            offset=0,
+            offset=5,
             transaction_type_filter=None,
             symbol_filter="AAPL",
-            start_date=None,
-            end_date=None,
+            start_date=date(2099, 1, 1),
+            end_date=date(2099, 12, 31),
         )
-        for txn in txns:
-            assert txn["symbol"] == "AAPL"
-
-    def test_offset_pagination(self, service):
-        """Offset should skip the specified number of transactions."""
-        random.seed(42)
-        all_txns = service.generate_transaction_list(
-            portfolio_id="p1", limit=100, offset=0,
-            transaction_type_filter=None, symbol_filter=None,
-            start_date=None, end_date=None,
-        )
-        offset_txns = service.generate_transaction_list(
-            portfolio_id="p1", limit=100, offset=5,
-            transaction_type_filter=None, symbol_filter=None,
-            start_date=None, end_date=None,
-        )
-        # With the same seed, offset=5 should return all_txns[5:]
-        # (Random seed resets between calls, so we just check type/len)
-        assert isinstance(offset_txns, list)
-
-    def test_sorted_descending_by_timestamp(self, service):
-        """Transactions should be sorted newest-first."""
-        random.seed(42)
-        txns = service.generate_transaction_list(
-            portfolio_id="p1", limit=50, offset=0,
-            transaction_type_filter=None, symbol_filter=None,
-            start_date=None, end_date=None,
-        )
-        if len(txns) >= 2:
-            timestamps = [t["timestamp"] for t in txns]
-            for i in range(len(timestamps) - 1):
-                assert timestamps[i] >= timestamps[i + 1]
+        assert isinstance(txns, list)
 
 
 # =========================================================================
@@ -558,24 +482,32 @@ class TestAllTransactionTypes:
 
 
 # =========================================================================
-# _mock_performance_metrics (private, but verifying contract)
+# mock_performance_metrics (canonical version in portfolio_helpers)
 # =========================================================================
 
 class TestMockPerformanceMetrics:
 
-    def test_mock_metrics_keys(self, service):
-        """Mock metrics should have all 13 expected keys."""
-        random.seed(42)
-        metrics = service._mock_performance_metrics()
+    def test_mock_metrics_keys(self):
+        """Mock metrics should contain all 13 expected keys plus a 'mock' flag."""
+        from backend.services.portfolio_helpers import mock_performance_metrics
+        metrics = mock_performance_metrics()
         expected = {
             "total_return", "annualized_return", "volatility", "sharpe_ratio",
             "sortino_ratio", "max_drawdown", "beta", "alpha", "treynor_ratio",
             "calmar_ratio", "win_rate", "profit_factor", "risk_adjusted_return",
+            "mock",
         }
         assert set(metrics.keys()) == expected
 
-    def test_mock_metrics_are_floats(self, service):
-        """All mock metric values should be floats."""
-        metrics = service._mock_performance_metrics()
-        for key, value in metrics.items():
-            assert isinstance(value, float), f"{key} is not float: {type(value)}"
+    def test_mock_metrics_are_none(self):
+        """All numeric mock metric values should be None (data not yet available)."""
+        from backend.services.portfolio_helpers import mock_performance_metrics
+        metrics = mock_performance_metrics()
+        numeric_keys = {
+            "total_return", "annualized_return", "volatility", "sharpe_ratio",
+            "sortino_ratio", "max_drawdown", "beta", "alpha", "treynor_ratio",
+            "calmar_ratio", "win_rate", "profit_factor", "risk_adjusted_return",
+        }
+        for key in numeric_keys:
+            assert metrics[key] is None, f"{key} should be None, got {metrics[key]}"
+        assert metrics["mock"] is True

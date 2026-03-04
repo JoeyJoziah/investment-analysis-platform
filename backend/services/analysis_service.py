@@ -7,7 +7,6 @@ Includes data fetching helpers, calculation utilities, and pipeline orchestratio
 import asyncio
 import logging
 import math
-import random
 import statistics
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -240,23 +239,19 @@ async def fetch_sentiment_data(
 # Calculation Utilities
 # ============================================================================
 
-def calculate_rsi(prices: List[float], period: int = 14) -> float:
-    """Calculate Relative Strength Index."""
-    return random.uniform(30, 70)
+def calculate_rsi(prices: List[float], period: int = 14) -> Optional[float]:
+    """Calculate Relative Strength Index. Returns None when insufficient data."""
+    return None
 
 
-def calculate_macd(prices: List[float]) -> Dict[str, float]:
-    """Calculate MACD indicator."""
-    return {
-        "macd": random.uniform(-2, 2),
-        "signal": random.uniform(-2, 2),
-        "histogram": random.uniform(-1, 1)
-    }
+def calculate_macd(prices: List[float]) -> Optional[Dict[str, float]]:
+    """Calculate MACD indicator. Returns None when insufficient data."""
+    return None
 
 
-def analyze_sentiment_text(text_data: List[str]) -> float:
-    """Analyze sentiment from text data."""
-    return random.uniform(-0.5, 0.5)
+def analyze_sentiment_text(text_data: List[str]) -> Dict[str, Any]:
+    """Analyze sentiment from text data. Returns unavailable stub when not implemented."""
+    return {"score": None, "label": "unavailable"}
 
 
 def generate_insights(analysis: Dict) -> List[str]:
@@ -302,7 +297,7 @@ def calculate_risk_metrics_from_prices(prices: List[float]) -> Dict[str, Any]:
         )
 
         return {
-            "beta": random.uniform(0.8, 1.2),
+            "beta": None,
             "alpha": mean_return * 252,
             "sharpe_ratio": sharpe_ratio,
             "sortino_ratio": sharpe_ratio * 1.2,
@@ -313,7 +308,7 @@ def calculate_risk_metrics_from_prices(prices: List[float]) -> Dict[str, Any]:
                 else min(returns, default=0.0)
             ),
             "cvar_95": min(returns) if returns else 0.0,
-            "correlation_with_market": random.uniform(0.6, 0.9),
+            "correlation_with_market": None,
             "risk_adjusted_return": mean_return / volatility if volatility > 0 else 0.0,
             "overall_risk_score": min(100, max(0, (volatility * 100) * 2))
         }

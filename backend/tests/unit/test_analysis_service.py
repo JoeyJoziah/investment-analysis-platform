@@ -349,17 +349,16 @@ class TestFetchSentimentData:
 
 class TestCalculateRsi:
 
-    def test_returns_float_in_expected_range(self):
-        """RSI should return a float between 30 and 70 (current stub)."""
+    def test_returns_none_for_any_input(self):
+        """RSI stub returns None (not yet implemented)."""
         prices = _generate_price_series(count=30)
         result = calculate_rsi(prices, period=14)
-        assert isinstance(result, float)
-        assert 30 <= result <= 70
+        assert result is None
 
     def test_handles_short_price_list(self):
-        """Even with insufficient data, should not raise."""
+        """Even with insufficient data, should not raise and should return None."""
         result = calculate_rsi([100.0, 101.0], period=14)
-        assert isinstance(result, float)
+        assert result is None
 
 
 # =========================================================================
@@ -368,19 +367,16 @@ class TestCalculateRsi:
 
 class TestCalculateMacd:
 
-    def test_returns_expected_keys(self):
-        """MACD result must contain macd, signal, and histogram."""
+    def test_returns_none_for_any_input(self):
+        """MACD stub returns None (not yet implemented)."""
         prices = _generate_price_series(count=30)
         result = calculate_macd(prices)
-        assert "macd" in result
-        assert "signal" in result
-        assert "histogram" in result
+        assert result is None
 
-    def test_values_are_floats(self):
-        """All MACD values should be floats."""
+    def test_handles_short_price_list(self):
+        """Even with insufficient data, should not raise and should return None."""
         result = calculate_macd([100.0] * 30)
-        for key in ("macd", "signal", "histogram"):
-            assert isinstance(result[key], float)
+        assert result is None
 
 
 # =========================================================================

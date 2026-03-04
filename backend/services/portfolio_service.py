@@ -4,8 +4,6 @@ Business logic for portfolio management operations.
 """
 
 import logging
-import random
-import uuid
 import statistics
 from typing import Dict, List, Optional, Any
 from decimal import Decimal
@@ -17,49 +15,6 @@ from backend.repositories.portfolio_repository import portfolio_repository
 from backend.repositories import stock_repository
 
 logger = logging.getLogger(__name__)
-
-
-def generate_position_data(symbol: str = None) -> Dict[str, Any]:
-    """
-    Generate a sample position as a dictionary.
-
-    Args:
-        symbol: Optional ticker symbol; picks randomly if omitted.
-
-    Returns:
-        Dictionary with all fields needed for the Position Pydantic model.
-    """
-    if not symbol:
-        symbols = [
-            "AAPL", "GOOGL", "MSFT", "AMZN", "META",
-            "NVDA", "TSLA", "JPM", "V", "JNJ",
-        ]
-        symbol = random.choice(symbols)
-
-    quantity = random.uniform(10, 100)
-    average_cost = random.uniform(50, 300)
-    current_price = average_cost * random.uniform(0.7, 1.5)
-
-    return {
-        "id": str(uuid.uuid4()),
-        "symbol": symbol,
-        "name": f"{symbol} Inc.",
-        "quantity": round(quantity, 2),
-        "average_cost": round(average_cost, 2),
-        "current_price": round(current_price, 2),
-        "market_value": round(quantity * current_price, 2),
-        "cost_basis": round(quantity * average_cost, 2),
-        "unrealized_gain": round((current_price - average_cost) * quantity, 2),
-        "unrealized_gain_percent": round(
-            (current_price - average_cost) / average_cost * 100, 2
-        ),
-        "realized_gain": random.uniform(-1000, 5000),
-        "asset_class": "stocks",
-        "sector": random.choice(
-            ["Technology", "Healthcare", "Finance", "Consumer"]
-        ),
-        "allocation_percent": random.uniform(5, 25),
-    }
 
 
 class PortfolioService:
@@ -389,12 +344,12 @@ class PortfolioService:
             if latest_price:
                 return float(latest_price.close)
 
-            # Fallback to mock price
-            return random.uniform(50, 500)
+            logger.warning(f"No price data found for {symbol}, returning 0.0")
+            return 0.0
 
         except Exception as e:
             logger.error(f"Error getting current price for {symbol}: {e}")
-            return random.uniform(50, 500)
+            return 0.0
 
     async def calculate_portfolio_risk_score(
         self,
@@ -461,7 +416,8 @@ class PortfolioService:
         """
         try:
             if not positions:
-                return self._mock_performance_metrics()
+                from backend.services.portfolio_helpers import mock_performance_metrics
+                return mock_performance_metrics()
 
             # Calculate portfolio returns
             total_return = sum(p.unrealized_gain_percent for p in positions) / len(positions) / 100
@@ -493,7 +449,7 @@ class PortfolioService:
                 "sharpe_ratio": sharpe_ratio,
                 "sortino_ratio": sharpe_ratio * 1.2,  # Approximation
                 "max_drawdown": min(returns) if returns else 0,
-                "beta": random.uniform(0.8, 1.2),  # Would calculate vs market
+                "beta": None,  # Requires market benchmark data to calculate
                 "alpha": total_return - 0.08,  # vs benchmark approximation
                 "treynor_ratio": total_return / 1.0,  # Simplified
                 "calmar_ratio": total_return / abs(min(returns, default=0.1)),
@@ -504,7 +460,8 @@ class PortfolioService:
 
         except Exception as e:
             logger.error(f"Error calculating performance metrics: {e}")
-            return self._mock_performance_metrics()
+            from backend.services.portfolio_helpers import mock_performance_metrics
+            return mock_performance_metrics()
 
     async def compute_portfolio_summaries(
         self,
@@ -895,24 +852,6 @@ class PortfolioService:
             })
         return result
 
-    def _mock_performance_metrics(self) -> Dict[str, Any]:
-        """Return randomly-generated placeholder performance metrics."""
-        return {
-            "total_return": random.uniform(-0.1, 0.3),
-            "annualized_return": random.uniform(0.05, 0.15),
-            "volatility": random.uniform(0.1, 0.3),
-            "sharpe_ratio": random.uniform(0.5, 2.0),
-            "sortino_ratio": random.uniform(0.7, 2.5),
-            "max_drawdown": random.uniform(-0.3, -0.05),
-            "beta": random.uniform(0.8, 1.2),
-            "alpha": random.uniform(-0.02, 0.05),
-            "treynor_ratio": random.uniform(0.1, 0.3),
-            "calmar_ratio": random.uniform(0.5, 2.0),
-            "win_rate": random.uniform(0.4, 0.7),
-            "profit_factor": random.uniform(1.2, 2.5),
-            "risk_adjusted_return": random.uniform(0.08, 0.20),
-        }
-
     def generate_performance_data_points(
         self,
         portfolio_id: str,
@@ -945,36 +884,28 @@ class PortfolioService:
         base_value = 100000
         for i in range(num_points):
             date_point = datetime.now(timezone.utc) - timedelta(days=num_points - i)
-            value = base_value * (1 + random.uniform(-0.02, 0.02))
-            base_value = value
-
             data_points.append({
                 "date": date_point.date().isoformat(),
-                "value": round(value, 2),
-                "benchmark_value": round(value * random.uniform(0.95, 1.05), 2),
+                "value": round(base_value, 2),
+                "benchmark_value": None,
             })
-
-        # Calculate metrics
-        start_value = data_points[0]["value"]
-        end_value = data_points[-1]["value"]
-        total_return = (end_value - start_value) / start_value
 
         return {
             "portfolio_id": portfolio_id,
             "period": period,
             "data_points": data_points,
             "metrics": {
-                "total_return": round(total_return, 4),
-                "annualized_return": round(total_return * (365 / num_points), 4),
-                "volatility": random.uniform(0.1, 0.3),
-                "sharpe_ratio": random.uniform(0.5, 2.0),
-                "max_drawdown": random.uniform(-0.2, -0.05),
-                "benchmark_correlation": random.uniform(0.6, 0.95),
+                "total_return": None,
+                "annualized_return": None,
+                "volatility": None,
+                "sharpe_ratio": None,
+                "max_drawdown": None,
+                "benchmark_correlation": None,
             },
             "vs_benchmark": {
-                "excess_return": random.uniform(-0.05, 0.1),
-                "tracking_error": random.uniform(0.02, 0.1),
-                "information_ratio": random.uniform(-0.5, 1.5),
+                "excess_return": None,
+                "tracking_error": None,
+                "information_ratio": None,
             },
         }
 
@@ -992,39 +923,28 @@ class PortfolioService:
             "portfolio_id": portfolio_id,
             "analysis_date": date.today(),
             "risk_analysis": {
-                "var_95": random.uniform(-0.1, -0.02),
-                "cvar_95": random.uniform(-0.15, -0.03),
-                "downside_deviation": random.uniform(0.05, 0.15),
-                "upside_potential": random.uniform(0.1, 0.3),
+                "var_95": None,
+                "cvar_95": None,
+                "downside_deviation": None,
+                "upside_potential": None,
             },
-            "diversification_score": random.uniform(60, 90),
+            "diversification_score": 0.0,
             "concentration_risk": {
-                "top_holding": random.uniform(0.1, 0.3),
-                "top_3_holdings": random.uniform(0.3, 0.5),
-                "top_5_holdings": random.uniform(0.5, 0.7),
+                "top_holding": None,
+                "top_3_holdings": None,
+                "top_5_holdings": None,
             },
-            "correlation_matrix": {
-                "AAPL": {"GOOGL": 0.7, "MSFT": 0.65, "AMZN": 0.6},
-                "GOOGL": {"AAPL": 0.7, "MSFT": 0.75, "AMZN": 0.65},
-                "MSFT": {"AAPL": 0.65, "GOOGL": 0.75, "AMZN": 0.6},
-            },
+            "correlation_matrix": {},
             "efficient_frontier": {
-                "current_position": {"return": 0.12, "risk": 0.15},
-                "optimal_position": {"return": 0.14, "risk": 0.14},
-                "improvement_potential": 0.02,
+                "current_position": {"return": None, "risk": None},
+                "optimal_position": {"return": None, "risk": None},
+                "improvement_potential": None,
             },
             "optimization_suggestions": [
-                "Reduce concentration in Technology sector",
-                "Consider adding international exposure",
-                "Increase allocation to fixed income for better risk-adjusted returns",
-                "Review positions with high correlation",
+                "Analysis not yet available — connect real portfolio data to generate suggestions.",
             ],
-            "rebalancing_needed": random.choice([True, False]),
-            "recommended_changes": [
-                {"action": "reduce", "symbol": "AAPL", "percent": 5},
-                {"action": "increase", "symbol": "BND", "percent": 10},
-                {"action": "add", "symbol": "VXUS", "percent": 5},
-            ],
+            "rebalancing_needed": False,
+            "recommended_changes": [],
         }
 
     def generate_rebalancing_trades(
@@ -1050,19 +970,15 @@ class PortfolioService:
         """
         trades = []
         for asset_class, target_percent in target_allocation.items():
-            current_percent = random.uniform(0, 30)
-            difference = target_percent - current_percent
-
-            if abs(difference) > 1:  # Only rebalance if difference > 1%
-                action = "buy" if difference > 0 else "sell"
-                trades.append({
-                    "asset_class": asset_class,
-                    "action": action,
-                    "amount": abs(difference) * 1000,  # Convert to dollar amount
-                    "current_allocation": round(current_percent, 2),
-                    "target_allocation": target_percent,
-                    "impact": round(difference, 2),
-                })
+            # Current allocation is unknown without real portfolio data
+            trades.append({
+                "asset_class": asset_class,
+                "action": "unavailable",
+                "amount": None,
+                "current_allocation": None,
+                "target_allocation": target_percent,
+                "impact": None,
+            })
 
         # Limit number of trades
         trades = trades[:max_trades]
@@ -1070,8 +986,8 @@ class PortfolioService:
         return {
             "portfolio_id": portfolio_id,
             "rebalancing_plan": trades,
-            "estimated_cost": sum(t["amount"] * 0.001 for t in trades),  # 0.1% transaction cost
-            "tax_impact": random.uniform(-1000, -100) if tax_efficient else 0,
+            "estimated_cost": None,
+            "tax_impact": None,
             "execution_status": "pending",
         }
 
@@ -1100,42 +1016,13 @@ class PortfolioService:
         Returns:
             Filtered, sorted list of transaction dictionaries (sliced per limit/offset)
         """
-        symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA"]
-
-        transactions = []
-        for _ in range(100):
-            trans_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 365))
-
-            if start_date and trans_date.date() < start_date:
-                continue
-            if end_date and trans_date.date() > end_date:
-                continue
-
-            sym = symbol_filter.upper() if symbol_filter else random.choice(symbols)
-            t_type = transaction_type_filter or random.choice(list(_all_transaction_types()))
-
-            trans = {
-                "id": str(uuid.uuid4()),
-                "portfolio_id": portfolio_id,
-                "symbol": sym,
-                "transaction_type": t_type,
-                "quantity": random.uniform(1, 50),
-                "price": random.uniform(50, 500),
-                "fees": random.uniform(0, 10),
-                "notes": "Transaction note",
-                "timestamp": trans_date,
-            }
-
-            if transaction_type_filter and trans["transaction_type"] != transaction_type_filter:
-                continue
-            if symbol_filter and trans["symbol"] != symbol_filter.upper():
-                continue
-
-            transactions.append(trans)
-
-        # Sort by timestamp descending
-        transactions.sort(key=lambda x: x["timestamp"], reverse=True)
-        return transactions[offset: offset + limit]
+        # No real transaction data available — return an empty list.
+        # Callers should query the database directly for real transaction history.
+        logger.info(
+            f"generate_transaction_list called for portfolio {portfolio_id}: "
+            "returning empty list (real DB query not implemented here)"
+        )
+        return []
 
     async def update_portfolio_metrics(self, portfolio_id: str) -> None:
         """

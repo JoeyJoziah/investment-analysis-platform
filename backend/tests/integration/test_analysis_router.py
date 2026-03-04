@@ -503,8 +503,8 @@ async def test_get_sentiment_analysis_success(
         "/api/v1/analysis/sentiment/AAPL",
     )
     data = assert_success_response(response, expected_status=200)
-    assert -1 <= data["overall_sentiment"] <= 1
-    assert data["sentiment_label"] in ["Positive", "Negative", "Neutral"]
+    assert data["overall_sentiment"] is None or -1 <= data["overall_sentiment"] <= 1
+    assert data["sentiment_label"] in ["Positive", "Negative", "Neutral", "Unavailable"]
     assert "news_sentiment" in data
     assert "social_sentiment" in data
     assert isinstance(data["key_topics"], list)
