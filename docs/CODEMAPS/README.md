@@ -1,14 +1,14 @@
 # Architecture Codemaps
 
-**Last Updated:** 2026-02-24
+**Last Updated:** 2026-03-04
 
 Quick reference to codebase structure for developers.
 
 | Codemap | Purpose |
 |---------|---------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System-wide architecture overview |
-| [BACKEND.md](BACKEND.md) | API routers, ML pipeline, ETL modules |
-| [FRONTEND.md](FRONTEND.md) | React pages, components, state |
+| [BACKEND.md](BACKEND.md) | API routers, services, ML pipeline, security |
+| [FRONTEND.md](FRONTEND.md) | React pages, components, state, tests |
 | [DATA_FLOW.md](DATA_FLOW.md) | Data sources, caching, pipelines |
 | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Docker, CI/CD, monitoring, deployment |
 
@@ -16,104 +16,77 @@ Quick reference to codebase structure for developers.
 
 | Component | Location | Key Files |
 |-----------|----------|-----------|
-| API Routers | `backend/api/routers/` | 18 mounted routers |
-| ML Pipeline | `backend/ml/` | 22 modules |
-| ETL Pipeline | `backend/etl/` | 17 modules (StockData/ExtractionResult dataclasses added) |
-| React Pages | `frontend/web/src/pages/` | 12 pages |
-| Redux State | `frontend/web/src/store/` | 6 slices |
+| API Routers | `backend/api/routers/` | 19 router files, 153+ endpoints |
+| Service Layer | `backend/services/` | 20 service files (10,241 total lines) |
+| ML Pipeline | `backend/ml/` | 48 modules |
+| ETL Pipeline | `backend/etl/` | 24 modules |
+| Security | `backend/security/` | 20 modules (RBAC, Fernet crypto, bcrypt passwords) |
+| React Pages | `frontend/web/src/pages/` | 14 pages (all lazy-loaded) |
+| Redux State | `frontend/web/src/store/slices/` | 6 slices |
+| Frontend Tests | `frontend/web/src/**/*.test.tsx` | 13 test files, 201 tests |
+| Backend Tests | `backend/tests/` | 71+ test files, 5,020 passing |
 | CI/CD Workflows | `.github/workflows/` | 29 workflows (Python 3.12, Node 20, Actions v4/v5) |
-| Docker Config | `infrastructure/` | 4 compose files |
-| Monitoring | `config/monitoring/` | Prometheus, Grafana |
+| Docker Config | `docker-compose*.yml` | 5 compose files |
+| Monitoring | `infrastructure/monitoring/` | Prometheus, Grafana, Loki, SLO targets |
 
-## CI/CD Hardening (2026-02-24)
+## Current State (2026-03-04)
 
-### Runtime Version Upgrades
+### Completed Priority Work
 
-| Runtime | Previous | Current | Affected Workflows |
-|---------|----------|---------|-------------------|
-| Python | 3.11 | 3.12 | 9 workflows |
-| Node.js | 18 | 20 | 9 workflows |
-| `actions/setup-python` | v4 | v5 | All Python workflows |
-| `actions/setup-node` | v3 | v4 | All Node.js workflows |
-| `actions/upload-artifact` | v3 | v4 | All artifact workflows |
-| `github/codeql-action` | v2 | v3 | `security-scan.yml` |
+| Priority | Items | Status |
+|----------|-------|--------|
+| P0 — Security Hardening | RBAC, crypto_utils, password_manager, CSP | COMPLETE |
+| P1 — CI Gates | Auth page tests (+30), slow test tagging | COMPLETE |
+| P2 — API Completion | trading.py router, ml.py expanded to 8 endpoints | COMPLETE |
+| P3 — Test Coverage | Test pollution fixed, 5,020 tests passing | COMPLETE |
+| P4 — Deployment & Ops | certbot, Loki+Promtail, SLO alerts, GDPR key | COMPLETE |
+| P5 — Frontend Polish | EnhancedDashboard deleted, analytics components to portfolio/ | COMPLETE |
 
-### Workflow Fixes (12 commits)
+### Remaining Work
 
-| Fix | Workflows | Impact |
-|-----|-----------|--------|
-| TA-Lib C library install | `daily-pipeline-validation.yml`, `security-scan.yml` | Resolved `talib` import failures |
-| Missing env vars (SECRET_KEY, JWT_SECRET_KEY) | `daily-pipeline-validation.yml` | Fixed pipeline startup crashes |
-| SSL disabled for CI PostgreSQL | `daily-pipeline-validation.yml` | Fixed db connection errors |
-| Semgrep/GitLeaks non-blocking | `security-scan.yml` | Prevented false-positive CI failures |
-| npm audit output fix | `dependency-updates.yml` | Fixed garbled output concatenation |
-| ETL validation resilience | `daily-pipeline-validation.yml` | Handles import errors gracefully |
+| Item | Priority | Notes |
+|------|----------|-------|
+| SSL certificates provisioned | HIGH | nginx-ssl.conf references empty ssl/ dir |
+| CI test gates made blocking | MEDIUM | `continue-on-error: true` still on lines 311, 457 |
+| Coverage floor raised to 60% | MEDIUM | Currently 35% |
+| Stock data loaded | MEDIUM | 0 stocks in DB, need NYSE/NASDAQ/AMEX |
+| LSTM model weights | LOW | Training code exists, weights not saved |
+| Trading router tests | LOW | test_trading_router.py exists |
+| Frontend TS errors quantified | LOW | Run `tsc --noEmit` |
+| Vitest/Playwright collision | LOW | Add `exclude: ['**/tests/e2e/**']` |
+| Redux slices/hooks test coverage | LOW | Currently 0% |
 
-### ETL Dataclass Additions
-
-Added missing `StockData` and `ExtractionResult` dataclasses to `backend/etl/unlimited_data_extractor.py` -- these were referenced by `unlimited_extractor_with_fallbacks.py` but not defined.
-
-### Orphan Submodule Removal
-
-Removed orphan `excalidraw` git submodule. `.gitmodules` file deleted entirely (no remaining submodules).
-
-## Wave 5 Updates (2026-01-28)
-
-### Routing Architecture Fixes
-
-| Change | Files | Impact |
-|--------|-------|--------|
-| Double-prefix fix | 6 routers | Resolved 404 errors |
-| Added /ping endpoint | health.py | Better health checks |
-| Rate limiter TESTING mode | rate_limiter.py | Tests run without rate limiting |
-
-### Schema Alignment
-
-| Model | Field Change | Purpose |
-|-------|--------------|---------|
-| Watchlist | Added `is_public` | Privacy control |
-| Transaction | `trade_date` (not `executed_at`) | Correct field name |
-| Stock | `industry_id` FK | Proper foreign key |
-
-### Test Patterns Discovered
-
-- **Schema validation**: Always verify field names against `unified_models.py`
-- **Async fixtures**: Use sync `MagicMock` for Redis cache
-- **CSRF handling**: `testing_mode=True` disables CSRF in tests
-
-## Test Status (2026-02-24)
+## Test Status (2026-03-04)
 
 | Metric | Value |
 |--------|-------|
-| Passing | 1543 |
-| Skipped | 8 (infra-only: celery, testcontainers, sqlparse, memory_profiler, objgraph, psycopg2, requests_mock) |
-| Failed | 0 |
-| xfailed | 5 |
-
-109 tests recovered across 4 commits (WebSocket, Celery, security, integration, monitoring).
+| Backend tests passing | 5,020 |
+| Backend tests skipped | 8 (infra-only: celery, testcontainers, etc.) |
+| Backend xfailed | 2 |
+| Backend failed | 0 |
+| Frontend tests passing | 197 |
+| Frontend test files | 13 |
+| Unit test files | 28 |
+| Total test files | 71+ |
 
 ## Performance-Critical Paths
 
-| Path | File | Line | Description |
-|------|------|------|-------------|
-| Cache Decorator | `backend/utils/cache.py` | 205-300 | Redis caching with TTL |
-| API Parallelization | `backend/api/routers/analysis.py` | 335-404 | Parallel API calls |
-| Database Indexes | `backend/migrations/versions/008_*` | - | 45 optimized indexes |
+| Path | File | Description |
+|------|------|-------------|
+| Cache Decorator | `backend/utils/cache.py` | Redis caching with TTL |
+| API Parallelization | `backend/api/routers/analysis.py:335-404` | Parallel API calls |
+| Batch Price History | `backend/repositories/price_repository.py` | N+1 fix |
+| Database Indexes | `backend/migrations/versions/008_*` | 45 optimized indexes |
 
-## N+1 Query Pattern Fix (CRITICAL-3)
+## Security Stack Summary
 
-Eliminated N+1 queries in recommendations generation:
+| Component | Implementation | Status |
+|-----------|---------------|--------|
+| RBAC | `security/rbac.py` — in-memory + DB-backed role management | COMPLETE |
+| Encryption | `security/crypto_utils.py` — Fernet AES + RSA-2048 | COMPLETE |
+| Passwords | `security/password_manager.py` — bcrypt work factor 12 | COMPLETE |
+| JWT | RS256 with auto-generated RSA keys | COMPLETE |
+| CSP | `script-src 'self'` only (no unsafe-inline) | HARDENED |
+| Rate Limiting | Redis-backed, 4 categories | COMPLETE |
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Query Count | 201+ | 2-3 | 99% reduction |
-| Response Time | 5-10s | 0.5-1s | 60-80% faster |
-| DB Load | High | Minimal | Significant reduction |
-
-**Key Changes:**
-- `price_repository.get_bulk_price_history()` - Single query for all price histories
-- `price_repository.get_latest_prices_bulk()` - Batch latest prices
-- `stock_repository.get_top_stocks()` - Optimized top stocks query
-- `recommendations.py:302-540` - Refactored to use batch queries
-
-**Last Updated**: 2026-02-24
+**Last Updated**: 2026-03-04

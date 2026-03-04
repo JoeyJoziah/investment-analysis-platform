@@ -1,8 +1,8 @@
 # Investment Analysis Platform - Codebase Architecture Map
 
-**Last Updated:** 2026-02-24
-**Version:** 2.4.0
-**Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings. Updated post-CI/CD hardening and test recovery.
+**Last Updated:** 2026-03-04
+**Version:** 3.0.0
+**Source of Truth:** Generated from code inspection of `backend/api/main.py`, `backend/security/security_config.py`, `backend/config/database.py`, and directory listings. Updated post P0-P5 priority completion (security stubs resolved, trading router added, Loki+certbot in production).
 
 ---
 
@@ -26,7 +26,9 @@ The Investment Analysis Platform is a full-stack financial analytics application
 - **Frontend**: React + TypeScript with Redux Toolkit state management and Material UI
 - **Architecture**: Layered domain-driven design with an 11-layer security middleware stack, timezone-aware UTC throughout
 - **Key Features**: Real-time stock analysis, ML predictions, portfolio management, investment thesis generation, background task scheduling, GDPR/SEC compliance, Kafka streaming, agent-based analysis, stock alerts
-- **Test Status**: 1543 tests passing, 8 skipped (infra-only), 0 failed, 5 xfailed (as of 2026-02-24)
+- **Test Status**: 5,020 backend tests passing, 8 skipped (infra-only), 0 failed, 2 xfailed (as of 2026-03-04)
+- **Security**: All stubs resolved — RBAC fully functional, Fernet crypto implemented, bcrypt passwords
+- **New Routers**: `trading.py` (validate/execute/impact), `ml.py` expanded to 8 endpoints
 
 ---
 
@@ -55,24 +57,25 @@ Standardized error handlers are registered via `backend/middleware/error_handler
 
 ```
 backend/api/routers/
-├── admin.py              # Admin operations
-├── agents.py             # Trading agents (added POST /analysis endpoint)
-├── analysis.py           # Technical/fundamental analysis
-├── auth.py               # Authentication & JWT management
-├── cache_management.py   # Cache admin endpoints
-├── gdpr.py               # GDPR data subject rights (export, consent, delete)
-├── health.py             # Health checks
-├── ml.py                 # ML predictions endpoint (NEW in Session 2)
+├── admin.py              # Admin operations (16 endpoints)
+├── agents.py             # Trading agents (7 endpoints)
+├── analysis.py           # Technical/fundamental analysis (5 endpoints)
+├── auth.py               # Authentication & JWT management (6 endpoints)
+├── cache_management.py   # Cache admin endpoints (8 endpoints)
+├── gdpr.py               # GDPR data subject rights - export, consent, delete (13 endpoints)
+├── health.py             # Health checks (7 endpoints)
+├── ml.py                 # ML predictions + model management (8 endpoints, expanded)
 ├── monitoring.py         # System metrics (NOT mounted in main.py)
-├── news.py               # News endpoints
-├── portfolio.py          # Portfolio management
-├── recommendations.py    # ML-powered recommendations
-├── settings.py           # User settings
-├── stocks.py             # Stock data, market info, search, alerts (enhanced)
+├── news.py               # News endpoints (4 endpoints)
+├── portfolio.py          # Portfolio management (10 endpoints)
+├── recommendations.py    # ML-powered recommendations (8 endpoints)
+├── settings.py           # User settings (10 endpoints)
+├── stocks.py             # Stock data, market info, search, alerts (12 endpoints)
 ├── stocks_legacy.py      # Legacy stock endpoints (NOT mounted in main.py)
-├── thesis.py             # Investment thesis generation
-├── watchlist.py          # User watchlists
-└── websocket.py          # Real-time WebSocket updates
+├── thesis.py             # Investment thesis generation (6 endpoints)
+├── trading.py            # Order validate/execute/portfolio-impact (3 endpoints, NEW)
+├── watchlist.py          # User watchlists (13 endpoints)
+└── websocket.py          # Real-time WebSocket updates (3 HTTP + 3 WS)
 ```
 
 #### 18 Routers Mounted in `main.py`
@@ -141,7 +144,7 @@ backend/security/
 ├── advanced_rate_limiter.py     # Redis-backed rate limiting with rules
 ├── audit_logging.py             # SEC-compliant audit trail (2555-day retention)
 ├── code_analyzer.py             # Static code analysis
-├── crypto_utils.py              # Cryptographic utilities
+├── crypto_utils.py              # Cryptographic utilities — Fernet AES-128-CBC + RSA-2048 (COMPLETE)
 ├── csrf_protection.py           # Token-based CSRF prevention
 ├── data_encryption.py           # Data encryption at rest
 ├── database_security.py         # Database security utilities
@@ -149,9 +152,9 @@ backend/security/
 ├── injection_prevention.py      # SQL/XSS/command injection prevention
 ├── input_validation.py          # Request validation middleware
 ├── jwt_manager.py               # RS256 JWT signing with key pairs
-├── password_manager.py          # Password hashing and policy
+├── password_manager.py          # bcrypt work factor 12 + legacy PBKDF2 verify (COMPLETE)
 ├── rate_limiter.py              # Basic rate limiter (superseded by advanced)
-├── rbac.py                      # Role-based access control
+├── rbac.py                      # Role-based access control — in-memory + DB-backed (COMPLETE)
 ├── secrets_manager.py           # Encrypted secrets storage
 ├── secrets_vault.py             # Secrets vault
 ├── security_config.py           # Central config + middleware assembly
@@ -378,12 +381,28 @@ backend/middleware/
 
 ### 10. Services (`backend/services/`)
 
+20 service files providing the business logic layer (10,241 total lines):
+
 ```
 backend/services/
-├── realtime_price_service.py       # Real-time price data service
-├── recommendation_service.py       # Multi-agent recommendation consensus (NEW in Wave 5-6)
-├── portfolio_service.py            # Portfolio operations service (NEW in Wave 5-6)
-└── analysis_service.py             # Analysis orchestration service (NEW in Wave 5-6)
+├── admin_service.py            # Administrative operations
+├── agents_service.py           # AI agent coordination
+├── analysis_service.py         # Analysis orchestration service
+├── gdpr_service.py             # Data export, deletion, anonymization
+├── market_data_service.py      # Market data aggregation
+├── news_service.py             # News collection and sentiment
+├── portfolio_helpers.py        # Portfolio calculation helpers
+├── portfolio_rebalancing.py    # Rebalancing logic
+├── portfolio_service.py        # Portfolio CRUD and analytics (1,162 lines)
+├── realtime_price_service.py   # Real-time price data service
+├── recommendation_analysis.py  # Recommendation scoring
+├── recommendation_crud.py      # Recommendation CRUD
+├── recommendation_service.py   # Full recommendation engine (1,234 lines)
+├── settings_service.py         # User settings management
+├── socketio_service.py         # Socket.IO real-time layer
+├── stocks_service.py           # Stock data operations
+├── trading_service.py          # Order validation and execution
+└── watchlist_service.py        # Watchlist management
 ```
 
 ### 11. Auth (`backend/auth/`)

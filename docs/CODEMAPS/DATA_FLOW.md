@@ -1,5 +1,7 @@
 # Data Flow Architecture Codemap
 
+**Last Updated:** 2026-03-04
+
 ## Data Sources
 
 ### Financial APIs
@@ -37,14 +39,14 @@
 │                    3-LAYER CACHE SYSTEM                      │
 ├─────────────────┬─────────────────┬──────────────────────────┤
 │   L1: Memory    │   L2: Redis     │   L3: PostgreSQL         │
-│   (In-process)  │   (512MB LRU)   │   (TimescaleDB)          │
+│   (In-process)  │   (640MB LRU)   │   (TimescaleDB)          │
 │   TTL: 60s      │   TTL: 5-30min  │   Persistent             │
 └─────────────────┴────────┬────────┴──────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                    AIRFLOW DAG SCHEDULER                     │
-│         data_pipelines/airflow/dags/daily_stock_pipeline.py  │
+│                    CELERY TASK SCHEDULER                     │
+│  • 5 queues: default, data, ml, recommendations, alerts      │
 │  • Daily data ingestion (6 AM UTC)                           │
 │  • Technical indicator calculation                           │
 │  • ML model inference                                        │
@@ -53,17 +55,19 @@
                          ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                      ML PIPELINE                             │
-│                    backend/ml/                               │
-│  • Feature engineering                                       │
-│  • LSTM, XGBoost, Prophet predictions                        │
+│                    backend/ml/ (48 files)                    │
+│  • Feature engineering (TA-Lib)                              │
+│  • XGBoost, LightGBM, Prophet predictions                    │
+│  • LSTM (training code present, weights not saved)           │
 │  • Sentiment analysis (FinBERT)                              │
+│  • Monte Carlo VaR calculation                               │
 └────────────────────────┬─────────────────────────────────────┘
                          │
                          ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    RECOMMENDATION ENGINE                     │
 │           backend/services/recommendation_service.py         │
-│  • Score aggregation                                         │
+│  • Score aggregation (technical/fundamental/sentiment/macro) │
 │  • Risk assessment                                           │
 │  • SEC compliance validation                                 │
 └────────────────────────┬─────────────────────────────────────┘
@@ -71,9 +75,9 @@
                          ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                       API LAYER                              │
-│                 backend/api/routers/                         │
-│  • REST endpoints                                            │
-│  • WebSocket real-time                                       │
+│                 backend/api/routers/ (19 files)               │
+│  • REST endpoints (153+ endpoints across 19 routers)         │
+│  • WebSocket real-time (native WS + Socket.IO)               │
 │  • Cache-decorated responses                                 │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -86,13 +90,13 @@
 - **Scope**: Per-process, frequently accessed data
 - **Location**: `backend/etl/intelligent_cache_system.py`
 
-### L2: Redis Cache (512MB LRU)
-- **Implementation**: Redis 7.0 with `allkeys-lru`
+### L2: Redis Cache (640MB LRU)
+- **Implementation**: Redis 7.2-alpine with `allkeys-lru`
+- **Memory**: 640MB maxmemory
 - **TTL**: 5-30 minutes depending on data type
 - **Scope**: Cross-process, API response caching
-- **Location**: `backend/utils/cache.py:205-300`
+- **Location**: `backend/utils/cache.py`
 
-**Quick Win Implementation**:
 ```python
 # backend/utils/cache.py
 @cache_with_ttl(ttl=300)
@@ -102,7 +106,7 @@ async def get_analysis(symbol: str) -> dict:
 ```
 
 ### L3: PostgreSQL (TimescaleDB)
-- **Implementation**: TimescaleDB hypertables
+- **Implementation**: TimescaleDB hypertables for time-series
 - **Scope**: Persistent historical data
 - **Location**: `backend/repositories/`
 
@@ -119,7 +123,7 @@ async def get_analysis(symbol: str) -> dict:
 | 08:30 | Recommendations | ~15 min |
 | 09:00 | Cache warming | ~10 min |
 
-### Airflow DAGs
+### Airflow DAGs (`data_pipelines/airflow/dags/`)
 
 | DAG | File | Schedule |
 |-----|------|----------|
@@ -133,12 +137,12 @@ async def get_analysis(symbol: str) -> dict:
 |-------|------|---------|
 | stocks | Regular | Stock metadata |
 | price_history | TimescaleDB | OHLCV data (hypertable) |
-| technical_indicators | TimescaleDB | Calculated indicators |
+| technical_indicators | TimescaleDB | Calculated indicators (28 indicators) |
 | recommendations | Regular | AI recommendations |
 | ml_predictions | Regular | Model predictions |
-| news_sentiment | Regular | Sentiment scores |
+| news_sentiment | Regular | Sentiment scores (virality, credibility, relevance) |
 
-### Indexes (Quick Win #4)
+### Indexes
 
 45 indexes added in `008_add_missing_query_indexes.py`:
 - Covering indexes for common queries
@@ -161,7 +165,7 @@ GET /api/analysis/{symbol}
                │ MISS
                ▼
 ┌─────────────────────────────┐
-│   asyncio.gather() PARALLEL │ ◄── Quick Win #2
+│   asyncio.gather() PARALLEL │
 │   • fetch_technical_indicators()
 │   • price_repository.get_price_history()
 │   • fetch_fundamental_data()
@@ -185,9 +189,9 @@ GET /api/analysis/{symbol}
 └─────────────────────────────┘
 ```
 
-**Performance**: 4-6s → 1.5-2s (60% improvement)
+**Performance**: 4-6s → 1.5-2s (60% improvement via parallel API calls)
 
-### Recommendations Endpoint (N+1 Query Fix - CRITICAL-3)
+### Recommendations Endpoint (N+1 Query Fix)
 
 ```
 GET /api/recommendations/daily
@@ -200,13 +204,13 @@ GET /api/recommendations/daily
                │ MISS
                ▼
 ┌─────────────────────────────┐
-│   Query 1: Get Top Stocks   │ ◄── stock_repository.get_top_stocks()
+│   Query 1: Get Top Stocks   │  stock_repository.get_top_stocks()
 │   Single query for 100 stocks
 └──────────────┬──────────────┘
                │
                ▼
 ┌─────────────────────────────┐
-│   Query 2: Bulk Price History │ ◄── N+1 FIX (Quick Win #5)
+│   Query 2: Bulk Price History│  N+1 FIX
 │   price_repository.get_bulk_price_history()
 │   Single query for ALL symbols
 │   Window function limits per symbol
@@ -227,17 +231,42 @@ GET /api/recommendations/daily
 └─────────────────────────────┘
 ```
 
-**Before N+1 Fix:**
-- Queries: 1 + 2*N = 201+ (for 100 stocks)
-- Time: 5-10 seconds
-- Pattern: Loop with individual queries
+**Before N+1 Fix:** 201+ queries, 5-10 seconds
+**After N+1 Fix:** 2-3 queries, 0.5-1 second (99% fewer queries, 60-80% faster)
 
-**After N+1 Fix:**
-- Queries: 2-3 total
-- Time: 0.5-1 second
-- Pattern: Batch queries + in-memory processing
+### ML Prediction Flow
 
-**Improvement: 99% fewer queries, 60-80% faster response**
+```
+POST /api/ml/predictions
+       │
+       ▼
+┌─────────────────────────────┐
+│   Check Redis Cache (L2)    │
+│   ML_PREDICTION_CACHE_TTL   │
+│   = 900s (15 min)           │
+└──────────────┬──────────────┘
+               │ MISS
+               ▼
+┌─────────────────────────────┐
+│   ModelManager              │
+│   • XGBoost (690 KB)        │
+│   • LightGBM                │
+│   • Prophet (AAPL/ADBE/AMZN)│
+│   • LSTM (code only)        │
+│   • Ensemble voting         │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   sanitize_numpy()          │
+│   (JSON serialization)      │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│   Return Prediction + CI    │
+└─────────────────────────────┘
+```
 
 ## Error Handling
 
@@ -247,5 +276,22 @@ GET /api/recommendations/daily
 | Cache misses | Fallback to database |
 | ML predictions | Return last known good value |
 | WebSocket | Auto-reconnect with exponential backoff |
+| Rate limiting | 429 response with Retry-After header |
 
-**Last Updated**: 2026-01-26
+## Log Aggregation Flow (Production)
+
+```
+Backend/Frontend containers
+       │
+       ▼
+   Promtail
+   (log shipping)
+       │
+       ▼
+     Loki
+   (Port 3100)
+       │
+       ▼
+   Grafana
+   (log queries)
+```

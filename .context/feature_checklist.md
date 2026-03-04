@@ -1,7 +1,7 @@
 # Feature Checklist
 
-**Last Updated**: 2026-03-03 (Refreshed with deep audit)
-**Overall Completion**: 87% (improved from 82%)
+**Last Updated**: 2026-03-04 (Post P0-P5 completion)
+**Overall Completion**: 91%
 
 ## Core Features
 
@@ -9,7 +9,7 @@
 - [x] Database schema for stocks (22 tables created)
 - [x] Price history tables (TimescaleDB optimized)
 - [x] Fundamental data models (14+ ratios on Fundamentals model)
-- [ ] Stock data loaded (NYSE/NASDAQ/AMEX) - **0 stocks currently**
+- [ ] Stock data loaded (NYSE/NASDAQ/AMEX) — **0 stocks currently**
 - [x] WebSocket real-time updates (2-layer: native WS + Socket.IO)
 - [x] Data validation pipeline (schema + range + completeness checks)
 - [x] Automated data refresh (Celery 5-queue schedule)
@@ -22,7 +22,7 @@
 - [x] RSI, MACD, Moving averages, Bollinger Bands, Volume indicators
 - [x] Custom indicators framework (momentum, volatility, trend, pattern recognition)
 - [x] Analysis router split into service layer
-- [x] TA-Lib integration (NEW)
+- [x] TA-Lib integration
 
 ### Fundamental Analysis
 - [x] Fundamental data models (income, balance sheet, cash flow)
@@ -38,9 +38,10 @@
 - [x] XGBoost trained (690 KB on disk)
 - [x] Prophet forecasting (3 stocks: AAPL, ADBE, AMZN)
 - [x] ML pipeline bugs fixed (missing imports resolved)
-- [x] LightGBM integration (NEW)
-- [x] Monte Carlo VaR calculation (NEW)
+- [x] LightGBM integration
+- [x] Monte Carlo VaR calculation
 - [x] Drift detection + feature store + model versioning
+- [x] ML router expanded to 8 endpoints (predictions, models, advanced)
 - [ ] LSTM model weights not persisted (scaler exists, network absent)
 - [ ] Online learning updates (code exists, not production-active)
 - [ ] Expand Prophet to all stocks
@@ -53,7 +54,7 @@
 - [ ] Real-time sentiment scoring
 
 ### Portfolio Management
-- [x] Portfolio CRUD endpoints (11 endpoints)
+- [x] Portfolio CRUD endpoints (10 endpoints)
 - [x] Transaction tracking
 - [x] Performance tracking
 - [x] Risk metrics framework (VaR, CVaR, risk attribution)
@@ -66,8 +67,11 @@
 ### Trading/Orders
 - [x] Order model fully defined in unified_models.py
 - [x] trading_service.py implemented
-- [ ] **Trading router missing** - Orders not accessible via API
-- [ ] Order placement, cancellation, order book endpoints
+- [x] **Trading router created** — `backend/api/routers/trading.py` (3 endpoints: validate, execute, impact)
+- [x] Order validation (pre-flight check)
+- [x] Trade execution endpoint
+- [x] Portfolio impact analysis endpoint
+- [ ] Full order book / history endpoints
 
 ### Recommendations
 - [x] Recommendation engine (multi-score: technical/fundamental/sentiment/macro)
@@ -78,11 +82,13 @@
 
 ### User Management
 - [x] OAuth2 authentication (RS256 JWT)
-- [x] Role-based access (6 roles defined)
+- [x] Role-based access — RBAC fully functional (`security/rbac.py`)
 - [x] User registration, profile, preferences
 - [x] Watchlist management (69+ tests)
 - [x] get_current_user properly separated (oauth2.py vs utils/auth.py)
-- [ ] RBAC enforcement stub (assign_role, check_access raise NotImplementedError)
+- [x] **RBAC implemented** — in-memory + optional DB-backed, all 5 methods functional
+- [x] **Password hashing** — bcrypt work factor 12, legacy PBKDF2 verify fallback
+- [x] **Crypto utils** — Fernet AES-128-CBC + RSA-2048 for signing
 
 ### TradingAgents (LangGraph)
 - [x] Multi-agent trading research graph (39 files total)
@@ -91,11 +97,9 @@
 - [x] Risk manager + trader node
 - [x] CLI interface (main.py: 1,105 lines)
 - [x] 9 dataflow integrations (Finnhub, Google News, Reddit, Yahoo Finance, etc.)
-- [ ] **Low test coverage** - only 3 test files for 39 source files
+- [ ] Low test coverage — only 3 test files for 39 source files
 
-## API Endpoints (153 total: 150 HTTP + 3 WebSocket)
-
-**Verified by deep audit: 78 GET, 48 POST, 8 PUT, 7 DELETE, 2 PATCH, 3 WebSocket across 18 routers (8,112 total lines)**
+## API Endpoints (153+ total: 150 HTTP + 3 WebSocket)
 
 ### Fully Implemented and Tested
 - [x] Health: 7 endpoints (root, readiness, liveness, startup, metrics, ping, rate-limiter)
@@ -109,6 +113,8 @@
 - [x] Settings: 10 endpoints (preferences, display, trading, notifications, reset)
 - [x] WebSocket: 3 HTTP + 3 WS (general, market, portfolio streams)
 - [x] GDPR: 13 endpoints (export, deletion, consent CRUD, anonymize, retention, audit)
+- [x] Trading: 3 endpoints (validate, execute, portfolio impact)
+- [x] ML: 8 endpoints (predictions POST, models GET/detail, + advanced)
 
 ### Implemented, Partially Tested
 - [x] Admin: 16 endpoints (users, jobs, config, cache, audit, announcements, maintenance)
@@ -116,7 +122,6 @@
 - [x] Cache: 8 endpoints (metrics, cost, performance, invalidate, warm, health)
 - [x] Thesis: 6 endpoints (CRUD + list by stock)
 - [x] Monitoring: 5 endpoints (health, cost, Grafana, alerts, API usage)
-- [x] ML: 2 endpoints (predictions POST, models GET) - **underdeveloped vs 48-file ML subsystem**
 
 ## Frontend (14 Pages, 54 Components)
 
@@ -146,11 +151,13 @@
 - [x] Route-based prefetching
 - [x] ErrorBoundary + PageSkeleton wrappers
 - [x] Zero @ts-ignore/@ts-expect-error suppressions (strong type discipline)
+- [x] Dead code removed (EnhancedDashboard.tsx deleted)
+- [x] Analytics components organized (CorrelationMatrix, EfficientFrontier, RiskDecomposition in portfolio/)
 - [ ] TypeScript compile errors need quantification (run `tsc --noEmit`)
 - [ ] API service missing typed methods for watchlist/alerts/settings
 - [ ] Redux slices have zero test coverage
 - [ ] Hooks have zero test coverage
-- [ ] EnhancedDashboard.tsx (746 lines) is dead code - not imported anywhere
+- [ ] Vitest/Playwright collision (add `exclude: ['**/tests/e2e/**']`)
 
 ## Infrastructure
 
@@ -158,14 +165,16 @@
 - [x] PostgreSQL/TimescaleDB 2.12.1-pg15
 - [x] Redis 7.2-alpine
 - [x] Backend container (multi-stage, non-root, TA-Lib, healthcheck)
+- [x] Frontend container (`frontend/web/Dockerfile` exists)
 - [x] Celery Worker + Beat (5 queues, memory limits)
 - [x] Prometheus + Grafana + AlertManager
-- [x] Nginx reverse proxy (SSL config ready, certs missing)
+- [x] Nginx reverse proxy (SSL config ready)
 - [x] 4 metric exporters
 - [x] Apache Airflow
 - [x] Cost monitor service
-- [x] Frontend container (Dockerfile path issue RESOLVED - `frontend/web/Dockerfile` exists)
-- [ ] SSL certificates not provisioned
+- [x] Certbot (auto-renewal via certbot/certbot:v2.7.4)
+- [x] Loki (grafana/loki:2.9.3) + Promtail (grafana/promtail:2.9.3)
+- [ ] SSL certificates not yet provisioned in ssl/ directory
 
 ### CI/CD (29 Workflows)
 - [x] Core CI (black, isort, flake8, mypy, pylint, bandit, safety, pip-audit)
@@ -176,45 +185,44 @@
 - [x] Migration check workflow
 - [x] Dependency updates
 - [ ] Backend test step uses `continue-on-error: true` (non-blocking)
-- [ ] Coverage floor at 35% (target is 80%)
-- [ ] K8s manifests missing (deploy steps will fail)
+- [ ] Coverage floor at 35% (target is 60-80%)
+- [ ] K8s manifests missing (deploy steps will fail on K8s)
 
 ### Security
 - [x] JWT RS256 with auto-generated RSA keys
 - [x] CSRF protection (67 tests)
-- [x] Rate limiting - Redis-backed distributed (56 tests)
+- [x] Rate limiting — Redis-backed distributed (56 tests)
 - [x] Security headers (HSTS, CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy)
 - [x] Audit logging
 - [x] OWASP validation (48 tests)
 - [x] GDPR/SEC compliance (129 tests)
-- [ ] RBAC - STUB (NotImplementedError)
-- [ ] crypto_utils - STUB (NotImplementedError)
-- [ ] password_manager - PBKDF2 (should be bcrypt/argon2)
-- [ ] CSP includes 'unsafe-inline' in production
+- [x] RBAC — fully implemented (in-memory + DB-backed, 4 roles, 4 permissions)
+- [x] crypto_utils — Fernet AES-128-CBC + RSA-2048 sign/verify
+- [x] password_manager — bcrypt work factor 12, legacy PBKDF2 verify fallback
+- [x] CSP script-src hardened (no unsafe-inline; style-src has unsafe-inline for MUI only)
 
 ### Testing
-- [x] Backend: 4,931 tests (4,929 pass, 1 flaky, 8 skip, 1 xfail)
+- [x] Backend: 5,020 tests (0 failed, 8 skipped infra, 2 xfailed)
 - [x] Frontend: 201 tests (197 pass, 4 fixable failures)
-- [x] 110 backend test files (41 unit, 49 top-level, 16 integration, 5 security, 4 middleware)
-- [x] 12 frontend test files (8 pages + 4 components)
+- [x] 28 backend unit test files
+- [x] 13 frontend test files (including auth.test.tsx with 30 tests)
 - [ ] TradingAgents: ~8% coverage (3 test files for 39 source files)
 - [ ] Frontend hooks/slices/services: 0% coverage
-- [ ] Celery tasks: ~5% coverage
-- [ ] No true E2E tests running in CI (Playwright configured, Vitest lacks e2e exclusion)
+- [ ] No true E2E tests running in CI (Playwright configured, Vitest collision)
 
 ## Progress Summary
 
-| Category | Previous (Feb 26) | Current (Mar 3) |
-|----------|-------------------|-----------------|
-| Core Features | 80% | 85% |
-| API Endpoints | 90% | 92% |
-| Service Layer | 90% | 92% |
-| Frontend | 75% | 88% |
-| Data Pipeline | 75% | 78% |
-| Infrastructure | 85% | 85% |
-| Security | 85% | 82% (stubs found) |
-| Testing | 70-75% | 88% |
-| Code Quality | 80% | 90% |
-| CI/CD | 60% | 70% |
-| Documentation | 85% | 85% |
-| **Overall** | **82%** | **87%** |
+| Category | Mar 3 | Mar 4 |
+|----------|-------|-------|
+| Core Features | 85% | 88% |
+| API Endpoints | 92% | 96% |
+| Service Layer | 92% | 92% |
+| Frontend | 88% | 89% |
+| Data Pipeline | 78% | 78% |
+| Infrastructure | 85% | 90% |
+| Security | 82% | 96% |
+| Testing | 88% | 90% |
+| Code Quality | 90% | 93% |
+| CI/CD | 70% | 72% |
+| Documentation | 85% | 91% |
+| **Overall** | **87%** | **91%** |

@@ -1,7 +1,6 @@
-# Installation Guide - Investment Analysis Platform
+# Installation Guide
 
-**Last Updated**: 2026-01-29
-**Version**: 1.0.0
+**Last Updated**: 2026-03-04
 **Platform**: macOS, Linux, Windows (WSL2)
 **Python**: 3.12+
 **Node.js**: 18+
@@ -15,7 +14,7 @@
 git clone https://github.com/yourusername/investment-analysis-platform.git
 cd investment-analysis-platform
 
-# 2. Run setup script (automated, interactive)
+# 2. Run setup script
 ./setup.sh
 
 # 3. Start development environment
@@ -24,7 +23,7 @@ cd investment-analysis-platform
 # 4. Access the application
 # Frontend: http://localhost:3000
 # API Docs: http://localhost:8000/docs
-# Grafana: http://localhost:3001
+# Grafana:  http://localhost:3001
 ```
 
 ---
@@ -34,305 +33,257 @@ cd investment-analysis-platform
 ### System Requirements
 - **CPU**: 4+ cores recommended
 - **RAM**: 8GB minimum, 16GB recommended
-- **Disk**: 50GB free space (for Docker images and data)
-- **Network**: Internet connection (for API calls and dependencies)
+- **Disk**: 50GB free space (Docker images and database)
+- **Network**: Internet connection required for API calls and dependencies
 
 ### Software Requirements
 
 #### macOS
 ```bash
-# Install Homebrew (if not installed)
+# Install Homebrew if not present
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install required tools
-brew install python@3.12 node git docker docker-compose postgresql redis
+brew install python@3.12 node git
+brew install --cask docker  # Docker Desktop
 
-# Verify installations
-python3 --version  # Should be 3.12+
-node --version     # Should be 18+
+# Verify
+python3.12 --version  # 3.12+
+node --version        # 18+
 docker --version
-docker-compose --version
+docker compose version
 ```
 
 #### Linux (Ubuntu/Debian)
 ```bash
-# Update package manager
-sudo apt-get update
-sudo apt-get upgrade -y
+sudo apt-get update && sudo apt-get upgrade -y
 
-# Install required tools
 sudo apt-get install -y \
-  python3.12 \
-  python3.12-venv \
-  python3-pip \
-  nodejs \
-  npm \
-  git \
-  docker.io \
-  docker-compose \
-  postgresql-client
+  python3.12 python3.12-venv python3-pip \
+  nodejs npm git
 
-# Add user to docker group
+# Docker Engine (not docker.io)
+curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 newgrp docker
-
-# Verify installations
-python3.12 --version
-node --version
-docker --version
 ```
 
 #### Windows (WSL2)
 ```bash
-# Install WSL2 (Windows Store or PowerShell as Admin)
+# In PowerShell (Admin):
 wsl --install
 
-# In WSL2 terminal:
-sudo apt-get update
-sudo apt-get upgrade -y
-
-# Install required tools
-sudo apt-get install -y \
-  python3.12 \
-  python3.12-venv \
-  python3-pip \
-  nodejs \
-  npm \
-  git \
-  docker.io
-
-# Add user to docker group
-sudo usermod -aG docker $USER
+# Then in your WSL2 terminal, follow the Linux (Ubuntu) steps above
 ```
 
 ---
 
-## Detailed Installation Steps
+## Detailed Installation
 
 ### Step 1: Clone Repository
 
 ```bash
-# HTTPS (recommended for first time)
 git clone https://github.com/yourusername/investment-analysis-platform.git
-
-# OR SSH (if you have SSH key configured)
-git clone git@github.com:yourusername/investment-analysis-platform.git
-
 cd investment-analysis-platform
 ```
 
 ### Step 2: Environment Setup
 
 #### Option A: Automated Setup (Recommended)
-```bash
-# Run interactive setup script
-./setup.sh
 
-# This will:
-# ✓ Check prerequisites
-# ✓ Create .env file with secure credentials
-# ✓ Generate encryption keys
-# ✓ Setup database
-# ✓ Initialize Redis
-# ✓ Install Python dependencies
-# ✓ Install Node.js dependencies
-# ✓ Build Docker images
-# ✓ Verify all services
+```bash
+./setup.sh
+# Checks prerequisites, generates .env with secure credentials,
+# installs dependencies, builds Docker images, verifies services.
 ```
 
 #### Option B: Manual Setup
 
-**2.1 Create Environment File**
+**2.1 Create `.env` file**
+
 ```bash
-# Copy template
 cp .env.example .env
-
-# Edit with your values
-nano .env  # or vim, code, etc.
-
-# Required values:
-# - SECRET_KEY (generate: python -c "import secrets; print(secrets.token_hex(32))")
-# - JWT_SECRET_KEY (same as above)
-# - FERNET_KEY (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
-# - Financial API keys (Alpha Vantage, Finnhub, Polygon, NewsAPI)
+# Edit .env with your values (see docs/ENVIRONMENT.md for full reference)
 ```
 
-**2.2 Python Environment**
+Minimum required values before first run:
+
 ```bash
-# Create virtual environment
+SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+MASTER_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(64))")
+FERNET_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+GDPR_ENCRYPTION_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
+REDIS_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
+```
+
+Also add your financial API keys:
+- `ALPHA_VANTAGE_API_KEY` - [alphavantage.co](https://www.alphavantage.co/support/#api-key)
+- `FINNHUB_API_KEY` - [finnhub.io](https://finnhub.io/register)
+- `POLYGON_API_KEY` - [polygon.io](https://polygon.io/dashboard/signup)
+- `NEWS_API_KEY` - [newsapi.org](https://newsapi.org/register)
+
+**2.2 Python virtual environment (for local development without Docker)**
+
+```bash
 python3.12 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # macOS/Linux
-# OR
-venv\Scripts\activate  # Windows
-
-# Upgrade pip
+source venv/bin/activate   # macOS/Linux
 pip install --upgrade pip
-
-# Install Python dependencies
 pip install -r requirements.txt
-
-# Verify installation
-python -c "import fastapi; import sqlalchemy; print('✓ Core packages installed')"
 ```
 
-**2.3 Node.js Dependencies**
+**2.3 Frontend dependencies**
+
 ```bash
-# Install frontend dependencies
 cd frontend/web
 npm install
-
-# Verify installation
-npm --version
-node_modules/.bin/react-scripts --version
-
 cd ../..
-```
-
-**2.4 Database Setup**
-```bash
-# Docker PostgreSQL (if not using external database)
-docker run --name investment-db \
-  -e POSTGRES_DB=investment_db \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=$DB_PASSWORD \
-  -p 5432:5432 \
-  -d postgres:15
-
-# Wait for database to start
-sleep 10
-
-# Initialize database
-python -m alembic upgrade head
-```
-
-**2.5 Redis Setup**
-```bash
-# Docker Redis
-docker run --name investment-redis \
-  -e REDIS_PASSWORD=$REDIS_PASSWORD \
-  -p 6379:6379 \
-  -d redis:7
-
-# Test connection
-redis-cli -p 6379 ping
-# Should output: PONG
 ```
 
 ### Step 3: Start Services
 
-#### Development Mode
+#### Development Mode (Docker Compose)
+
 ```bash
-# Using provided script (recommended)
 ./start.sh dev
+# OR
+docker compose up -d
+```
 
-# OR manually start each service
+#### Running services individually (without Docker)
 
+```bash
 # Terminal 1: Backend API
 source venv/bin/activate
 uvicorn backend.api.main:app --reload --port 8000
 
-# Terminal 2: Frontend
+# Terminal 2: Frontend (Vite dev server)
 cd frontend/web
-npm start  # Starts on http://localhost:3000
+npm run dev   # starts on http://localhost:3000
 
-# Terminal 3: Celery Worker (for background tasks)
+# Terminal 3: Celery worker
 source venv/bin/activate
 celery -A backend.tasks.celery_app worker -l info
 
-# Terminal 4: Celery Beat (for scheduled tasks)
+# Terminal 4: Celery beat (scheduler)
+source venv/bin/activate
 celery -A backend.tasks.celery_app beat -l info
 ```
 
 #### Production Mode
+
 ```bash
-# Configure SSL first (if needed)
+# Configure SSL first
 ./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
 
-# Start production environment
+# Start production stack
 ./start.sh prod
-
-# This starts:
-# ✓ FastAPI with Gunicorn
-# ✓ React with Nginx
-# ✓ PostgreSQL
-# ✓ Redis
-# ✓ Celery Worker & Beat
-# ✓ Prometheus & Grafana
-# ✓ AlertManager
 ```
 
 ### Step 4: Verify Installation
 
 ```bash
-# Check backend health
-curl http://localhost:8000/health
+# Backend health
+curl http://localhost:8000/api/health
+# Expected: {"status": "healthy", ...}
 
-# Check frontend
-open http://localhost:3000  # macOS
-xdg-open http://localhost:3000  # Linux
-start http://localhost:3000  # Windows
+# Open frontend
+open http://localhost:3000       # macOS
+xdg-open http://localhost:3000   # Linux
 
-# Check API documentation
-open http://localhost:8000/docs
-
-# Check database connection
-python -c "from backend.config.database import SessionLocal; \
-  session = SessionLocal(); \
-  result = session.execute('SELECT 1'); \
-  print('✓ Database connected')"
-
-# Check Redis connection
-redis-cli ping
-
-# Run test suite
-./start.sh test
-# Or manually:
-pytest backend/tests/ --cov=backend -v
+# Run the test suite
+pytest backend/tests/ -m "not slow" --tb=short
 ```
 
 ---
 
 ## Service URLs (Development)
 
-| Service | URL | Purpose | Username | Password |
-|---------|-----|---------|----------|----------|
-| Frontend | http://localhost:3000 | Web application | N/A | N/A |
-| API | http://localhost:8000 | REST API | N/A | N/A |
-| API Docs | http://localhost:8000/docs | Swagger UI | N/A | N/A |
-| ML Service | http://localhost:8001 | ML predictions | N/A | N/A |
-| Grafana | http://localhost:3001 | Dashboards | admin | admin |
-| Prometheus | http://localhost:9090 | Metrics | N/A | N/A |
-| PostgreSQL | localhost:5432 | Database | postgres | (from .env) |
-| Redis | localhost:6379 | Cache | (none) | (from .env) |
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Frontend | http://localhost:3000 | - |
+| API | http://localhost:8000 | - |
+| API Docs (Swagger) | http://localhost:8000/docs | - |
+| Grafana | http://localhost:3001 | admin / admin |
+| Prometheus | http://localhost:9090 | - |
+| PostgreSQL | localhost:5432 | postgres / (from .env) |
+| Redis | localhost:6379 | (from .env) |
+
+---
+
+## Docker Compose Overview
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Base service definitions (dev/test) |
+| `docker-compose.dev.yml` | Development overrides (hot reload, mounted source) |
+| `docker-compose.production.yml` | Production overrides (SSL, resource limits, monitoring) |
+| `docker-compose.test.yml` | Test environment (isolated DB, mocked APIs) |
+
+Production stack is started via the overlay:
+```bash
+docker compose -f docker-compose.production.yml up -d
+```
+
+### Production Docker Services
+
+- PostgreSQL 15 + TimescaleDB
+- Redis 7 (cache, Celery broker DB 0, Celery results DB 1)
+- FastAPI backend (Gunicorn)
+- React frontend (Nginx static serving)
+- Celery worker and beat scheduler
+- Nginx (TLS termination, reverse proxy)
+- Certbot (automatic Let's Encrypt renewal)
+- Prometheus + VictoriaMetrics (metrics with 90-day retention)
+- Grafana (dashboards)
+- Loki + Promtail (log aggregation)
+- AlertManager (alert routing)
+
+---
+
+## Getting API Keys
+
+### Alpha Vantage
+1. Go to https://www.alphavantage.co/
+2. Click "GET FREE API KEY"
+3. Enter your email and copy the key
+4. Add to `.env`: `ALPHA_VANTAGE_API_KEY=your_key`
+
+### Finnhub
+1. Go to https://finnhub.io/register
+2. Create account and copy API key from dashboard
+3. Add to `.env`: `FINNHUB_API_KEY=your_key`
+
+### Polygon.io
+1. Go to https://polygon.io/dashboard/signup
+2. Create account and copy API key
+3. Add to `.env`: `POLYGON_API_KEY=your_key`
+
+### NewsAPI
+1. Go to https://newsapi.org/register
+2. Create account and copy API key
+3. Add to `.env`: `NEWS_API_KEY=your_key`
 
 ---
 
 ## Installation Troubleshooting
 
-### Python Version Issues
+### Python version < 3.12
 
-**Problem**: `python3 --version` shows < 3.12
 ```bash
-# Solution: Install Python 3.12
 # macOS
 brew install python@3.12
 python3.12 --version
 
-# Linux
-sudo apt-get install python3.12
-python3.12 --version
-
-# Windows
-# Download from python.org and install, or use WSL2
+# Ubuntu
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt-get install python3.12 python3.12-venv
 ```
 
-### Dependency Conflicts
+### Dependency conflicts
 
-**Problem**: `pip install -r requirements.txt` fails
 ```bash
-# Solution: Create fresh virtual environment
 rm -rf venv
 python3.12 -m venv venv
 source venv/bin/activate
@@ -340,286 +291,90 @@ pip install --upgrade pip
 pip install -r requirements.txt --no-cache-dir
 ```
 
-### Docker Issues
+### Docker daemon not running
 
-**Problem**: Docker daemon not running
 ```bash
-# Solution: Start Docker
 # macOS
 open -a Docker
 
 # Linux
 sudo systemctl start docker
 
-# Windows (WSL2)
+# WSL2
 sudo service docker start
 ```
 
-### Database Connection Issues
+### Port already in use
 
-**Problem**: PostgreSQL connection refused
 ```bash
-# Solution: Check database is running
-docker ps | grep postgres
-
-# If not running, start it
-docker run --name investment-db \
-  -e POSTGRES_DB=investment_db \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=$DB_PASSWORD \
-  -p 5432:5432 \
-  -d postgres:15
+# Find the process using the port
+lsof -i :8000     # macOS/Linux
+# Kill it
+kill -9 <PID>
 ```
 
-### Port Already in Use
+### Backend starts then exits immediately
 
-**Problem**: Address already in use (port 3000, 8000, etc.)
+Check for missing required environment variables:
+
 ```bash
-# Find process using port
-lsof -i :3000  # macOS/Linux
-netstat -ano | findstr :3000  # Windows
-
-# Kill process
-kill -9 <PID>  # macOS/Linux
-taskkill /PID <PID> /F  # Windows
-
-# OR use different port
-uvicorn backend.api.main:app --port 8001
+docker compose logs backend | head -30
 ```
 
-### NPM Package Issues
+The most common cause is a missing `GDPR_ENCRYPTION_KEY`. See [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) Issue 2.
 
-**Problem**: npm install fails
+### npm install fails
+
 ```bash
-# Solution: Clear cache and reinstall
+cd frontend/web
 rm -rf node_modules package-lock.json
 npm cache clean --force
 npm install
-
-# OR use alternative registry
-npm install --registry https://registry.npmmirror.com
-```
-
-### Frontend Not Loading
-
-**Problem**: Blank page at localhost:3000
-```bash
-# Solution: Check console for errors
-# 1. Open browser DevTools (F12)
-# 2. Check Console tab for errors
-# 3. Check Network tab for failed requests
-
-# Restart frontend
-cd frontend/web
-npm start
-
-# Or rebuild from scratch
-rm -rf node_modules
-npm install
-npm start
-```
-
----
-
-## API Keys & Credentials
-
-### Financial Data APIs
-
-#### Alpha Vantage
-1. Go to https://www.alphavantage.co/
-2. Click "GET FREE API KEY"
-3. Enter your email
-4. Check email and copy API key
-5. Add to `.env`: `ALPHA_VANTAGE_API_KEY=your_key`
-
-#### Finnhub
-1. Go to https://finnhub.io/register
-2. Create account
-3. Copy API key from dashboard
-4. Add to `.env`: `FINNHUB_API_KEY=your_key`
-
-#### Polygon.io
-1. Go to https://polygon.io/dashboard/signup
-2. Create account
-3. Copy API key from dashboard
-4. Add to `.env`: `POLYGON_API_KEY=your_key`
-
-#### NewsAPI
-1. Go to https://newsapi.org/register
-2. Create account
-3. Copy API key from dashboard
-4. Add to `.env`: `NEWS_API_KEY=your_key`
-
-### Optional AI APIs
-
-#### OpenAI (for ChatGPT features)
-1. Go to https://platform.openai.com/api-keys
-2. Create new API key
-3. Add to `.env`: `OPENAI_API_KEY=sk-...`
-
-#### Anthropic Claude (for advanced AI)
-1. Go to https://console.anthropic.com/
-2. Create new API key
-3. Add to `.env`: `ANTHROPIC_API_KEY=sk-ant-...`
-
----
-
-## Docker Compose Setup
-
-Alternative to manual setup using Docker Compose:
-
-```bash
-# Start all services
-docker-compose up -d
-
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-
-# Full reset (removes volumes)
-docker-compose down -v
-```
-
-### docker-compose.yml Structure
-```yaml
-services:
-  postgres:        # Database
-  redis:           # Cache/Celery broker
-  backend:         # FastAPI application
-  frontend:        # React application
-  celery-worker:   # Background tasks
-  celery-beat:     # Scheduled tasks
-  prometheus:      # Metrics (production)
-  grafana:         # Dashboards (production)
-  alertmanager:    # Alerting (production)
-```
-
----
-
-## Production Deployment
-
-### Pre-Deployment Checklist
-- [ ] All environment variables set
-- [ ] SSL/TLS certificates obtained
-- [ ] Database backed up
-- [ ] Security audit passed
-- [ ] Tests pass (100%)
-- [ ] Load testing completed
-- [ ] Monitoring configured
-- [ ] Incident response plan ready
-
-### Deployment Steps
-
-```bash
-# 1. Configure SSL/TLS
-./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
-
-# 2. Update environment variables for production
-# Edit .env and set:
-# - ENVIRONMENT=production
-# - DEBUG=false
-# - SESSION_COOKIE_SECURE=true
-# - FORCE_HTTPS=true
-
-# 3. Build Docker images
-docker-compose build --no-cache
-
-# 4. Start production environment
-./start.sh prod
-
-# 5. Monitor services
-docker-compose logs -f
-
-# 6. Verify health
-curl https://yourdomain.com/health
 ```
 
 ---
 
 ## Maintenance & Updates
 
-### Regular Maintenance
+### Update dependencies
+
 ```bash
-# Update dependencies
+# Python
 pip install -r requirements.txt --upgrade
-npm update
 
-# Database backups
-pg_dump -U postgres -d investment_db > backup.sql
-
-# Clear old logs
-find logs -name "*.log" -mtime +30 -delete
-
-# Update Docker images
-docker-compose pull
-docker-compose up -d
+# Node
+cd frontend/web && npm update
 ```
 
-### Version Updates
+### Run database migrations
+
 ```bash
-# Check for updates
-git fetch origin
-git status
+# With Docker
+docker compose exec backend python -m alembic upgrade head
 
-# Pull latest changes
-git pull origin main
-
-# Run migrations
+# Without Docker
+source venv/bin/activate
 python -m alembic upgrade head
+```
 
-# Restart services
-./stop.sh
-./start.sh prod
+### Pull latest code
+
+```bash
+git pull origin main
+python -m alembic upgrade head
+./stop.sh && ./start.sh prod
 ```
 
 ---
 
-## Getting Help
+## Documentation
 
-### Documentation
 - [README.md](../README.md) - Project overview
+- [docs/ENVIRONMENT.md](ENVIRONMENT.md) - All environment variables
+- [docs/DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment
+- [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues
 - [CLAUDE.md](../CLAUDE.md) - Development guidelines
-- [docs/SECURITY.md](SECURITY.md) - Security guidelines
-- [docs/ENVIRONMENT.md](ENVIRONMENT.md) - Configuration reference
-
-### Support Channels
-- GitHub Issues: https://github.com/yourusername/investment-analysis-platform/issues
-- Discussions: https://github.com/yourusername/investment-analysis-platform/discussions
-- Email: support@yourdomain.com
-
-### Common Issues
-- See [Troubleshooting](#installation-troubleshooting) section above
-- Check Docker logs: `docker-compose logs -f`
-- Check application logs: `tail -f logs/app.log`
 
 ---
 
-## Next Steps
-
-1. **Read Documentation**
-   - [README.md](../README.md) - Project overview
-   - [CLAUDE.md](../CLAUDE.md) - Development guidelines
-
-2. **Configure API Keys**
-   - Add financial data API keys to `.env`
-   - Test API connections
-
-3. **Run Tests**
-   - Backend: `pytest backend/tests/ --cov=backend`
-   - Frontend: `npm test`
-
-4. **Start Development**
-   - Create feature branch: `git checkout -b feature/your-feature`
-   - Write tests first (TDD)
-   - Submit pull request
-
----
-
-*Installation Guide - Last Updated: 2026-01-29*
-*Version: 1.0.0*
-*Status: Production Ready*
+*Last Updated: 2026-03-04*

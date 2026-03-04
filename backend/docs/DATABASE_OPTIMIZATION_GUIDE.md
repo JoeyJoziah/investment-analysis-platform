@@ -577,25 +577,25 @@ DROP INDEX IF EXISTS unused_index_name;
 
 ### Before Going Live
 
-- [ ] Run all migrations: 006 (optimization) and 007 (compression)
-- [ ] Configure PostgreSQL parameters in postgresql.conf
-- [ ] Set up TimescaleDB compression policies  
-- [ ] Create materialized views and refresh policies
-- [ ] Install and configure monitoring dashboards
-- [ ] Set up automated maintenance cron jobs
-- [ ] Test bulk loading with sample data
-- [ ] Validate query performance benchmarks
-- [ ] Configure backup strategy for compressed data
-- [ ] Set up alerting for critical metrics
+- Run all migrations: 006 (optimization) and 007 (compression)
+- Configure PostgreSQL parameters in postgresql.conf
+- Set up TimescaleDB compression policies
+- Create materialized views and refresh policies
+- Install and configure monitoring dashboards (Prometheus + Grafana)
+- Set up automated maintenance cron jobs
+- Test bulk loading with sample data
+- Validate query performance benchmarks
+- Configure backup strategy for compressed data
+- Set up alerting for critical metrics (Alertmanager)
 
-### Post-Deployment
+### Post-Deployment Monitoring
 
-- [ ] Monitor initial bulk load performance
-- [ ] Verify compression ratios after first week
-- [ ] Check maintenance operation completion
-- [ ] Validate query response times
-- [ ] Monitor storage growth rates
-- [ ] Review and adjust configuration based on actual workload
-- [ ] Document any customizations for your specific environment
+- Monitor initial bulk load performance
+- Verify compression ratios after first week
+- Check maintenance operation completion
+- Validate query response times
+- Monitor storage growth rates
+- Review and adjust configuration based on actual workload
+- Document any customizations for your specific environment
 
 This optimized database schema and configuration should handle 6000+ daily ticker updates with millions of rows efficiently, maintaining sub-second query performance while minimizing storage footprint through intelligent compression and maintenance strategies.

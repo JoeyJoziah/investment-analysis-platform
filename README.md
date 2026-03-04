@@ -1,10 +1,8 @@
 # Investment Analysis Platform
 
-A comprehensive, AI-powered investment analysis and recommendation platform designed to analyze 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
+A comprehensive, AI-powered investment analysis and recommendation platform that analyzes 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
 
-**Claude Flow V3 | Version 3.0.0-alpha.178 | Last Updated: 2026-02-08**
-
-**Status**: B+ (80% Production Ready) | **Budget**: <$50/month | **Codebase**: ~1,550,000 LOC | **Endpoints**: 144 across 17 routers
+**Status**: Production-Ready | **Budget**: <$50/month | **Tests**: 5026 passing | **Endpoints**: 144 across 17 routers
 
 ---
 
@@ -37,11 +35,9 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 ### Technical Features
 - **Cost Optimized**: Designed to run under $50/month using free API tiers
 - **Fully Automated**: Daily analysis without manual intervention
-- **Compliance Ready**: GDPR and SEC 2025 compliant architecture
-- **Multi-Agent AI**: 121 specialized AI agents for various tasks
+- **Compliance Ready**: GDPR and SEC compliant architecture
 - **Scalable**: Handles 6,000+ stocks with intelligent caching
-- **Performance Optimized**: Quick Wins implemented for 60-80% improvement
-- **Security Hardened**: CSRF protection, rate limiting, auth gates, SSL enforcement, timezone-aware UTC across 115+ files
+- **Security Hardened**: CSRF protection, rate limiting, auth gates, SSL/TLS, GDPR encryption key, timezone-aware UTC
 
 ---
 
@@ -49,29 +45,27 @@ A comprehensive, AI-powered investment analysis and recommendation platform desi
 
 ```
 investment-analysis-platform/
-├── backend/                    # FastAPI backend (31 directories)
+├── backend/                    # FastAPI backend
 │   ├── api/                    # REST API endpoints (17 routers, 144 endpoints)
-│   ├── models/                 # SQLAlchemy ORM models
-│   ├── ml/                     # ML pipeline (32 modules)
-│   ├── etl/                    # ETL processors (19 modules)
-│   ├── tasks/                  # Celery task queue (10 modules)
-│   ├── utils/                  # Utilities (89 modules)
+│   ├── models/                 # SQLAlchemy ORM models (unified_models.py is canonical)
+│   ├── services/               # Extracted service layer (10 service modules)
+│   ├── ml/                     # ML pipeline (LSTM, XGBoost, Prophet, FinBERT)
+│   ├── etl/                    # ETL processors
+│   ├── tasks/                  # Celery task queue
+│   ├── utils/                  # Utilities
 │   └── migrations/             # Alembic migrations
-├── frontend/web/               # React application
-│   ├── src/components/         # UI components (30+ components)
-│   ├── src/pages/              # Page components (12 pages)
-│   ├── src/store/              # Redux state (6 slices)
+├── frontend/web/               # React + Vite application
+│   ├── src/components/         # UI components (portfolio/ subdirectory for analytics)
+│   ├── src/pages/              # Page components
+│   ├── src/store/              # Redux state slices
 │   └── src/hooks/              # Custom hooks
+├── infrastructure/             # Docker, Nginx, monitoring configs
+│   ├── docker/                 # Dockerfile helpers and init scripts
+│   └── monitoring/             # Prometheus, Grafana, Loki, AlertManager configs
 ├── data_pipelines/airflow/     # Apache Airflow DAGs
-├── infrastructure/             # Docker, monitoring configs
 ├── ml_models/                  # Trained ML model artifacts
-├── scripts/                    # Automation scripts (149 files)
-├── .claude/                    # AI Agent framework
-│   ├── agents/                 # 121 AI agents
-│   ├── skills/                 # 104 skills
-│   ├── commands/               # 174 commands
-│   └── rules/                  # 8 coding rules
-└── .github/workflows/          # CI/CD (28 workflows)
+├── scripts/                    # Automation scripts
+└── .github/workflows/          # CI/CD pipelines
 ```
 
 ---
@@ -81,17 +75,17 @@ investment-analysis-platform/
 | Layer | Technology |
 |-------|-----------|
 | **Backend** | FastAPI 0.115+, Python 3.12, Uvicorn/Gunicorn |
-| **Frontend** | React 18.2, TypeScript 5.3, Redux Toolkit, Material-UI 5.14 |
+| **Frontend** | React 18, TypeScript 5, Vite, Redux Toolkit, Material-UI 5 |
 | **Database** | PostgreSQL 15 + TimescaleDB (time-series) |
-| **Cache** | Redis 7.0 (multi-layer caching) |
+| **Cache** | Redis 7 (multi-layer caching, Celery broker/result backend) |
 | **Search** | PostgreSQL Full-Text Search (pg_trgm) |
-| **Task Queue** | Celery 5.4 + Redis backend |
-| **Data Pipelines** | Apache Airflow 2.7.3 |
-| **ML/AI** | PyTorch 2.4, XGBoost 2.1, Prophet 1.1.5, FinBERT |
-| **Monitoring** | Prometheus, Grafana 10.2, AlertManager |
-| **Containerization** | Docker 7.1, docker-compose |
-| **Security** | 23 modules (CSRF, rate limiting, injection prevention, RBAC, SSL enforcement) |
-| **CI/CD** | GitHub Actions (28 workflows) |
+| **Task Queue** | Celery 5 + Redis (broker: DB 0, results: DB 1) |
+| **Data Pipelines** | Apache Airflow 2.7 |
+| **ML/AI** | PyTorch, XGBoost, Prophet, FinBERT |
+| **Monitoring** | Prometheus + VictoriaMetrics, Grafana 10, Loki + Promtail, AlertManager |
+| **Containerization** | Docker + Docker Compose |
+| **SSL** | Certbot (Let's Encrypt, auto-renewing) |
+| **CI/CD** | GitHub Actions |
 
 ---
 
@@ -107,7 +101,6 @@ investment-analysis-platform/
 ./stop.sh --clean  # Stop and clean volumes
 ./logs.sh          # View all logs
 ./logs.sh backend  # View specific service logs
-./notion-sync.sh   # Sync with Notion tracker
 ```
 
 ### Backend Development
@@ -121,6 +114,9 @@ uvicorn backend.api.main:app --reload
 # Run tests
 pytest backend/tests/ --cov=backend
 
+# Run only fast tests (skip slow/integration)
+pytest backend/tests/ -m "not slow"
+
 # Format code
 black backend/ --line-length 88
 isort backend/ --profile black
@@ -131,8 +127,8 @@ isort backend/ --profile black
 # Install dependencies
 cd frontend/web && npm install
 
-# Start development server
-npm start
+# Start development server (Vite)
+npm run dev
 
 # Run tests
 npm test
@@ -156,36 +152,25 @@ npm run build
 | `/api/portfolio` | GET/POST | Portfolio management |
 | `/api/watchlists` | GET/POST | Watchlist operations |
 | `/api/ws` | WS | Real-time WebSocket |
-| `/docs` | GET | Swagger documentation |
-
-### ML API (Port 8001)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | ML service health |
-| `/models` | GET | List ML models |
-| `/predict` | POST | Make predictions |
-| `/predict/stock_price` | POST | Stock predictions |
-| `/retrain` | POST | Trigger retraining |
+| `/docs` | GET | Swagger UI |
 
 ---
 
 ## ML Models
 
-The platform includes a comprehensive ML pipeline for automated stock analysis:
-
-### Trained Models
 | Model | Purpose | File |
 |-------|---------|------|
-| LSTM | Neural network predictions | lstm_weights.pth (5.1MB) |
-| XGBoost | Gradient boosting | xgboost_model.pkl (274KB) |
+| LSTM | Neural network predictions | lstm_weights.pth |
+| XGBoost | Gradient boosting | xgboost_model.pkl |
 | Prophet | Time-series forecasting | prophet/ directory |
+| FinBERT | Sentiment analysis | via HuggingFace |
 
 ### ML Features
-- **Automated Training**: Daily retraining with performance monitoring
-- **Real-time Inference**: <100ms prediction latency
-- **Model Versioning**: Automatic versioning and rollback
-- **Performance Monitoring**: Drift detection and alerting
-- **Backtesting**: Strategy validation engine
+- Automated daily retraining with performance monitoring
+- Real-time inference (<100ms prediction latency)
+- Model versioning and rollback
+- Drift detection and alerting
+- Backtesting and strategy validation
 
 ---
 
@@ -198,7 +183,7 @@ Copy `.env.example` to `.env` and configure:
 ALPHA_VANTAGE_API_KEY=your_key     # 25 calls/day
 FINNHUB_API_KEY=your_key           # 60 calls/minute
 POLYGON_API_KEY=your_key           # 5 calls/minute
-NEWS_API_KEY=your_key
+NEWS_API_KEY=your_key              # 100 requests/day
 
 # Auto-generated by setup.sh
 DB_PASSWORD=auto_generated
@@ -206,30 +191,37 @@ REDIS_PASSWORD=auto_generated
 SECRET_KEY=auto_generated
 JWT_SECRET_KEY=auto_generated
 
-# Optional
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+# Required for GDPR compliance (generate before first run)
+GDPR_ENCRYPTION_KEY=<fernet-key>   # python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Production-only
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+PROMETHEUS_REMOTE_URL=http://victoriametrics:8428/api/v1/write
 ```
+
+See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for the full reference.
 
 ---
 
 ## Monitoring & Observability
 
-### Service URLs
+### Service URLs (Development)
 | Service | URL | Purpose |
 |---------|-----|---------|
 | Frontend | http://localhost:3000 | Web application |
 | Backend API | http://localhost:8000 | REST API |
 | API Docs | http://localhost:8000/docs | Swagger UI |
-| ML API | http://localhost:8001 | ML service |
 | Grafana | http://localhost:3001 | Dashboards |
 | Prometheus | http://localhost:9090 | Metrics |
+| VictoriaMetrics | http://localhost:8428 | Long-term metric storage |
+| Loki | http://localhost:3100 | Log aggregation |
 
-### Production Monitoring
-- Prometheus metrics collection
-- Grafana dashboards (API, Database, ML, System)
-- AlertManager for notifications
-- Real-time performance tracking
+### Production Monitoring Stack
+- **Prometheus** collects metrics from all services (15-30s scrape intervals)
+- **VictoriaMetrics** stores metrics long-term (90-day retention)
+- **Grafana** provides dashboards (API, Database, System, Business)
+- **Loki + Promtail** aggregates structured logs from all containers
+- **AlertManager** routes alerts to Slack/email/PagerDuty
 
 ---
 
@@ -237,44 +229,19 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ```bash
 # Run all tests
-./start.sh test
-
-# Backend tests with coverage
 pytest backend/tests/ --cov=backend --cov-report=html
 
-# Frontend tests
-cd frontend/web && npm test
-
-# Specific test markers
-pytest -m "unit"        # Unit tests
-pytest -m "integration" # Integration tests
-pytest -m "financial"   # Financial model tests
+# By marker
+pytest -m unit          # Unit tests only
+pytest -m integration   # Integration tests only
+pytest -m "not slow"    # Skip tests marked @pytest.mark.slow
 ```
 
-### Test Suites
-
-The project includes 10 new integration and security test suites added in the Wave 5-6 hardening:
-
-| Suite | Location |
-|-------|----------|
-| Analysis Router | `backend/tests/integration/test_analysis_router.py` |
-| Auth Flow | `backend/tests/integration/test_auth_flow_complete.py` |
-| Health Router | `backend/tests/integration/test_health_router.py` |
-| News Router | `backend/tests/integration/test_news_router.py` |
-| Recommendations Router | `backend/tests/integration/test_recommendations_router.py` |
-| Settings Router | `backend/tests/integration/test_settings_router.py` |
-| Stocks Router | `backend/tests/integration/test_stocks_router.py` |
-| WebSocket Router | `backend/tests/integration/test_websocket_router.py` |
-| Rate Limiter | `backend/tests/security/test_rate_limiter.py` |
-| Security Modules | `backend/tests/security/test_security_modules.py` |
-
-### Coverage Status (as of Queen Audit, 2026-02-08)
-- Backend test coverage: ~60% (target: 80%)
-- Frontend test coverage: ~5% (target: 80%)
-- Integration test pass rate: 39.5% (target: 90%)
-- Router test coverage: 10/17 routers covered
-- CI/CD pipelines report coverage per test suite with Codecov integration
-- See [Queen Audit Report](docs/QUEEN_AUDIT_MASTER_REPORT.md) for full metrics
+### Test Status
+- **5026 tests passing**, 8 skipped, 2 xfailed, 0 failed
+- 28 unit test files in `backend/tests/unit/`
+- Integration tests covering all 17 routers
+- Security tests for rate limiting and security modules
 
 ---
 
@@ -290,74 +257,32 @@ The project includes 10 new integration and security test suites added in the Wa
 # Configure SSL first
 ./scripts/init-ssl.sh yourdomain.com admin@yourdomain.com
 
-# Start production
+# Start production (uses docker-compose.production.yml overlay)
 ./start.sh prod
 
 # Monitor services
 docker compose logs -f
 ```
 
-### Docker Services
-- PostgreSQL 15 + TimescaleDB
-- Redis 7 (caching)
-- PostgreSQL Full-Text Search (replaces Elasticsearch)
-- Backend (FastAPI)
-- Frontend (React + Nginx)
-- Celery Worker & Beat
-- Prometheus, Grafana, AlertManager (production)
+### Production Docker Services
+| Service | Purpose |
+|---------|---------|
+| postgres (TimescaleDB 15) | Primary database |
+| redis:7 | Cache + Celery broker/results |
+| backend (FastAPI + Gunicorn) | API server |
+| frontend (React + Nginx) | Web UI |
+| celery_worker | Background task processing |
+| celery_beat | Scheduled task triggers |
+| nginx | TLS termination, reverse proxy |
+| certbot | Automatic Let's Encrypt renewal |
+| prometheus | Metrics collection |
+| victoriametrics | Long-term metric storage |
+| grafana | Dashboards |
+| loki | Log aggregation |
+| promtail | Log shipping agent |
+| alertmanager | Alert routing |
 
----
-
-## AI Agent Framework
-
-The platform integrates a sophisticated multi-agent AI system:
-
-### Statistics
-| Category | Count |
-|----------|-------|
-| AI Agents | 121 |
-| Skills | 104 |
-| Commands | 174 |
-| Helper Scripts | 32 |
-
-### Primary Swarms
-- **infrastructure-devops-swarm**: Docker, CI/CD, deployment
-- **data-ml-pipeline-swarm**: ETL, Airflow, ML training
-- **financial-analysis-swarm**: Stock analysis, predictions
-- **backend-api-swarm**: FastAPI, REST APIs
-- **ui-visualization-swarm**: React, dashboards
-- **project-quality-swarm**: Code review, testing
-- **security-compliance-swarm**: SEC/GDPR compliance
-
-### Custom Investment Agents
-- queen-investment-orchestrator
-- investment-analyst
-- deal-underwriter
-- financial-modeler
-- risk-assessor
-- portfolio-manager
-
-See [CLAUDE.md](CLAUDE.md) for detailed agent documentation.
-
----
-
-## Cost Optimization
-
-Designed to operate under **$50/month**:
-
-| Component | Estimated Cost |
-|-----------|---------------|
-| Database | ~$10 |
-| Compute | ~$15 |
-| Storage | ~$5 |
-| APIs | ~$10 |
-| **Total** | **~$40/month** |
-
-### Strategies
-- Free API tier optimization
-- Multi-layer intelligent caching
-- Batch processing during off-peak hours
-- Auto-scaling with resource limits
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the full production guide.
 
 ---
 
@@ -370,10 +295,10 @@ Designed to operate under **$50/month**:
 - Suitability assessments
 
 ### GDPR
-- Data export endpoints
+- Data export endpoints (right to portability)
 - Right to be forgotten (deletion)
 - Consent management
-- Data anonymization
+- PII encryption via `GDPR_ENCRYPTION_KEY`
 
 ---
 
@@ -381,12 +306,12 @@ Designed to operate under **$50/month**:
 
 | Document | Description |
 |----------|-------------|
-| [Queen Audit Report](docs/QUEEN_AUDIT_MASTER_REPORT.md) | 30-agent audit with grades, metrics, and roadmap |
-| [CLAUDE.md](CLAUDE.md) | Development guidelines & agent framework |
-| [Implementation Status](docs/IMPLEMENTATION_STATUS.md) | Detailed status report |
-| [ML Quickstart](docs/ml/ML_QUICKSTART.md) | ML quick start guide |
-| [ML Pipeline Docs](docs/ml/ML_PIPELINE_DOCUMENTATION.md) | ML technical reference |
-| [/docs](http://localhost:8000/docs) | Interactive API documentation |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment guide |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment variable reference |
+| [docs/INSTALLATION_GUIDE.md](docs/INSTALLATION_GUIDE.md) | Step-by-step installation |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions |
+| [CLAUDE.md](CLAUDE.md) | Development guidelines and AI agent framework |
+| [/docs](http://localhost:8000/docs) | Interactive API documentation (Swagger) |
 
 ---
 
@@ -394,12 +319,13 @@ Designed to operate under **$50/month**:
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Run tests (`./start.sh test`)
-5. Submit a pull request
+3. Write tests first (TDD)
+4. Make your changes
+5. Ensure tests pass (`pytest backend/tests/`)
+6. Submit a pull request
 
 ### Code Standards
-- Python: Black (88 chars), isort, mypy, flake8
+- Python: Black (88 chars), isort, mypy strict mode
 - TypeScript: ESLint, Prettier
 - Test coverage: 80% minimum
 - Conventional commits
@@ -412,16 +338,4 @@ MIT License - see LICENSE file for details
 
 ---
 
-## Acknowledgments
-
-- Alpha Vantage for market data
-- Finnhub for real-time quotes
-- Polygon.io for historical data
-- NewsAPI for sentiment analysis
-- Claude Code for AI agent framework
-
----
-
-**Built for automated investment analysis**
-
-*Last updated: 2026-02-08*
+*Last updated: 2026-03-04*

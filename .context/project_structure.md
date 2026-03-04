@@ -1,7 +1,7 @@
 # Project Structure
 
-**Last Updated**: 2026-03-03 (Refreshed with deep audit)
-**Previous Analysis**: 2026-02-26
+**Last Updated**: 2026-03-04 (Post P0-P5 completion)
+**Previous Analysis**: 2026-03-03
 
 ## Directory Tree Overview
 
@@ -20,7 +20,8 @@ investment-analysis-platform/
 │   │   └── statistical/         # Cointegration
 │   ├── api/
 │   │   ├── main.py              # FastAPI app with 12-layer middleware stack
-│   │   └── routers/             # 18 routers (153 endpoints: 150 HTTP + 3 WS, 8,112 total lines)
+│   │   └── routers/             # 19 routers (153+ endpoints, 8,112 total lines)
+│   │       └── trading.py       # NEW: order validate/execute/impact
 │   ├── auth/                    # 6 files - OAuth2, JWT (RS256), enhanced auth
 │   ├── compliance/              # 10 files - GDPR, consent, data export
 │   ├── config/                  # 7 files - settings, database (632 lines)
@@ -33,28 +34,33 @@ investment-analysis-platform/
 │   │   ├── data_prep/           # Training data generation
 │   │   ├── models/              # Ensemble voting classifier
 │   │   ├── pipeline/            # Deployment, optimization
-│   │   └── training/            # LSTM, XGBoost, Prophet trainers
+│   │   └── training/            # LSTM, XGBoost, Prophet, LightGBM trainers
 │   ├── models/                  # 12 files - unified_models.py (canonical ORM Base)
 │   ├── monitoring/              # 19 files - Prometheus, alerts, dashboards
 │   ├── repositories/            # 13 files - async CRUD pattern
 │   ├── scanner/                 # 4 files - market scanning
-│   ├── security/                # 20 files - comprehensive security stack (3 stubs: rbac, crypto, passwords)
+│   ├── security/                # 20 files - comprehensive security stack
+│   │   ├── rbac.py              # COMPLETE: in-memory + DB-backed RBAC
+│   │   ├── crypto_utils.py      # COMPLETE: Fernet AES + RSA-2048
+│   │   └── password_manager.py  # COMPLETE: bcrypt + legacy PBKDF2 verify
 │   ├── services/                # 20 files - business logic layer (10,241 total lines)
 │   ├── streaming/               # 2 files - Kafka client
 │   ├── tasks/                   # 14 files - Celery (5 queues, beat schedule)
-│   ├── tests/                   # 110 test files, 4,931 tests
-│   │   ├── unit/                # 41 files
+│   ├── tests/                   # 71+ test files, 5,020 passing
+│   │   ├── unit/                # 28 files (+ test_trading_router.py, test_ml_router_extended.py)
 │   │   ├── integration/         # 16 files
 │   │   ├── security/            # 5 files
 │   │   ├── middleware/          # 4 files
 │   │   ├── fixtures/            # 4 fixture files
 │   │   └── *.py                 # 49 top-level test files
-│   ├── TradingAgents/           # 39 files - LangGraph trading system (3 test files, low coverage)
-│   └── utils/                   # 61 files (55 active, reduced from 87)
+│   ├── TradingAgents/           # 39 files - LangGraph trading system (3 test files, ~8% coverage)
+│   └── utils/                   # 61 files (reduced from 87, stabilized)
 ├── frontend/
 │   └── web/                     # React 18 + TypeScript + Vite + MUI v5
+│       ├── Dockerfile           # Node Alpine multi-stage build
 │       └── src/
-│           ├── components/      # 55 files across 15 subdirectories (1 dead: EnhancedDashboard.tsx)
+│           ├── components/      # 54 active files across 15+ subdirectories
+│           │   │                # (EnhancedDashboard.tsx DELETED)
 │           │   ├── alerts/      # AlertForm, AlertsList
 │           │   ├── analysis/    # AnalysisCharts, AnalysisFilters, AnalysisTable
 │           │   ├── cards/       # Recommendation cards, portfolio summary, news
@@ -64,7 +70,8 @@ investment-analysis-platform/
 │           │   ├── market/      # MarketCharts, MarketSummary, MarketTickers
 │           │   ├── monitoring/  # CostMonitor
 │           │   ├── panels/      # Allocation, MarketOverview, NewsFeed, Recs
-│           │   ├── portfolio/   # PortfolioActions, PortfolioChart, PortfolioTabs
+│           │   ├── portfolio/   # PortfolioActions, PortfolioChart, PortfolioTabs,
+│           │   │                # CorrelationMatrix, EfficientFrontier, RiskDecomposition
 │           │   ├── recommendations/ # Filter, List
 │           │   ├── settings/    # SettingsForm, SettingsTabs
 │           │   ├── watchlist/   # WatchlistActions, WatchlistTable
@@ -73,6 +80,7 @@ investment-analysis-platform/
 │           │   ├── SearchModal/
 │           │   └── WebSocketIndicator/
 │           ├── pages/           # 14 pages (all lazy-loaded)
+│           │   └── auth.test.tsx # 30 tests: Login, Register, ForgotPassword
 │           ├── store/slices/    # 6 Redux slices
 │           ├── services/        # API (Axios) + WebSocket (Socket.IO)
 │           ├── hooks/           # 13 custom hooks (performance-oriented)
@@ -81,10 +89,16 @@ investment-analysis-platform/
 │           ├── utils/           # Accessibility, env helpers
 │           ├── config/          # API endpoint registry
 │           └── design/          # Design system
-│       └── tests/e2e/           # 2 Playwright spec files
+│       └── tests/e2e/           # 2 Playwright spec files (not in CI yet)
 ├── infrastructure/
 │   ├── docker/                  # Dockerfiles (backend, frontend, ML)
-│   ├── monitoring/              # Prometheus, Grafana, alerts configs
+│   ├── monitoring/              # Prometheus, Grafana, Loki, SLO alerts configs
+│   │   ├── alertmanager.yml
+│   │   ├── prometheus.yml
+│   │   ├── prometheus.prod.yml
+│   │   ├── alerts/
+│   │   │   └── slo-targets.yml  # NEW: SLO target definitions
+│   │   └── loki/                # Loki + Promtail configs (referenced from compose)
 │   └── nginx/                   # Reverse proxy + SSL config + security headers
 ├── scripts/                     # 100+ scripts across 8 subdirectories
 │   ├── deployment/              # Blue-green deploy, rollback
@@ -98,9 +112,9 @@ investment-analysis-platform/
 ├── data_pipelines/              # Airflow DAGs
 ├── datasets/                    # Dataset definitions
 ├── docs/                        # 18 documentation subdirectories
-├── ml_models/                   # Trained model artifacts (XGBoost, Prophet x3)
+├── ml_models/                   # Trained model artifacts (XGBoost 690KB, Prophet x3)
 ├── docker-compose.yml           # Base (17 services)
-├── docker-compose.production.yml # Production stack (canonical)
+├── docker-compose.production.yml # Production stack — Loki, Promtail, certbot added
 ├── docker-compose.dev.yml       # Development overrides
 ├── docker-compose.test.yml      # Test overrides
 └── docker-compose.ml-production.yml # ML-specific production
@@ -108,26 +122,22 @@ investment-analysis-platform/
 
 ## Key Metrics
 
-| Metric | Feb 26 | Mar 3 | Change |
-|--------|--------|-------|--------|
-| Total project files | ~27,000 | 27,580 | +580 |
-| Python source files | ~330 | 493 | +163 (sub-module splits) |
-| Frontend TSX components | ~30 | 55 | +25 (extracted, 1 dead code) |
-| Frontend pages | 12 | 14 | +2 (auth flows) |
-| Backend test files | 96 | 110 | +14 |
-| Frontend test files | 4 | 12 | +8 |
-| Backend tests (passing) | 3,569 | 4,929 | +1,360 |
-| Frontend tests (passing) | 0 | 197 | +197 (NEW) |
-| Frontend TS/TSX files (total) | ~60 | 106 | +46 |
-| API endpoints | ~140 | 153 | +13 (78 GET, 48 POST, 8 PUT, 7 DEL, 2 PATCH, 3 WS) |
-| Router files | 15 | 18 | +3 (8,112 total lines) |
-| Service files | 12 | 20 | +8 (10,241 total lines) |
-| Security modules | 22 | 20 | Consolidated |
-| CI/CD workflows | 28 | 28 | Stable |
-| Docker compose files | 4 | 5 | +1 (ML production) |
-| ML modules | 36 | 48 | +12 |
-| Utils files | 55 | 61 | +6 (sub-module splits) |
-| Database migrations | 9 | 13 | +4 |
+| Metric | Mar 3 | Mar 4 | Change |
+|--------|-------|-------|--------|
+| Python source files | 493 | 493 | Stable |
+| Frontend TSX components | 55 (1 dead) | 54 (dead removed) | -1 (EnhancedDashboard deleted) |
+| Frontend pages | 14 | 14 | Stable |
+| Backend test files | 71+ | 71+ | Stable |
+| Frontend test files | 12 | 13 | +1 (auth.test.tsx) |
+| Backend tests (passing) | 4,929 | 5,020 | +91 |
+| Frontend tests (passing) | 197 | 197 | Stable |
+| API endpoints | 153 | 153+ | +3 trading, +6 ML |
+| Router files | 18 | 19 | +1 (trading.py) |
+| Service files | 20 | 20 | Stable |
+| Security modules | 20 (3 stubs) | 20 (0 stubs) | All stubs resolved |
+| CI/CD workflows | 29 | 29 | Stable |
+| Docker compose files | 5 | 5 | Stable |
+| ML modules | 48 | 48 | Stable |
 
 ## Technology Stack
 
@@ -138,22 +148,24 @@ investment-analysis-platform/
 | FastAPI | Latest | 12-layer middleware stack |
 | SQLAlchemy | 2.x | DeclarativeBase, async sessions |
 | PostgreSQL | 15 | TimescaleDB 2.12.1 extension |
-| Redis | 7.2-alpine | Cache + distributed rate limiting |
+| Redis | 7.2-alpine | 640MB maxmemory, allkeys-lru |
 | Celery | Latest | 5 queues, beat scheduler, prefork pool |
 | Alembic | Latest | 13 migration versions |
 | Prometheus | Latest | Metrics + alerting |
+| cryptography | Latest | Fernet, RSA-2048 (crypto_utils) |
+| passlib | Latest | bcrypt work factor 12 (password_manager) |
 
 ### Frontend
 | Technology | Version | Notes |
 |------------|---------|-------|
 | React | 18.2.0 | 14 pages, 54 components |
-| TypeScript | 5.3.3 | Strict mode (15 errors remaining) |
+| TypeScript | 5.3.3 | Strict mode, zero @ts-ignore |
 | Vite | 7.3.1 | 18 manual vendor chunks |
 | Redux Toolkit | Latest | 6 domain slices |
 | Material-UI | 5.14 | Full theming + design tokens |
 | Recharts | Latest | Primary charting |
 | Plotly, Chart.js, Lightweight Charts | Latest | 3 additional chart libs |
-| Vitest | 4.0.16 | 12 test files, 201 tests |
+| Vitest | 4.0.16 | 13 test files, 201 tests |
 | Playwright | 1.40 | 2 E2E specs (not yet in CI) |
 
 ### ML
@@ -161,41 +173,12 @@ investment-analysis-platform/
 |------------|-------|
 | XGBoost | Trained model on disk (690 KB) |
 | Prophet | 3 models (AAPL, ADBE, AMZN) |
-| LightGBM | NEW - integrated |
-| TA-Lib | NEW - technical indicators |
+| LightGBM | Integrated |
+| TA-Lib | Technical indicators |
 | LSTM | Training code exists, weights not saved |
 | FinBERT | Sentiment analysis framework |
 
-## Changes Since Last Analysis (2026-02-26)
-
-### 30 Commits, 130 Files Changed (+39,830/-17,434 lines)
-
-**Backend Modularization (Waves 4-6)**:
-- Wave 4: Split 5 largest backend files into sub-modules
-- Wave 5: Split 7 large backend files into sub-modules
-- Wave 6: Extracted frontend components + added 8 test files
-
-**Testing Expansion (Waves 1-3)**:
-- Wave 1: ETL layer extended coverage (+307 tests)
-- Wave 2: Monitoring layer extended coverage (+331 tests)
-- Wave 3: ML and analytics extended coverage (+564 tests)
-
-**Feature Additions**:
-- ML: LightGBM, TA-Lib indicators, Monte Carlo VaR
-- Real-time: Socket.IO service, Celery optimization
-- Frontend: UI overhaul, expanded pages, auth flows (Login, Register, ForgotPassword), seed script
-- ORM: DeclarativeBase migration, legacy shims
-- Security: P0 fixes — password verification, crypto stubs, JWT unification
-
-**Frontend Extraction**:
-- 14 pages -> all lazy-loaded with typed skeletons
-- Monolithic pages split into 54 domain-organized components
-- 13 custom performance hooks
-- 8 new page-level test files
-
-## Files Over 800 Lines (Verified by Deep Audit)
-
-**30 backend files exceed 800 lines. Top 10:**
+## Files Over 800 Lines (Top 10, verified by deep audit)
 
 | File | Lines | Category |
 |------|-------|----------|
@@ -210,13 +193,12 @@ investment-analysis-platform/
 | `monitoring/health_checks.py` | 1,102 | Monitoring |
 | `ml/online_learning.py` | 1,082 | ML |
 
-**Distribution**: Services (2), Security (6), ML (5), Monitoring (4), ETL (2), Utils (3), Data (1), Models (2), TradingAgents (1), API (1), Tasks (1), Config (1)
+Note: Most are cohesive domain code. None are routers (all routers <753 lines post-extraction).
 
-**Frontend files >500 lines:**
+## Frontend Files >500 Lines
+
 | File | Lines | Status |
 |------|-------|--------|
-| `EnhancedDashboard.tsx` | 746 | DEAD CODE (not imported) |
-| `SettingsTabs.tsx` | 586 | Candidate for extraction |
-| `PortfolioSummary.tsx` | 534 | Candidate for extraction |
-
-Note: Most backend large files are cohesive domain code, not sprawl. Frontend `EnhancedDashboard.tsx` should be deleted or integrated.
+| ~~EnhancedDashboard.tsx~~ | ~~746~~ | DELETED (dead code) |
+| `SettingsTabs.tsx` | 586 | Candidate for extraction (non-urgent) |
+| `PortfolioSummary.tsx` | 534 | Candidate for extraction (non-urgent) |

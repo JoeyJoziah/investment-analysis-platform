@@ -1,8 +1,8 @@
 # System Architecture Codemap
 
-**Last Updated:** 2026-02-24
-**Wave:** 5-6+ (CI/CD Hardening, Test Recovery)
-**Status:** Production-Ready
+**Last Updated:** 2026-03-04
+**Wave:** Post-Loki Remediation (Waves 1-14, P0-P5 Complete)
+**Status:** Production-Approaching (Staging-Ready)
 
 ---
 
@@ -17,34 +17,35 @@
               |                              |                              |
     +---------v---------+         +----------v----------+         +---------v---------+
     |   React Frontend  |         |   FastAPI Backend   |         |   WebSocket Hub   |
-    |   (Next.js/React) |         | (Performance Opt)   |         |   (Real-time)     |
+    |  (React 18/Vite)  |         | (12-layer middleware)|         |   (Real-time)     |
     +--------+----------+         +----------+----------+         +---------+---------+
              |                               |                              |
              +---------------+---------------+---------------+--------------+
                              |                               |
                    +---------v---------+           +---------v---------+
                    |   PostgreSQL DB   |           |   Redis Cache     |
-                   | (Primary Storage) |           | (Multi-tier TTL)  |
+                   | (TimescaleDB ext) |           | (Multi-tier TTL)  |
                    +-------------------+           +-------------------+
                              |
               +--------------+---------------+
               |                              |
     +---------v---------+          +---------v---------+
     |   ML Pipeline     |          |   ETL Pipeline    |
-    | (XGBoost/Prophet) |          | (Multi-source)    |
-    +-------------------+          +-------------------+
+    | (XGBoost/Prophet/ |          | (Multi-source)    |
+    |  LightGBM/LSTM)   |          +-------------------+
+    +-------------------+
 ```
 
 ---
 
-## API Routing Architecture (Wave 5 Fix)
+## API Routing Architecture
 
 **Pattern:** Single prefix in `main.py`, no prefix in individual routers.
 
-### Router Registration (Correct Pattern)
+### Router Registration
 
 ```python
-# backend/api/main_performance_optimized.py (lines 430-439)
+# backend/api/main.py
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
@@ -54,22 +55,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(websocket.router, prefix="/ws", tags=["websocket"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
+app.include_router(trading.router, prefix="/api/trading", tags=["trading"])
+app.include_router(ml.router, prefix="/api/ml", tags=["ml"])
 ```
-
-### Wave 5 Double-Prefix Fix
-
-**Problem:** Routers had `prefix="/xxx"` in their definition AND in `include_router()`.
-
-| Router | Before (Double Prefix) | After (Single Prefix) |
-|--------|------------------------|----------------------|
-| auth.py | `prefix="/auth"` | `tags=["authentication"]` |
-| portfolio.py | `prefix="/portfolio"` | `tags=["portfolio"]` |
-| admin.py | `prefix="/admin"` | `tags=["admin"]` |
-| analysis.py | `prefix="/analysis"` | `tags=["analysis"]` |
-| recommendations.py | `prefix="/recommendations"` | `tags=["recommendations"]` |
-| websocket.py | `prefix="/ws"` | `tags=["websocket"]` |
-
-**Commit:** `178a92e`
 
 ---
 
@@ -83,7 +71,7 @@ app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 | `/api/health/readiness` | health | GET | Service readiness (DB, Redis) |
 | `/api/health/liveness` | health | GET | Kubernetes liveness probe |
 | `/api/health/metrics` | health | GET | System metrics |
-| `/api/health/ping` | health | GET | Simple ping/pong (Wave 5) |
+| `/api/health/ping` | health | GET | Simple ping/pong |
 | `/api/stocks` | stocks | GET | List stocks with filtering |
 | `/api/stocks/search` | stocks | GET | Search stocks by name/symbol |
 | `/api/stocks/{symbol}` | stocks | GET | Stock detail |
@@ -96,6 +84,12 @@ app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 | `/api/analysis/{symbol}` | analysis | GET | Stock analysis |
 | `/api/portfolio` | portfolio | GET/POST | Portfolio management |
 | `/api/admin/*` | admin | Various | Admin operations |
+| `/api/trading/validate` | trading | POST | Validate order pre-flight |
+| `/api/trading/execute` | trading | POST | Execute trade |
+| `/api/trading/impact` | trading | POST | Portfolio impact analysis |
+| `/api/ml/predictions` | ml | POST | Run ML prediction |
+| `/api/ml/models` | ml | GET | List available models |
+| `/api/ml/models/{model_id}` | ml | GET | Model details |
 | `/ws/*` | websocket | WS | Real-time updates |
 
 ---
@@ -126,20 +120,23 @@ Exchanges (1) ----< Stocks (N) ----< PriceHistory (N)
 Sectors (1) ----< Industries (N) ----< Stocks (N)
 ```
 
-### Wave 5 Model Updates
+### Canonical ORM
 
-| Model | Field | Change | Commit |
-|-------|-------|--------|--------|
-| Watchlist | `is_public` | Added (Boolean, default False) | `9e51bc9` |
-| Transaction | `trade_date` | Renamed from `executed_at` | Schema alignment |
-| Transaction | `total_amount` | Added as required field | Schema alignment |
-| Stock | `industry_id` | Changed from string to FK | Schema alignment |
+`backend/models/unified_models.py` is the single source of truth for all ORM models
+and Alembic migrations. All routers and services import from this module.
+
+Key field conventions:
+- `Position.avg_cost_basis` (not `cost_basis`)
+- `Transaction.trade_date` (not `executed_at`)
+- `Transaction.total_amount` (required field)
+- `Watchlist.is_public` (Boolean, default False)
+- `Stock.industry_id` (FK to industries, not string)
 
 ---
 
 ## Middleware Stack
 
-### Execution Order (Wave 5 Verified)
+### Execution Order (12 layers)
 
 ```
 Request
@@ -181,9 +178,7 @@ Router Handler
 ### Rate Limiter Configuration
 
 ```python
-# Wave 5 Fix: TESTING mode bypass
 # backend/security/rate_limiter.py
-
 # In TESTING mode, rate limiting is bypassed
 if os.getenv("TESTING") == "True":
     return RateLimitStatus(allowed=True, ...)
@@ -221,38 +216,35 @@ Recommendation Generation:
 
 ## Test Architecture
 
-### Integration Test Categories
+### Test Suite Statistics (2026-03-04)
 
-| Category | Files | Purpose |
-|----------|-------|---------|
-| GDPR | `test_gdpr_data_lifecycle.py` | Data privacy compliance |
-| Auth-Portfolio | `test_auth_to_portfolio_flow.py` | Authentication flows |
-| Stock-Analysis | `test_stock_to_analysis_flow.py` | Analysis pipeline |
-| Agents-Recommendations | `test_agents_to_recommendations_flow.py` | AI agent flows |
-| Phase3 Integration | `test_phase3_integration.py` | End-to-end flows |
+| Metric | Value |
+|--------|-------|
+| Backend tests passing | 5,020 |
+| Skipped (infra-only) | 8 |
+| xfailed | 2 |
+| Failed | 0 |
+| Frontend tests | 201 |
+| Total test files | 71+ |
 
-### Wave 5 Test Patterns
+### Test Categories
 
-**Schema Validation Pattern:**
-```python
-# Always verify field names against unified_models.py
-from backend.models.unified_models import Transaction, Stock, Fundamentals
+| Category | Location | Purpose |
+|----------|----------|---------|
+| Unit | `backend/tests/unit/` | 28+ files, services/utils/ML |
+| Integration | `backend/tests/integration/` | 16 files, API flows |
+| Security | `backend/tests/security/` | 5 files, CSRF/OWASP |
+| Middleware | `backend/tests/middleware/` | 4 files |
+| Frontend | `frontend/web/src/**/*.test.tsx` | 13 files |
 
-# Use correct field names
-transaction = Transaction(
-    trade_date=datetime.utcnow(),      # NOT executed_at
-    total_amount=Decimal("7505.00"),   # Required
-    ...
-)
-```
+### Key Test Patterns
 
-**Async Fixture Pattern:**
-```python
-# Use sync MagicMock for cache fixtures
-@pytest.fixture
-def mock_cache():
-    return MagicMock()  # NOT AsyncMock for Redis client
-```
+**Fixture setup (`backend/tests/conftest.py`):**
+- `authenticated_client` bypasses JWT via dependency override
+- `async_client` has NO auth (use for 401 testing)
+- JWT uses RS256 with auto-generated RSA keys
+- Two `get_current_user` paths: `oauth2.py` (returns User ORM) vs `utils/auth.py` (returns dict)
+- conftest overrides both: `get_current_user` AND `get_current_user_utils`
 
 ---
 
@@ -267,7 +259,7 @@ Client                    API                     Database
    |                       |-- Validate credentials -->|
    |                       |<-- User record -----------|
    |                       |                          |
-   |                       |-- Generate JWT           |
+   |                       |-- Generate JWT (RS256)   |
    |<-- JWT token ---------|                          |
    |                       |                          |
    |-- GET /api/* -------->|                          |
@@ -276,6 +268,20 @@ Client                    API                     Database
    |                       |-- Verify JWT             |
    |<-- Response ----------|                          |
 ```
+
+### Security Stack (Fully Implemented)
+
+| Component | Implementation | Status |
+|-----------|---------------|--------|
+| JWT Auth | RS256 with auto-generated RSA keys | COMPLETE |
+| RBAC | `security/rbac.py` - in-memory + optional DB-backed | COMPLETE |
+| Crypto | `security/crypto_utils.py` - Fernet (AES-128-CBC) + RSA-2048 | COMPLETE |
+| Passwords | `security/password_manager.py` - bcrypt (work factor 12) + legacy PBKDF2 verify | COMPLETE |
+| CSP | `script-src 'self'` only; `style-src` allows `'unsafe-inline'` for MUI | HARDENED |
+| Rate Limiting | Redis-backed distributed, 4 categories | COMPLETE |
+| CSRF | 67 tests | COMPLETE |
+| Audit Logging | Per-request logs | COMPLETE |
+| GDPR | 13 endpoints, field-level encryption key via env | COMPLETE |
 
 ### Rate Limiting Categories
 
@@ -296,23 +302,26 @@ Client                    API                     Database
 |---------|-------|------|---------|
 | backend | fastapi | 8000 | API server |
 | frontend | node/nginx | 3000 | Web app |
-| postgres | postgres:15 | 5432 | Database |
-| redis | redis:7 | 6379 | Cache |
+| postgres | timescale/timescaledb:2.12.1-pg15 | 5432 | Database |
+| redis | redis:7.2-alpine | 6379 | Cache |
 | celery_worker | backend | - | Background tasks |
 | celery_beat | backend | - | Scheduled tasks |
 | prometheus | prometheus | 9090 | Metrics |
 | grafana | grafana | 3001 | Dashboards |
+| loki | grafana/loki:2.9.3 | 3100 | Log aggregation |
+| promtail | grafana/promtail:2.9.3 | - | Log shipping |
+| certbot | certbot/certbot:v2.7.4 | - | SSL auto-renewal |
 
-### CI/CD Runtime Versions (Standardized 2026-02-24)
+### CI/CD Runtime Versions
 
 | Runtime | Version | Notes |
 |---------|---------|-------|
-| Python | 3.12 (primary) | CI matrix also tests 3.9, 3.10, 3.11 |
-| Node.js | 20 | Upgraded from 18 across 9 workflows |
-| `actions/setup-python` | v5 | Upgraded from v4 |
-| `actions/setup-node` | v4 | Upgraded from v3 |
-| `actions/upload-artifact` | v4 | Upgraded from v3 |
-| `github/codeql-action/*` | v3 | Upgraded from v2 in security-scan |
+| Python | 3.12 (primary) | CI matrix also tests 3.10, 3.11 |
+| Node.js | 20 | Standardized across all workflows |
+| `actions/setup-python` | v5 | |
+| `actions/setup-node` | v4 | |
+| `actions/upload-artifact` | v4 | |
+| `github/codeql-action/*` | v3 | |
 
 ---
 
@@ -325,6 +334,9 @@ Client                    API                     Database
 | Router Registry | `backend/api/routers/__init__.py` |
 | Settings | `backend/config/settings.py` |
 | Security Config | `backend/security/security_config.py` |
+| RBAC | `backend/security/rbac.py` |
+| Crypto Utils | `backend/security/crypto_utils.py` |
+| Password Manager | `backend/security/password_manager.py` |
 | Rate Limiter | `backend/security/rate_limiter.py` |
 | Cache Utils | `backend/utils/cache.py` |
 | Test Fixtures | `backend/tests/conftest.py` |
@@ -338,21 +350,3 @@ Client                    API                     Database
 - [FRONTEND.md](FRONTEND.md) - Frontend architecture
 - [DATA_FLOW.md](DATA_FLOW.md) - Data pipeline flows
 - [INFRASTRUCTURE.md](INFRASTRUCTURE.md) - DevOps configuration
-
----
-
-**Wave 5 Commits:**
-- `178a92e` - fix: Resolve double-prefix routing causing 404 errors
-- `9e51bc9` - fix: Resolve integration test schema mismatches and fixture issues
-- `f12c6b2` - fix: Skip rate limiting when TESTING=True
-
-**Post-Wave 6 CI/CD Commits (2026-02-09 through 2026-02-24):**
-- `d9b2d1c` - fix: Upgrade Node 18 to 20, Python 3.11 to 3.12, standardize action versions
-- `786ffec` - fix(ci): Add TA-Lib C library to pipeline validation
-- `4b8b168` - fix(ci): Add TA-Lib C library to security scan
-- `ca91ccd` - fix(ci): Add missing SECRET_KEY/JWT_SECRET_KEY to pipeline validation
-- `4812e1f` - fix(ci): Fix pipeline validation db init and security scan issues
-- `9f22b30` - fix(ci): Make ETL validation resilient to import errors
-- `7a39cb9` - fix(ci): Make Semgrep non-blocking
-- `4bac2fc` - fix(ci): Make GitLeaks non-blocking
-- `4cd4620` - fix: Add missing StockData and ExtractionResult dataclasses to ETL

@@ -1,19 +1,20 @@
 # Infrastructure Architecture Codemap
 
+**Last Updated:** 2026-03-04
+
 ## Docker Services
 
 ### Core Services
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| postgres | postgres:15-alpine | 5432 | Primary database |
-| timescaledb | timescale/timescaledb | - | Time-series extension |
-| redis | redis:7-alpine | 6379 | Cache & message broker |
-| backend | custom | 8000 | FastAPI application |
-| frontend | custom | 3000 | React application |
-| celery_worker | custom | - | Background tasks |
-| celery_beat | custom | - | Scheduled tasks |
-| airflow | apache/airflow | 8080 | Pipeline orchestration |
+| postgres | timescale/timescaledb:2.12.1-pg15 | 5432 | Primary database |
+| redis | redis:7.2-alpine | 6379 | Cache & message broker |
+| backend | custom (multi-stage, non-root) | 8000 | FastAPI application |
+| frontend | custom (Node Alpine, multi-stage) | 3000 | React application |
+| celery_worker | custom | - | Background tasks (5 queues) |
+| celery_beat | custom | - | Scheduled tasks (beat scheduler) |
+| nginx | nginx:alpine | 80/443 | Reverse proxy + SSL |
 
 ### Monitoring Stack (Production)
 
@@ -22,55 +23,68 @@
 | prometheus | prom/prometheus | 9090 | Metrics collection |
 | grafana | grafana/grafana | 3001 | Dashboards |
 | alertmanager | prom/alertmanager | 9093 | Alert routing |
+| loki | grafana/loki:2.9.3 | 3100 | Log aggregation |
+| promtail | grafana/promtail:2.9.3 | - | Log shipping to Loki |
+| certbot | certbot/certbot:v2.7.4 | - | SSL certificate auto-renewal |
+
+### Additional Services (Production Only)
+
+| Service | Purpose |
+|---------|---------|
+| cost_monitor | Budget monitoring (alert at 90% of $50/month) |
+| node-exporter | Host metrics for Prometheus |
+| cadvisor | Container metrics |
+| airflow | Pipeline orchestration (Airflow DAGs) |
 
 ## Docker Compose Files
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Base configuration |
+| `docker-compose.yml` | Base configuration (17 services) |
 | `docker-compose.dev.yml` | Development overrides |
-| `docker-compose.prod.yml` | Production configuration |
+| `docker-compose.production.yml` | Full production stack (canonical) — includes Loki, Promtail, certbot |
 | `docker-compose.test.yml` | Testing configuration |
+| `docker-compose.ml-production.yml` | ML-specific production extensions |
 
 ## Resource Allocations
 
-### Development
+### Production (`docker-compose.production.yml`)
 
 | Service | CPU | Memory |
 |---------|-----|--------|
-| postgres | 0.75 | 384MB |
-| redis | 0.2 | 128MB |
-| backend | 0.5 | 512MB |
-| celery_worker | 0.75 | 512MB |
-| airflow | 0.5 | 512MB |
-
-### Production
-
-| Service | CPU | Memory |
-|---------|-----|--------|
-| postgres | 1.0 | 512MB |
-| redis | 0.25 | 600MB |
-| backend | 1.0 | 768MB |
-| celery_worker | 1.0 | 768MB |
-| airflow | 0.75 | 768MB |
+| postgres | 1.0 | 1.5 GB |
+| redis | 0.25 | 640 MB |
+| backend | 0.75 | 512 MB |
+| celery_worker | 2.0 | 1 GB |
+| celery_beat | - | No limits (gap) |
+| nginx | 0.25 | 128 MB |
+| prometheus | 0.25 | 256 MB |
+| grafana | 0.2 | 192 MB |
 
 ## Configuration Files
 
-### Monitoring (`config/monitoring/`)
+### Monitoring (`infrastructure/monitoring/`)
 
 | File | Purpose |
 |------|---------|
-| `prometheus.yml` | Prometheus scrape config |
+| `prometheus.yml` | Prometheus scrape config (10+ targets) |
+| `prometheus.prod.yml` | Production Prometheus config |
 | `alertmanager.yml` | Alert routing rules |
+| `alerts/slo-targets.yml` | SLO target definitions |
 | `grafana/provisioning/` | Grafana dashboards |
+| `loki/loki-config.yaml` | Loki log aggregation config |
+| `loki/promtail-config.yaml` | Promtail log shipping config |
 
 ### Nginx (`infrastructure/nginx/`)
 
 | File | Purpose |
 |------|---------|
 | `nginx.conf` | Main configuration |
-| `ssl.conf` | SSL/TLS settings |
+| `nginx-ssl.conf` | SSL/TLS settings (references ssl/ directory) |
 | `upstream.conf` | Backend proxy |
+
+**Note:** `ssl/` directory must contain `fullchain.pem`, `privkey.pem`, `dhparam.pem`,
+`chain.pem` before nginx starts in production. Use certbot container for auto-provisioning.
 
 ## Health Checks
 
@@ -97,7 +111,7 @@ healthcheck:
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                        NGINX                                │
-│              (Reverse Proxy + SSL)                          │
+│              (Reverse Proxy + SSL via certbot)              │
 │                     Port 80/443                             │
 └─────────────────────────┬───────────────────────────────────┘
                           │
@@ -117,6 +131,11 @@ healthcheck:
           │    PostgreSQL   │ │      Redis      │ │  Celery Worker  │
           │    Port 5432    │ │   Port 6379     │ │                 │
           └─────────────────┘ └─────────────────┘ └─────────────────┘
+                    │
+          ┌─────────────────┐ ┌─────────────────┐
+          │   Prometheus    │ │      Loki       │
+          │    Port 9090    │ │   Port 3100     │
+          └─────────────────┘ └─────────────────┘
 ```
 
 ## Environment Variables
@@ -129,7 +148,9 @@ healthcheck:
 | DB_PASSWORD | postgres | Auth |
 | REDIS_URL | backend | Cache connection |
 | REDIS_PASSWORD | redis | Auth |
-| SECRET_KEY | backend | JWT signing |
+| SECRET_KEY | backend | JWT signing seed |
+| JWT_SECRET_KEY | backend | JWT secret |
+| GDPR_ENCRYPTION_KEY | backend | Fernet key for field-level encryption |
 
 ### API Keys
 
@@ -140,27 +161,21 @@ healthcheck:
 | POLYGON_API_KEY | backend | 5/min |
 | NEWS_API_KEY | backend | 100/day |
 
-## Deployment Scripts
+## Deployment Scripts (`scripts/deployment/`)
 
-| Script | Purpose |
-|--------|---------|
-| `setup.sh` | Initial setup with credential generation |
-| `start.sh` | Start services (dev/prod/test) |
-| `stop.sh` | Stop all services |
-| `logs.sh` | View service logs |
-| `board-sync.sh` | GitHub Projects sync |
-| `notion-sync.sh` | Notion sync |
+| Script | Quality | Notes |
+|--------|---------|-------|
+| `blue_green_deploy.sh` | HIGH | Error handling, dry-run, auto-rollback |
+| `rollback.sh` | HIGH | Version-targeted, confirmation, JSON reports |
+| `generate_secrets.sh` | GOOD | Python cryptography module |
+| `validate-env.sh` | GOOD | Environment validation |
+| `backup.sh` | MODERATE | S3 support, integrity verification |
+| `restore-backup.sh` | MODERATE | S3 restore |
 
 ## CI/CD Workflows (`.github/workflows/`)
 
-**Runtime Versions (standardized 2026-02-24):**
-- Python: `3.12` (primary), matrix tests 3.9-3.12 in `ci.yml`
-- Node.js: `20`
-
-**Action Versions (standardized 2026-02-24):**
-- `actions/setup-python@v5`, `actions/setup-node@v4`
-- `actions/upload-artifact@v4`, `actions/download-artifact@v4`
-- `github/codeql-action/*@v3` (except 2 legacy v2 refs in staging/production deploy)
+**Runtime Versions:** Python 3.12 (primary, matrix: 3.10/3.11/3.12), Node.js 20
+**Action Versions:** `setup-python@v5`, `setup-node@v4`, `upload-artifact@v4`, `codeql@v3`
 
 ### Core Workflows
 
@@ -177,7 +192,7 @@ healthcheck:
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `staging-deploy.yml` | Push to main | Build, test, deploy to staging |
-| `production-deploy.yml` | Release published | Build, test, deploy to production |
+| `production-deploy.yml` | Release published | Build, test, deploy to production (blue-green) |
 | `release-management.yml` | Version tag push | Release versioning and changelog |
 | `automated-release.yml` | Manual/VERSION push | Semantic versioning pipeline |
 | `workflow-coordinator.yml` | Manual dispatch | Orchestrate multi-workflow runs |
@@ -201,48 +216,14 @@ healthcheck:
 
 ### TA-Lib C Library Dependency
 
-Workflows that run Python code importing `talib` include a build step that compiles TA-Lib 0.4.0 from source:
+Workflows that run Python code importing `talib` include a build step that
+compiles TA-Lib 0.4.0 from source:
 - `daily-pipeline-validation.yml`
 - `security-scan.yml`
 - `ci.yml` (via requirements)
 - `reusable-test.yml`
 - `production-deploy.yml`
 - `dependency-updates.yml`
-
-## Quick Wins Applied
-
-### Elasticsearch Removal (Quick Win #3)
-- **Before**: Elasticsearch 8.11 service ($15-20/month)
-- **After**: PostgreSQL Full-Text Search with pg_trgm
-- **Impact**: Reduced monthly cost, simpler stack
-
-### Redis Memory Increase (Quick Win #4)
-- **Before**: 128MB maxmemory
-- **After**: 512MB maxmemory with `allkeys-lru`
-- **Files Modified**:
-  - `docker-compose.yml`
-  - `docker-compose.dev.yml`
-  - `docker-compose.prod.yml`
-
-## Cost Breakdown
-
-### Current ($45-50/month target achieved)
-
-| Component | Estimated Cost |
-|-----------|---------------|
-| Database | ~$10 |
-| Compute | ~$15 |
-| Storage | ~$5 |
-| APIs | ~$10 |
-| **Total** | **~$40-45** |
-
-### Savings from Quick Wins
-
-| Optimization | Savings |
-|--------------|---------|
-| Elasticsearch removal | $15-20/month |
-| Resource right-sizing | $10-15/month |
-| **Total** | **$25-35/month** |
 
 ## Monitoring Dashboards
 
@@ -255,6 +236,8 @@ Workflows that run Python code importing `talib` include a build step that compi
 | Cache Performance | Hit rate, memory usage |
 | ML Pipeline | Model latency, accuracy |
 | Infrastructure | CPU, memory, disk |
+| Business Metrics | Active users, recommendations, portfolio updates |
+| External APIs | Rate limit status, response times |
 
 ### Prometheus Metrics
 
@@ -264,6 +247,23 @@ Workflows that run Python code importing `talib` include a build step that compi
 | `http_request_duration_seconds` | Histogram | method, endpoint |
 | `cache_hits_total` | Counter | cache_type |
 | `db_query_duration_seconds` | Histogram | query_type |
+
+### SLO Targets (`infrastructure/monitoring/alerts/slo-targets.yml`)
+
+SLO definitions have been added including availability, latency p95, and error rate targets.
+
+## Cost Profile
+
+| Component | Monthly Cost |
+|-----------|-------------|
+| VPS/Compute | ~$20 |
+| Database | ~$10 |
+| Redis | ~$5 |
+| Monitoring | ~$5 |
+| **Total** | **~$40 (under $50 budget)** |
+
+Elasticsearch was removed in favor of PostgreSQL full-text search (pg_trgm),
+saving $15-20/month.
 
 ## Troubleshooting
 
@@ -288,26 +288,9 @@ docker stats --no-stream
 # Restart single service
 docker compose restart <service>
 
-# View service logs
-./logs.sh <service>
-
 # Full restart
-./stop.sh && ./start.sh dev
+docker compose down && docker compose up -d
+
+# View logs
+docker compose logs -f <service>
 ```
-
-## CI/CD Hardening History (2026-02-24)
-
-12 commits resolved daily CI failures:
-- `d9b2d1c` -- Node 18 to 20, standardized action versions across 9 workflows
-- `786ffec`, `4b8b168` -- TA-Lib C library added to pipeline validation and security scan
-- `ca91ccd` -- Missing SECRET_KEY/JWT_SECRET_KEY added to pipeline validation
-- `03b6237` -- SSL disabled for CI PostgreSQL service
-- `363fe69` -- Fixed inline Python code in pipeline validation
-- `4812e1f` -- Fixed pipeline validation db init and security scan issues
-- `9f22b30` -- ETL validation made resilient to import errors
-- `c7d78da` -- Fixed npm audit output concatenation in dependency-updates
-- `7a39cb9` -- Semgrep made non-blocking in security scan
-- `4bac2fc` -- GitLeaks made non-blocking in security scan
-- CodeQL upgraded from v2 to v3 in `security-scan.yml`
-
-**Last Updated**: 2026-02-24
