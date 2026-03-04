@@ -248,7 +248,7 @@ class CryptoUtils:
 
 ## Tests (`backend/tests/`)
 
-28 unit test files, 71+ total test files, 5,020 tests passing.
+28 unit test files, 71+ total test files, 5,026 tests passing.
 
 | Directory | Files | Coverage |
 |-----------|-------|---------|

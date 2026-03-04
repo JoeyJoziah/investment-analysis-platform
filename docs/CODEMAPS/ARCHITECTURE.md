@@ -220,7 +220,7 @@ Recommendation Generation:
 
 | Metric | Value |
 |--------|-------|
-| Backend tests passing | 5,020 |
+| Backend tests passing | 5,026 |
 | Skipped (infra-only) | 8 |
 | xfailed | 2 |
 | Failed | 0 |

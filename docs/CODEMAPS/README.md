@@ -24,7 +24,7 @@ Quick reference to codebase structure for developers.
 | React Pages | `frontend/web/src/pages/` | 14 pages (all lazy-loaded) |
 | Redux State | `frontend/web/src/store/slices/` | 6 slices |
 | Frontend Tests | `frontend/web/src/**/*.test.tsx` | 13 test files, 201 tests |
-| Backend Tests | `backend/tests/` | 71+ test files, 5,020 passing |
+| Backend Tests | `backend/tests/` | 71+ test files, 5,026 passing |
 | CI/CD Workflows | `.github/workflows/` | 29 workflows (Python 3.12, Node 20, Actions v4/v5) |
 | Docker Config | `docker-compose*.yml` | 5 compose files |
 | Monitoring | `infrastructure/monitoring/` | Prometheus, Grafana, Loki, SLO targets |
@@ -38,7 +38,7 @@ Quick reference to codebase structure for developers.
 | P0 — Security Hardening | RBAC, crypto_utils, password_manager, CSP | COMPLETE |
 | P1 — CI Gates | Auth page tests (+30), slow test tagging | COMPLETE |
 | P2 — API Completion | trading.py router, ml.py expanded to 8 endpoints | COMPLETE |
-| P3 — Test Coverage | Test pollution fixed, 5,020 tests passing | COMPLETE |
+| P3 — Test Coverage | Test pollution fixed, 5,026 tests passing | COMPLETE |
 | P4 — Deployment & Ops | certbot, Loki+Promtail, SLO alerts, GDPR key | COMPLETE |
 | P5 — Frontend Polish | EnhancedDashboard deleted, analytics components to portfolio/ | COMPLETE |
 
@@ -60,7 +60,7 @@ Quick reference to codebase structure for developers.
 
 | Metric | Value |
 |--------|-------|
-| Backend tests passing | 5,020 |
+| Backend tests passing | 5,026 |
 | Backend tests skipped | 8 (infra-only: celery, testcontainers, etc.) |
 | Backend xfailed | 2 |
 | Backend failed | 0 |
