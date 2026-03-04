@@ -48,6 +48,7 @@ class ContentSecurityPolicy:
     """Content Security Policy configuration"""
     default_src: List[str] = field(default_factory=lambda: ["'self'"])
     script_src: List[str] = field(default_factory=lambda: ["'self'"])
+    # 'unsafe-inline' required for Material UI CSS-in-JS runtime styles
     style_src: List[str] = field(default_factory=lambda: ["'self'", "'unsafe-inline'"])
     img_src: List[str] = field(default_factory=lambda: ["'self'", "data:", "https:"])
     font_src: List[str] = field(default_factory=lambda: ["'self'", "data:"])

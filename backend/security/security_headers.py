@@ -111,7 +111,8 @@ class SecurityHeadersConfig:
         """Get default Content Security Policy"""
         return {
             CSPDirective.DEFAULT_SRC: ["'self'"],
-            CSPDirective.SCRIPT_SRC: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            CSPDirective.SCRIPT_SRC: ["'self'"],
+            # 'unsafe-inline' required for Material UI CSS-in-JS runtime styles
             CSPDirective.STYLE_SRC: ["'self'", "'unsafe-inline'"],
             CSPDirective.IMG_SRC: ["'self'", "data:", "https:"],
             CSPDirective.FONT_SRC: ["'self'", "data:", "https:"],
@@ -501,7 +502,9 @@ def get_development_security_config() -> SecurityHeadersConfig:
             CSPDirective.FRAME_ANCESTORS: ["'self'"]
         },
         frame_options="SAMEORIGIN",
-        csp_report_only=True  # Use report-only mode in development
+        # Report-only mode in development: unsafe-inline/unsafe-eval are
+        # acceptable here because violations are only reported, not enforced.
+        csp_report_only=True
     )
 
 

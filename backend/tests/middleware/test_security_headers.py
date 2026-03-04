@@ -146,6 +146,30 @@ class TestSecurityHeadersMiddleware:
         assert "default-src 'self'" in csp
         assert "script-src 'self'" in csp
 
+    def test_csp_no_unsafe_in_script_src(self, client):
+        """Default CSP must not allow unsafe-inline or unsafe-eval in script-src"""
+        response = client.get("/test")
+        csp = response.headers.get("Content-Security-Policy")
+        assert csp is not None
+        # Extract the script-src directive value
+        for directive in csp.split(";"):
+            directive = directive.strip()
+            if directive.startswith("script-src"):
+                assert "'unsafe-inline'" not in directive
+                assert "'unsafe-eval'" not in directive
+                break
+
+    def test_csp_style_src_allows_unsafe_inline(self, client):
+        """style-src must allow unsafe-inline for Material UI CSS-in-JS"""
+        response = client.get("/test")
+        csp = response.headers.get("Content-Security-Policy")
+        assert csp is not None
+        for directive in csp.split(";"):
+            directive = directive.strip()
+            if directive.startswith("style-src"):
+                assert "'unsafe-inline'" in directive
+                break
+
     def test_permissions_policy(self, client):
         """Test Permissions-Policy header"""
         response = client.get("/test")
