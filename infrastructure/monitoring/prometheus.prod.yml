@@ -57,3 +57,12 @@ scrape_configs:
     static_configs:
       - targets: ['nginx-exporter:9113']
     scrape_interval: 30s
+
+# Remote write to VictoriaMetrics for long-term retention (90+ days)
+# Enabled when PROMETHEUS_REMOTE_URL is set in environment
+remote_write:
+  - url: "${PROMETHEUS_REMOTE_URL:-http://victoriametrics:8428/api/v1/write}"
+    queue_config:
+      max_samples_per_send: 1000
+      batch_send_deadline: 5s
+      max_shards: 3

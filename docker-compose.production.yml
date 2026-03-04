@@ -316,6 +316,8 @@ services:
       - '--web.external-url=http://${PROMETHEUS_DOMAIN:-localhost:9090}'
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - victoriametrics
     logging: *default-logging
     deploy:
       <<: *resource-limits-medium
@@ -345,6 +347,30 @@ services:
       - prometheus
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      <<: *healthcheck-defaults
+    logging: *default-logging
+    deploy:
+      <<: *resource-limits-small
+    networks:
+      - investment_network
+
+  # VictoriaMetrics - Long-term Prometheus-compatible metric storage
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.96.0
+    container_name: investment_victoriametrics_prod
+    <<: *restart-policy
+    command:
+      - '-storageDataPath=/victoria-metrics-data'
+      - '-retentionPeriod=90d'
+      - '-httpListenAddr=:8428'
+      - '-search.maxUniqueTimeseries=300000'
+      - '-search.maxStalenessInterval=5m'
+    volumes:
+      - victoria_metrics_data:/victoria-metrics-data
+    ports:
+      - "${VICTORIA_METRICS_PORT:-8428}:8428"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8428/health"]
       <<: *healthcheck-defaults
     logging: *default-logging
     deploy:
@@ -472,6 +498,12 @@ volumes:
       type: none
       o: bind
       device: ${DATA_DIR:-./data}/loki
+  victoria_metrics_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/victoriametrics
 
 networks:
   investment_network:
