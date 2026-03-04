@@ -4,6 +4,7 @@ Monitoring and Observability Endpoints
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -23,20 +24,59 @@ from backend.models.monitoring_schemas import (
 
 router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
 
+logger = logging.getLogger(__name__)
+
 
 @router.get("/health")
 async def health_check() -> ApiResponse[HealthCheckResponse]:
     """Complete system health check"""
-    return success_response(data=HealthCheckResponse(
-        status="healthy",
+    services: Dict[str, Any] = {"api": "healthy"}
+    errors: Dict[str, str] = {}
+
+    # Check Redis connectivity
+    try:
+        from backend.utils.cache import get_redis
+        redis_client = await get_redis()
+        await redis_client.ping()
+        services["redis"] = "healthy"
+    except Exception as exc:
+        logger.warning("Redis health check failed: %s", exc)
+        services["redis"] = "unhealthy"
+        errors["redis"] = str(exc)
+
+    # Check database connectivity
+    try:
+        from sqlalchemy import text
+        from backend.config.database import db_manager
+        async with db_manager.get_session() as session:
+            await session.execute(text("SELECT 1"))
+        services["database"] = "healthy"
+    except Exception as exc:
+        logger.warning("Database health check failed: %s", exc)
+        services["database"] = "unhealthy"
+        errors["database"] = str(exc)
+
+    # Check Grafana (existing, does not raise)
+    services["grafana"] = grafana_client.test_connection()
+
+    # Determine overall status
+    redis_ok = services["redis"] == "healthy"
+    db_ok = services["database"] == "healthy"
+
+    if redis_ok and db_ok:
+        overall = "healthy"
+    elif redis_ok or db_ok:
+        overall = "degraded"
+    else:
+        overall = "unhealthy"
+
+    response_data = HealthCheckResponse(
+        status=overall,
         timestamp=datetime.now(timezone.utc).isoformat(),
-        services={
-            "api": "healthy",
-            "database": "healthy",  # Add actual DB check
-            "redis": "healthy",     # Add actual Redis check
-            "grafana": grafana_client.test_connection()
-        }
-    ))
+        services=services,
+    )
+
+    return success_response(data=response_data)
 
 
 @router.get("/metrics/cost")

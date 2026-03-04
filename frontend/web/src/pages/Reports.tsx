@@ -217,11 +217,95 @@ const Reports: React.FC = () => {
   }, [notify]);
 
   const handleDownload = useCallback((r: RecentReport) => {
-    notify('success', `Downloading ${r.name}.${r.format.toLowerCase()}`);
+    if (r.status !== 'ready') {
+      notify('warning', `${r.name} is not ready for download`);
+      return;
+    }
+
+    try {
+      // Build a plain-text summary of the report metadata to use as download content.
+      // In a real implementation this would be replaced with the actual file bytes
+      // fetched from the API (e.g. via a presigned URL or a /reports/:id/download endpoint).
+      const lines = [
+        `Report: ${r.name}`,
+        `Type: ${r.type}`,
+        `Format: ${r.format}`,
+        `Status: ${r.status}`,
+        `Date Range: ${r.dateRange}`,
+        `Generated: ${fmtDate(r.generatedAt)}`,
+        `File Size: ${r.fileSize}`,
+      ];
+      const content = lines.join('\n');
+
+      const mimeTypes: Record<ReportFormat, string> = {
+        PDF: 'application/pdf',
+        CSV: 'text/csv',
+        Excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      };
+
+      const blob = new Blob([content], { type: mimeTypes[r.format] ?? 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${r.name}.${r.format.toLowerCase()}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+
+      notify('success', `Downloaded ${r.name}`);
+    } catch {
+      notify('error', `Failed to download ${r.name}`);
+    }
   }, [notify]);
 
   const handleView = useCallback((r: RecentReport) => {
-    notify('info', `Opening ${r.name} preview`);
+    if (r.status !== 'ready') {
+      notify('warning', `${r.name} is not ready to view`);
+      return;
+    }
+
+    try {
+      // Build an HTML preview of the report metadata.
+      // In a real implementation the content would come from the API.
+      const rows = [
+        ['Report Name', r.name],
+        ['Type', r.type],
+        ['Format', r.format],
+        ['Date Range', r.dateRange],
+        ['Generated', fmtDate(r.generatedAt)],
+        ['File Size', r.fileSize],
+        ['Status', r.status],
+      ]
+        .map(([label, value]) => `<tr><th style="text-align:left;padding:6px 12px;background:#f5f5f5">${label}</th><td style="padding:6px 12px">${value}</td></tr>`)
+        .join('');
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>${r.name}</title>
+  <style>body{font-family:sans-serif;margin:2rem}table{border-collapse:collapse;width:100%}tr{border-bottom:1px solid #ddd}</style>
+</head>
+<body>
+  <h2>${r.name}</h2>
+  <table>${rows}</table>
+  <p style="margin-top:1.5rem;color:#888;font-size:.85rem">
+    Note: This is a metadata preview. Full report content requires a connected API.
+  </p>
+</body>
+</html>`;
+
+      const newWindow = window.open('', '_blank');
+      if (!newWindow) {
+        notify('warning', 'Pop-up blocked. Allow pop-ups for this site to view reports.');
+        return;
+      }
+      newWindow.document.write(html);
+      newWindow.document.close();
+    } catch {
+      notify('error', `Failed to open ${r.name}`);
+    }
   }, [notify]);
 
   const handleToggleSchedule = useCallback((id: string) => {

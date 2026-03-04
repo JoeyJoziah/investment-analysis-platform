@@ -147,8 +147,9 @@ export const fetchWatchlist = createAsyncThunk(
     try {
       const response = await apiService.get('/api/watchlists/default');
       return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch watchlist');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlist');
     }
   }
 );
@@ -165,8 +166,9 @@ export const addToWatchlist = createAsyncThunk(
         notes,
       });
       return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to add to watchlist');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to add to watchlist');
     }
   }
 );
@@ -177,8 +179,9 @@ export const removeFromWatchlist = createAsyncThunk(
     try {
       await apiService.delete(`/api/watchlists/default/symbols/${symbol}`);
       return symbol;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to remove from watchlist');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to remove from watchlist');
     }
   }
 );
@@ -203,8 +206,9 @@ export const updateWatchlistItem = createAsyncThunk(
         updates
       );
       return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to update watchlist item');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to update watchlist item');
     }
   }
 );
@@ -216,8 +220,9 @@ export const fetchAllWatchlists = createAsyncThunk(
     try {
       const response = await apiService.get('/api/watchlists');
       return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to fetch watchlists');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlists');
     }
   }
 );
@@ -236,8 +241,9 @@ export const createWatchlist = createAsyncThunk(
         is_public: isPublic,
       });
       return response.data;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to create watchlist');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to create watchlist');
     }
   }
 );
@@ -249,8 +255,9 @@ export const deleteWatchlist = createAsyncThunk(
     try {
       await apiService.delete(`/api/watchlists/${watchlistId}`);
       return watchlistId;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || 'Failed to delete watchlist');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to delete watchlist');
     }
   }
 );

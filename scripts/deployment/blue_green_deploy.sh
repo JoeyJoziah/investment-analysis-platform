@@ -334,7 +334,7 @@ services:
     image: investment-backend:${VERSION}
     container_name: investment_api_${target_env}
     ports:
-      - "${target_env == 'blue' && echo '8001' || echo '8002'}:8000"
+      - "$([[ "$target_env" == 'blue' ]] && echo '8001' || echo '8002'):8000"
     environment:
       - ENVIRONMENT=${target_env}
     networks:
@@ -344,7 +344,7 @@ services:
     image: investment-frontend:${VERSION}
     container_name: investment_web_${target_env}
     ports:
-      - "${target_env == 'blue' && echo '3001' || echo '3002'}:80"
+      - "$([[ "$target_env" == 'blue' ]] && echo '3001' || echo '3002'):80"
     environment:
       - ENVIRONMENT=${target_env}
     networks:

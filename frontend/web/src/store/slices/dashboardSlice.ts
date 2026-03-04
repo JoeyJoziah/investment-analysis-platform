@@ -14,13 +14,108 @@ interface Sector {
   volume: number;
 }
 
+interface HeatmapEntry {
+  symbol: string;
+  sector: string;
+  change: number;
+  changePercent: number;
+  marketCap: number;
+}
+
+interface Recommendation {
+  id: string;
+  ticker: string;
+  action: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  targetPrice: number;
+  currentPrice: number;
+  rationale: string;
+  createdAt: string;
+}
+
+interface PositionSummary {
+  ticker: string;
+  companyName: string;
+  change: number;
+  changePercent: number;
+  currentPrice: number;
+  marketValue: number;
+}
+
+interface AllocationEntry {
+  label: string;
+  value: number;
+  percent: number;
+}
+
+interface NewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  tickers: string[];
+}
+
+interface ApiUsageEntry {
+  provider: string;
+  calls: number;
+  cost: number;
+  date: string;
+}
+
+interface CostBreakdownEntry {
+  category: string;
+  amount: number;
+  percent: number;
+}
+
+interface CostAlert {
+  id: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  triggeredAt: string;
+}
+
+interface CostTrendEntry {
+  date: string;
+  cost: number;
+  projected: boolean;
+}
+
+interface MarketSentimentState {
+  overall: string;
+  score: number;
+  breakdown: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+}
+
+interface CostMetricsState {
+  currentMonthCost: number;
+  projectedMonthCost: number;
+  dailyAverage: number;
+  monthlyBudget: number;
+  apiUsage: ApiUsageEntry[];
+  costBreakdown: CostBreakdownEntry[];
+  alerts: CostAlert[];
+  lastUpdated: string;
+  costTrend: CostTrendEntry[];
+  savingsMode: boolean;
+  emergencyMode: boolean;
+}
+
 interface DashboardState {
   marketOverview: {
     indices: MarketIndex[];
-    heatmap: any[];
+    heatmap: HeatmapEntry[];
     sectors: Sector[];
   } | null;
-  topRecommendations: any[];
+  topRecommendations: Recommendation[];
   portfolioSummary: {
     totalValue: number;
     totalCost: number;
@@ -33,9 +128,9 @@ interface DashboardState {
     yearChange: number;
     activePositions: number;
     performanceHistory: Array<{ date: string; value: number }>;
-    topGainers: any[];
-    topLosers: any[];
-    allocation: any[];
+    topGainers: PositionSummary[];
+    topLosers: PositionSummary[];
+    allocation: AllocationEntry[];
     riskMetrics: {
       sharpeRatio: number;
       beta: number;
@@ -46,29 +141,9 @@ interface DashboardState {
     cashBalance: number;
     marginUsed: number;
   } | null;
-  recentNews: any[];
-  marketSentiment: {
-    overall: string;
-    score: number;
-    breakdown: {
-      positive: number;
-      neutral: number;
-      negative: number;
-    };
-  } | null;
-  costMetrics: {
-    currentMonthCost: number;
-    projectedMonthCost: number;
-    dailyAverage: number;
-    monthlyBudget: number;
-    apiUsage: any[];
-    costBreakdown: any[];
-    alerts: any[];
-    lastUpdated: string;
-    costTrend: any[];
-    savingsMode: boolean;
-    emergencyMode: boolean;
-  } | null;
+  recentNews: NewsItem[];
+  marketSentiment: MarketSentimentState | null;
+  costMetrics: CostMetricsState | null;
   loading: boolean;
   error: string | null;
 }
@@ -120,13 +195,13 @@ const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState,
   reducers: {
-    updateMarketSentiment: (state, action: PayloadAction<any>) => {
+    updateMarketSentiment: (state, action: PayloadAction<MarketSentimentState>) => {
       state.marketSentiment = action.payload;
     },
-    updateCostMetrics: (state, action: PayloadAction<any>) => {
+    updateCostMetrics: (state, action: PayloadAction<CostMetricsState>) => {
       state.costMetrics = action.payload;
     },
-    addNews: (state, action: PayloadAction<any>) => {
+    addNews: (state, action: PayloadAction<NewsItem>) => {
       state.recentNews.unshift(action.payload);
       if (state.recentNews.length > 20) {
         state.recentNews.pop();

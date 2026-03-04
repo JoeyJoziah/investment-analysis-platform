@@ -6,6 +6,13 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { apiConfig, buildApiUrl } from '../config/api.config';
 
+export interface RegisterUserData {
+  username: string;
+  email: string;
+  password: string;
+  fullName?: string;
+}
+
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: apiConfig.baseURL,
@@ -73,16 +80,16 @@ apiClient.interceptors.response.use(
 // API methods
 export const api = {
   // Generic methods
-  get: <T = any>(url: string, config?: AxiosRequestConfig) => 
+  get: <T = unknown>(url: string, config?: AxiosRequestConfig) =>
     apiClient.get<T>(url, config),
   
-  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => 
+  post: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     apiClient.post<T>(url, data, config),
-  
-  put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => 
+
+  put: <T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
     apiClient.put<T>(url, data, config),
   
-  delete: <T = any>(url: string, config?: AxiosRequestConfig) => 
+  delete: <T = unknown>(url: string, config?: AxiosRequestConfig) =>
     apiClient.delete<T>(url, config),
   
   // Authentication
@@ -93,7 +100,7 @@ export const api = {
     logout: () =>
       api.post(apiConfig.endpoints.auth.logout),
     
-    register: (userData: any) =>
+    register: (userData: RegisterUserData) =>
       api.post(apiConfig.endpoints.auth.register, userData),
     
     getProfile: () =>
