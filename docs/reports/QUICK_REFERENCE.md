@@ -6,28 +6,26 @@
 ```
 backend/
 ├── services/
-│   └── realtime_price_service.py          (17KB) - Price service with Finnhub WebSocket
+│   └── realtime_price_service.py          - Price service with Finnhub WebSocket
 └── api/routers/
-    └── portfolio.py                        (Modified) - Updated endpoints with real-time prices
+    └── portfolio.py                        - Endpoints with real-time prices
 ```
 
 ### Frontend (TypeScript/React)
 ```
 frontend/web/src/
 ├── hooks/
-│   └── usePortfolioWebSocket.ts           (7.4KB) - WebSocket connection hook
-├── components/
-│   ├── CorrelationMatrix.tsx              (5.6KB) - Asset correlation heatmap
-│   ├── EfficientFrontier.tsx              (7.8KB) - ML-based efficient frontier
-│   └── RiskDecomposition.tsx              (9.2KB) - Risk analysis chart
-└── pages/
-    └── Portfolio.tsx                       (Modified) - Integrated with WebSocket
+│   └── usePortfolioWebSocket.ts           - WebSocket connection hook
+└── components/portfolio/
+    ├── CorrelationMatrix.tsx              - Asset correlation heatmap
+    ├── EfficientFrontier.tsx              - ML-based efficient frontier
+    └── RiskDecomposition.tsx              - Risk analysis chart
 ```
 
 ### Documentation
 ```
+docs/reports/
 ├── WEBSOCKET_IMPLEMENTATION.md             - Complete architecture & specs
-├── PHASE_3_2_IMPLEMENTATION_SUMMARY.md     - Implementation overview
 └── QUICK_REFERENCE.md                      - This file
 ```
 
@@ -57,9 +55,9 @@ const { isConnected, priceUpdates } = usePortfolioWebSocket(
 
 ### React Components
 ```typescript
-import CorrelationMatrix from '../components/CorrelationMatrix';
-import EfficientFrontier from '../components/EfficientFrontier';
-import RiskDecomposition from '../components/RiskDecomposition';
+import CorrelationMatrix from '../components/portfolio/CorrelationMatrix';
+import EfficientFrontier from '../components/portfolio/EfficientFrontier';
+import RiskDecomposition from '../components/portfolio/RiskDecomposition';
 
 // Use in JSX
 <CorrelationMatrix correlations={metrics.correlationMatrix} />
@@ -69,7 +67,7 @@ import RiskDecomposition from '../components/RiskDecomposition';
 
 ## API Endpoints
 
-### Portfolio Endpoints (Updated)
+### Portfolio Endpoints
 ```
 GET /portfolio/summary
   - Real-time portfolio values
@@ -82,7 +80,7 @@ GET /portfolio/{portfolio_id}
   - Cache: 30 seconds
 ```
 
-### WebSocket Endpoints (Existing)
+### WebSocket Endpoints
 ```
 WS /ws/stream?client_id={id}
   - Main real-time stream
@@ -256,9 +254,8 @@ curl http://localhost:8000/api/ws/health
 
 ## Documentation Links
 
-- **Full Implementation**: `WEBSOCKET_IMPLEMENTATION.md`
-- **Phase Summary**: `PHASE_3_2_IMPLEMENTATION_SUMMARY.md`
-- **This Guide**: `QUICK_REFERENCE.md`
+- **Full Implementation**: `docs/reports/WEBSOCKET_IMPLEMENTATION.md`
+- **This Guide**: `docs/reports/QUICK_REFERENCE.md`
 
 ## Support
 
@@ -268,9 +265,3 @@ For issues or questions:
 3. Check server logs for errors
 4. Verify environment configuration
 5. Test with manual curl/WebSocket client
-
----
-
-**Last Updated**: 2026-01-27
-**Status**: Production Ready
-**Version**: 1.0

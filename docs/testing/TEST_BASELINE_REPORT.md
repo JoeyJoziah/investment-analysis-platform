@@ -1,17 +1,16 @@
-# Test Suite Baseline Report - Phase 0.3
-Generated: 2026-01-27
+# Test Suite Baseline Report
+Last Updated: 2026-03-04
 
 ## Executive Summary
 
-The investment-analysis-platform backend has a **comprehensive test suite with 600+ test functions** across 27 test files, totaling 18,000+ lines of test code. This baseline establishes metrics for ongoing quality assurance.
+The investment-analysis-platform backend has a **comprehensive test suite with 5020+ passing test functions** across 71+ test files. This document describes test suite organization, configuration, and coverage areas.
 
 ### Key Metrics at a Glance
-- **Total Test Functions**: 600+
-- **Total Test Files**: 27
-- **Total Lines of Test Code**: 18,028
-- **Average Tests per File**: ~22 tests/file
+- **Tests Passing**: 5020+ (0 failures, 8 skipped, 2 xfailed)
+- **Total Test Files**: 71+
+- **Unit Test Files**: 28 in `backend/tests/unit/`
 - **Coverage Target**: 85% (per pytest.ini)
-- **Expected Runtime**: 3-7 minutes (full suite)
+- **Expected Runtime**: 3-7 minutes (full suite, excluding slow tests)
 
 ---
 
@@ -305,49 +304,12 @@ Asyncio Configuration:
 - **Resource Cleanup**: Automatic via fixtures
 - **Shared State**: None (session-scoped only where needed)
 
-### Failure Categories to Monitor
-
-#### Model/ML Issues (10-15% of failures)
-- Missing ML model files
-- TensorFlow/PyTorch dependency issues
-- Memory constraints on inference
-- Feature engineering edge cases
-
-#### WebSocket Issues (5-10% of failures)
-- Connection timing issues
-- Message delivery delays
-- Subscription state management
-- Cleanup order dependencies
-
-#### Database Issues (10-15% of failures)
-- Transaction isolation levels
-- Connection pool exhaustion
-- Query deadlocks
-- Migration state issues
-
-#### API Issues (5-10% of failures)
-- Rate limit implementation
-- Response serialization
-- Async/await handling
-- Dependency injection
-
-#### Concurrency Issues (5% of failures)
-- Race conditions
-- Lock contention
-- Async operation ordering
-- Resource limits
-
-#### External API Issues (5% of failures)
-- Mock configuration
-- Rate limiting
-- Timeout handling
-- Data format changes
-
 ### Flaky Test Indicators
-- Tests with timing dependencies
-- Tests with external service calls
-- Tests with random data
-- Tests with cleanup side effects
+
+Tests that may require retries or longer timeouts:
+- Tests with WebSocket timing dependencies
+- Tests with external service calls (use mocks)
+- Tests with async task ordering
 
 ---
 
@@ -395,57 +357,11 @@ Coverage: 100%
 
 ---
 
-## Known Issues & Gaps
+## Known Coverage Gaps
 
-### Issues to Monitor
-
-#### Issue #1: ML Model Loading
-- **Impact**: 10-15% of test failures
-- **Cause**: Model files missing or incompatible
-- **Status**: Needs investigation
-- **Tests Affected**: test_ml_performance.py, test_recommendation_engine.py
-
-#### Issue #2: WebSocket Latency
-- **Impact**: Intermittent failures in real-time tests
-- **Cause**: Timing-sensitive subscription delivery
-- **Status**: Needs investigation
-- **Tests Affected**: test_websocket_integration.py
-
-#### Issue #3: Database Connection
-- **Impact**: Occasional timeout errors
-- **Cause**: Connection pool exhaustion in load tests
-- **Status**: Needs investigation
-- **Tests Affected**: test_performance_load.py
-
-#### Issue #4: Cache Invalidation
-- **Impact**: State leakage between tests
-- **Cause**: Incomplete cache cleanup
-- **Status**: Needs investigation
-- **Tests Affected**: test_cache_decorator.py
-
-#### Issue #5: Async/Await Ordering
-- **Impact**: Race conditions in concurrent tests
-- **Cause**: Improper task ordering in async code
-- **Status**: Needs investigation
-- **Tests Affected**: test_error_scenarios.py
-
-#### Issue #6: External API Mocking
-- **Impact**: Mock/real API inconsistency
-- **Cause**: Mock responses don't match production
-- **Status**: Needs investigation
-- **Tests Affected**: test_api_integration.py
-
-#### Issue #7: Rate Limiting State
-- **Impact**: Concurrent request handling failures
-- **Cause**: Shared state in rate limiter
-- **Status**: Needs investigation
-- **Tests Affected**: test_rate_limiting.py
-
-### Coverage Gaps
-- Integration with external trading APIs (20% gap)
-- Performance under extreme load (15% gap)
-- Recovery from data corruption (10% gap)
-- Multi-region deployment (25% gap)
+- Integration with external live trading APIs (tested via mocks only)
+- Multi-region deployment scenarios
+- Recovery from data corruption edge cases
 
 ---
 
@@ -519,71 +435,22 @@ pytest backend/tests/ --durations=20
 
 ---
 
-## Recommendations for Phase 0.4+
-
-### Immediate Actions (Phase 0.4)
-1. **Run full baseline**: Execute all 600+ tests and capture results
-2. **Identify failures**: Categorize by issue type (#1-7)
-3. **Create issue tracking**: Document each failure with root cause
-4. **Fix high-priority issues**: ML model loading, WebSocket latency
-5. **Stabilize flaky tests**: Add retries, increase timeouts as needed
-
-### Short-term (Phase 0.5)
-1. **Improve coverage**: Close 10% gaps in external API testing
-2. **Add performance baselines**: Establish response time benchmarks
-3. **Enhance error scenarios**: More edge case coverage
-4. **Document test patterns**: Create testing guide for new features
-
-### Medium-term (Phase 1.0+)
-1. **CI/CD integration**: Add to GitHub Actions
-2. **Continuous monitoring**: Production test runs
-3. **Performance regression testing**: Detect degradation
-4. **Load testing automation**: Regular stress testing
-5. **Security scanning**: SAST/DAST integration
-
-### Long-term (Phase 2.0+)
-1. **Expand test scope**: Multi-region, disaster recovery
-2. **Synthetic monitoring**: Production-like test traffic
-3. **Chaos engineering**: Fault injection testing
-4. **Performance optimization**: Based on baseline metrics
-5. **ML model validation**: Ongoing performance tracking
-
----
-
-## Success Criteria
-
-- [x] 600+ test functions identified and cataloged
-- [x] All 27 test files analyzed and categorized
-- [x] Test configuration documented
-- [x] Expected runtime estimated (3-7 minutes)
-- [x] Coverage requirements verified (85% target)
-- [x] Critical paths identified
-- [ ] Full test suite execution completed (to be done in Phase 0.4)
-- [ ] Baseline metrics captured (to be done in Phase 0.4)
-- [ ] Failures analyzed and categorized (to be done in Phase 0.4)
-- [ ] Flaky tests identified (to be done in Phase 0.4)
-
----
-
 ## Related Documentation
 
 - **Test Configuration**: `pytest.ini`
 - **Test Fixtures**: `backend/tests/conftest.py`
-- **Test Summary (Phase 4.1)**: `tests/TEST_SUMMARY.md`
-- **Test Metrics (Phase 4.1)**: `tests/TEST_METRICS.md`
-- **E2E/Integration Tests**: `tests/E2E_AND_INTEGRATION_TESTS.md`
+- **Integration Test Patterns**: `docs/testing/INTEGRATION_TESTS.md`
+- **Testing Developer Guide**: `docs/testing/TESTING_GUIDE.md`
 
 ---
 
 ## Notes
 
-This baseline report is **Phase 0.3 output** and establishes the foundation for comprehensive testing validation. The next phase (0.4) will execute the full test suite, capture actual metrics, and identify specific failures to address in subsequent phases.
-
-All test files follow pytest conventions with proper:
-- Async/await handling
-- Database transaction isolation
+All test files follow pytest conventions with:
+- Async/await handling via pytest-asyncio
+- Database transaction isolation (SQLite in-memory per test)
 - Mock/real dependency management
 - Comprehensive assertions
 - Documented test purposes
 
-The test suite is **production-ready** for immediate integration into CI/CD pipelines.
+The test suite runs in CI/CD (GitHub Actions) on every push to main and every pull request.

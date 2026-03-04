@@ -565,7 +565,7 @@ exit $?
 
 ---
 
-## Questions?
+## Further Reference
 
-See the investigation guide: `TEST_FAILURE_ANALYSIS.md`
-See the baseline report: `TEST_BASELINE_REPORT.md`
+- **Test baseline and coverage areas**: See `TEST_BASELINE_REPORT.md`
+- **Integration test patterns**: See `INTEGRATION_TESTS.md`
