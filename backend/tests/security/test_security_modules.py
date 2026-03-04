@@ -348,6 +348,76 @@ class TestRoleBasedAccessControl:
         assert Permission.DELETE.value == "delete"
         assert Permission.ADMIN.value == "admin"
 
+    def test_assign_role_idempotent(self, rbac):
+        """Assigning the same role twice returns False on the second call."""
+        assert rbac.assign_role(10, Role.ANALYST) is True
+        assert rbac.assign_role(10, Role.ANALYST) is False
+
+    def test_revoke_nonexistent_role(self, rbac):
+        """Revoking a role the user doesn't have returns False."""
+        assert rbac.revoke_role(999, Role.ADMIN) is False
+
+    def test_revoke_clears_empty_set(self, rbac):
+        """After revoking the last role, user should have no roles."""
+        rbac.assign_role(20, Role.VIEWER)
+        rbac.revoke_role(20, Role.VIEWER)
+        assert rbac.get_user_roles(20) == []
+
+    def test_db_backed_get_user_roles(self):
+        """DB-backed mode reads role from User.role column."""
+        mock_session = MagicMock()
+        mock_user = MagicMock()
+        mock_user.role = "analyst"
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_user
+
+        rbac = RoleBasedAccessControl(db_session=mock_session)
+        roles = rbac.get_user_roles(1)
+        assert roles == ["analyst"]
+
+    def test_db_backed_assign_role_persists(self):
+        """DB-backed mode persists role to User.role column on assign."""
+        mock_session = MagicMock()
+        mock_user = MagicMock()
+        mock_user.role = None
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_user
+
+        rbac = RoleBasedAccessControl(db_session=mock_session)
+        result = rbac.assign_role(1, Role.ADMIN)
+        assert result is True
+        assert mock_user.role == Role.ADMIN
+        mock_session.commit.assert_called()
+
+    def test_db_backed_revoke_role_clears_column(self):
+        """DB-backed mode clears User.role column on revoke."""
+        mock_session = MagicMock()
+        mock_user = MagicMock()
+        mock_user.role = "admin"
+        mock_session.query.return_value.filter.return_value.first.return_value = mock_user
+
+        rbac = RoleBasedAccessControl(db_session=mock_session)
+        rbac.assign_role(1, Role.ADMIN)
+        result = rbac.revoke_role(1, Role.ADMIN)
+        assert result is True
+        assert mock_user.role is None
+        mock_session.commit.assert_called()
+
+    def test_db_backed_fallback_to_memory(self):
+        """DB-backed mode falls back to in-memory when user not in DB."""
+        mock_session = MagicMock()
+        mock_session.query.return_value.filter.return_value.first.return_value = None
+
+        rbac = RoleBasedAccessControl(db_session=mock_session)
+        rbac._user_roles[5] = {"viewer"}
+        roles = rbac.get_user_roles(5)
+        assert roles == ["viewer"]
+
+    def test_in_memory_mode_default(self):
+        """Default constructor uses in-memory mode (no DB session)."""
+        rbac = RoleBasedAccessControl()
+        assert rbac._db_session is None
+        rbac.assign_role(1, Role.USER)
+        assert rbac.get_user_roles(1) == ["user"]
+
 
 # =============================================================================
 # 3. Input Validation Tests
