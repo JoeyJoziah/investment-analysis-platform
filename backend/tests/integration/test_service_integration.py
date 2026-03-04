@@ -326,31 +326,36 @@ async def test_portfolio_service_add_position_validation():
     """
     service = PortfolioService()
 
-    # Mock repository
+    # Mock repository and stock lookup
+    mock_stock = MagicMock()
+    mock_stock.id = 42
+
     with patch.object(service.repository, 'get_by_id', new_callable=AsyncMock) as mock_get:
         with patch.object(service.repository, 'add_position', new_callable=AsyncMock) as mock_add:
-            # Mock portfolio exists
-            mock_portfolio = MagicMock()
-            mock_portfolio.user_id = 1
-            mock_get.return_value = mock_portfolio
+            with patch('backend.repositories.stock_repository.get_by_symbol', new_callable=AsyncMock, return_value=mock_stock):
 
-            # Mock position creation
-            mock_position = MagicMock()
-            mock_position.id = 1
-            mock_position.avg_cost_basis = Decimal("150.0")
-            mock_add.return_value = mock_position
+                # Mock portfolio exists
+                mock_portfolio = MagicMock()
+                mock_portfolio.user_id = 1
+                mock_get.return_value = mock_portfolio
 
-            # Test with valid inputs
-            result = await service.add_position(
-                portfolio_id=1,
-                stock_symbol="AAPL",
-                quantity=10.0,
-                cost=150.0,
-                user_id=1
-            )
+                # Mock position creation
+                mock_position = MagicMock()
+                mock_position.id = 1
+                mock_position.avg_cost_basis = Decimal("150.0")
+                mock_add.return_value = mock_position
 
-            assert result['success'] is True
-            assert result['position_id'] == 1
+                # Test with valid inputs
+                result = await service.add_position(
+                    portfolio_id=1,
+                    stock_symbol="AAPL",
+                    quantity=10.0,
+                    cost=150.0,
+                    user_id=1
+                )
+
+                assert result['success'] is True
+                assert result['position_id'] == 1
 
 
 @pytest.mark.asyncio

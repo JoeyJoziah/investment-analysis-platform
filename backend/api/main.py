@@ -160,9 +160,15 @@ try:
     from backend.middleware.response_optimizer import ResponseTimingMiddleware, ETagMiddleware
 
     # Configure CORS
-    cors_origins = ["http://localhost:3000", "http://localhost:8000"]
-    if settings.ENVIRONMENT == "development":
-        cors_origins.extend(["http://127.0.0.1:3000", "http://127.0.0.1:8000"])
+    # Read allowed origins from CORS_ORIGINS env var (comma-separated).
+    # Falls back to localhost-only defaults for local development.
+    _cors_env = os.environ.get("CORS_ORIGINS", "")
+    if _cors_env.strip():
+        cors_origins = [origin.strip() for origin in _cors_env.split(",") if origin.strip()]
+    else:
+        cors_origins = ["http://localhost:3000", "http://localhost:8000"]
+        if settings.ENVIRONMENT == "development":
+            cors_origins.extend(["http://127.0.0.1:3000", "http://127.0.0.1:8000"])
 
     # Register middleware in priority order (highest priority = outermost)
 
@@ -305,9 +311,15 @@ except Exception as e:
     logger.warning("Falling back to basic CORS middleware only")
 
     # Emergency fallback - just CORS
+    _cors_env_fallback = os.environ.get("CORS_ORIGINS", "")
+    _fallback_origins = (
+        [o.strip() for o in _cors_env_fallback.split(",") if o.strip()]
+        if _cors_env_fallback.strip()
+        else ["http://localhost:3000", "http://localhost:8000"]
+    )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000", "http://localhost:8000"],
+        allow_origins=_fallback_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

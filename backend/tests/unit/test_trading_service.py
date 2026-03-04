@@ -9,7 +9,7 @@ import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.services.trading_service import (
     TradingService,
@@ -402,6 +402,17 @@ class TestValidateOrder:
 
 class TestExecuteTrade:
 
+    @pytest.fixture(autouse=True)
+    def _mock_stock_lookup(self):
+        mock_stock = MagicMock()
+        mock_stock.id = 42
+        with patch(
+            'backend.repositories.stock_repository.get_by_symbol',
+            new_callable=AsyncMock,
+            return_value=mock_stock,
+        ):
+            yield
+
     @pytest.mark.asyncio
     async def test_successful_buy_execution(self, service, mock_repo):
         """A valid buy order should execute and return success with trade details."""
@@ -436,7 +447,7 @@ class TestExecuteTrade:
             })
         mock_repo.add_position.assert_called_once_with(
             portfolio_id=1,
-            stock_id=1,  # placeholder
+            stock_id=42,
             quantity=Decimal('5'),
             price=Decimal('200.0'),
             transaction_type='buy',
@@ -444,7 +455,8 @@ class TestExecuteTrade:
 
     @pytest.mark.asyncio
     async def test_sell_trade_returns_success(self, service, mock_repo):
-        """Sell execution should return success even though position is None."""
+        """Sell execution should return success when selling all shares (position deleted)."""
+        mock_repo.add_position = AsyncMock(return_value=None)  # all shares sold
         with patch.object(service, 'repository', mock_repo):
             result = await service.execute_trade(1, {
                 'symbol': 'AAPL',
@@ -454,7 +466,7 @@ class TestExecuteTrade:
                 'price': 160.0,
             })
         assert result['success'] is True
-        assert result['trade_id'] is None  # sell returns position=None
+        assert result['trade_id'] is None  # position deleted after full sell
         assert result['total_cost'] == 800.0
 
     @pytest.mark.asyncio
@@ -485,7 +497,7 @@ class TestExecuteTrade:
                 'price': 150.0,
             })
         assert result['success'] is False
-        assert 'Failed to execute trade' in result['error']
+        assert 'Failed to execute buy trade' in result['error']
 
     @pytest.mark.asyncio
     async def test_execute_trade_exception(self, service, mock_repo):

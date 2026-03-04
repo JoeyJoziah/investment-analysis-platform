@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from backend.repositories.portfolio_repository import portfolio_repository
+from backend.repositories import stock_repository
+from backend.exceptions import InvalidPositionError
 
 logger = logging.getLogger(__name__)
 
@@ -171,9 +173,14 @@ class TradingService:
             quantity = Decimal(str(order['quantity']))
             price = Decimal(str(order.get('price', 0)))
 
-            # For now, this is a stub - would need stock_id lookup
-            logger.warning(f"Stock symbol lookup not implemented: {symbol}")
-            stock_id = 1  # Placeholder
+            # Look up the stock_id from the ticker symbol
+            stock = await stock_repository.get_by_symbol(symbol)
+            if not stock:
+                return {
+                    'success': False,
+                    'error': f"Stock symbol '{symbol}' not found"
+                }
+            stock_id = stock.id
 
             # Execute the trade using repository
             if side == OrderSide.BUY:
@@ -184,16 +191,26 @@ class TradingService:
                     price=price,
                     transaction_type='buy'
                 )
-            else:  # SELL
-                # Would need to handle sell logic
-                logger.warning("Sell order execution not fully implemented")
-                position = None
 
-            if not position and side == OrderSide.BUY:
-                return {
-                    'success': False,
-                    'error': 'Failed to execute trade'
-                }
+                if not position:
+                    return {
+                        'success': False,
+                        'error': 'Failed to execute buy trade'
+                    }
+            else:  # SELL
+                try:
+                    position = await self.repository.add_position(
+                        portfolio_id=portfolio_id,
+                        stock_id=stock_id,
+                        quantity=quantity,
+                        price=price,
+                        transaction_type='sell'
+                    )
+                except InvalidPositionError as exc:
+                    return {
+                        'success': False,
+                        'error': str(exc)
+                    }
 
             return {
                 'success': True,

@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Any
 from decimal import Decimal
 from datetime import datetime, date, timedelta, timezone
 
+from fastapi import HTTPException
+
 from backend.repositories.portfolio_repository import portfolio_repository
 from backend.repositories import stock_repository
 
@@ -159,10 +161,14 @@ class PortfolioService:
             quantity_decimal = Decimal(str(quantity))
             cost_decimal = Decimal(str(cost))
 
-            # Note: Would need to lookup stock_id from stock_symbol
-            # For now, this is a placeholder
-            logger.warning(f"Stock symbol lookup not implemented: {stock_symbol}")
-            stock_id = 1  # Placeholder
+            # Look up the stock_id from the ticker symbol
+            stock = await stock_repository.get_by_symbol(stock_symbol)
+            if not stock:
+                return {
+                    'success': False,
+                    'error': f"Stock symbol '{stock_symbol}' not found"
+                }
+            stock_id = stock.id
 
             # Add position using repository
             position = await self.repository.add_position(

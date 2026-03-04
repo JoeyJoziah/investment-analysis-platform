@@ -243,7 +243,7 @@ async def analyze_stock(
         cached_analysis = await analysis_svc.get_cached_analysis(symbol)
         if cached_analysis and request.analysis_type == AnalysisType.QUICK:
             logger.info(f"Returning cached analysis for {symbol}")
-            pass
+            return success_response(data=cached_analysis)
 
         # Verify stock exists in database
         stock = await stock_repository.get_by_symbol(symbol, session=db)

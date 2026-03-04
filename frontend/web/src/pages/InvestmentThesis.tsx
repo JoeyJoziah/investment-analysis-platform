@@ -29,10 +29,6 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 
-// NOTE: Monaco Editor needs to be installed
-// Run: npm install @monaco-editor/react
-// Import will be: import Editor from '@monaco-editor/react';
-
 interface InvestmentThesis {
   id?: number;
   stock_id: number;
@@ -197,9 +193,16 @@ const InvestmentThesisPage: React.FC = () => {
   };
 
   const exportAsPDF = () => {
-    // TODO: Implement PDF export
-    // This would require a library like jsPDF or html2pdf
-    setError('PDF export not yet implemented');
+    if (!markdownContent) {
+      setError('No content to export');
+      return;
+    }
+
+    setSuccess('Opening print dialog — select "Save as PDF" in your browser to export.');
+    // Allow the success message to render before the print dialog blocks the UI
+    setTimeout(() => {
+      window.print();
+    }, 300);
   };
 
   if (loading) {
@@ -211,225 +214,237 @@ const InvestmentThesisPage: React.FC = () => {
   }
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box mb={3}>
-        <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-          <IconButton onClick={() => navigate(-1)}>
-            <ArrowBack />
-          </IconButton>
-          <Typography variant="h4" component="h1">
-            Investment Thesis
-            {thesis?.stock_symbol && ` - ${thesis.stock_symbol}`}
-            {thesis?.stock_name && ` (${thesis.stock_name})`}
-          </Typography>
-        </Stack>
+    <>
+      {/* Print-only styles: show only the editor content when printing */}
+      <style>{`
+        @media print {
+          body > *:not(#thesis-print-root) { display: none !important; }
+          #thesis-print-root { display: block !important; }
+          .thesis-print-hide { display: none !important; }
+          .thesis-print-content { font-family: serif; font-size: 12pt; white-space: pre-wrap; }
+        }
+      `}</style>
 
-        {thesis && (
-          <Stack direction="row" spacing={1}>
-            <Chip label={`Version ${thesis.version}`} size="small" />
-            <Chip
-              label={`Updated ${new Date(thesis.updated_at!).toLocaleDateString()}`}
-              size="small"
-              variant="outlined"
-            />
+      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }} id="thesis-print-root">
+        {/* Header */}
+        <Box mb={3} className="thesis-print-hide">
+          <Stack direction="row" alignItems="center" spacing={2} mb={2}>
+            <IconButton onClick={() => navigate(-1)}>
+              <ArrowBack />
+            </IconButton>
+            <Typography variant="h4" component="h1">
+              Investment Thesis
+              {thesis?.stock_symbol && ` - ${thesis.stock_symbol}`}
+              {thesis?.stock_name && ` (${thesis.stock_name})`}
+            </Typography>
           </Stack>
+
+          {thesis && (
+            <Stack direction="row" spacing={1}>
+              <Chip label={`Version ${thesis.version}`} size="small" />
+              <Chip
+                label={`Updated ${new Date(thesis.updated_at!).toLocaleDateString()}`}
+                size="small"
+                variant="outlined"
+              />
+            </Stack>
+          )}
+        </Box>
+
+        {/* Alerts */}
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }} className="thesis-print-hide">
+            {error}
+          </Alert>
         )}
-      </Box>
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }} className="thesis-print-hide">
+            {success}
+          </Alert>
+        )}
 
-      {/* Alerts */}
-      {error && (
-        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      {success && (
-        <Alert severity="success" onClose={() => setSuccess(null)} sx={{ mb: 2 }}>
-          {success}
-        </Alert>
-      )}
-
-      {/* Main Content */}
-      <Grid container spacing={3}>
-        {/* Sidebar - Structured Fields */}
-        <Grid item xs={12} md={3}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Core Details
-            </Typography>
-
-            <TextField
-              fullWidth
-              label="Investment Objective *"
-              value={objective}
-              onChange={(e) => setObjective(e.target.value)}
-              margin="normal"
-              multiline
-              rows={3}
-              helperText="Primary investment goal"
-            />
-
-            <TextField
-              fullWidth
-              select
-              label="Time Horizon *"
-              value={timeHorizon}
-              onChange={(e) => setTimeHorizon(e.target.value as any)}
-              margin="normal"
-            >
-              <MenuItem value="short-term">Short-term (0-1 year)</MenuItem>
-              <MenuItem value="medium-term">Medium-term (1-5 years)</MenuItem>
-              <MenuItem value="long-term">Long-term (5+ years)</MenuItem>
-            </TextField>
-
-            <TextField
-              fullWidth
-              label="Target Price"
-              value={targetPrice}
-              onChange={(e) => setTargetPrice(e.target.value)}
-              margin="normal"
-              type="number"
-              inputProps={{ step: '0.01', min: '0' }}
-              helperText="Price target based on valuation"
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <Stack spacing={1}>
-              <Button
-                fullWidth
-                variant="contained"
-                startIcon={<Save />}
-                onClick={saveThesis}
-                disabled={saving}
-              >
-                {saving ? 'Saving...' : thesis?.id ? 'Update Thesis' : 'Create Thesis'}
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<Description />}
-                onClick={() => setTemplateDialogOpen(true)}
-              >
-                Load Template
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<Download />}
-                onClick={exportAsMarkdown}
-                disabled={!markdownContent}
-              >
-                Export as Markdown
-              </Button>
-
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<Download />}
-                onClick={exportAsPDF}
-                disabled={!markdownContent}
-              >
-                Export as PDF
-              </Button>
-            </Stack>
-          </Paper>
-
-          {/* Info Panel */}
-          <Paper sx={{ p: 2, mt: 2 }}>
-            <Stack direction="row" spacing={1} alignItems="flex-start">
-              <Info color="primary" fontSize="small" />
-              <Typography variant="caption" color="text.secondary">
-                The markdown editor below supports full markdown syntax. Use the template
-                to get started with a comprehensive structure.
+        {/* Main Content */}
+        <Grid container spacing={3}>
+          {/* Sidebar - Structured Fields */}
+          <Grid item xs={12} md={3} className="thesis-print-hide">
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Core Details
               </Typography>
-            </Stack>
-          </Paper>
-        </Grid>
 
-        {/* Main Editor */}
-        <Grid item xs={12} md={9}>
-          <Paper sx={{ p: 3, minHeight: '70vh' }}>
-            <Typography variant="h6" gutterBottom>
-              Thesis Document (Markdown)
-            </Typography>
-
-            {/* Monaco Editor Placeholder */}
-            <Box
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                minHeight: '60vh',
-                bgcolor: 'background.default',
-                p: 2,
-              }}
-            >
               <TextField
                 fullWidth
+                label="Investment Objective *"
+                value={objective}
+                onChange={(e) => setObjective(e.target.value)}
+                margin="normal"
                 multiline
-                rows={30}
-                value={markdownContent}
-                onChange={(e) => setMarkdownContent(e.target.value)}
-                placeholder="Write your investment thesis in markdown format..."
-                variant="outlined"
-                sx={{
-                  '& .MuiInputBase-root': {
-                    fontFamily: 'monospace',
-                    fontSize: '0.9rem',
-                  },
-                }}
+                rows={3}
+                helperText="Primary investment goal"
               />
 
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  <strong>To enable rich markdown editing:</strong>
-                  <br />
-                  1. Install Monaco Editor: <code>npm install @monaco-editor/react</code>
-                  <br />
-                  2. Replace the TextField above with the Monaco Editor component
-                  <br />
-                  3. This will provide syntax highlighting, autocomplete, and a better
-                  editing experience
-                </Typography>
-              </Alert>
-            </Box>
-          </Paper>
-        </Grid>
-      </Grid>
+              <TextField
+                fullWidth
+                select
+                label="Time Horizon *"
+                value={timeHorizon}
+                onChange={(e) => setTimeHorizon(e.target.value as any)}
+                margin="normal"
+              >
+                <MenuItem value="short-term">Short-term (0-1 year)</MenuItem>
+                <MenuItem value="medium-term">Medium-term (1-5 years)</MenuItem>
+                <MenuItem value="long-term">Long-term (5+ years)</MenuItem>
+              </TextField>
 
-      {/* Load Template Dialog */}
-      <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)}>
-        <DialogTitle>Load Investment Thesis Template</DialogTitle>
-        <DialogContent>
-          <Typography>
-            This will load a comprehensive investment thesis template with sections for:
-          </Typography>
-          <ul>
-            <li>Executive Summary</li>
-            <li>Business Model Analysis</li>
-            <li>Competitive Advantages (Moats)</li>
-            <li>Financial Health Assessment</li>
-            <li>Growth Drivers</li>
-            <li>Risk Assessment (Bear/Base/Bull Cases)</li>
-            <li>Valuation Analysis</li>
-            <li>Investment & Exit Strategy</li>
-            <li>Decision Log</li>
-          </ul>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This will replace your current content. Make sure to save any existing work first.
-          </Alert>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
-          <Button onClick={loadTemplate} variant="contained">
-            Load Template
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+              <TextField
+                fullWidth
+                label="Target Price"
+                value={targetPrice}
+                onChange={(e) => setTargetPrice(e.target.value)}
+                margin="normal"
+                type="number"
+                inputProps={{ step: '0.01', min: '0' }}
+                helperText="Price target based on valuation"
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <Stack spacing={1}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<Save />}
+                  onClick={saveThesis}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : thesis?.id ? 'Update Thesis' : 'Create Thesis'}
+                </Button>
+
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Description />}
+                  onClick={() => setTemplateDialogOpen(true)}
+                >
+                  Load Template
+                </Button>
+
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={exportAsMarkdown}
+                  disabled={!markdownContent}
+                >
+                  Export as Markdown
+                </Button>
+
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={exportAsPDF}
+                  disabled={!markdownContent}
+                >
+                  Export as PDF
+                </Button>
+              </Stack>
+            </Paper>
+
+            {/* Info Panel */}
+            <Paper sx={{ p: 2, mt: 2 }}>
+              <Stack direction="row" spacing={1} alignItems="flex-start">
+                <Info color="primary" fontSize="small" />
+                <Typography variant="caption" color="text.secondary">
+                  The markdown editor below supports full markdown syntax. Use the template
+                  to get started with a comprehensive structure.
+                </Typography>
+              </Stack>
+            </Paper>
+          </Grid>
+
+          {/* Main Editor */}
+          <Grid item xs={12} md={9}>
+            <Paper sx={{ p: 3, minHeight: '70vh' }}>
+              <Typography variant="h6" gutterBottom className="thesis-print-hide">
+                Thesis Document (Markdown)
+              </Typography>
+
+              {/* Print view: plain text rendering */}
+              <Box className="thesis-print-content" sx={{ display: 'none' }}>
+                <Typography variant="h5" gutterBottom>
+                  Investment Thesis
+                  {thesis?.stock_symbol && ` — ${thesis.stock_symbol}`}
+                  {thesis?.stock_name && ` (${thesis.stock_name})`}
+                </Typography>
+                <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'serif', fontSize: '12pt' }}>
+                  {markdownContent}
+                </pre>
+              </Box>
+
+              {/* Editor */}
+              <Box
+                className="thesis-print-hide"
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  minHeight: '60vh',
+                  bgcolor: 'background.default',
+                  p: 2,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={30}
+                  value={markdownContent}
+                  onChange={(e) => setMarkdownContent(e.target.value)}
+                  placeholder="// Start writing your investment thesis here"
+                  variant="outlined"
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
+                    },
+                  }}
+                />
+              </Box>
+            </Paper>
+          </Grid>
+        </Grid>
+
+        {/* Load Template Dialog */}
+        <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)}>
+          <DialogTitle>Load Investment Thesis Template</DialogTitle>
+          <DialogContent>
+            <Typography>
+              This will load a comprehensive investment thesis template with sections for:
+            </Typography>
+            <ul>
+              <li>Executive Summary</li>
+              <li>Business Model Analysis</li>
+              <li>Competitive Advantages (Moats)</li>
+              <li>Financial Health Assessment</li>
+              <li>Growth Drivers</li>
+              <li>Risk Assessment (Bear/Base/Bull Cases)</li>
+              <li>Valuation Analysis</li>
+              <li>Investment & Exit Strategy</li>
+              <li>Decision Log</li>
+            </ul>
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              This will replace your current content. Make sure to save any existing work first.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setTemplateDialogOpen(false)}>Cancel</Button>
+            <Button onClick={loadTemplate} variant="contained">
+              Load Template
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Container>
+    </>
   );
 };
 
