@@ -97,17 +97,14 @@ jobs:
           pip install black isort flake8 mypy pylint
 
       - name: Format check with Black
-        continue-on-error: true
         run: |
           black --check --diff --exclude 'TradingAgents/' backend/
 
       - name: Import sorting check with isort
-        continue-on-error: true
         run: |
           isort --check-only --diff --skip-glob 'backend/TradingAgents/*' backend/
 
       - name: Lint with flake8
-        continue-on-error: true
         run: |
           flake8 backend/ --max-line-length=88 --extend-ignore=E203,W503 --exclude=backend/TradingAgents
 
@@ -130,13 +127,11 @@ jobs:
           npm install
 
       - name: Lint frontend code
-        continue-on-error: true
         run: |
           cd frontend/web
           npm run lint
 
       - name: Check frontend formatting
-        continue-on-error: true
         run: |
           cd frontend/web
           npm run format:check
@@ -199,7 +194,6 @@ jobs:
           echo "REDIS_URL=redis://localhost:6379/0" >> .env.test
 
       - name: Run unit tests with coverage
-        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
@@ -307,7 +301,6 @@ jobs:
           pip install testcontainers
 
       - name: Run integration tests
-        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
@@ -378,7 +371,6 @@ jobs:
           pip install psutil memory-profiler
 
       - name: Run performance tests
-        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
@@ -429,7 +421,6 @@ jobs:
           pip install scikit-learn yfinance
 
       - name: Run financial model validation tests
-        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           SECRET_KEY: test-secret-key-for-ci
@@ -497,7 +488,6 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run security and compliance tests
-        continue-on-error: true
         env:
           PYTHONPATH: ${{ github.workspace }}
           DATABASE_URL: postgresql://postgres:${{ env.POSTGRES_PASSWORD }}@localhost:5432/test_investment_db
@@ -538,7 +528,6 @@ jobs:
           npm install
 
       - name: Run frontend unit tests
-        continue-on-error: true
         run: |
           cd frontend/web
           npm test -- --coverage --run
@@ -574,17 +563,14 @@ jobs:
         run: mkdir -p models
 
       - name: Build backend Docker image
-        continue-on-error: true
         run: |
           docker build -f Dockerfile.backend -t investment-app-backend:test .
 
       - name: Build frontend Docker image
-        continue-on-error: true
         run: |
           docker build -f Dockerfile.frontend -t investment-app-frontend:test .
 
       - name: Test Docker containers
-        continue-on-error: true
         run: |
           # Start services
           docker compose -f docker-compose.test.yml up -d

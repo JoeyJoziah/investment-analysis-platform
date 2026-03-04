@@ -402,7 +402,6 @@ jobs:
 
     - name: Build backend image for scanning
       uses: docker/build-push-action@v5
-      continue-on-error: true
       with:
         context: .
         file: ./Dockerfile.backend
@@ -413,7 +412,6 @@ jobs:
 
     - name: Build frontend image for scanning
       uses: docker/build-push-action@v5
-      continue-on-error: true
       with:
         context: ./frontend/web
         file: ./frontend/web/Dockerfile

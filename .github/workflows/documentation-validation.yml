@@ -202,7 +202,6 @@ jobs:
           EOF
         env:
           CHANGED_FILES: ${{ needs.analyze-changes.outputs.changed_files }}
-        continue-on-error: true
 
       - name: Upload duplicate report
         if: always()

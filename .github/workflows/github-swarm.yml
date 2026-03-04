@@ -225,7 +225,6 @@ jobs:
 
       - name: Run Tests with Coverage
         id: coverage
-        continue-on-error: true
         run: |
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt 2>/dev/null || true
@@ -317,7 +316,6 @@ jobs:
 
       - name: Run pip-audit
         id: pip-audit
-        continue-on-error: true
         run: |
           if [ -f requirements.txt ]; then
             pip-audit -r requirements.txt --format json > pip-audit.json 2>/dev/null || echo '{"vulnerabilities":[]}' > pip-audit.json
@@ -329,7 +327,6 @@ jobs:
 
       - name: Run Bandit (Python Security)
         id: bandit
-        continue-on-error: true
         run: |
           if [ -d "backend" ]; then
             bandit -r backend/ -f json -o bandit.json 2>/dev/null || echo '{"results":[]}' > bandit.json
