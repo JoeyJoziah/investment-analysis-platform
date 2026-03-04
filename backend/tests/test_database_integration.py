@@ -19,6 +19,11 @@ import asyncpg
 import pandas as pd
 import numpy as np
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
+import subprocess as _sp
+try:
+    _sp.run(["docker", "info"], capture_output=True, check=True, timeout=5)
+except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired):
+    pytest.skip("Docker not available - required for testcontainers", allow_module_level=True)
 from testcontainers.postgres import PostgresContainer
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database

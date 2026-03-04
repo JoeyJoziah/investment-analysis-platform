@@ -23,6 +23,8 @@ _celery_mock.shared_task = lambda *a, **kw: (lambda fn: fn)
 _celery_mock.Celery = MagicMock
 _celery_mock.Task = MagicMock
 _celery_mock.group = MagicMock
+_celery_mock.chain = MagicMock
+_celery_mock.current_app = MagicMock
 
 # celery.signals sub-module
 _celery_signals = types.ModuleType("celery.signals")
@@ -75,6 +77,19 @@ class _FakeCeleryApp:
 _celery_app_mod = types.ModuleType("backend.tasks.celery_app")
 _celery_app_mod.celery_app = _FakeCeleryApp()
 sys.modules["backend.tasks.celery_app"] = _celery_app_mod
+
+# Clear any previously-imported task modules so they re-import with the fake
+# celery_app (when real celery is installed, earlier tests may have imported these).
+# We must also remove them as attributes on the parent package, because Python
+# caches submodules as attributes; `from backend.tasks.X import Y` would find
+# the old (real-celery) module via the attribute rather than re-importing.
+_tasks_pkg = sys.modules.get("backend.tasks")
+for _task_mod in list(sys.modules):
+    if _task_mod.startswith("backend.tasks.") and _task_mod != "backend.tasks.celery_app":
+        _attr = _task_mod.rsplit(".", 1)[-1]
+        if _tasks_pkg is not None and hasattr(_tasks_pkg, _attr):
+            delattr(_tasks_pkg, _attr)
+        del sys.modules[_task_mod]
 
 # Mock heavy optional dependencies that may not be installed
 for mod_name in ("psutil", "redis"):

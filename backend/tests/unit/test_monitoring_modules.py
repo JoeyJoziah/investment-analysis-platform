@@ -113,6 +113,12 @@ SLATarget_ST = _st.SLATarget
 SLAMeasurement = _st.SLAMeasurement
 SLATracker = _st.SLATracker
 
+# Use the SAME StockPriority enum that sla_tracker.py imported at load time.
+# In isolation our mock provides _StockPriority; in the full suite the real module
+# may already be in sys.modules, giving sla_tracker the real StockPriority.
+# Using the module's own reference avoids enum identity mismatches.
+_StockPriority = _st.StockPriority
+
 # --- metrics_collector.py ---
 # This module imports from prometheus_client and FastAPI.
 # prometheus_client is installed, but we need to handle backend.config.settings

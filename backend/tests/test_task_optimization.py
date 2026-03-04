@@ -328,9 +328,14 @@ class TestTaskMonitor:
 
     @pytest.fixture
     def task_monitor(self, mock_redis):
-        """Create TaskMonitor instance"""
-        with patch('backend.tasks.task_config.get_redis_client', return_value=mock_redis):
-            return TaskMonitor()
+        """Create TaskMonitor instance with mock Redis directly injected.
+
+        We bypass __init__ to avoid fragile get_redis_client patching that
+        breaks when sys.modules is polluted by other test modules.
+        """
+        monitor = TaskMonitor.__new__(TaskMonitor)
+        monitor.redis_client = mock_redis
+        return monitor
 
     def test_get_task_metrics(self, task_monitor, mock_redis):
         """Test getting metrics for a specific task"""

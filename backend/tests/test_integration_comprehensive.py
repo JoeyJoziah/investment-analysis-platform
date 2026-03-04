@@ -17,6 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 import redis
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
+import subprocess as _sp
+try:
+    _sp.run(["docker", "info"], capture_output=True, check=True, timeout=5)
+except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired):
+    pytest.skip("Docker not available - required for testcontainers", allow_module_level=True)
 from testcontainers.postgres import PostgresContainer
 from testcontainers.redis import RedisContainer
 
