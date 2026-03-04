@@ -11,9 +11,9 @@ import {
   Legend,
   Tooltip as RechartsTooltip,
 } from 'recharts';
-import CorrelationMatrix from '../CorrelationMatrix';
-import EfficientFrontier from '../EfficientFrontier';
-import RiskDecomposition from '../RiskDecomposition';
+import CorrelationMatrix from './CorrelationMatrix';
+import EfficientFrontier from './EfficientFrontier';
+import RiskDecomposition from './RiskDecomposition';
 import type { Position, PortfolioMetrics } from '../../store/slices/portfolioSlice';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
