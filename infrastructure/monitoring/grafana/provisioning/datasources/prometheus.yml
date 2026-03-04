@@ -12,3 +12,12 @@ datasources:
       httpMethod: POST
       customQueryParameters: ''
     secureJsonData: {}
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: true
+    jsonData:
+      maxLines: 1000

@@ -1,0 +1,216 @@
+# SLO Alert Rules - Investment Analysis Platform
+# Availability: 99.9% | Latency p95 < 500ms | Error Rate < 0.5%
+#
+# Error budget: 0.1% = ~43 min/month downtime allowed
+
+groups:
+  - name: slo-availability
+    interval: 30s
+    rules:
+      # --- Recording rules for SLO burn-rate windows ---
+
+      # 5-minute request success rate
+      - record: slo:api_availability:ratio_rate5m
+        expr: >
+          1 - (
+            sum(rate(api_errors_total[5m]))
+            /
+            sum(rate(api_requests_total[5m]))
+          )
+
+      # 1-hour request success rate
+      - record: slo:api_availability:ratio_rate1h
+        expr: >
+          1 - (
+            sum(rate(api_errors_total[1h]))
+            /
+            sum(rate(api_requests_total[1h]))
+          )
+
+      # 6-hour request success rate
+      - record: slo:api_availability:ratio_rate6h
+        expr: >
+          1 - (
+            sum(rate(api_errors_total[6h]))
+            /
+            sum(rate(api_requests_total[6h]))
+          )
+
+      # --- Multi-window burn rate alerts ---
+
+      # Fast burn: consuming error budget 14.4x faster than allowed
+      # Triggers if both 5m AND 1h windows breach simultaneously
+      - alert: SLOAvailabilityFastBurn
+        expr: >
+          slo:api_availability:ratio_rate5m < 0.986
+          and
+          slo:api_availability:ratio_rate1h < 0.986
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          window: fast
+        annotations:
+          summary: "SLO violation: availability burning error budget rapidly"
+          description: >
+            API availability is {{ $value | humanizePercentage }} over the last hour.
+            SLO target: 99.9%. Error budget is being consumed 14x faster than allowed.
+          runbook: "Check backend health, database connections, and recent deployments"
+
+      # Slow burn: consuming error budget 3x faster than allowed
+      # Triggers if both 1h AND 6h windows breach simultaneously
+      - alert: SLOAvailabilitySlowBurn
+        expr: >
+          slo:api_availability:ratio_rate1h < 0.997
+          and
+          slo:api_availability:ratio_rate6h < 0.997
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+          window: slow
+        annotations:
+          summary: "SLO warning: availability trending below target"
+          description: >
+            API availability is {{ $value | humanizePercentage }} over the last 6 hours.
+            SLO target: 99.9%. Error budget consumption is elevated.
+
+  - name: slo-latency
+    interval: 30s
+    rules:
+      # --- Recording rules for latency SLO ---
+
+      # p95 latency over 5 minutes
+      - record: slo:api_latency_p95:seconds_rate5m
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(api_request_duration_seconds_bucket[5m])) by (le)
+          )
+
+      # p95 latency over 1 hour
+      - record: slo:api_latency_p95:seconds_rate1h
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(api_request_duration_seconds_bucket[1h])) by (le)
+          )
+
+      # Fraction of requests completing within 500ms (5m window)
+      - record: slo:api_latency_good:ratio_rate5m
+        expr: >
+          sum(rate(api_request_duration_seconds_bucket{le="0.5"}[5m]))
+          /
+          sum(rate(api_request_duration_seconds_count[5m]))
+
+      # --- Latency SLO alerts ---
+
+      # Fast burn: p95 latency exceeding 500ms target
+      - alert: SLOLatencyFastBurn
+        expr: slo:api_latency_p95:seconds_rate5m > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          slo: latency
+          window: fast
+        annotations:
+          summary: "SLO violation: p95 latency exceeds 500ms"
+          description: >
+            API p95 latency is {{ $value }}s (target: 0.5s).
+            Check for slow queries, cold caches, or resource contention.
+
+      # Slow burn: sustained elevated latency
+      - alert: SLOLatencySlowBurn
+        expr: slo:api_latency_p95:seconds_rate1h > 0.4
+        for: 30m
+        labels:
+          severity: warning
+          slo: latency
+          window: slow
+        annotations:
+          summary: "SLO warning: p95 latency trending toward 500ms target"
+          description: >
+            API p95 latency is {{ $value }}s over the last hour (target: 0.5s).
+            Investigate query performance and cache hit rates.
+
+  - name: slo-error-rate
+    interval: 30s
+    rules:
+      # --- Recording rules for error rate SLO ---
+
+      # 5-minute error rate
+      - record: slo:api_error_rate:ratio_rate5m
+        expr: >
+          sum(rate(api_errors_total[5m]))
+          /
+          sum(rate(api_requests_total[5m]))
+
+      # 1-hour error rate
+      - record: slo:api_error_rate:ratio_rate1h
+        expr: >
+          sum(rate(api_errors_total[1h]))
+          /
+          sum(rate(api_requests_total[1h]))
+
+      # --- Error rate SLO alerts ---
+
+      # Fast burn: error rate spiking above 0.5%
+      - alert: SLOErrorRateFastBurn
+        expr: slo:api_error_rate:ratio_rate5m > 0.005
+        for: 2m
+        labels:
+          severity: critical
+          slo: error-rate
+          window: fast
+        annotations:
+          summary: "SLO violation: error rate exceeds 0.5%"
+          description: >
+            API error rate is {{ $value | humanizePercentage }} (target: < 0.5%).
+            Check application logs and recent deployments.
+
+      # Slow burn: elevated error rate sustained
+      - alert: SLOErrorRateSlowBurn
+        expr: slo:api_error_rate:ratio_rate1h > 0.003
+        for: 15m
+        labels:
+          severity: warning
+          slo: error-rate
+          window: slow
+        annotations:
+          summary: "SLO warning: error rate trending above target"
+          description: >
+            API error rate is {{ $value | humanizePercentage }} over the last hour.
+            SLO target: < 0.5%. Investigate error patterns in Loki.
+
+  - name: slo-error-budget
+    interval: 60s
+    rules:
+      # Monthly error budget remaining (30-day rolling)
+      - record: slo:error_budget_remaining:ratio
+        expr: >
+          1 - (
+            (1 - slo:api_availability:ratio_rate6h) / 0.001
+          )
+
+      # Error budget exhaustion alert
+      - alert: SLOErrorBudgetLow
+        expr: slo:error_budget_remaining:ratio < 0.25
+        for: 5m
+        labels:
+          severity: warning
+          slo: error-budget
+        annotations:
+          summary: "SLO error budget below 25%"
+          description: >
+            Only {{ $value | humanizePercentage }} of the monthly error budget remains.
+            Consider freezing non-critical deployments until budget recovers.
+
+      - alert: SLOErrorBudgetExhausted
+        expr: slo:error_budget_remaining:ratio < 0
+        for: 1m
+        labels:
+          severity: critical
+          slo: error-budget
+        annotations:
+          summary: "SLO error budget exhausted"
+          description: >
+            Monthly error budget is fully consumed.
+            Freeze all non-emergency deployments. Focus on reliability improvements.
