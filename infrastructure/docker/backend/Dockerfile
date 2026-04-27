@@ -37,7 +37,10 @@ RUN curl -L https://github.com/ta-lib/ta-lib/releases/download/v0.4.0/ta-lib-0.4
 
 # Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Set library path for TA-Lib Python wrapper installation
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+RUN ldconfig && pip install --no-cache-dir --user -r requirements.txt
 
 # Download NLTK data
 RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt stopwords wordnet vader_lexicon
@@ -72,7 +75,7 @@ COPY --from=builder /usr/local/share/nltk_data /usr/local/share/nltk_data
 # Copy application code
 COPY --chown=appuser:appuser backend /app/backend
 COPY --chown=appuser:appuser models /app/models
-COPY --chown=appuser:appuser scripts /app/scripts
+RUN mkdir -p /app/scripts && chown appuser:appuser /app/scripts
 COPY --chown=appuser:appuser alembic.ini /app/
 
 # Create necessary directories
@@ -98,7 +101,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Default command - can be overridden
+# Default command
 CMD ["gunicorn", "backend.api.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--workers", "4", \

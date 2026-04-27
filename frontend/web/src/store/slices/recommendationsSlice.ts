@@ -1,28 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { apiService } from '../../services/api.service';
-
-interface Recommendation {
-  ticker: string;
-  company_name: string;
-  action: 'BUY' | 'SELL' | 'HOLD';
-  confidence: number;
-  target_price: number;
-  current_price: number;
-  potential_return: number;
-  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
-  reasoning: string;
-  technical_score: number;
-  fundamental_score: number;
-  sentiment_score: number;
-  ml_prediction: number;
-  time_horizon: string;
-  sector: string;
-  market_cap: number;
-  volume: number;
-  pe_ratio: number;
-  dividend_yield: number;
-  created_at: string;
-}
+import { Recommendation } from '../../types';
 
 interface RecommendationsState {
   recommendations: Recommendation[];
@@ -35,7 +13,7 @@ interface RecommendationsState {
     minConfidence: number;
     minReturn: number;
   };
-  sortBy: 'confidence' | 'potential_return' | 'created_at';
+  sortBy: 'confidence' | 'expectedReturn' | 'createdAt';
   sortOrder: 'asc' | 'desc';
   pagination: {
     page: number;
@@ -115,10 +93,10 @@ const applyFilters = (state: RecommendationsState) => {
 
   // Apply filters
   if (state.filters.action) {
-    filtered = filtered.filter(r => r.action === state.filters.action);
+    filtered = filtered.filter(r => r.recommendation === state.filters.action);
   }
   if (state.filters.riskLevel) {
-    filtered = filtered.filter(r => r.risk_level === state.filters.riskLevel);
+    filtered = filtered.filter(r => r.risk === state.filters.riskLevel);
   }
   if (state.filters.sector) {
     filtered = filtered.filter(r => r.sector === state.filters.sector);
@@ -127,7 +105,7 @@ const applyFilters = (state: RecommendationsState) => {
     filtered = filtered.filter(r => r.confidence >= state.filters.minConfidence);
   }
   if (state.filters.minReturn !== 0) {
-    filtered = filtered.filter(r => r.potential_return >= state.filters.minReturn);
+    filtered = filtered.filter(r => r.expectedReturn >= state.filters.minReturn);
   }
 
   // Apply sorting
@@ -135,7 +113,7 @@ const applyFilters = (state: RecommendationsState) => {
     let aValue: any = a[state.sortBy];
     let bValue: any = b[state.sortBy];
 
-    if (state.sortBy === 'created_at') {
+    if (state.sortBy === 'createdAt') {
       aValue = new Date(aValue).getTime();
       bValue = new Date(bValue).getTime();
     }

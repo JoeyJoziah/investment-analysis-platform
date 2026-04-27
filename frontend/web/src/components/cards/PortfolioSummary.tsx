@@ -17,7 +17,8 @@ import {
   Tooltip,
   useTheme,
   alpha,
-  Grid
+  Grid,
+  Paper
 } from '@mui/material';
 import {
   TrendingUp,

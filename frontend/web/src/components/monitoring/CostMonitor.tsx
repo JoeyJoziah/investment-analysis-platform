@@ -18,7 +18,8 @@ import {
   Button,
   Collapse,
   useTheme,
-  alpha
+  alpha,
+  Paper
 } from '@mui/material';
 import {
   AttachMoney,

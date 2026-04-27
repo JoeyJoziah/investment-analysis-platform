@@ -30,7 +30,7 @@ from backend.config.settings import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+router = APIRouter(tags=["recommendations"])
 
 # Enum definitions (moved to top to avoid forward reference issues)
 class RecommendationType(str, Enum):

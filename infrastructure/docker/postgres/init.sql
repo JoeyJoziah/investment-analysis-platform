@@ -5,6 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
 -- Create function for updating timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()

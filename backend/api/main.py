@@ -86,6 +86,14 @@ async def lifespan(app: FastAPI):
     scheduler = await start_scheduler()
     logger.info("Background scheduler started")
     
+    # Start WebSocket cleanup task
+    try:
+        from backend.api.routers.websocket import start_websocket_cleanup_task
+        await start_websocket_cleanup_task()
+        logger.info("WebSocket cleanup task started")
+    except Exception as e:
+        logger.warning(f"Failed to start WebSocket cleanup task: {e}")
+    
     # Load ML models
     try:
         from backend.ml.model_manager import get_model_manager

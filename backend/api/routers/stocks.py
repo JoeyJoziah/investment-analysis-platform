@@ -32,7 +32,7 @@ from backend.utils.api_cache_decorators import (
     generate_cache_key
 )
 from backend.utils.database_query_cache import cached_query
-# TODO: Fix these imports - functions don't exist in enhanced_error_handling
+# Imports from enhanced_error_handling (verified to exist)
 from backend.utils.enhanced_error_handling import (
     handle_api_error,
     validate_stock_symbol

@@ -463,7 +463,7 @@ const Portfolio: React.FC = () => {
                 Sector Allocation
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
-                <RechartsP pieChart>
+                <RechartsPieChart>
                   <Pie
                     data={Object.entries(metrics?.diversification?.sector || {}).map(
                       ([sector, value]) => ({ name: sector, value })

@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-04-27T15:35:17.779341",
+  "overall_success": false,
+  "total_duration": 4.405273,
+  "categories_tested": [
+    "all"
+  ],
+  "test_files": [
+    "test_resilience_integration.py",
+    "test_websocket_integration.py",
+    "test_database_integration.py",
+    "test_data_pipeline_integration.py",
+    "test_security_integration.py",
+    "test_api_integration.py"
+  ]
+}

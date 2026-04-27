@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Path
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Path, status
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, date
@@ -24,7 +24,7 @@ from backend.ml.model_manager import get_model_manager
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/analysis", tags=["analysis"])
+router = APIRouter(tags=["analysis"])
 
 # Initialize data clients and analyzers
 alpha_vantage_client = AlphaVantageClient() if settings.ALPHA_VANTAGE_API_KEY else None

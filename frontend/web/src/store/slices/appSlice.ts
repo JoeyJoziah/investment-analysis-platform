@@ -47,7 +47,7 @@ export const initializeApp = createAsyncThunk(
   async () => {
     try {
       // Check for stored auth token
-      const token = localStorage.getItem('authToken');
+      const token = localStorage.getItem('access_token');
       if (token) {
         // Verify token and get user info
         const response = await apiService.get('/auth/me');
@@ -64,7 +64,7 @@ export const login = createAsyncThunk(
   'app/login',
   async (credentials: { email: string; password: string }) => {
     const response = await apiService.post('/auth/login', credentials);
-    localStorage.setItem('authToken', response.data.token);
+    localStorage.setItem('access_token', response.data.access_token);
     return response.data.user;
   }
 );
@@ -73,7 +73,7 @@ export const logout = createAsyncThunk(
   'app/logout',
   async () => {
     await apiService.post('/auth/logout');
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('access_token');
   }
 );
 

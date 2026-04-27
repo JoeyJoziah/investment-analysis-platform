@@ -4,6 +4,7 @@ import { setWebSocketConnected, addNotification } from '../store/slices/appSlice
 import { updateQuote } from '../store/slices/stockSlice';
 import { updateMarketIndex, updateMarketBreadth } from '../store/slices/marketSlice';
 import { updatePosition } from '../store/slices/portfolioSlice';
+import { env } from '../utils/env';
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -16,11 +17,11 @@ class WebSocketService {
       return;
     }
 
-    const wsUrl = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+    const wsUrl = env.WS_URL;
     
     this.socket = io(wsUrl, {
       auth: {
-        token: token || localStorage.getItem('authToken'),
+        token: token || localStorage.getItem('access_token'),
       },
       transports: ['websocket'],
       reconnection: true,
@@ -213,8 +214,8 @@ class WebSocketService {
   private checkPriceAlerts(ticker: string, price: number) {
     // This would normally check against user's configured alerts
     // For now, just a placeholder
-    const alerts = []; // Get from state or local storage
-    
+    const alerts: any[] = []; // Get from state or local storage
+
     alerts.forEach((alert: any) => {
       if (alert.ticker === ticker && alert.active) {
         const triggered = 

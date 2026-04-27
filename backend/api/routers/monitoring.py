@@ -11,7 +11,7 @@ from backend.utils.grafana_client import grafana_client
 from backend.utils.auth import get_current_user
 from backend.utils.cost_monitor import cost_monitor
 
-router = APIRouter(prefix="/api/monitoring", tags=["monitoring"])
+router = APIRouter(tags=["monitoring"])
 
 
 @router.get("/health")

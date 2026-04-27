@@ -15,7 +15,7 @@ from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, r
 from backend.security.jwt_manager import get_jwt_manager, TokenClaims
 from backend.security.secrets_manager import get_secrets_manager
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(tags=["authentication"])
 
 # Security configurations
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

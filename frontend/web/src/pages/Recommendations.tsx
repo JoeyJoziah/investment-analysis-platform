@@ -47,33 +47,12 @@ import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchRecommendations } from '../store/slices/recommendationsSlice';
 import { addToWatchlist, removeFromWatchlist } from '../store/slices/portfolioSlice';
 import { addNotification } from '../store/slices/appSlice';
-
-interface Recommendation {
-  id: string;
-  ticker: string;
-  companyName: string;
-  sector: string;
-  price: number;
-  targetPrice: number;
-  recommendation: 'STRONG_BUY' | 'BUY' | 'HOLD' | 'SELL' | 'STRONG_SELL';
-  confidence: number;
-  signals: {
-    technical: number;
-    fundamental: number;
-    sentiment: number;
-    ml_prediction: number;
-  };
-  reasons: string[];
-  risk: 'LOW' | 'MEDIUM' | 'HIGH';
-  timeHorizon: 'SHORT' | 'MEDIUM' | 'LONG';
-  expectedReturn: number;
-  lastUpdated: string;
-}
+import { Recommendation } from '../types';
 
 const Recommendations: React.FC = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { recommendations, isLoading } = useAppSelector((state) => state.recommendations);
+  const { recommendations, loading: isLoading } = useAppSelector((state) => state.recommendations);
   const { watchlist } = useAppSelector((state) => state.portfolio);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -88,11 +67,11 @@ const Recommendations: React.FC = () => {
   });
 
   useEffect(() => {
-    dispatch(fetchRecommendations());
+    dispatch(fetchRecommendations({}));
   }, [dispatch]);
 
   const handleRefresh = () => {
-    dispatch(fetchRecommendations());
+    dispatch(fetchRecommendations({}));
     dispatch(
       addNotification({
         type: 'info',

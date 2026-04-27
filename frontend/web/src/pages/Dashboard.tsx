@@ -245,7 +245,10 @@ const Dashboard: React.FC = () => {
               Portfolio Performance
             </Typography>
             <StockChart
-              data={portfolioSummary?.performanceHistory}
+              data={portfolioSummary?.performanceHistory?.map(item => ({
+                date: item.date,
+                close: item.value
+              }))}
               height={300}
               showVolume={false}
             />
@@ -254,7 +257,7 @@ const Dashboard: React.FC = () => {
 
         {/* Portfolio Summary */}
         <Grid item xs={12} lg={4}>
-          <PortfolioSummary summary={portfolioSummary} />
+          <PortfolioSummary summary={portfolioSummary ?? undefined} />
         </Grid>
 
         {/* Recent News */}
@@ -274,7 +277,7 @@ const Dashboard: React.FC = () => {
 
         {/* Cost Monitor */}
         <Grid item xs={12} lg={4}>
-          <CostMonitor metrics={costMetrics} />
+          <CostMonitor metrics={costMetrics ?? undefined} />
         </Grid>
 
         {/* Market Sectors Performance */}

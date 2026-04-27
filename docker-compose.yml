@@ -168,7 +168,7 @@ services:
       - ./data_pipelines/airflow/logs:/opt/airflow/logs
       - ./data_pipelines/airflow/plugins:/opt/airflow/plugins
     ports:
-      - "8080:8080"
+      - "8082:8080"
     depends_on:
       - postgres
       - redis

@@ -30,7 +30,7 @@ from backend.security.audit_logging import get_audit_logger, AuditEventType, Aud
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ws", tags=["websocket"])
+router = APIRouter(tags=["websocket"])
 
 # Enhanced WebSocket connection manager with error handling and persistence
 class EnhancedConnectionManager:
@@ -304,8 +304,15 @@ async def cleanup_stale_connections_task():
             logger.error(f"Error in cleanup task: {e}")
             await asyncio.sleep(60)
 
-# Start cleanup task
-cleanup_task = asyncio.create_task(cleanup_stale_connections_task())
+# Cleanup task - initialized at startup, not at module import
+cleanup_task: Optional[asyncio.Task] = None
+
+async def start_websocket_cleanup_task():
+    """Start the cleanup task - should be called during app startup"""
+    global cleanup_task
+    if cleanup_task is None or cleanup_task.done():
+        cleanup_task = asyncio.create_task(cleanup_stale_connections_task())
+        logger.info("WebSocket cleanup task started")
 
 # Data structures for real-time data
 active_price_streams: Dict[str, asyncio.Task] = {}

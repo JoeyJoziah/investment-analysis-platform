@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(gh issue *)",
+      "PowerShell(Write-Output \"===== UNTRACKED FILES \\(not in origin at all\\) =====\"; git ls-files --others --exclude-standard; Write-Output \"\"; Write-Output \"===== MODIFIED FILES: per-file line delta vs origin/main =====\"; git diff --numstat origin/main -- $\\(git diff --name-only\\) 2>&1)",
+      "PowerShell(Write-Output \"===== Untracked files: do they exist on origin/main? =====\"; $untracked = @\\('.claude/settings.local.json','QUICK_TEST_CHECKLIST.md','TEST_PLAN.md','backend/config/settings_secure.py','backend/config/settings_validation.py','docker-compose.simple.yml','frontend/web/index.html','frontend/web/src/utils/accessibility.tsx','frontend/web/tsconfig.json','frontend/web/tsconfig.node.json','frontend/web/vite.config.ts','infrastructure/docker/nginx/conf.d/default.conf','infrastructure/docker/nginx/nginx.conf','models/.gitkeep','scripts/run_quick_tests.py','scripts/run_quick_tests.sh','scripts/setup/models/model_config.json'\\); foreach \\($f in $untracked\\) { $exists = git cat-file -e \"origin/main:$f\" 2>$null; if \\($LASTEXITCODE -eq 0\\) { Write-Output \"ON ORIGIN: $f\" } else { Write-Output \"LOCAL ONLY: $f\" } })",
+      "PowerShell(git *)"
+    ]
+  }
+}

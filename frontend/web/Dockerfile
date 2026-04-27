@@ -1,20 +1,20 @@
-# Development Dockerfile for React frontend
+# Development Dockerfile for React frontend with Vite
 FROM node:18-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package.json only (without lock file)
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci || npm install
+# Install dependencies with legacy peer deps
+RUN npm install --legacy-peer-deps
 
 # Copy application code
 COPY . .
 
-# Expose port
+# Expose Vite dev server port
 EXPOSE 3000
 
-# Start development server
+# Start Vite development server
 CMD ["npm", "start"]

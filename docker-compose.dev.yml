@@ -10,7 +10,7 @@ services:
     build:
       context: .
       dockerfile: ./infrastructure/docker/backend/Dockerfile
-      target: development
+
     volumes:
       - ./backend:/app/backend  # Hot reload
       - ./models:/app/models
@@ -28,8 +28,8 @@ services:
   frontend:
     build:
       context: ./frontend/web
-      dockerfile: ../../infrastructure/docker/frontend/Dockerfile
-      target: development
+      dockerfile: Dockerfile
+
     volumes:
       - ./frontend/web/src:/app/src
       - ./frontend/web/public:/app/public
@@ -50,7 +50,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev_password}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./scripts/init_database.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   # Override Redis for development
   redis:

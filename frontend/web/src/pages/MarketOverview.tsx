@@ -437,7 +437,7 @@ const MarketOverview: React.FC = () => {
                   <XAxis dataKey="sector" angle={-45} textAnchor="end" height={80} />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="changePercent" fill={(entry: any) => entry.changePercent >= 0 ? '#00C49F' : '#FF8042'} />
+                  <Bar dataKey="changePercent" fill="#00C49F" />
                 </BarChart>
               </ResponsiveContainer>
             </Grid>
@@ -495,7 +495,14 @@ const MarketOverview: React.FC = () => {
             Market Heat Map
           </Typography>
           <Box sx={{ height: 600 }}>
-            <MarketHeatmap data={heatmapData} />
+            <MarketHeatmap data={heatmapData.map(item => ({
+              name: item.name,
+              ticker: item.ticker,
+              value: item.marketCap,
+              change: item.changePercent,
+              volume: item.volume,
+              sector: item.sector
+            }))} />
           </Box>
         </TabPanel>
 

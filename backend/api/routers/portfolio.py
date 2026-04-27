@@ -33,7 +33,7 @@ from backend.config.settings import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+router = APIRouter(tags=["portfolio"])
 
 # Enums
 class TransactionType(str, Enum):

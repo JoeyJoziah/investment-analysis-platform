@@ -1,5 +1,5 @@
 -- Database initialization script
-CREATE DATABASE IF NOT EXISTS investment_db;
+-- Database is created by Docker entrypoint
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE investment_db TO postgres;
