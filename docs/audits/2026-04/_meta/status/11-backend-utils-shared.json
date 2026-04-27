@@ -1,0 +1,10 @@
+{
+  "scope_id": "11-backend-utils-shared",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T00:30:00Z",
+  "agent_id": "code-analyzer",
+  "report_path": "docs/audits/2026-04/reports/11-backend-utils-shared.md",
+  "findings_total": 20,
+  "redactions": 0
+}

@@ -1,0 +1,9 @@
+{
+  "scope_id": "14-ci-cd-workflows",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T00:00:00Z",
+  "report_path": "docs/audits/2026-04/reports/14-ci-cd-workflows.md",
+  "findings_total": 14,
+  "redactions": 0
+}

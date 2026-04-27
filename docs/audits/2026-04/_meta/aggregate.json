@@ -1,0 +1,273 @@
+{
+  "totals": {
+    "critical": 48,
+    "high": 114,
+    "medium": 143,
+    "low": 69,
+    "total": 374
+  },
+  "by_scope": {
+    "01-backend-api": {
+      "critical": 3,
+      "high": 6,
+      "medium": 8,
+      "low": 3,
+      "total": 20
+    },
+    "02-backend-services-domain": {
+      "critical": 4,
+      "high": 7,
+      "medium": 10,
+      "low": 4,
+      "total": 25
+    },
+    "03-ml-engine": {
+      "critical": 3,
+      "high": 5,
+      "medium": 6,
+      "low": 3,
+      "total": 17
+    },
+    "04-trading-agents": {
+      "critical": 2,
+      "high": 7,
+      "medium": 9,
+      "low": 4,
+      "total": 22
+    },
+    "05-data-ingestion-etl": {
+      "critical": 3,
+      "high": 6,
+      "medium": 7,
+      "low": 4,
+      "total": 20
+    },
+    "06-airflow-pipelines": {
+      "critical": 3,
+      "high": 6,
+      "medium": 5,
+      "low": 2,
+      "total": 16
+    },
+    "07-database-persistence": {
+      "critical": 4,
+      "high": 6,
+      "medium": 6,
+      "low": 2,
+      "total": 18
+    },
+    "08-auth-security-compliance": {
+      "critical": 4,
+      "high": 8,
+      "medium": 6,
+      "low": 2,
+      "total": 20
+    },
+    "09-analytics": {
+      "critical": 3,
+      "high": 6,
+      "medium": 8,
+      "low": 4,
+      "total": 21
+    },
+    "10-monitoring-observability": {
+      "critical": 3,
+      "high": 7,
+      "medium": 5,
+      "low": 2,
+      "total": 17
+    },
+    "11-backend-utils-shared": {
+      "critical": 0,
+      "high": 4,
+      "medium": 11,
+      "low": 5,
+      "total": 20
+    },
+    "12-frontend": {
+      "critical": 3,
+      "high": 7,
+      "medium": 8,
+      "low": 4,
+      "total": 22
+    },
+    "13-infra-deployment": {
+      "critical": 1,
+      "high": 7,
+      "medium": 8,
+      "low": 4,
+      "total": 20
+    },
+    "14-ci-cd-workflows": {
+      "critical": 2,
+      "high": 4,
+      "medium": 5,
+      "low": 3,
+      "total": 14
+    },
+    "15-test-suite": {
+      "critical": 4,
+      "high": 9,
+      "medium": 9,
+      "low": 5,
+      "total": 27
+    },
+    "16-config-secrets": {
+      "critical": 2,
+      "high": 4,
+      "medium": 6,
+      "low": 3,
+      "total": 15
+    },
+    "17-scripts-tooling": {
+      "critical": 2,
+      "high": 7,
+      "medium": 8,
+      "low": 5,
+      "total": 22
+    },
+    "18-docs-health": {
+      "critical": 2,
+      "high": 8,
+      "medium": 18,
+      "low": 10,
+      "total": 38
+    }
+  },
+  "statuses": {
+    "14-ci-cd-workflows": "complete",
+    "07-database-persistence": "complete",
+    "15-test-suite": "complete",
+    "12-frontend": "complete",
+    "03-ml-engine": "complete",
+    "16-config-secrets": "complete",
+    "06-airflow-pipelines": "complete",
+    "18-docs-health": "complete",
+    "05-data-ingestion-etl": "complete",
+    "10-monitoring-observability": "complete",
+    "02-backend-services-domain": "complete",
+    "08-auth-security-compliance": "complete",
+    "11-backend-utils-shared": "complete",
+    "17-scripts-tooling": "complete",
+    "09-analytics": "complete",
+    "13-infra-deployment": "complete",
+    "04-trading-agents": "complete",
+    "01-backend-api": "complete"
+  },
+  "cross_links": {
+    "05-data-ingestion-etl": [
+      "08-auth-security-compliance",
+      "02-backend-services-domain",
+      "09-analytics",
+      "08-auth-security-compliance",
+      "10-monitoring-observability",
+      "07-database-persistence",
+      "08-auth-security-compliance",
+      "15-test-suite",
+      "07-database-persistence"
+    ],
+    "07-database-persistence": [
+      "05-data-ingestion-etl",
+      "16-config-secrets",
+      "02-backend-services-domain",
+      "02-backend-services-domain",
+      "02-backend-services-domain",
+      "03-ml-engine",
+      "02-backend-services-domain",
+      "13-infra-deployment",
+      "11-backend-utils-shared"
+    ],
+    "16-config-secrets": [
+      "05-data-ingestion-etl",
+      "02-backend-services",
+      "05-data-ingestion-etl",
+      "03-ml-engine",
+      "06-airflow-pipelines",
+      "08-auth-security-compliance",
+      "14-ci-cd-workflows",
+      "17-scripts-tooling"
+    ]
+  },
+  "top_critical": [
+    {
+      "scope": "01-backend-api",
+      "id": "F-01-001",
+      "severity": "critical",
+      "category": "bug",
+      "loc": "backend/api/routers/auth.py:27-28,57,77",
+      "title": "RS256 algorithm with string secret causes runtime InvalidKeyError"
+    },
+    {
+      "scope": "01-backend-api",
+      "id": "F-01-002",
+      "severity": "critical",
+      "category": "dead_code",
+      "loc": "backend/api/routers/monitoring.py:25",
+      "title": "monitoring.py router never registered \u2014 5 endpoints unreachable"
+    },
+    {
+      "scope": "01-backend-api",
+      "id": "F-01-003",
+      "severity": "critical",
+      "category": "architecture",
+      "loc": "backend/api/versioning.py:756,820-824",
+      "title": "V1DeprecationMiddleware treats all current /api/v1/ routes as deprecated \u2014 log spam and incorrect headers"
+    },
+    {
+      "scope": "02-backend-services-domain",
+      "id": "F-02-001",
+      "severity": "critical",
+      "category": "dead_code",
+      "loc": "backend/services/recommendation_service.py:54 + backend/services/recommendation_crud.py:49 + backend/services/recommendation_analysis.py:31",
+      "title": "RecommendationService duplicates 100% of two unused mixins"
+    },
+    {
+      "scope": "02-backend-services-domain",
+      "id": "F-02-002",
+      "severity": "critical",
+      "category": "bug",
+      "loc": "backend/services/realtime_price_service.py:86-98",
+      "title": "aiohttp ClientSession closed before WebSocket can be used"
+    },
+    {
+      "scope": "02-backend-services-domain",
+      "id": "F-02-003",
+      "severity": "critical",
+      "category": "bug",
+      "loc": "backend/services/admin_service.py:23-49,131-141,147+; backend/services/recommendation_service.py:140-218,748-795,801-842,882-904; backend/services/portfolio_rebalancing.py:16-76; backend/services/socketio_service.py:258-279",
+      "title": "Live endpoints surface `random.uniform()` / `random.randint()` data as real values"
+    },
+    {
+      "scope": "02-backend-services-domain",
+      "id": "F-02-004",
+      "severity": "critical",
+      "category": "broken_dependency",
+      "loc": "backend/tasks/scheduler.py:48-95 + backend/api/main.py:92-93",
+      "title": "Async scheduler is wired but every body is commented out"
+    },
+    {
+      "scope": "03-ml-engine",
+      "id": "F-03-001",
+      "severity": "critical",
+      "category": "security",
+      "loc": "backend/ml/ml_api_server.py:190-214",
+      "title": "Unauthenticated model management endpoints"
+    },
+    {
+      "scope": "03-ml-engine",
+      "id": "F-03-002",
+      "severity": "critical",
+      "category": "security",
+      "loc": "backend/ml/model_manager.py:221,300",
+      "title": "`torch.load()` without `weights_only=True` \u2014 arbitrary code execution risk"
+    },
+    {
+      "scope": "03-ml-engine",
+      "id": "F-03-003",
+      "severity": "critical",
+      "category": "bug",
+      "loc": "ml_models/",
+      "title": "Trained model binaries absent \u2014 platform runs on dummy fallbacks"
+    }
+  ]
+}

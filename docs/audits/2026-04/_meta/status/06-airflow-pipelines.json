@@ -1,0 +1,9 @@
+{
+  "scope_id": "06-airflow-pipelines",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T01:00:00Z",
+  "report_path": "docs/audits/2026-04/reports/06-airflow-pipelines.md",
+  "findings_total": 16,
+  "redactions": 0
+}

@@ -1,0 +1,13 @@
+{
+  "scope_id": "13-infra-deployment",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T00:00:00Z",
+  "agent_id": "cloud-architect",
+  "report_path": "docs/audits/2026-04/reports/13-infra-deployment.md",
+  "findings_total": 20,
+  "redactions": 0,
+  "priors_archived": 21,
+  "priors_total_mapped": 22,
+  "prior_skipped_owned_by_other_scope": ["docs/PHASE_4.2_IMPLEMENTATION.md"]
+}

@@ -1,0 +1,9 @@
+{
+  "scope_id": "04-trading-agents",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T01:00:00Z",
+  "report_path": "docs/audits/2026-04/reports/04-trading-agents.md",
+  "findings_total": 22,
+  "redactions": 0
+}
