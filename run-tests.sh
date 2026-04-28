@@ -81,7 +81,9 @@ if [ "$RUN_FRONTEND" = true ]; then
 
     cd "$SCRIPT_DIR/frontend/web"
 
-    if npm test -- --watchAll=false --passWithNoTests; then
+    # F-15-002 (audit 2026-04): Vitest 4.x rejects Jest flags --watchAll/--passWithNoTests.
+    # Use --run for one-shot execution.
+    if npm run test -- --run; then
         echo ""
         echo "[Frontend Tests] PASSED"
     else
