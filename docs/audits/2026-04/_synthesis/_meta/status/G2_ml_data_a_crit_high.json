@@ -1,0 +1,45 @@
+{
+  "cluster_id": "G2_ml_data_a_crit_high",
+  "status": "complete",
+  "findings_count": 41,
+  "findings_referenced": 41,
+  "scopes": ["03-ml-engine", "04-trading-agents", "05-data-ingestion-etl", "06-airflow-pipelines", "09-analytics"],
+  "severity": ["critical", "high"],
+  "sub_themes": [
+    "ml_pipeline_correctness",
+    "trading_agents_correctness",
+    "ingestion_correctness",
+    "airflow_dag_fixes",
+    "analytics_correctness"
+  ],
+  "total_effort_hours": 138.5,
+  "loki_actionable_count": 38,
+  "human_ack_required": ["F-09-002"],
+  "loki_actionable_false": ["F-05-009", "F-09-006"],
+  "fail_first_findings": ["F-04-002", "F-09-001", "F-05-007", "F-06-002", "F-06-003", "F-03-004", "F-05-001"],
+  "dependencies": {
+    "independent_of": ["A", "B", "C"],
+    "soft_depends_on": ["E"],
+    "internal": [
+      "D_airflow_blocks_A_ml_training",
+      "F-09-006_waits_on_F-05-004",
+      "F-06-008_couples_F-03-004_F-06-002"
+    ]
+  },
+  "architectural_decisions": {
+    "F-09-002": {
+      "default": "revert_to_bundled_engine",
+      "recommended": "fix_forward_single_yield_wrapper",
+      "requires_human_ack": true
+    }
+  },
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/G2_ml_data_a_crit_high.md",
+  "all_ids_assertion": "PASS",
+  "ids": [
+    "F-03-002", "F-03-004", "F-03-006", "F-03-007", "F-03-008",
+    "F-04-001", "F-04-002", "F-04-003", "F-04-004", "F-04-005", "F-04-006", "F-04-007", "F-04-008", "F-04-009",
+    "F-05-001", "F-05-002", "F-05-004", "F-05-005", "F-05-006", "F-05-007", "F-05-008", "F-05-009",
+    "F-06-001", "F-06-002", "F-06-003", "F-06-004", "F-06-005", "F-06-006", "F-06-007", "F-06-008", "F-06-009",
+    "F-09-001", "F-09-002", "F-09-003", "F-09-004", "F-09-005", "F-09-006", "F-09-007", "F-09-008", "F-09-009", "F-09-010"
+  ]
+}

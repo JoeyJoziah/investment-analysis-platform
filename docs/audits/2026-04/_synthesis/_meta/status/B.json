@@ -1,0 +1,1 @@
+{"cluster":"B","name":"jwt-auth","status":"complete","started_at":"2026-04-27T00:00:00Z","completed_at":"2026-04-27T00:00:00Z","ids_total":25,"ids_referenced":25,"steps":12,"effort_hours_low":40,"effort_hours_high":55,"loki_cost_estimate_usd":1.8,"depends_on":["A"],"workpaper":"docs/audits/2026-04/_synthesis/workpaper/B.md"}

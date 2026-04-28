@@ -11,12 +11,9 @@ from sqlalchemy.pool import StaticPool
 from backend.models.unified_models import Base
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an instance of the default event loop for the test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# NOTE: Removed deprecated session-scope `event_loop` fixture (F-15-013, audit 2026-04).
+# `asyncio_mode = auto` in pytest.ini handles loop creation; redefining
+# event_loop here conflicts with newer pytest-asyncio and emits DeprecationWarnings.
 
 
 @pytest_asyncio.fixture(scope="function")

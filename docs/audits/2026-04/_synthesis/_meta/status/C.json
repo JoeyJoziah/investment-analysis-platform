@@ -1,0 +1,54 @@
+{
+  "worker": "C",
+  "cluster": "csp-unsafe-removal",
+  "status": "partial",
+  "loki_actionable": "partial",
+  "requires_human_ack": true,
+  "findings_addressed": ["F-08-003", "F-12-003", "F-13-014"],
+  "findings_count": 3,
+  "severity_floor": "medium",
+  "severity_ceiling": "critical",
+  "files_touched": [
+    "backend/security/security_config.py",
+    "backend/security/csp_report.py",
+    "frontend/web/index.html",
+    "frontend/web/vite.config.ts",
+    "infrastructure/docker/nginx/conf.d/security-headers.conf",
+    "infrastructure/docker/frontend/security-headers.conf",
+    "config/services/nginx/security-headers.conf",
+    "tests/e2e/csp-violations.spec.ts"
+  ],
+  "path_corrections": [
+    {
+      "slice_path": "frontend/web/src/index.html",
+      "actual_path": "frontend/web/index.html",
+      "finding_id": "F-12-003"
+    }
+  ],
+  "human_ack_items": [
+    "Choose CSP nonce vs hash strategy (default: per-request nonce)",
+    "Choose CSP ownership: backend vs nginx (default: backend owns, nginx passes through)",
+    "Schedule rollout window for ≥7 day report-only soak before enforcing flip",
+    "Confirm third-party domain allowlist completeness before enforcing flip"
+  ],
+  "loki_actionable_now": [
+    "Backend nonce middleware scaffold (report-only)",
+    "Vite dev/prod CSP split",
+    "Nginx duplicate CSP cleanup across 3 files",
+    "E2E test scaffold for CSP violations"
+  ],
+  "loki_blocked": [
+    "Phase 4 flip from report-only to enforcing",
+    "Final third-party allowlist sign-off"
+  ],
+  "effort_hours_active": 14,
+  "effort_hours_passive_soak_days": 7,
+  "estimated_cost_usd": 2100,
+  "depends_on_clusters": [],
+  "soft_depends_on_clusters": ["B"],
+  "rollback_complexity": "low",
+  "rollback_strategy": "report-only mode first; single nginx config revert + reload for fast recovery",
+  "destructive_without_sequencing": true,
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/C.md",
+  "all_ids_referenced": true
+}

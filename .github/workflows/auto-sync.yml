@@ -210,10 +210,12 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # When PR is merged, update any linked issues on the board
-          PR_BODY="${{ github.event.pull_request.body }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+          # When PR is merged, update any linked issues on the board.
+          # PR_BODY / PR_NUMBER come from `env:` above to neutralise
+          # script injection via attacker-controlled PR body.
 
           # Extract issue references (Closes #123, Fixes #456, etc.)
           ISSUE_REFS=$(echo "$PR_BODY" | grep -oE "(close[sd]?|fix(es|ed)?|resolve[sd]?)\s*#[0-9]+" -i | grep -oE "#[0-9]+" || echo "")

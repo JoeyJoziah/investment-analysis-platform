@@ -1,0 +1,25 @@
+{
+  "scope_id": "08-auth-security-compliance",
+  "state": "complete",
+  "started_at": "2026-04-27T17:00:00Z",
+  "finished_at": "2026-04-27T18:30:00Z",
+  "report_path": "docs/audits/2026-04/reports/08-auth-security-compliance.md",
+  "findings_total": 20,
+  "findings_by_severity": {
+    "critical": 4,
+    "high": 8,
+    "medium": 6,
+    "low": 2
+  },
+  "redactions": 30,
+  "redactions_breakdown": {
+    "SECURITY_CREDENTIALS_AUDIT.md": 12,
+    "SECRET_ROTATION_PLAN.md": 6,
+    "security-audit-report.md": 8,
+    "SECURITY_REMEDIATION_COMPLETE.md": 4
+  },
+  "prior_reports_archived": 30,
+  "prior_reports_path": "docs/audits/2026-04/_meta/prior-reports-archive/",
+  "cross_scope_references": ["01-backend-api", "05-data-ingestion-etl", "07-database-persistence", "10-monitoring-observability", "11-backend-utils-shared", "12-frontend", "13-infra-deployment", "14-ci-cd-workflows", "15-test-suite", "16-config-secrets", "17-scripts-tooling", "18-docs-health"],
+  "tool_limitation_note": "Sub-agent received only Read tool; report content delivered inline; orchestrator persisted files and ran archive redaction pipeline."
+}

@@ -1,0 +1,14 @@
+{
+  "scope_id": "02-backend-services-domain",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T00:00:00Z",
+  "report_path": "docs/audits/2026-04/reports/02-backend-services-domain.md",
+  "findings_total": 25,
+  "redactions": 0,
+  "agent_id": "backend-architect",
+  "tier": "medium",
+  "files_in_scope": 40,
+  "files_reviewed": 40,
+  "priors_archived": 4
+}

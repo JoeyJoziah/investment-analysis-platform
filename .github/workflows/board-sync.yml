@@ -125,10 +125,12 @@ jobs:
         if: github.event.action == 'closed' && github.event.pull_request.merged == true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          echo "PR merged: ${{ github.event.pull_request.title }}"
+          echo "PR merged: $PR_TITLE"
           # Find and close related issues
-          BODY="${{ github.event.pull_request.body }}"
+          BODY="$PR_BODY"
           if [[ "$BODY" =~ (Closes|Fixes|Resolves)[[:space:]]*#([0-9]+) ]]; then
             ISSUE_NUM="${BASH_REMATCH[2]}"
             echo "Related issue: #$ISSUE_NUM"

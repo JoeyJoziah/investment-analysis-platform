@@ -1,0 +1,86 @@
+{
+  "cluster": "E",
+  "name": "test-exclusion",
+  "anchor": "F-15-003",
+  "status": "complete",
+  "type": "independent",
+  "blockers": [],
+  "unblocks": ["B", "C", "D", "scope-02-followup", "scope-07-followup"],
+  "parallel_safe_with": ["A"],
+  "recommended_run_order": "first",
+  "findings_total": 15,
+  "findings_referenced": 15,
+  "finding_ids": [
+    "F-06-012",
+    "F-15-001",
+    "F-15-002",
+    "F-15-003",
+    "F-15-004",
+    "F-15-008",
+    "F-15-009",
+    "F-15-011",
+    "F-15-013",
+    "F-15-019",
+    "F-15-020",
+    "F-15-021",
+    "F-15-023",
+    "F-15-026",
+    "F-15-027"
+  ],
+  "source_scopes": ["06-airflow-pipelines", "15-test-suite"],
+  "severity_breakdown": {
+    "critical": 4,
+    "high": 3,
+    "medium": 5,
+    "low": 3
+  },
+  "effort_hours_total": 27.0,
+  "loki_actionable": "mostly",
+  "loki_caveats": [
+    "Step 5 (mock-removal new tests) needs human/Sonnet review",
+    "Step 6 (SQLite fallback test selection) is a minor design choice"
+  ],
+  "files_touched": {
+    "config": ["pytest.ini", "run-tests.sh", "run_integration_tests.py"],
+    "edits": [
+      "backend/tests/test_performance_optimizations.py",
+      "backend/tests/test_database_integration.py",
+      "backend/tests/unit/test_realtime_price_service.py",
+      "backend/tests/unit/test_repositories_unit.py",
+      "tests/security/conftest.py",
+      "backend/tests/README.md"
+    ],
+    "new": [
+      "data_pipelines/airflow/dags/utils/conftest.py",
+      "backend/tests/integration/test_database_sqlite.py",
+      "tests/README.md"
+    ],
+    "moves": [
+      "backend/tests/benchmark_n1_query_fix.py -> scripts/performance/benchmark_n1_query_fix.py"
+    ],
+    "deletes": [
+      "tests/TEST_SUMMARY.md",
+      "tests/TEST_METRICS.md",
+      "tests/E2E_AND_INTEGRATION_TESTS.md",
+      "tests/QUICK_START.md",
+      "tests/FILE_MANIFEST.md"
+    ]
+  },
+  "no_source_code_modifications": true,
+  "writes_only_to": [
+    "docs/audits/2026-04/_synthesis/workpaper/E.md",
+    "docs/audits/2026-04/_synthesis/_meta/status/E.json"
+  ],
+  "cascade_artifacts_expected": [
+    "docs/audits/2026-04/_synthesis/_meta/artifacts/E-step1-failures.txt",
+    "docs/audits/2026-04/_synthesis/_meta/artifacts/E-step2-failures.txt"
+  ],
+  "risks_top": [
+    "CI flood from un-exclusion - schedule with team",
+    "Double-reporting with B/C/D - artifact handoff mitigates",
+    "Coverage gate 75->85 may break unrelated PRs - stage roll-out"
+  ],
+  "acceptance_tests_count": 13,
+  "rollback_complexity": "low",
+  "version": 1
+}

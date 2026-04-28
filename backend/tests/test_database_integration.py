@@ -20,10 +20,30 @@ import pandas as pd
 import numpy as np
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
 import subprocess as _sp
+import warnings as _warnings
+
+# F-15-008 (audit 2026-04): make the Docker requirement visible in CI.
+# Previously this was a silent module-level skip, which let the entire DB
+# integration suite quietly disappear from CI runs without docker. Now:
+#   * the skip reason includes "Docker required" so it shows up in CI
+#     summary lines
+#   * we emit a UserWarning so any pytest -W error config flags it
+#   * INTEGRATION_REQUIRE_DOCKER=1 promotes the skip to a hard failure,
+#     which CI should set so missing Docker breaks the build instead of
+#     silently passing.
 try:
     _sp.run(["docker", "info"], capture_output=True, check=True, timeout=5)
-except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired):
-    pytest.skip("Docker not available - required for testcontainers", allow_module_level=True)
+except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired) as _docker_err:
+    _msg = (
+        "Docker required for testcontainers-based DB integration suite "
+        f"({type(_docker_err).__name__}: {_docker_err}). "
+        "For Docker-free coverage see backend/tests/integration/test_database_sqlite.py. "
+        "Set INTEGRATION_REQUIRE_DOCKER=1 in CI to fail instead of skip."
+    )
+    _warnings.warn(_msg, UserWarning, stacklevel=2)
+    if os.getenv("INTEGRATION_REQUIRE_DOCKER") == "1":
+        pytest.fail(_msg, pytrace=False)
+    pytest.skip(_msg, allow_module_level=True)
 from testcontainers.postgres import PostgresContainer
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database

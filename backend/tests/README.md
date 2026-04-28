@@ -53,12 +53,19 @@ async def test_thesis_not_found(async_client):
 
 ### Coverage Requirements
 
-- **Minimum line coverage**: 85%
-- **Critical path coverage**: 95%
-- **Security code coverage**: 100%
-- **Error handling coverage**: 90%
+- **Minimum line coverage (enforced gate)**: **85%**
+- *Aspirational, not gated:* critical path 95%, security 100%, error
+  handling 90%. These remain targets to drive design decisions but are
+  **not enforced** by CI -- enforcing them today would require near-
+  full removal of mock-based unit tests, which is a separate workstream.
 
-Coverage threshold is enforced by pytest (see `pytest.ini`):
+The single canonical gate is 85%, set on the command line by both
+`pytest backend/tests/ --cov=backend --cov-fail-under=85` and
+`python run_integration_tests.py` (which passes `--cov-fail-under=85`
+internally). The previous mix of 60% / 75% / 85% / 95% / 100% values
+across `pytest.ini`, `run_integration_tests.py`, and this README is
+resolved by the audit-2026-04 cleanup (F-15-009, F-15-019, F-15-027).
+
 ```bash
 # Will fail if coverage drops below 85%
 pytest backend/tests/ --cov=backend --cov-fail-under=85
@@ -379,10 +386,10 @@ External dependencies are mocked with realistic responses:
 
 ## Coverage Requirements
 
-- Minimum line coverage: 85%
-- Critical path coverage: 95%
-- Security code coverage: 100%
-- Error handling coverage: 90%
+- Minimum line coverage: **85% (enforced)**
+- Critical path coverage: 95% (aspirational, not gated)
+- Security code coverage: 100% (aspirational, not gated)
+- Error handling coverage: 90% (aspirational, not gated)
 
 Coverage reports are generated in multiple formats:
 - Terminal output for immediate feedback

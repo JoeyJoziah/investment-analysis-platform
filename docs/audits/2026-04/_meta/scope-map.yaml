@@ -1,0 +1,460 @@
+version: 1
+date: "2026-04-27"
+plan: "/Users/devinmcgrath/.claude/plans/why-can-t-we-chunk-eager-whale.md"
+
+tiers:
+  small:  { max_files: 30,  finding_cap: 200, token_budget: 6000 }
+  medium: { max_files: 80,  finding_cap: 400, token_budget: 10000 }
+  large:  { max_files: 9999, finding_cap: 600, token_budget: 14000 }
+
+# Cross-cutting priors are listed here; each scope only references the SECTIONS relevant to it.
+cross_cutting_priors:
+  - path: "docs/QUEEN_AUDIT_MASTER_REPORT.md"
+    note: "Cross-cutting; sections may be split per scope."
+  - path: "docs/AUDIT_SUMMARY.txt"
+  - path: "docs/DELIVERY_SUMMARY.md"
+  - path: "docs/REFACTOR_AUDIT_SUMMARY.md"
+  - path: "docs/PROJECT_ROADMAP.md"
+
+scopes:
+
+  - id: "01-backend-api"
+    name: "Backend API & Middleware"
+    agent_type: "backend-developer"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    paths_in:
+      - "backend/api/**/*.py"
+      - "backend/middleware/**/*.py"
+    paths_out: ["backend/api/__pycache__/"]
+    priors:
+      - "docs/API_DESIGN_AUDIT_REPORT.md"
+      - "docs/MIDDLEWARE_ASYNCCLIENT_FIXES.md"
+      - "docs/websocket-architecture-analysis.md"
+      - "docs/websocket-risks-summary.md"
+      - "docs/api/V1_TO_V2_MIGRATION_GUIDE.md"
+      - "docs/reports/api-standardization-plan.md"
+      - "docs/reports/WEBSOCKET_IMPLEMENTATION.md"
+
+  - id: "02-backend-services-domain"
+    name: "Backend Services, Domain, Tasks"
+    agent_type: "backend-architect"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    wave: 3   # cross-cutting; reads Wave 2 TL;DRs
+    paths_in:
+      - "backend/services/**/*.py"
+      - "backend/domain/**/*.py"
+      - "backend/tasks/**/*.py"
+    paths_out: []
+    priors:
+      - "docs/INTEGRATION_SUMMARY.md"
+      - "docs/INVESTMENT_THESIS_FEATURE.md"
+      - "docs/architecture/CODEBASE_ARCHITECTURE_MAP.md"
+      - "docs/architecture/COMPREHENSIVE_CACHING_SYSTEM.md"
+
+  - id: "03-ml-engine"
+    name: "ML / Recommendation Engine"
+    agent_type: "ml-engineer"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    paths_in:
+      - "backend/ml/**/*.py"
+      - "ml_models/**"
+      - "models/**"
+      - "backend/ml_logs/**"
+    paths_out: ["ml_models/.hf_cache/"]
+    priors:
+      - "docs/PHASE_4.2_IMPLEMENTATION.md"
+      - "docs/ml/GPU_SUPPORT.md"
+      - "docs/ml/ML_API_REFERENCE.md"
+      - "docs/ml/ML_OPERATIONS_GUIDE.md"
+      - "docs/ml/ML_PIPELINE_DOCUMENTATION.md"
+      - "docs/ml/ML_QUICKSTART.md"
+
+  - id: "04-trading-agents"
+    name: "TradingAgents Subsystem"
+    agent_type: "python-pro"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    paths_in:
+      - "backend/TradingAgents/**/*.py"
+    paths_out: []
+    priors: []
+
+  - id: "05-data-ingestion-etl"
+    name: "Data Ingestion, ETL, Streaming, Scanner"
+    agent_type: "data-engineer"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    paths_in:
+      - "backend/data_ingestion/**/*.py"
+      - "backend/etl/**/*.py"
+      - "backend/streaming/**/*.py"
+      - "backend/scanner/**/*.py"
+    paths_out: []
+    priors:
+      - "docs/architecture/DATA_COLLECTION_SOLUTION.md"
+      - "docs/architecture/MULTI_SOURCE_ETL_SOLUTION.md"
+      - "docs/architecture/UNLIMITED_DATA_EXTRACTION_SOLUTION.md"
+      - "docs/architecture/UNLIMITED_STOCK_EXTRACTION_SOLUTION.md"
+      - "docs/reports/ETL_ACTIVATION_SUCCESS.md"
+      - "docs/reports/STOCK_UNIVERSE_EXPANSION_SUCCESS.md"
+
+  - id: "06-airflow-pipelines"
+    name: "Airflow Data Pipelines"
+    agent_type: "data-engineer"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    paths_in:
+      - "data_pipelines/airflow/**"
+    paths_out: []
+    priors: []
+
+  - id: "07-database-persistence"
+    name: "Database, Repositories, Migrations"
+    agent_type: "database-optimizer"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    wave: 3
+    paths_in:
+      - "backend/models/**/*.py"
+      - "backend/repositories/**/*.py"
+      - "backend/migrations/**"
+      - "alembic.ini"
+      - "infrastructure/postgres/**"
+      - "infrastructure/database/**"
+    paths_out: []
+    priors: []
+
+  - id: "08-auth-security-compliance"
+    name: "Auth, Security, Compliance, Scanner"
+    agent_type: "security-auditor"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    wave: 3
+    paths_in:
+      - "backend/auth/**/*.py"
+      - "backend/security/**/*.py"
+      - "backend/compliance/**/*.py"
+      - ".gitleaks.toml"
+      - ".secrets.baseline"
+    paths_out: []
+    priors:
+      - "docs/SECURITY.md"
+      - "docs/SECURITY-INTELLIGENCE-BRIDGE.md"
+      - "docs/SEC_REGULATORY_COMPLIANCE_AUDIT.md"
+      - "docs/COMPLIANCE_ACTION_PLAN.md"
+      - "docs/COMPLIANCE_README.md"
+      - "docs/COMPLIANCE_SUMMARY.txt"
+      - "docs/PHASE2-SECURITY-INTELLIGENCE-SUMMARY.md"
+      - "docs/phase2-checklist.md"
+      - "docs/phase2-quick-fixes.md"
+      - "docs/phase2-validation-report.md"
+      - "docs/security/CONTAINER_SECURITY_REMEDIATION.md"
+      - "docs/security/CSP_CORS_REMEDIATION.md"
+      - "docs/security/IMPLEMENTATION_SUMMARY.md"
+      - "docs/security/INTEGRATION_EXAMPLE.md"
+      - "docs/security/PHASE1_SECURITY_SUMMARY.md"
+      - "docs/security/PHASE1_VERIFICATION_CHECKLIST.md"
+      - "docs/security/PHASE2_IMPROVEMENTS.md"
+      - "docs/security/PHASE3_IMPLEMENTATION_SUMMARY.md"
+      - "docs/security/PHASE3_SECURITY_FINAL.md"
+      - "docs/security/QUICK_REFERENCE.md"
+      - "docs/security/README.md"
+      - "docs/security/ROW_LOCKING_README.md"
+      - "docs/security/ROW_LOCKING_SUMMARY.md"
+      - "docs/security/ROW_LOCKING.md"
+      - "docs/security/SECRET_ROTATION_PLAN.md"
+      - "docs/security/SECURITY_CREDENTIALS_AUDIT.md"
+      - "docs/security/SECURITY_FEATURES.md"
+      - "docs/security/SECURITY_IMPLEMENTATION_SUMMARY.md"
+      - "docs/reports/security-audit-report.md"
+      - "docs/reports/SECURITY_REMEDIATION_COMPLETE.md"
+
+  - id: "09-analytics"
+    name: "Analytics"
+    agent_type: "data-scientist"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    paths_in:
+      - "backend/analytics/**/*.py"
+    paths_out: []
+    priors: []
+
+  - id: "10-monitoring-observability"
+    name: "Monitoring & Observability"
+    agent_type: "sre-engineer"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    wave: 3
+    paths_in:
+      - "backend/monitoring/**/*.py"
+      - "infrastructure/monitoring/**"
+      - "config/monitoring/**"
+    paths_out: []
+    priors:
+      - "docs/PERFORMANCE_BENCHMARKS.md"
+      - "docs/PERFORMANCE_OPTIMIZATION.md"
+      - "docs/architecture/PERFORMANCE_OPTIMIZATIONS.md"
+
+  - id: "11-backend-utils-shared"
+    name: "Backend Utils & Shared"
+    agent_type: "code-analyzer"
+    fallback_agent: "general-purpose"
+    tier: "medium"
+    paths_in:
+      - "backend/utils/**/*.py"
+      - "backend/exceptions.py"
+      - "backend/__init__.py"
+    paths_out: []
+    priors:
+      - "docs/architecture/error-handling-analysis.md"
+
+  - id: "12-frontend"
+    name: "Frontend (React)"
+    agent_type: "react-specialist"
+    fallback_agent: "general-purpose"
+    tier: "large"
+    wave: 3
+    paths_in:
+      - "frontend/web/src/**"
+      - "frontend/web/vite.config.ts"
+      - "frontend/web/tsconfig*.json"
+      - "frontend/web/package.json"
+      - "frontend/web/index.html"
+    paths_out:
+      - "frontend/web/node_modules/"
+      - "frontend/web/dist/"
+      - "frontend/web/tests/**"          # owned by scope 15
+      - "frontend/web/playwright.config.ts"  # owned by scope 15
+    priors:
+      - "docs/FRONTEND_AUDIT_REPORT.md"
+      - "docs/TYPESCRIPT_STRICT_MODE_AUDIT.md"
+      - "frontend/web/UI_DESIGN_ANALYSIS.md"
+
+  - id: "13-infra-deployment"
+    name: "Infrastructure & Deployment"
+    agent_type: "cloud-architect"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    paths_in:
+      - "Dockerfile.*"
+      - "docker-compose*.yml"
+      - "infrastructure/**"
+      - "ssl/**"
+      - "certbot-www/**"
+      - ".devcontainer/**"
+      - ".dockerignore"
+    paths_out:
+      - "infrastructure/postgres/**"
+      - "infrastructure/database/**"
+      - "infrastructure/monitoring/**"   # owned by scope 10
+    priors:
+      - "docs/DEPLOYMENT.md"
+      - "docs/PRODUCTION_DEPLOYMENT_GUIDE.md"
+      - "docs/README_PRODUCTION_GUIDE.md"
+      - "docs/RUNBOOK.md"
+      - "docs/TROUBLESHOOTING.md"
+      - "docs/reports/DEPLOYMENT_READINESS_SUMMARY.md"
+      - "docs/reports/PRODUCTION_LAUNCH_COMPLETE.md"
+      - "docs/reports/PRODUCTION_READINESS_CHECKLIST.md"
+      - "docs/reports/PHASE3_DEPLOYMENT_READINESS.md"
+      - "docs/deployment/PHASE1_CRITICAL_CORRECTION.md"
+      - "docs/deployment/PHASE1_EXECUTIVE_SUMMARY.md"
+      - "docs/deployment/PHASE1_FINAL_SUMMARY.md"
+      - "docs/deployment/PHASE2_ERROR_CATEGORIZATION.md"
+      - "docs/deployment/PHASE2_EXECUTION_PLAN.md"
+      - "docs/deployment/PHASE2_WAVE_RESULTS.md"
+      - "docs/deployment/PHASE2B_ROOT_CAUSE_ANALYSIS.md"
+      - "docs/deployment/PHASE3_DEPLOYMENT_CHECKLIST.md"
+      - "docs/deployment/PHASE6_BLOCKER_RESOLUTION.md"
+      - "docs/deployment/PHASE6_PHASE1_COMPLETE.md"
+      - "docs/deployment/PHASE6_PHASE1_PROGRESS.md"
+      - "docs/deployment/PHASE6_TEST_BASELINE_REPORT.md"
+
+  - id: "14-ci-cd-workflows"
+    name: "CI/CD Workflows"
+    agent_type: "cicd-engineer"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    paths_in:
+      - ".github/workflows/**"
+      - ".pre-commit-config.yaml"
+      - ".github/**"
+    paths_out: [".github/workflows/.cache/"]
+    priors:
+      - "docs/GITHUB_WORKFLOWS.md"
+      - "docs/github-workflows-guide.md"
+      - "docs/WORKFLOW_AUTOMATION_AUDIT.md"
+      - "docs/WORKFLOW_COORDINATION_SUMMARY.md"
+      - "docs/PHASE3_SWARM_WORKFLOW_COORDINATION.md"
+      - "docs/reports/HOOKS_CONSOLIDATION_COMPLETE.md"
+
+  - id: "15-test-suite"
+    name: "Test Suite (backend, frontend, integration)"
+    agent_type: "qa-expert"
+    fallback_agent: "general-purpose"
+    tier: "large"
+    wave: 3
+    paths_in:
+      - "backend/tests/**"
+      - "frontend/web/tests/**"
+      - "tests/**"
+      - "pytest.ini"
+      - "run-tests.sh"
+      - "run_integration_tests.py"
+      - "test_performance.sh"
+    paths_out: []
+    priors:
+      - "docs/TEST_REPORT.md"
+      - "docs/test-coverage-analysis-report.md"
+      - "docs/test-coverage-summary.txt"
+      - "docs/test-fix-checklist.md"
+      - "docs/test-fix-priority-matrix.md"
+      - "docs/pytest-asyncio-analysis.md"
+      - "docs/pytest-asyncio-before-after.md"
+      - "docs/pytest-asyncio-fixes-summary.md"
+      - "docs/pytest-asyncio-implementation-guide.md"
+      - "docs/QA_ACTION_PLAN.md"
+      - "docs/README_VERIFICATION.md"
+      - "docs/VERIFICATION_IMPLEMENTATION_SUMMARY.md"
+      - "docs/VERIFICATION_QUICK_START.md"
+      - "docs/VERIFICATION_SCRIPTS_GUIDE.md"
+      - "docs/VERIFICATION_SYSTEM_ARCHITECTURE.md"
+      - "docs/testing/INTEGRATION_TESTS.md"
+      - "docs/testing/TEST_BASELINE_REPORT.md"
+      - "docs/testing/TEST_DOCUMENTATION_INDEX.md"
+      - "docs/testing/TEST_EXECUTION_CHECKLIST.md"
+      - "docs/testing/TEST_FAILURE_ANALYSIS.md"
+      - "docs/testing/TEST_VALIDATION_METRICS.md"
+      - "docs/testing/TESTING_GUIDE.md"
+      - "docs/reports/QUALITY_ASSURANCE_REPORT.md"
+      - "docs/reports/README_VALIDATION.md"
+      - "docs/reports/VALIDATION_EXECUTIVE_SUMMARY.md"
+      - "docs/reports/VALIDATION_INDEX.md"
+      - "tests/TEST_SUMMARY.md"
+      - "tests/TEST_METRICS.md"
+      - "tests/E2E_AND_INTEGRATION_TESTS.md"
+      - "tests/QUICK_START.md"
+      - "tests/FILE_MANIFEST.md"
+
+  - id: "16-config-secrets"
+    name: "Config & Secrets Management"
+    agent_type: "dependency-manager"
+    fallback_agent: "general-purpose"
+    tier: "small"
+    paths_in:
+      - "config/**"
+      - ".env.*"
+      - ".env.example"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "requirements-dev.txt"
+      - "requirements/**"
+      - ".flake8"
+      - ".mypy.ini"
+      - "package.json"
+      - "Makefile"
+    paths_out:
+      - "config/monitoring/**"   # owned by scope 10
+    priors:
+      - "docs/ENVIRONMENT.md"
+      - "docs/reports/dependency-alignment.md"
+      - "docs/reports/cleanup-plan-requirements-files.md"
+
+  - id: "17-scripts-tooling"
+    name: "Scripts & Install Tooling"
+    agent_type: "tooling-engineer"
+    fallback_agent: "general-purpose"
+    tier: "large"
+    paths_in:
+      - "scripts/**"
+      - "install_*.py"
+      - "install_*.sh"
+      - "setup*.sh"
+      - "start*.sh"
+      - "stop.sh"
+      - "logs.sh"
+      - "board-sync.sh"
+      - "notion-sync.sh"
+      - "sync-all.sh"
+      - "sync-boards.sh"
+    paths_out: []
+    priors:
+      - "docs/INSTALLATION_GUIDE.md"
+      - "docs/SCRIPTS_REFERENCE.md"
+      - "docs/WSL_INSTALLATION_FIXES.md"
+
+  - id: "18-docs-health"
+    name: "Documentation Health"
+    agent_type: "documentation-engineer"
+    fallback_agent: "general-purpose"
+    tier: "large"
+    paths_in:
+      - "docs/**/*.md"
+      - "docs/**/*.txt"
+      - "README.md"
+      - "CLAUDE.md"
+    paths_out:
+      - "docs/audits/**"             # don't audit our own audit
+      - "docs/CODEMAPS/**"           # autogen, validated separately
+    priors:
+      - "docs/DOCUMENTATION_HEALTH.md"
+      - "docs/DOCUMENTATION_INDEX.md"
+      - "docs/DOCUMENTATION_PATTERNS_EXTRACTION.md"
+      - "docs/DOCUMENTATION_SYNC_2026_01_29.md"
+      - "docs/DOCUMENTATION_SYNC_COMPLETE.md"
+      - "docs/DOCUMENTATION_CHECKLIST_2026_01_29.md"
+      - "docs/DOC_HEALTH_IMPLEMENTATION_CHECKLIST.md"
+      - "docs/DOC_HEALTH_QUICKSTART.md"
+      - "docs/CLAUDE_FOLDER_COMPREHENSIVE_REVIEW.md"
+      - "docs/CLAUDE_FLOW_V3_VERSION_ALIGNMENT.md"
+      - "docs/CLEANUP_CHECKLIST.md"
+      - "docs/CONTRIB.md"
+      - "docs/DELETION_LOG.md"
+      - "docs/QUEEN_AUDIT_MASTER_REPORT.md"
+      - "docs/AUDIT_SUMMARY.txt"
+      - "docs/DELIVERY_SUMMARY.md"
+      - "docs/REFACTOR_AUDIT_SUMMARY.md"
+      - "docs/PROJECT_ROADMAP.md"
+      - "docs/IMPLEMENTATION_ROADMAP.md"
+      - "docs/IMPLEMENTATION_STATUS.md"
+      - "docs/IMPLEMENTATION_TRACKER.md"
+      - "docs/NOTION_TASK_MAPPING.md"
+      - "docs/intelligent-debug-workflow-implementation.md"
+      - "docs/wave4_completion_report.md"
+      - "docs/wave4.5_completion_report.md"
+      - "docs/WAVE5_FINAL_SUMMARY.md"
+      - "docs/wave5_progress_report.md"
+      - "docs/wave5_session_complete.md"
+      - "docs/reports/agent-categories-quick-reference.md"
+      - "docs/reports/agent-reorganization-plan.md"
+      - "docs/reports/agent-reorganization-summary.md"
+      - "docs/reports/agent-reorganization-visual-map.md"
+      - "docs/reports/cleanup-plan.md"
+      - "docs/reports/MODERNIZATION_SUMMARY.md"
+      - "docs/reports/P1_EXECUTION_PROGRESS.md"
+      - "docs/reports/PHASE_0_3_SUMMARY.md"
+      - "docs/reports/PHASE_3_2_IMPLEMENTATION_SUMMARY.md"
+      - "docs/reports/PHASE_3.3_IMPLEMENTATION_SUMMARY.md"
+      - "docs/reports/PHASE_4_1_COMPLETION.md"
+      - "docs/reports/PHASE_4.2_COMPLETION_SUMMARY.md"
+      - "docs/reports/PHASE_4.2_QUICK_START.md"
+      - "docs/reports/PHASE3_METRICS.md"
+      - "docs/reports/PHASE3_VALIDATION_REPORT.md"
+      - "docs/reports/PHASE4_REMEDIATION_PLAN.md"
+      - "docs/reports/PHASE4_REVIEW_SYNTHESIS.md"
+      - "docs/reports/QUICK_REFERENCE.md"
+      - "docs/reports/QUICK_WINS.md"
+      - "docs/reports/SYNCHRONIZATION_QUALITY_REPORT.md"
+      - "docs/reports/BLOCKER_FIX_GUIDE.md"
+      - "docs/architecture/DOCUMENTATION_REORGANIZATION_PLAN.md"
+      - "docs/GITHUB_ISSUES_BACKLOG.md"
+
+# Wave assignment
+waves:
+  wave_2_batch_1: ["01-backend-api", "03-ml-engine", "04-trading-agents", "05-data-ingestion-etl", "06-airflow-pipelines", "09-analytics"]
+  wave_2_batch_2: ["11-backend-utils-shared", "13-infra-deployment", "14-ci-cd-workflows", "16-config-secrets", "17-scripts-tooling", "18-docs-health"]
+  wave_3_batch_1: ["02-backend-services-domain", "07-database-persistence", "08-auth-security-compliance"]
+  wave_3_batch_2: ["10-monitoring-observability", "12-frontend", "15-test-suite"]

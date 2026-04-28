@@ -31,22 +31,39 @@ class IntegrationTestRunner:
         self.reports_dir = self.project_root / "test_reports"
         self.reports_dir.mkdir(exist_ok=True)
         
-        # Test categories and their files
+        # Test categories and their files.
+        #
+        # F-15-021 (audit 2026-04): The previous static 6-file list ignored
+        # the rest of backend/tests/integration/ (12+ files). Switched to
+        # dynamic discovery so any new test_*.py added to the integration
+        # directory is automatically picked up.
+        #
+        # Legacy hardcoded names retained under "legacy" for any external
+        # CI script that may still expect that exact list.
+        integration_dir = self.test_dir / "integration"
+        legacy_files = [
+            "test_api_integration.py",
+            "test_database_integration.py",
+            "test_data_pipeline_integration.py",
+            "test_websocket_integration.py",
+            "test_security_integration.py",
+            "test_resilience_integration.py",
+        ]
+        all_integration = (
+            sorted(p.name for p in integration_dir.glob("test_*.py"))
+            if integration_dir.exists()
+            else []
+        )
         self.test_categories = {
             "api": ["test_api_integration.py"],
-            "database": ["test_database_integration.py"], 
+            "database": ["test_database_integration.py"],
             "data_pipeline": ["test_data_pipeline_integration.py"],
             "websocket": ["test_websocket_integration.py"],
             "security": ["test_security_integration.py"],
             "resilience": ["test_resilience_integration.py"],
-            "all": [
-                "test_api_integration.py",
-                "test_database_integration.py",
-                "test_data_pipeline_integration.py", 
-                "test_websocket_integration.py",
-                "test_security_integration.py",
-                "test_resilience_integration.py"
-            ]
+            "integration": all_integration,
+            "legacy": legacy_files,
+            "all": sorted(set(all_integration) | set(legacy_files)),
         }
     
     def setup_environment(self, environment: str = "test"):
@@ -202,7 +219,10 @@ class IntegrationTestRunner:
                 "--cov-report=term-missing",
                 f"--cov-report=html:{self.reports_dir}/coverage_html",
                 f"--cov-report=xml:{self.reports_dir}/coverage.xml",
-                "--cov-fail-under=75"
+                # F-15-009 (audit 2026-04): canonical threshold = 85%.
+                # Was 75% here, conflicting with pytest.ini comment (60%) and
+                # backend/tests/README.md (85%). Single source of truth: 85%.
+                "--cov-fail-under=85"
             ])
         
         # Add output formats

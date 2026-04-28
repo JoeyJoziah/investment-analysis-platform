@@ -1,0 +1,39 @@
+{
+  "cluster_id": "G5_tests_config_scripts",
+  "status": "complete",
+  "scopes": ["15-test-suite", "16-config-secrets", "17-scripts-tooling"],
+  "findings_total": 37,
+  "findings_covered": 37,
+  "sub_themes": {
+    "tests": {
+      "count": 9,
+      "ids": ["F-15-005", "F-15-010", "F-15-014", "F-15-015", "F-15-016", "F-15-017", "F-15-018", "F-15-022", "F-15-025"]
+    },
+    "config": {
+      "count": 10,
+      "ids": ["F-16-001", "F-16-002", "F-16-004", "F-16-005", "F-16-008", "F-16-011", "F-16-012", "F-16-013", "F-16-014", "F-16-015"]
+    },
+    "scripts": {
+      "count": 18,
+      "ids": ["F-17-003", "F-17-004", "F-17-005", "F-17-006", "F-17-008", "F-17-010", "F-17-011", "F-17-012", "F-17-013", "F-17-014", "F-17-015", "F-17-016", "F-17-017", "F-17-018", "F-17-019", "F-17-020", "F-17-021", "F-17-022"]
+    }
+  },
+  "severity_counts": {
+    "critical": 2,
+    "high": 9,
+    "medium": 18,
+    "low": 8
+  },
+  "effort_hours_total": 48.5,
+  "loki_actionable_count": 35,
+  "loki_actionable_exclusions": ["F-15-025", "F-16-011", "F-17-015"],
+  "dependencies": {
+    "soft_depends_on": ["A_secret_rotation", "E_test_exclusion"],
+    "cross_scope": ["G1_backend", "06-airflow-pipelines", "13-infra-deployment", "18-docs-health"]
+  },
+  "deliverables": {
+    "workpaper": "docs/audits/2026-04/_synthesis/workpaper/G5_tests_config_scripts.md",
+    "status": "docs/audits/2026-04/_synthesis/_meta/status/G5_tests_config_scripts.json"
+  },
+  "final_assertion": "All 37 finding IDs covered: F-15-005, F-15-010, F-15-014, F-15-015, F-15-016, F-15-017, F-15-018, F-15-022, F-15-025, F-16-001, F-16-002, F-16-004, F-16-005, F-16-008, F-16-011, F-16-012, F-16-013, F-16-014, F-16-015, F-17-003, F-17-004, F-17-005, F-17-006, F-17-008, F-17-010, F-17-011, F-17-012, F-17-013, F-17-014, F-17-015, F-17-016, F-17-017, F-17-018, F-17-019, F-17-020, F-17-021, F-17-022."
+}

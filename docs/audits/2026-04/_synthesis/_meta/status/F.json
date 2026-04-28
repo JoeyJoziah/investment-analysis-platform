@@ -1,0 +1,50 @@
+{
+  "cluster_id": "F",
+  "cluster_name": "frontend-backend-api-contract-drift",
+  "worker": "F",
+  "status": "complete",
+  "findings_count": 7,
+  "finding_ids": [
+    "F-12-001",
+    "F-12-002",
+    "F-01-003",
+    "F-01-007",
+    "F-01-008",
+    "F-01-016",
+    "F-01-017"
+  ],
+  "source_scopes": ["01-backend-api", "12-frontend"],
+  "anchors": ["F-12-001", "F-12-002", "F-01-003", "F-01-007"],
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/F.md",
+  "all_ids_referenced": true,
+  "files_touched": [
+    "frontend/web/src/config/api.config.ts",
+    "frontend/web/src/store/slices/appSlice.ts",
+    "backend/api/versioning.py",
+    "backend/api/main.py"
+  ],
+  "total_effort_hours": 14.5,
+  "step_count": 6,
+  "loki_actionable": "partial",
+  "loki_actionable_reason": "Step 1 (canonical prefix decision) requires human confirmation; default = keep /api/v1/. Steps 2-6 are mechanical and full-actionable once Step 1 is confirmed.",
+  "dependencies": {
+    "after": ["B", "E"],
+    "before": [],
+    "coordination": "frontend and backend must deploy together in single PR/release"
+  },
+  "severity_mix": {
+    "critical": 3,
+    "high": 2,
+    "medium": 1,
+    "low": 1
+  },
+  "key_risks": [
+    "deploy-ordering between frontend and backend",
+    "external consumers reading Sunset header",
+    "gdpr router internal route paths after prefix tighten",
+    "verify zero call sites for create_versioned_router before deletion"
+  ],
+  "acceptance_summary": "e2e login + stock fetch pass; no Sunset/Deprecation headers on /api/v1/*; no ETag on /api/v1/metrics; no duplicate-route warnings; dead-code symbols absent",
+  "rollback": "single squash-merge revert restores both halves atomically",
+  "schema_version": "1.0"
+}

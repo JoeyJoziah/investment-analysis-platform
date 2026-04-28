@@ -1,0 +1,9 @@
+{
+  "scope_id": "15-test-suite",
+  "state": "complete",
+  "started_at": "2026-04-27T00:00:00Z",
+  "finished_at": "2026-04-27T03:00:00Z",
+  "report_path": "docs/audits/2026-04/reports/15-test-suite.md",
+  "findings_total": 27,
+  "redactions": 0
+}

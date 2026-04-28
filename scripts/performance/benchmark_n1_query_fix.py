@@ -3,7 +3,7 @@ Benchmark script for N+1 Query Fix
 CRITICAL-3: Measures query count and performance before/after optimization.
 
 Usage:
-    python -m backend.tests.benchmark_n1_query_fix
+    python -m scripts.performance.benchmark_n1_query_fix
 
 Expected results:
     Before: 201+ queries, ~5-10 seconds

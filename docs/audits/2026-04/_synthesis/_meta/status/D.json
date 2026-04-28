@@ -1,0 +1,50 @@
+{
+  "worker": "D",
+  "cluster": "random-data",
+  "status": "complete",
+  "slice_path": "docs/audits/2026-04/_synthesis/_meta/slices/D.jsonl",
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/D.md",
+  "findings_count": 5,
+  "finding_ids": ["F-02-003", "F-02-015", "F-02-018", "F-03-003", "F-03-005"],
+  "anchors": ["F-02-003", "F-03-003"],
+  "source_reports": ["02-backend-services-domain.md", "03-ml-engine.md"],
+  "severity_breakdown": {
+    "critical": 2,
+    "high": 1,
+    "medium": 2
+  },
+  "loki_actionable_findings": ["F-02-018", "F-03-003", "F-03-005"],
+  "requires_human_ack": true,
+  "human_ack_reason": "Policy decision per synthesis-handoff §6: should the platform return HTTP 503 model_unavailable vs. tagged-synthetic vs. third option? SEC-implicated for regulated investment platform. Loki must halt before applying any subset.",
+  "recommended_default": "HTTP 503 + structured model_unavailable payload + Sentry breadcrumb + frontend empty-state",
+  "fail_first_tests_specified": ["F-02-003", "F-02-018", "F-03-003", "F-03-005"],
+  "effort_days_range": "5-10",
+  "effort_hours_sum": 53,
+  "cross_cluster_dependencies": {
+    "soft": [
+      {
+        "cluster": "G3",
+        "scope": "12-frontend",
+        "reason": "Frontend must add empty-state component for new model_unavailable error before user-facing fix is shippable"
+      }
+    ],
+    "cross_scope_from_slice": [
+      "01-backend-api",
+      "02-backend-services-domain",
+      "07-database-persistence",
+      "08-auth-security-compliance",
+      "10-monitoring-observability",
+      "12-frontend",
+      "13-infra-deployment"
+    ]
+  },
+  "open_questions": [
+    "Policy: 503 vs tagged-synthetic vs cached-with-staleness?",
+    "F-03-003 source: local training run vs HF Hub download?",
+    "F-02-015 transport: Socket.IO vs raw WebSocket?",
+    "Does settings.DEMO_MODE already exist?",
+    "SEC legal review needed for empty-state copy?"
+  ],
+  "all_ids_referenced_in_section_2": true,
+  "writes_only_to_allowed_paths": true
+}

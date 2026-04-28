@@ -1,0 +1,110 @@
+{
+  "cluster_id": "G4_storage_security_residual",
+  "status": "READY",
+  "scopes": ["07-database-persistence", "08-auth-security-compliance", "10-monitoring-observability"],
+  "finding_count": 41,
+  "all_findings": [
+    "F-07-002", "F-07-003", "F-07-004", "F-07-005", "F-07-006", "F-07-007", "F-07-008",
+    "F-07-009", "F-07-010", "F-07-011", "F-07-012", "F-07-013", "F-07-014", "F-07-015",
+    "F-07-016", "F-07-017", "F-07-018",
+    "F-08-001", "F-08-006", "F-08-007", "F-08-010", "F-08-011", "F-08-014", "F-08-016",
+    "F-08-018", "F-08-019", "F-08-020",
+    "F-10-001", "F-10-002", "F-10-003", "F-10-005", "F-10-006", "F-10-008", "F-10-009",
+    "F-10-010", "F-10-011", "F-10-012", "F-10-014", "F-10-015", "F-10-016", "F-10-017"
+  ],
+  "highest_priority": "F-07-002",
+  "phases": [
+    {"phase": 1, "label": "DB transactional fix (fail-first)", "findings": ["F-07-002"], "blocking": true, "hours": 4.0},
+    {"phase": 2, "label": "Schema/migration drift", "findings": ["F-07-003","F-07-004","F-07-005","F-07-006","F-07-007","F-07-008","F-07-009","F-07-010","F-07-011","F-07-012","F-07-013","F-07-014","F-07-015","F-07-016","F-07-017","F-07-018"], "hours": 24.5},
+    {"phase": 3, "label": "Prometheus metrics restoration", "findings": ["F-10-001","F-10-002","F-10-003","F-10-005","F-10-006","F-10-008","F-10-009","F-10-010","F-10-011","F-10-012","F-10-014","F-10-015","F-10-016","F-10-017"], "hours": 16.25},
+    {"phase": 4, "label": "Security residuals", "findings": ["F-08-001","F-08-006","F-08-007","F-08-010","F-08-011","F-08-014","F-08-016","F-08-018","F-08-019"], "hours": 24.0},
+    {"phase": 5, "label": "SEC fiduciary tests (BLOCKED)", "findings": ["F-08-020"], "blocked_on": "human_ack_legal", "hours_after_ack": 4.0}
+  ],
+  "human_ack_required": [
+    {"finding_id": "F-08-020", "reason": "SEC FiduciaryDutyChecker untested; legal/compliance must spec required behavior before tests encode current implementation as canonical.", "action": "halt"}
+  ],
+  "policy_defaults_applied": [
+    {"finding_id": "F-08-007", "default": "single-role-only", "source": "synthesis-handoff §6"},
+    {"finding_id": "F-08-Q4", "default": "redacted archives moved out of repo", "source": "synthesis-handoff §6", "note": "tracked outside G4"}
+  ],
+  "loki_actionable_count": 35,
+  "loki_actionable_ids": [
+    "F-07-002","F-07-003","F-07-004","F-07-005","F-07-006","F-07-007","F-07-008","F-07-009",
+    "F-07-010","F-07-011","F-07-012","F-07-013","F-07-014","F-07-015","F-07-016","F-07-018",
+    "F-08-001","F-08-006","F-08-010","F-08-011","F-08-014","F-08-018","F-08-020",
+    "F-10-001","F-10-002","F-10-003","F-10-005","F-10-008","F-10-009","F-10-010","F-10-011",
+    "F-10-014","F-10-015","F-10-016","F-10-017"
+  ],
+  "non_loki_actionable_ids": ["F-07-017","F-08-007","F-08-016","F-08-019","F-10-006","F-10-012"],
+  "dependencies": {
+    "independent_of": ["A_secret_rotation","B_jwt_auth","C_csp"],
+    "soft_depends_on": ["E_test_suite"],
+    "soft_depends_reason": "F-07-002 fix may cause previously-excluded tests/database/* to surface real failures; coordinate un-exclusion with phase 1 landing.",
+    "cross_scope_handoffs": [
+      {"finding_id": "F-07-018", "delegated_to": "scope-11 cluster"},
+      {"finding_id": "F-10-012", "depends_on": "F-08-008 fail-open fix in cluster A or D"},
+      {"finding_id": "F-08-001", "coordinate_with": "A_secret_rotation re-encryption window"}
+    ]
+  },
+  "fail_first_test": {
+    "finding_id": "F-07-002",
+    "test_path": "tests/database/test_transactions.py",
+    "tests": [
+      "test_transaction_yields_real_session",
+      "test_transaction_rolls_back_on_exception"
+    ],
+    "expected_state_before_fix": "FAIL",
+    "expected_state_after_fix": "PASS"
+  },
+  "files_touched": [
+    "backend/repositories/base.py",
+    "backend/repositories/stock_repository.py",
+    "backend/models/unified_models.py",
+    "backend/models/database.py",
+    "backend/models/tables.py",
+    "backend/models/ml_models.py",
+    "backend/migrations/versions/001_add_critical_indexes.py",
+    "backend/migrations/versions/002_implement_partitioning.py",
+    "backend/migrations/versions/006_optimize_for_massive_loads.py",
+    "backend/migrations/versions/adba55bf7b52_add_critical_indexes_and_fix_.py",
+    "backend/migrations/add_performance_indexes.sql",
+    "backend/migrations/add_row_locking_versions.sql",
+    "infrastructure/database/optimizations.sql",
+    "infrastructure/postgres/postgresql.conf",
+    "backend/security/secrets_manager.py",
+    "backend/security/rbac.py",
+    "backend/security/security_config.py",
+    "backend/auth/oauth2.py",
+    "backend/auth/__init__.py",
+    ".secrets.baseline",
+    ".gitleaks.toml",
+    "docs/CODEMAPS/BACKEND.md",
+    "backend/monitoring/metrics_collector.py",
+    "backend/monitoring/real_time_alerts.py",
+    "backend/monitoring/data_quality_metrics.py",
+    "backend/monitoring/health_checks.py",
+    "backend/monitoring/health_system.py",
+    "backend/monitoring/sla_tracker.py",
+    "backend/monitoring/log_analysis.py",
+    "infrastructure/monitoring/prometheus.yml",
+    "config/monitoring/prometheus.yml",
+    "infrastructure/monitoring/alerts/slo-targets.yml",
+    "backend/tests/test_monitoring_api.py",
+    "tests/database/test_transactions.py",
+    "tests/database/test_repository_filters.py",
+    "tests/database/test_position_versioning.py",
+    "tests/security/test_rbac_single_role.py",
+    "tests/monitoring/test_metrics_endpoint.py"
+  ],
+  "total_effort_hours_actionable": 68.75,
+  "total_effort_hours_blocked": 4.0,
+  "risks": [
+    "F-07-002 fix may surface latent rollback bugs masked by silent no-op transactions.",
+    "Prometheus unification may flood Alertmanager once silent metrics start producing real series.",
+    "F-07-007 lazy-loading change can re-introduce MissingGreenlet errors in async sessions.",
+    "F-08-001 KDF rotation is destructive if any stored ciphertext is missed during re-encrypt.",
+    "F-08-007 single-role policy commits to a schema migration if multi-role is later required.",
+    "F-08-020 SEC fiduciary gap remains open until legal ACK — recorded, not silenced."
+  ],
+  "assertion": "all_41_finding_ids_present"
+}

@@ -1,0 +1,39 @@
+{
+  "worker_id": "G2_ml_data_b_med_low",
+  "status": "complete",
+  "slice_path": "docs/audits/2026-04/_synthesis/_meta/slices/G2_ml_data_b_med_low.jsonl",
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/G2_ml_data_b_med_low.md",
+  "findings_total": 47,
+  "findings_referenced": 47,
+  "scopes_covered": ["03-ml-engine", "04-trading-agents", "05-data-ingestion-etl", "06-airflow-pipelines", "09-analytics"],
+  "severity_mix": {"medium": 33, "low": 14},
+  "fix_steps": 15,
+  "loki_actionable_count": 42,
+  "human_ack_required_ids": [
+    "F-03-010",
+    "F-03-011",
+    "F-03-015",
+    "F-04-020",
+    "F-04-022",
+    "F-05-010",
+    "F-05-015",
+    "F-06-015",
+    "F-09-014",
+    "F-09-020"
+  ],
+  "estimated_hours": 84,
+  "estimated_loki_cost_usd": "3-5",
+  "dependencies": "independent; defer to end of program after G2_ml_data_a_crit_high lands",
+  "risk_level": "low",
+  "all_ids_referenced": true,
+  "ids": [
+    "F-03-009", "F-03-010", "F-03-011", "F-03-012", "F-03-013", "F-03-015", "F-03-016",
+    "F-04-010", "F-04-011", "F-04-012", "F-04-013", "F-04-014", "F-04-015", "F-04-016",
+    "F-04-017", "F-04-018", "F-04-019", "F-04-020", "F-04-021", "F-04-022",
+    "F-05-010", "F-05-011", "F-05-013", "F-05-014", "F-05-015", "F-05-016", "F-05-017",
+    "F-05-018", "F-05-019", "F-05-020",
+    "F-06-010", "F-06-011", "F-06-013", "F-06-014", "F-06-015", "F-06-016",
+    "F-09-011", "F-09-012", "F-09-013", "F-09-014", "F-09-015", "F-09-016", "F-09-017",
+    "F-09-018", "F-09-019", "F-09-020", "F-09-021"
+  ]
+}
