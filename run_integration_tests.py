@@ -219,7 +219,10 @@ class IntegrationTestRunner:
                 "--cov-report=term-missing",
                 f"--cov-report=html:{self.reports_dir}/coverage_html",
                 f"--cov-report=xml:{self.reports_dir}/coverage.xml",
-                "--cov-fail-under=75"
+                # F-15-009 (audit 2026-04): canonical threshold = 85%.
+                # Was 75% here, conflicting with pytest.ini comment (60%) and
+                # backend/tests/README.md (85%). Single source of truth: 85%.
+                "--cov-fail-under=85"
             ])
         
         # Add output formats
