@@ -838,3 +838,101 @@ class TestSortParamsDataclass:
     def test_desc_direction(self):
         sp = SortParams(field="name", direction=SortDirection.DESC)
         assert sp.direction == SortDirection.DESC
+
+
+# ---------------------------------------------------------------------------
+# AsyncBaseRepository.transaction() -- F-15-011 / F-07-002
+# ---------------------------------------------------------------------------
+#
+# Audit 2026-04, Cluster E Step 5 (workpaper:
+# docs/audits/2026-04/_synthesis/workpaper/E.md).
+#
+# The production `transaction()` method on AsyncBaseRepository is decorated
+# with @asynccontextmanager but its body never `yield`s a session. Internally
+# it defines a nested async-generator `_execute_transaction` and passes it to
+# `db_manager.execute_with_retry(...)`. Net effect: `async with
+# repo.transaction() as session:` blocks fail at runtime because the outer
+# context manager produces no session.
+#
+# Existing tests in this file never exercised this path. The two tests below
+# do, with mocked AsyncSession + patched get_db_session, asserting the
+# documented contract:
+#   - on success the session.commit() should be invoked
+#   - on a raised exception the session.rollback() should be invoked
+#
+# Both tests are EXPECTED TO FAIL until scope-07 fixes F-07-002. We mark them
+# xfail(strict=True) so CI does not flood red, but flipping their state to
+# passing will fail strict mode and force scope-07 to remove the marker.
+
+class TestAsyncBaseRepositoryTransaction:
+    """F-15-011: real test of AsyncBaseRepository.transaction() async-generator bug."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        strict=True,
+        reason="cascade-to-scope-07-fix (F-07-002 transaction async-generator bug)",
+    )
+    async def test_transaction_commits_on_success(self):
+        """`async with repo.transaction() as session:` should commit on success."""
+        from contextlib import asynccontextmanager
+
+        mock_session = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
+
+        @asynccontextmanager
+        async def _fake_get_db_session(*_a, **_kw):
+            yield mock_session
+
+        repo = StockRepository()
+
+        with patch(
+            "backend.repositories.base.get_db_session", _fake_get_db_session
+        ):
+            async with repo.transaction() as session:
+                # Body of transaction -- in real use the caller would do work
+                # against `session` here.
+                assert session is not None
+
+        # Contract: on a clean exit, the transaction should have committed.
+        assert mock_session.commit.await_count >= 1, (
+            "Expected commit() on successful transaction; current production "
+            "transaction() returns no session and body never executes."
+        )
+        assert mock_session.rollback.await_count == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        strict=True,
+        reason="cascade-to-scope-07-fix (F-07-002 transaction async-generator bug)",
+    )
+    async def test_transaction_rolls_back_on_exception(self):
+        """`async with repo.transaction(): raise` should rollback."""
+        from contextlib import asynccontextmanager
+
+        mock_session = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
+
+        @asynccontextmanager
+        async def _fake_get_db_session(*_a, **_kw):
+            yield mock_session
+
+        repo = StockRepository()
+
+        class _BoomError(RuntimeError):
+            pass
+
+        with patch(
+            "backend.repositories.base.get_db_session", _fake_get_db_session
+        ):
+            with pytest.raises(_BoomError):
+                async with repo.transaction():
+                    raise _BoomError("simulated failure inside transaction")
+
+        # Contract: on inner-block exception, rollback should have run.
+        assert mock_session.rollback.await_count >= 1, (
+            "Expected rollback() when transaction body raises; current "
+            "production transaction() never enters the body so neither "
+            "commit nor rollback is reached."
+        )

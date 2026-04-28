@@ -1052,3 +1052,89 @@ class TestModuleLevelHelpers:
         ):
             # Should not raise
             await shutdown_realtime_price_service()
+
+
+# ===========================================================================
+# FinnhubWebSocketClient -- connect() session lifetime (F-15-004 / F-02-002)
+# ===========================================================================
+#
+# Audit 2026-04, Cluster E Step 5 (workpaper: docs/audits/2026-04/_synthesis/workpaper/E.md).
+#
+# The production `connect()` wraps `self.websocket = await session.ws_connect(...)`
+# in an `async with aiohttp.ClientSession() as session:` block. When `connect()`
+# returns the `async with` exits, closing the underlying session and rendering
+# `self.websocket` unusable. Existing tests in this file mocked `connect()` itself
+# (or its inner ClientSession entry/exit) in ways that hid the real lifetime bug.
+#
+# The `TestConnect` class below exercises `connect()` with a minimally-mocked
+# `aiohttp.ClientSession` -- we do NOT patch `connect` itself, and we do NOT
+# pretend the context manager `__aexit__` was never called. The assertion is the
+# audit's spec: after `await client.connect()` returns, the websocket must still
+# be live (`not closed`) AND the underlying ClientSession must not yet be closed.
+#
+# These tests are EXPECTED TO FAIL until scope-02 lands the F-02-002 fix
+# (likely: store the session on `self._session` and close it in `disconnect()`,
+# instead of closing it inside `connect()`'s `async with`). They are marked
+# `xfail(strict=True, reason="cascade-to-scope-02-fix")` so:
+#   - CI does not turn red while scope-02 is pending (xfail=expected failure)
+#   - When scope-02 fixes the bug the test will become XPASS and CI will fail
+#     with strict=True, forcing the cluster to flip xfail off.
+
+class TestConnect:
+    """F-15-004: real (un-mocked) test of FinnhubWebSocketClient.connect() session lifetime."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        strict=True,
+        reason="cascade-to-scope-02-fix (F-02-002 session-lifetime bug)",
+    )
+    async def test_connect_keeps_session_open_after_return(self, ws_client):
+        """
+        After connect() returns, the websocket must still be usable.
+
+        The bug: `async with aiohttp.ClientSession() as session:` closes the
+        session at the end of connect(), so `self.websocket` is dead by the
+        time the caller can use it.
+        """
+        # Minimal mock: a fake websocket object with a `closed` attribute
+        fake_ws = MagicMock()
+        fake_ws.closed = False
+
+        # Fake session that records when __aexit__ runs (i.e. session closed)
+        fake_session = MagicMock()
+        fake_session.ws_connect = AsyncMock(return_value=fake_ws)
+        fake_session.__aenter__ = AsyncMock(return_value=fake_session)
+        fake_session.__aexit__ = AsyncMock(return_value=None)
+        fake_session.closed = False
+
+        async def _mark_closed(*_a, **_kw):
+            fake_session.closed = True
+            fake_ws.closed = True
+            return None
+
+        fake_session.__aexit__.side_effect = _mark_closed
+
+        # Patch ClientSession at the module the production code imports from.
+        # Do NOT patch `connect` itself -- that's what hid the bug originally.
+        with patch(
+            "backend.services.realtime_price_service.aiohttp.ClientSession",
+            return_value=fake_session,
+        ):
+            # Replace the receive loop background task so we don't actually
+            # iterate over the fake websocket forever.
+            with patch.object(
+                FinnhubWebSocketClient, "_receive_loop", new=AsyncMock()
+            ):
+                await ws_client.connect()
+
+        # The audit's spec: after connect() returns, the websocket reference on
+        # the client should still be live. With the current production bug the
+        # session.__aexit__ has already run, marking both as closed.
+        assert ws_client.websocket is not None
+        assert ws_client.websocket.closed is False, (
+            "Expected websocket to be open after connect() returns; "
+            "session-lifetime bug F-02-002 closes it prematurely."
+        )
+        assert fake_session.closed is False, (
+            "Expected ClientSession to still be open after connect() returns."
+        )
