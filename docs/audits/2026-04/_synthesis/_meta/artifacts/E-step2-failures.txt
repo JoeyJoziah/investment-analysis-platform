@@ -1,0 +1,33 @@
+# E-step2-failures.txt — Cascade artifact from Cluster E Step 2 (un-exclude tests/database/ + tests/test_database_fixes.py)
+# Generated: 2026-04-28T19:08:42Z
+# Branch: remediation/audit-2026-04
+# Source: pytest --collect-only tests/test_database_fixes.py (PYTHONPATH=.)
+#
+# Hand-off:
+#   tests/test_database_fixes.py → scope-07 cluster
+#     - Missing module: backend.utils.async_database_fixed
+#     - Expected to expose F-07-002 (AsyncBaseRepository.transaction async-generator bug)
+#       and F-07-001-class issues once the module path is resolved or the test is updated
+#       to import from the canonical async_database location.
+#
+# Note: tests/database/ directory is empty in the current tree; Step 2's effective
+# scope is the bare-files-in-tests/ slice covered by the same pytest.ini change.
+# ---------------------------------------------------------------------------
+
+============================= test session starts ==============================
+collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+________________ ERROR collecting tests/test_database_fixes.py _________________
+ImportError while importing test module '/Users/devinmcgrath/projects/investment-analysis-platform/tests/test_database_fixes.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/importlib/__init__.py:127: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_database_fixes.py:20: in <module>
+    from backend.utils.async_database_fixed import AsyncDatabaseManager, BatchProcessor, DataQualityValidator
+E   ModuleNotFoundError: No module named 'backend.utils.async_database_fixed'
+=========================== short test summary info ============================
+ERROR tests/test_database_fixes.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+===================== no tests collected, 1 error in 2.03s =====================
