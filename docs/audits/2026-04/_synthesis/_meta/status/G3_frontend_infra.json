@@ -1,0 +1,32 @@
+{
+  "cluster_id": "G3_frontend_infra",
+  "status": "complete",
+  "workpaper": "docs/audits/2026-04/_synthesis/workpaper/G3_frontend_infra.md",
+  "slice": "docs/audits/2026-04/_synthesis/_meta/slices/G3_frontend_infra.jsonl",
+  "scopes": ["12-frontend", "13-infra-deployment", "14-ci-cd-workflows"],
+  "sub_themes": ["ci-cd-security", "docker-production-build", "frontend-residual"],
+  "finding_count": 45,
+  "finding_ids": [
+    "F-12-004","F-12-006","F-12-007","F-12-008","F-12-009","F-12-012","F-12-013","F-12-014","F-12-017","F-12-018","F-12-019","F-12-020","F-12-021","F-12-022",
+    "F-13-001","F-13-002","F-13-003","F-13-005","F-13-006","F-13-007","F-13-008","F-13-009","F-13-010","F-13-011","F-13-012","F-13-013","F-13-015","F-13-016","F-13-017","F-13-018","F-13-019",
+    "F-14-001","F-14-002","F-14-003","F-14-004","F-14-005","F-14-006","F-14-007","F-14-008","F-14-009","F-14-010","F-14-011","F-14-012","F-14-013","F-14-014"
+  ],
+  "severity_counts": {
+    "critical": 4,
+    "high": 17,
+    "medium": 19,
+    "low": 5
+  },
+  "phases": [
+    {"phase": 1, "name": "CI/CD security (RCE-class)", "findings": ["F-14-001","F-14-002","F-14-003","F-14-004","F-14-006","F-14-007"], "hours": 17},
+    {"phase": 2, "name": "Docker production unblock", "findings": ["F-13-001","F-13-002","F-13-003","F-13-006","F-13-007","F-13-009","F-13-019"], "hours": 13},
+    {"phase": 3, "name": "Infra hardening", "findings": ["F-13-005","F-13-008","F-13-010","F-13-011","F-13-012","F-13-013","F-13-015","F-13-016","F-13-017","F-13-018","F-14-005","F-14-008","F-14-009","F-14-010","F-14-011","F-14-012","F-14-013","F-14-014"], "hours": 26.5},
+    {"phase": 4, "name": "Frontend residual", "findings": ["F-12-004","F-12-006","F-12-007","F-12-008","F-12-009","F-12-012","F-12-013","F-12-014","F-12-017","F-12-018","F-12-019","F-12-020","F-12-021","F-12-022"], "hours": 33.75}
+  ],
+  "total_effort_hours": 90.25,
+  "loki_actionable_count": 37,
+  "soft_dependencies": ["A:secret-rotation","C:csp-headers","F:frontend-backend-contract","G2:ml-engine","G5:test-suite"],
+  "hard_dependencies": [],
+  "critical_path": ["F-14-001","F-14-002","F-14-003","F-13-001"],
+  "assertion_all_45_present": true
+}

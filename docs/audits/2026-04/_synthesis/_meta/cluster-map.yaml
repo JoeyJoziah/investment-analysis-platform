@@ -1,0 +1,731 @@
+# Cluster Map — initial assignment for synthesis swarm
+# A-F: pre-identified clusters from EXECUTIVE_SUMMARY §4
+# G/G1/G2/G3: residual, sharded if >50 findings
+total_findings: 374
+
+clusters:
+  A:
+    name: secret-rotation
+    count: 25
+    findings:
+      - F-05-003  # anchor
+      - F-05-012  # keyword: es_password
+      - F-07-001  # anchor
+      - F-08-009  # anchor
+      - F-08-012  # keyword: .env
+      - F-10-004  # keyword: grafana
+      - F-10-007  # keyword: credentials in
+      - F-10-013  # keyword: grafana
+      - F-12-005  # keyword: .env
+      - F-12-010  # keyword: .env
+      - F-12-016  # keyword: .env
+      - F-13-004  # keyword: .env
+      - F-13-020  # keyword: .env
+      - F-15-012  # keyword: credentials in
+      - F-15-024  # keyword: .env
+      - F-16-003  # keyword: .env
+      - F-16-006  # keyword: .env
+      - F-16-007  # keyword: .env
+      - F-16-009  # keyword: .env
+      - F-16-010  # keyword: .env
+      - F-17-001  # anchor
+      - F-17-002  # keyword: .env
+      - F-17-007  # keyword: .env
+      - F-17-009  # keyword: es_password
+      - F-18-005  # keyword: grafana
+  B:
+    name: jwt-auth
+    count: 25
+    findings:
+      - F-01-001  # anchor
+      - F-01-004  # keyword: current_user
+      - F-01-005  # keyword: current_user
+      - F-01-006  # keyword: jwt
+      - F-01-009  # anchor
+      - F-01-012  # keyword: jwt
+      - F-01-013  # keyword: jwt
+      - F-01-020  # keyword: jwt
+      - F-02-011  # keyword: jwt
+      - F-03-001  # keyword: jwt
+      - F-03-014  # keyword: unauthenticated
+      - F-03-017  # keyword: authentication
+      - F-08-002  # anchor
+      - F-08-004  # anchor
+      - F-08-005  # anchor
+      - F-08-008  # keyword: jwt
+      - F-08-013  # keyword: login
+      - F-08-015  # keyword: jwt
+      - F-08-017  # keyword: jwt
+      - F-11-001  # keyword: authentication
+      - F-11-016  # keyword: auth.py
+      - F-12-011  # keyword: login
+      - F-12-015  # keyword: login
+      - F-15-006  # keyword: jwt
+      - F-15-007  # keyword: jwt
+  C:
+    name: csp
+    count: 3
+    findings:
+      - F-08-003  # anchor
+      - F-12-003  # anchor
+      - F-13-014  # keyword: csp
+  D:
+    name: random-data
+    count: 5
+    findings:
+      - F-02-003  # anchor
+      - F-02-015  # keyword: fake data
+      - F-02-018  # keyword: fake data
+      - F-03-003  # anchor
+      - F-03-005  # keyword: random value
+  E:
+    name: test-exclusion
+    count: 15
+    findings:
+      - F-06-012  # keyword: pytest.ini
+      - F-15-001  # scope-15 + test-disable phrasing
+      - F-15-002  # scope-15 + test-disable phrasing
+      - F-15-003  # anchor
+      - F-15-004  # scope-15 + test-disable phrasing
+      - F-15-008  # scope-15 + test-disable phrasing
+      - F-15-009  # keyword: pytest.ini
+      - F-15-011  # scope-15 + test-disable phrasing
+      - F-15-013  # keyword: tests/security/
+      - F-15-019  # keyword: pytest.ini
+      - F-15-020  # scope-15 + test-disable phrasing
+      - F-15-021  # scope-15 + test-disable phrasing
+      - F-15-023  # scope-15 + test-disable phrasing
+      - F-15-026  # scope-15 + test-disable phrasing
+      - F-15-027  # keyword: tests/security/
+  F:
+    name: frontend-backend-contract
+    count: 7
+    findings:
+      - F-01-003  # anchor
+      - F-01-007  # anchor
+      - F-01-008  # keyword: /api/v1/
+      - F-01-016  # keyword: /api/v1/
+      - F-01-017  # keyword: v1deprecation
+      - F-12-001  # anchor
+      - F-12-002  # anchor
+  G:
+    name: residual-findings
+    count: 294
+    findings:
+      - F-01-002  # residual
+      - F-01-010  # residual
+      - F-01-011  # residual
+      - F-01-014  # residual
+      - F-01-015  # residual
+      - F-01-018  # residual
+      - F-01-019  # residual
+      - F-02-001  # residual
+      - F-02-002  # residual
+      - F-02-004  # residual
+      - F-02-005  # residual
+      - F-02-006  # residual
+      - F-02-007  # residual
+      - F-02-008  # residual
+      - F-02-009  # residual
+      - F-02-010  # residual
+      - F-02-012  # residual
+      - F-02-013  # residual
+      - F-02-014  # residual
+      - F-02-016  # residual
+      - F-02-017  # residual
+      - F-02-019  # residual
+      - F-02-020  # residual
+      - F-02-021  # residual
+      - F-02-022  # residual
+      - F-02-023  # residual
+      - F-02-024  # residual
+      - F-02-025  # residual
+      - F-03-002  # residual
+      - F-03-004  # residual
+      - F-03-006  # residual
+      - F-03-007  # residual
+      - F-03-008  # residual
+      - F-03-009  # residual
+      - F-03-010  # residual
+      - F-03-011  # residual
+      - F-03-012  # residual
+      - F-03-013  # residual
+      - F-03-015  # residual
+      - F-03-016  # residual
+      - F-04-001  # residual
+      - F-04-002  # residual
+      - F-04-003  # residual
+      - F-04-004  # residual
+      - F-04-005  # residual
+      - F-04-006  # residual
+      - F-04-007  # residual
+      - F-04-008  # residual
+      - F-04-009  # residual
+      - F-04-010  # residual
+      - F-04-011  # residual
+      - F-04-012  # residual
+      - F-04-013  # residual
+      - F-04-014  # residual
+      - F-04-015  # residual
+      - F-04-016  # residual
+      - F-04-017  # residual
+      - F-04-018  # residual
+      - F-04-019  # residual
+      - F-04-020  # residual
+      - F-04-021  # residual
+      - F-04-022  # residual
+      - F-05-001  # residual
+      - F-05-002  # residual
+      - F-05-004  # residual
+      - F-05-005  # residual
+      - F-05-006  # residual
+      - F-05-007  # residual
+      - F-05-008  # residual
+      - F-05-009  # residual
+      - F-05-010  # residual
+      - F-05-011  # residual
+      - F-05-013  # residual
+      - F-05-014  # residual
+      - F-05-015  # residual
+      - F-05-016  # residual
+      - F-05-017  # residual
+      - F-05-018  # residual
+      - F-05-019  # residual
+      - F-05-020  # residual
+      - F-06-001  # residual
+      - F-06-002  # residual
+      - F-06-003  # residual
+      - F-06-004  # residual
+      - F-06-005  # residual
+      - F-06-006  # residual
+      - F-06-007  # residual
+      - F-06-008  # residual
+      - F-06-009  # residual
+      - F-06-010  # residual
+      - F-06-011  # residual
+      - F-06-013  # residual
+      - F-06-014  # residual
+      - F-06-015  # residual
+      - F-06-016  # residual
+      - F-07-002  # residual
+      - F-07-003  # residual
+      - F-07-004  # residual
+      - F-07-005  # residual
+      - F-07-006  # residual
+      - F-07-007  # residual
+      - F-07-008  # residual
+      - F-07-009  # residual
+      - F-07-010  # residual
+      - F-07-011  # residual
+      - F-07-012  # residual
+      - F-07-013  # residual
+      - F-07-014  # residual
+      - F-07-015  # residual
+      - F-07-016  # residual
+      - F-07-017  # residual
+      - F-07-018  # residual
+      - F-08-001  # residual
+      - F-08-006  # residual
+      - F-08-007  # residual
+      - F-08-010  # residual
+      - F-08-011  # residual
+      - F-08-014  # residual
+      - F-08-016  # residual
+      - F-08-018  # residual
+      - F-08-019  # residual
+      - F-08-020  # residual
+      - F-09-001  # residual
+      - F-09-002  # residual
+      - F-09-003  # residual
+      - F-09-004  # residual
+      - F-09-005  # residual
+      - F-09-006  # residual
+      - F-09-007  # residual
+      - F-09-008  # residual
+      - F-09-009  # residual
+      - F-09-010  # residual
+      - F-09-011  # residual
+      - F-09-012  # residual
+      - F-09-013  # residual
+      - F-09-014  # residual
+      - F-09-015  # residual
+      - F-09-016  # residual
+      - F-09-017  # residual
+      - F-09-018  # residual
+      - F-09-019  # residual
+      - F-09-020  # residual
+      - F-09-021  # residual
+      - F-10-001  # residual
+      - F-10-002  # residual
+      - F-10-003  # residual
+      - F-10-005  # residual
+      - F-10-006  # residual
+      - F-10-008  # residual
+      - F-10-009  # residual
+      - F-10-010  # residual
+      - F-10-011  # residual
+      - F-10-012  # residual
+      - F-10-014  # residual
+      - F-10-015  # residual
+      - F-10-016  # residual
+      - F-10-017  # residual
+      - F-11-002  # residual
+      - F-11-003  # residual
+      - F-11-004  # residual
+      - F-11-005  # residual
+      - F-11-006  # residual
+      - F-11-007  # residual
+      - F-11-008  # residual
+      - F-11-009  # residual
+      - F-11-010  # residual
+      - F-11-011  # residual
+      - F-11-012  # residual
+      - F-11-013  # residual
+      - F-11-014  # residual
+      - F-11-015  # residual
+      - F-11-017  # residual
+      - F-11-018  # residual
+      - F-11-019  # residual
+      - F-11-020  # residual
+      - F-12-004  # residual
+      - F-12-006  # residual
+      - F-12-007  # residual
+      - F-12-008  # residual
+      - F-12-009  # residual
+      - F-12-012  # residual
+      - F-12-013  # residual
+      - F-12-014  # residual
+      - F-12-017  # residual
+      - F-12-018  # residual
+      - F-12-019  # residual
+      - F-12-020  # residual
+      - F-12-021  # residual
+      - F-12-022  # residual
+      - F-13-001  # residual
+      - F-13-002  # residual
+      - F-13-003  # residual
+      - F-13-005  # residual
+      - F-13-006  # residual
+      - F-13-007  # residual
+      - F-13-008  # residual
+      - F-13-009  # residual
+      - F-13-010  # residual
+      - F-13-011  # residual
+      - F-13-012  # residual
+      - F-13-013  # residual
+      - F-13-015  # residual
+      - F-13-016  # residual
+      - F-13-017  # residual
+      - F-13-018  # residual
+      - F-13-019  # residual
+      - F-14-001  # residual
+      - F-14-002  # residual
+      - F-14-003  # residual
+      - F-14-004  # residual
+      - F-14-005  # residual
+      - F-14-006  # residual
+      - F-14-007  # residual
+      - F-14-008  # residual
+      - F-14-009  # residual
+      - F-14-010  # residual
+      - F-14-011  # residual
+      - F-14-012  # residual
+      - F-14-013  # residual
+      - F-14-014  # residual
+      - F-15-005  # residual
+      - F-15-010  # residual
+      - F-15-014  # residual
+      - F-15-015  # residual
+      - F-15-016  # residual
+      - F-15-017  # residual
+      - F-15-018  # residual
+      - F-15-022  # residual
+      - F-15-025  # residual
+      - F-16-001  # residual
+      - F-16-002  # residual
+      - F-16-004  # residual
+      - F-16-005  # residual
+      - F-16-008  # residual
+      - F-16-011  # residual
+      - F-16-012  # residual
+      - F-16-013  # residual
+      - F-16-014  # residual
+      - F-16-015  # residual
+      - F-17-003  # residual
+      - F-17-004  # residual
+      - F-17-005  # residual
+      - F-17-006  # residual
+      - F-17-008  # residual
+      - F-17-010  # residual
+      - F-17-011  # residual
+      - F-17-012  # residual
+      - F-17-013  # residual
+      - F-17-014  # residual
+      - F-17-015  # residual
+      - F-17-016  # residual
+      - F-17-017  # residual
+      - F-17-018  # residual
+      - F-17-019  # residual
+      - F-17-020  # residual
+      - F-17-021  # residual
+      - F-17-022  # residual
+      - F-18-001  # residual
+      - F-18-002  # residual
+      - F-18-003  # residual
+      - F-18-004  # residual
+      - F-18-006  # residual
+      - F-18-007  # residual
+      - F-18-008  # residual
+      - F-18-009  # residual
+      - F-18-010  # residual
+      - F-18-011  # residual
+      - F-18-012  # residual
+      - F-18-013  # residual
+      - F-18-014  # residual
+      - F-18-015  # residual
+      - F-18-016  # residual
+      - F-18-017  # residual
+      - F-18-018  # residual
+      - F-18-019  # residual
+      - F-18-020  # residual
+      - F-18-021  # residual
+      - F-18-022  # residual
+      - F-18-023  # residual
+      - F-18-024  # residual
+      - F-18-025  # residual
+      - F-18-026  # residual
+      - F-18-027  # residual
+      - F-18-028  # residual
+      - F-18-029  # residual
+      - F-18-030  # residual
+      - F-18-031  # residual
+      - F-18-032  # residual
+      - F-18-033  # residual
+      - F-18-034  # residual
+      - F-18-035  # residual
+      - F-18-036  # residual
+      - F-18-037  # residual
+      - F-18-038  # residual
+
+g_shards:
+  G1_backend:
+    count: 46
+    findings:
+      - F-01-002  # severity=critical scope=01-backend-api
+      - F-01-010  # severity=medium scope=01-backend-api
+      - F-01-011  # severity=medium scope=01-backend-api
+      - F-01-014  # severity=medium scope=01-backend-api
+      - F-01-015  # severity=medium scope=01-backend-api
+      - F-01-018  # severity=low scope=01-backend-api
+      - F-01-019  # severity=low scope=01-backend-api
+      - F-02-001  # severity=critical scope=02-backend-services-domain
+      - F-02-002  # severity=critical scope=02-backend-services-domain
+      - F-02-004  # severity=critical scope=02-backend-services-domain
+      - F-02-005  # severity=high scope=02-backend-services-domain
+      - F-02-006  # severity=high scope=02-backend-services-domain
+      - F-02-007  # severity=high scope=02-backend-services-domain
+      - F-02-008  # severity=high scope=02-backend-services-domain
+      - F-02-009  # severity=high scope=02-backend-services-domain
+      - F-02-010  # severity=high scope=02-backend-services-domain
+      - F-02-012  # severity=medium scope=02-backend-services-domain
+      - F-02-013  # severity=medium scope=02-backend-services-domain
+      - F-02-014  # severity=medium scope=02-backend-services-domain
+      - F-02-016  # severity=medium scope=02-backend-services-domain
+      - F-02-017  # severity=medium scope=02-backend-services-domain
+      - F-02-019  # severity=medium scope=02-backend-services-domain
+      - F-02-020  # severity=medium scope=02-backend-services-domain
+      - F-02-021  # severity=medium scope=02-backend-services-domain
+      - F-02-022  # severity=medium scope=02-backend-services-domain
+      - F-02-023  # severity=low scope=02-backend-services-domain
+      - F-02-024  # severity=low scope=02-backend-services-domain
+      - F-02-025  # severity=low scope=02-backend-services-domain
+      - F-11-002  # severity=high scope=11-backend-utils-shared
+      - F-11-003  # severity=high scope=11-backend-utils-shared
+      - F-11-004  # severity=high scope=11-backend-utils-shared
+      - F-11-005  # severity=high scope=11-backend-utils-shared
+      - F-11-006  # severity=medium scope=11-backend-utils-shared
+      - F-11-007  # severity=medium scope=11-backend-utils-shared
+      - F-11-008  # severity=medium scope=11-backend-utils-shared
+      - F-11-009  # severity=medium scope=11-backend-utils-shared
+      - F-11-010  # severity=medium scope=11-backend-utils-shared
+      - F-11-011  # severity=medium scope=11-backend-utils-shared
+      - F-11-012  # severity=medium scope=11-backend-utils-shared
+      - F-11-013  # severity=medium scope=11-backend-utils-shared
+      - F-11-014  # severity=medium scope=11-backend-utils-shared
+      - F-11-015  # severity=medium scope=11-backend-utils-shared
+      - F-11-017  # severity=low scope=11-backend-utils-shared
+      - F-11-018  # severity=low scope=11-backend-utils-shared
+      - F-11-019  # severity=low scope=11-backend-utils-shared
+      - F-11-020  # severity=low scope=11-backend-utils-shared
+  G2_ml_data_a_crit_high:
+    count: 41
+    findings:
+      - F-03-002  # severity=critical scope=03-ml-engine
+      - F-03-004  # severity=high scope=03-ml-engine
+      - F-03-006  # severity=high scope=03-ml-engine
+      - F-03-007  # severity=high scope=03-ml-engine
+      - F-03-008  # severity=high scope=03-ml-engine
+      - F-04-001  # severity=critical scope=04-trading-agents
+      - F-04-002  # severity=critical scope=04-trading-agents
+      - F-04-003  # severity=high scope=04-trading-agents
+      - F-04-004  # severity=high scope=04-trading-agents
+      - F-04-005  # severity=high scope=04-trading-agents
+      - F-04-006  # severity=high scope=04-trading-agents
+      - F-04-007  # severity=high scope=04-trading-agents
+      - F-04-008  # severity=high scope=04-trading-agents
+      - F-04-009  # severity=high scope=04-trading-agents
+      - F-05-001  # severity=critical scope=05-data-ingestion-etl
+      - F-05-002  # severity=critical scope=05-data-ingestion-etl
+      - F-05-004  # severity=high scope=05-data-ingestion-etl
+      - F-05-005  # severity=high scope=05-data-ingestion-etl
+      - F-05-006  # severity=high scope=05-data-ingestion-etl
+      - F-05-007  # severity=high scope=05-data-ingestion-etl
+      - F-05-008  # severity=high scope=05-data-ingestion-etl
+      - F-05-009  # severity=high scope=05-data-ingestion-etl
+      - F-06-001  # severity=critical scope=06-airflow-pipelines
+      - F-06-002  # severity=critical scope=06-airflow-pipelines
+      - F-06-003  # severity=critical scope=06-airflow-pipelines
+      - F-06-004  # severity=high scope=06-airflow-pipelines
+      - F-06-005  # severity=high scope=06-airflow-pipelines
+      - F-06-006  # severity=high scope=06-airflow-pipelines
+      - F-06-007  # severity=high scope=06-airflow-pipelines
+      - F-06-008  # severity=high scope=06-airflow-pipelines
+      - F-06-009  # severity=high scope=06-airflow-pipelines
+      - F-09-001  # severity=critical scope=09-analytics
+      - F-09-002  # severity=critical scope=09-analytics
+      - F-09-003  # severity=critical scope=09-analytics
+      - F-09-004  # severity=high scope=09-analytics
+      - F-09-005  # severity=high scope=09-analytics
+      - F-09-006  # severity=high scope=09-analytics
+      - F-09-007  # severity=high scope=09-analytics
+      - F-09-008  # severity=high scope=09-analytics
+      - F-09-009  # severity=high scope=09-analytics
+      - F-09-010  # severity=high scope=09-analytics
+  G2_ml_data_b_med_low:
+    count: 47
+    findings:
+      - F-03-009  # severity=medium scope=03-ml-engine
+      - F-03-010  # severity=medium scope=03-ml-engine
+      - F-03-011  # severity=medium scope=03-ml-engine
+      - F-03-012  # severity=medium scope=03-ml-engine
+      - F-03-013  # severity=medium scope=03-ml-engine
+      - F-03-015  # severity=low scope=03-ml-engine
+      - F-03-016  # severity=low scope=03-ml-engine
+      - F-04-010  # severity=medium scope=04-trading-agents
+      - F-04-011  # severity=medium scope=04-trading-agents
+      - F-04-012  # severity=medium scope=04-trading-agents
+      - F-04-013  # severity=medium scope=04-trading-agents
+      - F-04-014  # severity=medium scope=04-trading-agents
+      - F-04-015  # severity=medium scope=04-trading-agents
+      - F-04-016  # severity=medium scope=04-trading-agents
+      - F-04-017  # severity=medium scope=04-trading-agents
+      - F-04-018  # severity=medium scope=04-trading-agents
+      - F-04-019  # severity=low scope=04-trading-agents
+      - F-04-020  # severity=low scope=04-trading-agents
+      - F-04-021  # severity=low scope=04-trading-agents
+      - F-04-022  # severity=low scope=04-trading-agents
+      - F-05-010  # severity=medium scope=05-data-ingestion-etl
+      - F-05-011  # severity=medium scope=05-data-ingestion-etl
+      - F-05-013  # severity=medium scope=05-data-ingestion-etl
+      - F-05-014  # severity=medium scope=05-data-ingestion-etl
+      - F-05-015  # severity=medium scope=05-data-ingestion-etl
+      - F-05-016  # severity=low scope=05-data-ingestion-etl
+      - F-05-017  # severity=low scope=05-data-ingestion-etl
+      - F-05-018  # severity=low scope=05-data-ingestion-etl
+      - F-05-019  # severity=low scope=05-data-ingestion-etl
+      - F-05-020  # severity=low scope=05-data-ingestion-etl
+      - F-06-010  # severity=medium scope=06-airflow-pipelines
+      - F-06-011  # severity=medium scope=06-airflow-pipelines
+      - F-06-013  # severity=medium scope=06-airflow-pipelines
+      - F-06-014  # severity=medium scope=06-airflow-pipelines
+      - F-06-015  # severity=low scope=06-airflow-pipelines
+      - F-06-016  # severity=low scope=06-airflow-pipelines
+      - F-09-011  # severity=medium scope=09-analytics
+      - F-09-012  # severity=medium scope=09-analytics
+      - F-09-013  # severity=medium scope=09-analytics
+      - F-09-014  # severity=medium scope=09-analytics
+      - F-09-015  # severity=medium scope=09-analytics
+      - F-09-016  # severity=medium scope=09-analytics
+      - F-09-017  # severity=medium scope=09-analytics
+      - F-09-018  # severity=medium scope=09-analytics
+      - F-09-019  # severity=low scope=09-analytics
+      - F-09-020  # severity=low scope=09-analytics
+      - F-09-021  # severity=low scope=09-analytics
+  G3_frontend_infra:
+    count: 45
+    findings:
+      - F-12-004  # severity=high scope=12-frontend
+      - F-12-006  # severity=high scope=12-frontend
+      - F-12-007  # severity=high scope=12-frontend
+      - F-12-008  # severity=high scope=12-frontend
+      - F-12-009  # severity=high scope=12-frontend
+      - F-12-012  # severity=medium scope=12-frontend
+      - F-12-013  # severity=medium scope=12-frontend
+      - F-12-014  # severity=medium scope=12-frontend
+      - F-12-017  # severity=medium scope=12-frontend
+      - F-12-018  # severity=medium scope=12-frontend
+      - F-12-019  # severity=low scope=12-frontend
+      - F-12-020  # severity=low scope=12-frontend
+      - F-12-021  # severity=low scope=12-frontend
+      - F-12-022  # severity=low scope=12-frontend
+      - F-13-001  # severity=critical scope=13-infra-deployment
+      - F-13-002  # severity=high scope=13-infra-deployment
+      - F-13-003  # severity=high scope=13-infra-deployment
+      - F-13-005  # severity=high scope=13-infra-deployment
+      - F-13-006  # severity=high scope=13-infra-deployment
+      - F-13-007  # severity=high scope=13-infra-deployment
+      - F-13-008  # severity=high scope=13-infra-deployment
+      - F-13-009  # severity=medium scope=13-infra-deployment
+      - F-13-010  # severity=medium scope=13-infra-deployment
+      - F-13-011  # severity=medium scope=13-infra-deployment
+      - F-13-012  # severity=medium scope=13-infra-deployment
+      - F-13-013  # severity=medium scope=13-infra-deployment
+      - F-13-015  # severity=medium scope=13-infra-deployment
+      - F-13-016  # severity=medium scope=13-infra-deployment
+      - F-13-017  # severity=medium scope=13-infra-deployment
+      - F-13-018  # severity=low scope=13-infra-deployment
+      - F-13-019  # severity=low scope=13-infra-deployment
+      - F-14-001  # severity=critical scope=14-ci-cd-workflows
+      - F-14-002  # severity=critical scope=14-ci-cd-workflows
+      - F-14-003  # severity=critical scope=14-ci-cd-workflows
+      - F-14-004  # severity=high scope=14-ci-cd-workflows
+      - F-14-005  # severity=high scope=14-ci-cd-workflows
+      - F-14-006  # severity=high scope=14-ci-cd-workflows
+      - F-14-007  # severity=high scope=14-ci-cd-workflows
+      - F-14-008  # severity=high scope=14-ci-cd-workflows
+      - F-14-009  # severity=medium scope=14-ci-cd-workflows
+      - F-14-010  # severity=medium scope=14-ci-cd-workflows
+      - F-14-011  # severity=medium scope=14-ci-cd-workflows
+      - F-14-012  # severity=medium scope=14-ci-cd-workflows
+      - F-14-013  # severity=medium scope=14-ci-cd-workflows
+      - F-14-014  # severity=low scope=14-ci-cd-workflows
+  G4_storage_security_residual:
+    count: 41
+    findings:
+      - F-07-002  # severity=critical scope=07-database-persistence
+      - F-07-003  # severity=critical scope=07-database-persistence
+      - F-07-004  # severity=critical scope=07-database-persistence
+      - F-07-005  # severity=high scope=07-database-persistence
+      - F-07-006  # severity=high scope=07-database-persistence
+      - F-07-007  # severity=high scope=07-database-persistence
+      - F-07-008  # severity=high scope=07-database-persistence
+      - F-07-009  # severity=high scope=07-database-persistence
+      - F-07-010  # severity=high scope=07-database-persistence
+      - F-07-011  # severity=medium scope=07-database-persistence
+      - F-07-012  # severity=medium scope=07-database-persistence
+      - F-07-013  # severity=medium scope=07-database-persistence
+      - F-07-014  # severity=medium scope=07-database-persistence
+      - F-07-015  # severity=medium scope=07-database-persistence
+      - F-07-016  # severity=medium scope=07-database-persistence
+      - F-07-017  # severity=low scope=07-database-persistence
+      - F-07-018  # severity=low scope=07-database-persistence
+      - F-08-001  # severity=critical scope=08-auth-security-compliance
+      - F-08-006  # severity=high scope=08-auth-security-compliance
+      - F-08-007  # severity=high scope=08-auth-security-compliance
+      - F-08-010  # severity=high scope=08-auth-security-compliance
+      - F-08-011  # severity=high scope=08-auth-security-compliance
+      - F-08-014  # severity=medium scope=08-auth-security-compliance
+      - F-08-016  # severity=medium scope=08-auth-security-compliance
+      - F-08-018  # severity=medium scope=08-auth-security-compliance
+      - F-08-019  # severity=low scope=08-auth-security-compliance
+      - F-08-020  # severity=low scope=08-auth-security-compliance
+      - F-10-001  # severity=critical scope=10-monitoring-observability
+      - F-10-002  # severity=critical scope=10-monitoring-observability
+      - F-10-003  # severity=critical scope=10-monitoring-observability
+      - F-10-005  # severity=high scope=10-monitoring-observability
+      - F-10-006  # severity=high scope=10-monitoring-observability
+      - F-10-008  # severity=high scope=10-monitoring-observability
+      - F-10-009  # severity=high scope=10-monitoring-observability
+      - F-10-010  # severity=high scope=10-monitoring-observability
+      - F-10-011  # severity=medium scope=10-monitoring-observability
+      - F-10-012  # severity=medium scope=10-monitoring-observability
+      - F-10-014  # severity=medium scope=10-monitoring-observability
+      - F-10-015  # severity=low scope=10-monitoring-observability
+      - F-10-016  # severity=low scope=10-monitoring-observability
+      - F-10-017  # severity=low scope=10-monitoring-observability
+  G5_tests_config_scripts:
+    count: 37
+    findings:
+      - F-15-005  # severity=high scope=15-test-suite
+      - F-15-010  # severity=high scope=15-test-suite
+      - F-15-014  # severity=medium scope=15-test-suite
+      - F-15-015  # severity=medium scope=15-test-suite
+      - F-15-016  # severity=medium scope=15-test-suite
+      - F-15-017  # severity=medium scope=15-test-suite
+      - F-15-018  # severity=medium scope=15-test-suite
+      - F-15-022  # severity=medium scope=15-test-suite
+      - F-15-025  # severity=low scope=15-test-suite
+      - F-16-001  # severity=critical scope=16-config-secrets
+      - F-16-002  # severity=critical scope=16-config-secrets
+      - F-16-004  # severity=high scope=16-config-secrets
+      - F-16-005  # severity=high scope=16-config-secrets
+      - F-16-008  # severity=medium scope=16-config-secrets
+      - F-16-011  # severity=medium scope=16-config-secrets
+      - F-16-012  # severity=medium scope=16-config-secrets
+      - F-16-013  # severity=low scope=16-config-secrets
+      - F-16-014  # severity=low scope=16-config-secrets
+      - F-16-015  # severity=low scope=16-config-secrets
+      - F-17-003  # severity=high scope=17-scripts-tooling
+      - F-17-004  # severity=high scope=17-scripts-tooling
+      - F-17-005  # severity=high scope=17-scripts-tooling
+      - F-17-006  # severity=high scope=17-scripts-tooling
+      - F-17-008  # severity=high scope=17-scripts-tooling
+      - F-17-010  # severity=medium scope=17-scripts-tooling
+      - F-17-011  # severity=medium scope=17-scripts-tooling
+      - F-17-012  # severity=medium scope=17-scripts-tooling
+      - F-17-013  # severity=medium scope=17-scripts-tooling
+      - F-17-014  # severity=medium scope=17-scripts-tooling
+      - F-17-015  # severity=medium scope=17-scripts-tooling
+      - F-17-016  # severity=medium scope=17-scripts-tooling
+      - F-17-017  # severity=medium scope=17-scripts-tooling
+      - F-17-018  # severity=low scope=17-scripts-tooling
+      - F-17-019  # severity=low scope=17-scripts-tooling
+      - F-17-020  # severity=low scope=17-scripts-tooling
+      - F-17-021  # severity=low scope=17-scripts-tooling
+      - F-17-022  # severity=low scope=17-scripts-tooling
+  G6_docs:
+    count: 37
+    findings:
+      - F-18-001  # severity=high scope=18-docs-health
+      - F-18-002  # severity=high scope=18-docs-health
+      - F-18-003  # severity=high scope=18-docs-health
+      - F-18-004  # severity=high scope=18-docs-health
+      - F-18-006  # severity=medium scope=18-docs-health
+      - F-18-007  # severity=medium scope=18-docs-health
+      - F-18-008  # severity=medium scope=18-docs-health
+      - F-18-009  # severity=medium scope=18-docs-health
+      - F-18-010  # severity=medium scope=18-docs-health
+      - F-18-011  # severity=medium scope=18-docs-health
+      - F-18-012  # severity=low scope=18-docs-health
+      - F-18-013  # severity=low scope=18-docs-health
+      - F-18-014  # severity=low scope=18-docs-health
+      - F-18-015  # severity=low scope=18-docs-health
+      - F-18-016  # severity=low scope=18-docs-health
+      - F-18-017  # severity=low scope=18-docs-health
+      - F-18-018  # severity=low scope=18-docs-health
+      - F-18-019  # severity=low scope=18-docs-health
+      - F-18-020  # severity=low scope=18-docs-health
+      - F-18-021  # severity=low scope=18-docs-health
+      - F-18-022  # severity=low scope=18-docs-health
+      - F-18-023  # severity=low scope=18-docs-health
+      - F-18-024  # severity=low scope=18-docs-health
+      - F-18-025  # severity=low scope=18-docs-health
+      - F-18-026  # severity=low scope=18-docs-health
+      - F-18-027  # severity=low scope=18-docs-health
+      - F-18-028  # severity=low scope=18-docs-health
+      - F-18-029  # severity=low scope=18-docs-health
+      - F-18-030  # severity=low scope=18-docs-health
+      - F-18-031  # severity=low scope=18-docs-health
+      - F-18-032  # severity=low scope=18-docs-health
+      - F-18-033  # severity=low scope=18-docs-health
+      - F-18-034  # severity=low scope=18-docs-health
+      - F-18-035  # severity=low scope=18-docs-health
+      - F-18-036  # severity=low scope=18-docs-health
+      - F-18-037  # severity=low scope=18-docs-health
+      - F-18-038  # severity=low scope=18-docs-health
+
+# Cross-cluster dependencies (initial — workers may add more):
+dependencies:
+  B: [{depends_on: A, type: blocks, reason: 'JWT secret rotation must complete before JWT algo fix to avoid masked failure'}]
+  E: [{depends_on: null, type: independent, reason: 'un-excluding tests early surfaces signal for B/C/D'}]
+  C: [{depends_on: B, type: soft, reason: 'CSP rollout easier after auth stabilized'}]

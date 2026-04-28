@@ -1,0 +1,45 @@
+{
+  "cluster_id": "G6_docs",
+  "status": "complete",
+  "synthesis_date": "2026-04-27",
+  "scope_sources": ["18-docs-health"],
+  "program_position": "deferred-last",
+  "findings_total": 37,
+  "findings_covered": 37,
+  "finding_ids": [
+    "F-18-001", "F-18-002", "F-18-003", "F-18-004",
+    "F-18-006", "F-18-007", "F-18-008", "F-18-009", "F-18-010",
+    "F-18-011", "F-18-012", "F-18-013", "F-18-014", "F-18-015",
+    "F-18-016", "F-18-017", "F-18-018", "F-18-019", "F-18-020",
+    "F-18-021", "F-18-022", "F-18-023", "F-18-024", "F-18-025",
+    "F-18-026", "F-18-027", "F-18-028", "F-18-029", "F-18-030",
+    "F-18-031", "F-18-032", "F-18-033", "F-18-034", "F-18-035",
+    "F-18-036", "F-18-037", "F-18-038"
+  ],
+  "severity_counts": {
+    "high": 4,
+    "medium": 6,
+    "low": 27
+  },
+  "sub_themes": [
+    "archive_bulk_cleanup",
+    "stale_dates_status_headers",
+    "broken_intra_doc_references",
+    "missing_per_directory_readmes",
+    "deprecation_archive_index",
+    "ci_doc_health_workflow",
+    "documentation_governance"
+  ],
+  "fix_steps_count": 7,
+  "depends_on": ["G_B", "G_C", "G_D"],
+  "cross_scope_refs": ["14-ci-cd-workflows"],
+  "effort_hours_raw_sum": 92,
+  "effort_hours_realistic": 25,
+  "loki_cost_estimate_usd": 2.5,
+  "loki_actionable_pct": 100,
+  "destructive_actions": false,
+  "rollback_complexity": "trivial",
+  "risk_level": "minimal",
+  "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/G6_docs.md",
+  "assertion": "all 37 finding IDs covered"
+}

@@ -1,0 +1,1 @@
+{"cluster_id": "G1_backend", "phase": "complete", "ts": "2026-04-27T00:00:00Z", "workpaper_path": "docs/audits/2026-04/_synthesis/workpaper/G1_backend.md", "ids_referenced": 46, "fix_steps": 42, "human_ack_required": true, "human_ack_steps": [6, 23, 25, 30, 33, 34, 35, 37], "depends_on": ["B_jwt-auth", "E_test-exclusion", "D_random-data-recommendations"]}
