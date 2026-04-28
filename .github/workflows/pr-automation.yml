@@ -197,8 +197,10 @@ jobs:
 
     - name: Check PR description
       id: check-description
+      env:
+        PR_BODY: ${{ github.event.pull_request.body }}
       run: |
-        BODY="${{ github.event.pull_request.body }}"
+        BODY="$PR_BODY"
 
         ISSUES=""
 
@@ -221,8 +223,10 @@ jobs:
 
     - name: Check PR title
       id: check-title
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
       run: |
-        TITLE="${{ github.event.pull_request.title }}"
+        TITLE="$PR_TITLE"
 
         TITLE_ISSUES=""
 
@@ -351,17 +355,25 @@ jobs:
 
     steps:
     - name: Generate PR summary
+      env:
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BASE: ${{ github.event.pull_request.base.ref }}
+        PR_HEAD: ${{ github.event.pull_request.head.ref }}
       run: |
-        echo "## 📝 Pull Request Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**PR #**: ${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Author**: @${{ github.event.pull_request.user.login }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Title**: ${{ github.event.pull_request.title }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Base**: ${{ github.event.pull_request.base.ref }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Head**: ${{ github.event.pull_request.head.ref }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Automated Actions Taken" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ PR classified and labeled" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Size analysis completed" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Health checks performed" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Reviewers assigned (if applicable)" >> $GITHUB_STEP_SUMMARY
+        {
+          echo "## 📝 Pull Request Summary"
+          echo ""
+          echo "**PR #**: $PR_NUMBER"
+          echo "**Author**: @$PR_AUTHOR"
+          echo "**Title**: $PR_TITLE"
+          echo "**Base**: $PR_BASE"
+          echo "**Head**: $PR_HEAD"
+          echo ""
+          echo "### Automated Actions Taken"
+          echo "- ✅ PR classified and labeled"
+          echo "- ✅ Size analysis completed"
+          echo "- ✅ Health checks performed"
+          echo "- ✅ Reviewers assigned (if applicable)"
+        } >> "$GITHUB_STEP_SUMMARY"

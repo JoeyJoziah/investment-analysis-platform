@@ -29,9 +29,12 @@ jobs:
     steps:
     - name: Analyze issue content
       id: analyze
+      env:
+        ISSUE_TITLE: ${{ github.event.issue.title }}
+        ISSUE_BODY: ${{ github.event.issue.body }}
       run: |
-        TITLE="${{ github.event.issue.title }}"
-        BODY="${{ github.event.issue.body }}"
+        TITLE="$ISSUE_TITLE"
+        BODY="$ISSUE_BODY"
         TEXT="$TITLE $BODY"
 
         LABELS=""
@@ -157,8 +160,9 @@ jobs:
       id: search
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        ISSUE_TITLE: ${{ github.event.issue.title }}
       run: |
-        TITLE="${{ github.event.issue.title }}"
+        TITLE="$ISSUE_TITLE"
 
         # Search for similar open issues
         SIMILAR=$(gh issue list --state open --limit 50 --json number,title,body | \
@@ -304,14 +308,22 @@ jobs:
 
     steps:
     - name: Generate metrics summary
+      env:
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        ISSUE_ACTION: ${{ github.event.action }}
+        ISSUE_TITLE: ${{ github.event.issue.title }}
+        ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+        ISSUE_STATE: ${{ github.event.issue.state }}
       run: |
-        echo "## 📊 Issue Event Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Issue #**: ${{ github.event.issue.number }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Action**: ${{ github.event.action }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Title**: ${{ github.event.issue.title }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Author**: @${{ github.event.issue.user.login }}" >> $GITHUB_STEP_SUMMARY
-        echo "**State**: ${{ github.event.issue.state }}" >> $GITHUB_STEP_SUMMARY
+        {
+          echo "## 📊 Issue Event Summary"
+          echo ""
+          echo "**Issue #**: $ISSUE_NUMBER"
+          echo "**Action**: $ISSUE_ACTION"
+          echo "**Title**: $ISSUE_TITLE"
+          echo "**Author**: @$ISSUE_AUTHOR"
+          echo "**State**: $ISSUE_STATE"
+        } >> "$GITHUB_STEP_SUMMARY"
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Automated Actions" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Issue classified and labeled" >> $GITHUB_STEP_SUMMARY
