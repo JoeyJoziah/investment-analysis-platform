@@ -54,7 +54,12 @@ apiClient.interceptors.response.use(
             { refresh_token: refreshToken }
           );
           
-          const { access_token } = response.data;
+          // Backend returns ApiResponse envelope: { success, data: { access_token, ... } }.
+          const payload = response.data?.data ?? response.data;
+          const access_token = payload?.access_token;
+          if (!access_token) {
+            throw new Error('Refresh response did not include access_token');
+          }
           localStorage.setItem('access_token', access_token);
           
           // Retry original request with new token

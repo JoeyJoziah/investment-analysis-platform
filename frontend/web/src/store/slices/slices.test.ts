@@ -223,6 +223,41 @@ describe('appSlice', () => {
     expect(state.user).toEqual(user);
   });
 
+  // F-12-002 (PRD audit 2026-04 / Workstream F): regression test.
+  // Backend returns the ApiResponse envelope { success, data: { access_token, ... } }.
+  // Pre-fix code read response.data.token (undefined) and stored "Bearer undefined"
+  // for every subsequent request. This test asserts the token is read from the
+  // envelope's nested `data.access_token` and stored verbatim.
+  it('login thunk stores access_token from ApiResponse envelope', async () => {
+    const { apiService } = await import('../../services/api.service');
+    (apiService.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: { access_token: 'tok-123', token_type: 'bearer' },
+      },
+    });
+
+    const dispatch = vi.fn();
+    const getState = vi.fn();
+    await login({ email: 'a@b.com', password: 'pw' })(dispatch, getState, undefined);
+
+    expect(localStorage.getItem('access_token')).toBe('tok-123');
+  });
+
+  it('login thunk rejects when access_token is missing', async () => {
+    const { apiService } = await import('../../services/api.service');
+    (apiService.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: { success: true, data: {} },
+    });
+
+    const dispatch = vi.fn();
+    const getState = vi.fn();
+    const result = await login({ email: 'a@b.com', password: 'pw' })(dispatch, getState, undefined);
+
+    expect(result.type).toBe('app/login/rejected');
+    expect(localStorage.getItem('access_token')).toBeNull();
+  });
+
   it('logout.fulfilled clears user', () => {
     let state = appReducer(undefined, {
       type: login.fulfilled.type,
