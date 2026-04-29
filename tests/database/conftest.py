@@ -72,8 +72,19 @@ async def patched_get_db_session(monkeypatch, tx_session_factory):
     async def _fake_get_db_session(
         isolation_level=None, readonly: bool = False
     ) -> AsyncGenerator[AsyncSession, None]:
-        async with tx_session_factory() as session:
+        # Mirror db_manager.get_session() semantics: commit on clean exit,
+        # rollback on exception. This is what production
+        # ``backend.config.database.get_db_session`` provides via
+        # ``db_manager.get_session``.
+        session = tx_session_factory()
+        try:
             yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
     import backend.repositories.base as repo_base
 

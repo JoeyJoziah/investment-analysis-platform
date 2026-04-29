@@ -656,20 +656,34 @@ class AsyncBaseRepository(Generic[ModelType], ABC):
         isolation_level: Optional[TransactionIsolationLevel] = None
     ):
         """
-        Context manager for database transaction with retry logic.
-        
+        Async context manager for database transactions.
+
+        Audit fix 2026-04 / F-07-002: previously this body defined a nested
+        async-generator and passed it to ``db_manager.execute_with_retry``,
+        but the outer function never ``yield``ed. ``@asynccontextmanager``
+        therefore raised ``'coroutine' object has no attribute '__anext__'``
+        on ``__aenter__``, so every ``async with repo.transaction(): ...``
+        block in the codebase was a silent no-op.
+
+        Retry logic for transient deadlocks/serialization failures belongs
+        inside the operation the caller runs against ``session``, not around
+        the ``yield``. ``db_manager.get_session()`` (via ``get_db_session``)
+        already handles commit-on-clean-exit and rollback-on-exception, so
+        this wrapper just delegates and re-yields the session.
+
         Args:
             isolation_level: Transaction isolation level
-        
+
         Yields:
             AsyncSession: Database session within transaction
         """
-        async def _execute_transaction():
-            async with get_db_session(isolation_level=isolation_level) as session:
+        async with get_db_session(isolation_level=isolation_level) as session:
+            try:
                 yield session
-        
-        # Execute transaction with retry logic for deadlocks
-        await db_manager.execute_with_retry(_execute_transaction)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
 
 class AsyncCRUDRepository(AsyncBaseRepository[ModelType]):
