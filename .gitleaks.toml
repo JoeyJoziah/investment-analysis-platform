@@ -128,13 +128,21 @@ commits = [
     # "commitsha",
 ]
 
-# Stop words that indicate false positives
+# Stopwords that indicate false positives.
+#
+# Audit fix 2026-04 / F-08-011: previously this list contained the exact
+# keywords (password, bearer, token, api, key, secret, auth) that should
+# *trigger* secret detection. Any line containing one of those strings
+# was suppressed, including real leaks. Replaced with the documented
+# placeholder pattern set commonly used by gitleaks consumers.
+#
+# Real fix: rely on per-rule entropy + regex specificity, and on the path
+# allowlist above for fixtures/test files. Keep stopwords narrow.
 stopwords = [
-    '''password''',
-    '''bearer''',
-    '''token''',
-    '''api''',
-    '''key''',
-    '''secret''',
-    '''auth''',
+    '''example''',
+    '''placeholder''',
+    '''dummy''',
+    '''sample''',
+    '''xxxxxxxx''',
+    '''00000000''',
 ]
