@@ -459,17 +459,19 @@ class TestCalculateRiskMetricsFromPrices:
         returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
         assert metrics["max_drawdown"] == min(returns)
 
-    def test_insufficient_data_returns_fallbacks(self):
-        """With fewer than 30 prices, return hardcoded fallback values."""
-        metrics = calculate_risk_metrics_from_prices([100.0, 101.0, 99.0])
-        assert metrics["beta"] == 1.15
-        assert metrics["sharpe_ratio"] == 1.85
-        assert metrics["max_drawdown"] == -0.15
+    def test_insufficient_data_raises(self):
+        """F-02-018 (PRD audit 2026-04): with fewer than 30 prices the
+        function MUST raise InsufficientDataError rather than fabricate
+        plausible-looking placeholder metrics."""
+        from backend.exceptions import InsufficientDataError
+        with pytest.raises(InsufficientDataError):
+            calculate_risk_metrics_from_prices([100.0, 101.0, 99.0])
 
-    def test_empty_prices_returns_fallbacks(self):
-        """An empty price list returns fallback values."""
-        metrics = calculate_risk_metrics_from_prices([])
-        assert metrics["overall_risk_score"] == 42.0
+    def test_empty_prices_raises(self):
+        """F-02-018: empty price list raises InsufficientDataError."""
+        from backend.exceptions import InsufficientDataError
+        with pytest.raises(InsufficientDataError):
+            calculate_risk_metrics_from_prices([])
 
     def test_risk_score_bounded_0_to_100(self):
         """Overall risk score should be clamped between 0 and 100."""

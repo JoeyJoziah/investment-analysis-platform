@@ -24,6 +24,8 @@ from backend.repositories import stock_repository, price_repository
 from backend.utils.cache import cache_with_ttl
 from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager
+from backend.exceptions import InsufficientDataError, ModelUnavailableError
+from backend.api.error_responses import raise_model_unavailable
 from backend.models.api_response import ApiResponse, success_response
 from backend.utils.numpy_serializer import sanitize_numpy
 from backend.services.analysis_service import (
@@ -546,9 +548,19 @@ async def analyze_stock(
                 )
 
         # Risk Metrics calculation (delegated to service)
+        # Per F-02-018 / PRD audit 2026-04 §3 D: insufficient price history
+        # (n<30) raises InsufficientDataError which we surface as a structured
+        # HTTP 503 ``model_unavailable`` response rather than fabricating
+        # placeholder risk metrics.
         logger.info(f"Calculating risk metrics for {symbol}")
         prices_for_risk = [float(p.close) for p in price_history] if price_history else []
-        risk_fields = calculate_risk_metrics_from_prices(prices_for_risk)
+        try:
+            risk_fields = calculate_risk_metrics_from_prices(prices_for_risk)
+        except InsufficientDataError as exc:
+            raise_model_unavailable(
+                model="risk_metrics",
+                reason=exc.reason or "insufficient_data",
+            )
         risk_metrics = RiskMetrics(**risk_fields)
 
         # Calculate overall score and recommendation (delegated to service)
