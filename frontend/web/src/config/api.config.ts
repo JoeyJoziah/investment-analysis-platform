@@ -14,127 +14,130 @@ export const apiConfig = {
   wsURL: WS_URL,
   timeout: 30000, // 30 seconds
   
+  // All endpoints use the canonical /api/v1/ prefix. The backend mounts every
+  // router under /api/v1/ (see backend/api/main.py:333-348). There is no v2
+  // migration planned; future major versions would mount at /api/v2/.
   endpoints: {
     // Authentication
     auth: {
-      login: '/api/auth/login',
-      logout: '/api/auth/logout',
-      refresh: '/api/auth/refresh',
-      register: '/api/auth/register',
-      profile: '/api/auth/profile',
+      login: '/api/v1/auth/login',
+      logout: '/api/v1/auth/logout',
+      refresh: '/api/v1/auth/refresh',
+      register: '/api/v1/auth/register',
+      profile: '/api/v1/auth/profile',
     },
-    
+
     // Stocks
     stocks: {
-      list: '/api/stocks',
-      detail: (ticker: string) => `/api/stocks/${ticker}`,
-      search: '/api/stocks/search',
-      trending: '/api/stocks/trending',
+      list: '/api/v1/stocks',
+      detail: (ticker: string) => `/api/v1/stocks/${ticker}`,
+      search: '/api/v1/stocks/search',
+      trending: '/api/v1/stocks/trending',
     },
-    
+
     // Market Data
     market: {
-      overview: '/api/market/overview',
-      indices: '/api/market/indices',
-      sectors: '/api/market/sectors',
-      movers: '/api/market/movers',
+      overview: '/api/v1/market/overview',
+      indices: '/api/v1/market/indices',
+      sectors: '/api/v1/market/sectors',
+      movers: '/api/v1/market/movers',
     },
-    
+
     // Analysis
     analysis: {
-      technical: (ticker: string) => `/api/analysis/technical/${ticker}`,
-      fundamental: (ticker: string) => `/api/analysis/fundamental/${ticker}`,
-      sentiment: (ticker: string) => `/api/analysis/sentiment/${ticker}`,
-      prediction: (ticker: string) => `/api/analysis/prediction/${ticker}`,
+      technical: (ticker: string) => `/api/v1/analysis/technical/${ticker}`,
+      fundamental: (ticker: string) => `/api/v1/analysis/fundamental/${ticker}`,
+      sentiment: (ticker: string) => `/api/v1/analysis/sentiment/${ticker}`,
+      prediction: (ticker: string) => `/api/v1/analysis/prediction/${ticker}`,
     },
-    
+
     // Recommendations
     recommendations: {
-      list: '/api/recommendations',
-      detail: (id: string) => `/api/recommendations/${id}`,
-      active: '/api/recommendations/active',
-      history: '/api/recommendations/history',
+      list: '/api/v1/recommendations',
+      detail: (id: string) => `/api/v1/recommendations/${id}`,
+      active: '/api/v1/recommendations/active',
+      history: '/api/v1/recommendations/history',
     },
-    
+
     // Portfolio
     portfolio: {
-      list: '/api/portfolio',
-      positions: '/api/portfolio/positions',
-      transactions: '/api/portfolio/transactions',
-      performance: '/api/portfolio/performance',
-      add: '/api/portfolio/add',
-      remove: '/api/portfolio/remove',
+      list: '/api/v1/portfolio',
+      positions: '/api/v1/portfolio/positions',
+      transactions: '/api/v1/portfolio/transactions',
+      performance: '/api/v1/portfolio/performance',
+      add: '/api/v1/portfolio/add',
+      remove: '/api/v1/portfolio/remove',
     },
-    
+
     // Watchlist - New API endpoints
     watchlist: {
       // Get all user watchlists
-      list: '/api/watchlists',
+      list: '/api/v1/watchlists',
       // Create a new watchlist
-      create: '/api/watchlists',
+      create: '/api/v1/watchlists',
       // Get specific watchlist with items
-      get: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      get: (watchlistId: number) => `/api/v1/watchlists/${watchlistId}`,
       // Update a watchlist
-      update: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      update: (watchlistId: number) => `/api/v1/watchlists/${watchlistId}`,
       // Delete a watchlist
-      delete: (watchlistId: number) => `/api/watchlists/${watchlistId}`,
+      delete: (watchlistId: number) => `/api/v1/watchlists/${watchlistId}`,
       // Add item to watchlist
-      addItem: (watchlistId: number) => `/api/watchlists/${watchlistId}/items`,
+      addItem: (watchlistId: number) => `/api/v1/watchlists/${watchlistId}/items`,
       // Update watchlist item
       updateItem: (watchlistId: number, itemId: number) =>
-        `/api/watchlists/${watchlistId}/items/${itemId}`,
+        `/api/v1/watchlists/${watchlistId}/items/${itemId}`,
       // Remove watchlist item
       removeItem: (watchlistId: number, itemId: number) =>
-        `/api/watchlists/${watchlistId}/items/${itemId}`,
+        `/api/v1/watchlists/${watchlistId}/items/${itemId}`,
       // Default watchlist operations
-      default: '/api/watchlists/default',
+      default: '/api/v1/watchlists/default',
       // Add symbol to default watchlist
-      addToDefault: (symbol: string) => `/api/watchlists/default/symbols/${symbol}`,
+      addToDefault: (symbol: string) => `/api/v1/watchlists/default/symbols/${symbol}`,
       // Remove symbol from default watchlist
-      removeFromDefault: (symbol: string) => `/api/watchlists/default/symbols/${symbol}`,
+      removeFromDefault: (symbol: string) => `/api/v1/watchlists/default/symbols/${symbol}`,
     },
-    
+
     // News
     news: {
-      latest: '/api/news/latest',
-      byTicker: (ticker: string) => `/api/news/${ticker}`,
-      market: '/api/news/market',
+      latest: '/api/v1/news/latest',
+      byTicker: (ticker: string) => `/api/v1/news/${ticker}`,
+      market: '/api/v1/news/market',
     },
-    
+
     // User Settings
     settings: {
-      preferences: '/api/settings/preferences',
-      display: '/api/settings/display',
-      trading: '/api/settings/trading',
-      notifications: '/api/settings/notifications',
-      reset: '/api/settings/reset',
-      apiKeys: '/api/settings/api-keys',
+      preferences: '/api/v1/settings/preferences',
+      display: '/api/v1/settings/display',
+      trading: '/api/v1/settings/trading',
+      notifications: '/api/v1/settings/notifications',
+      reset: '/api/v1/settings/reset',
+      apiKeys: '/api/v1/settings/api-keys',
     },
 
     // Trading
     trading: {
-      validateOrder: '/api/trading/orders/validate',
-      execute: (portfolioId: number) => `/api/trading/orders/${portfolioId}`,
-      impact: (portfolioId: number) => `/api/trading/orders/${portfolioId}/impact`,
+      validateOrder: '/api/v1/trading/orders/validate',
+      execute: (portfolioId: number) => `/api/v1/trading/orders/${portfolioId}`,
+      impact: (portfolioId: number) => `/api/v1/trading/orders/${portfolioId}/impact`,
     },
 
     // ML
     ml: {
-      predict: '/api/ml/predictions',
-      models: '/api/ml/models',
-      driftDetect: '/api/ml/drift/detect',
-      driftStatus: '/api/ml/drift/status',
-      versions: '/api/ml/versions',
-      promote: (modelName: string) => `/api/ml/versions/${modelName}/promote`,
-      rollback: (modelName: string) => `/api/ml/versions/${modelName}/rollback`,
-      backtest: '/api/ml/backtest',
+      predict: '/api/v1/ml/predictions',
+      models: '/api/v1/ml/models',
+      driftDetect: '/api/v1/ml/drift/detect',
+      driftStatus: '/api/v1/ml/drift/status',
+      versions: '/api/v1/ml/versions',
+      promote: (modelName: string) => `/api/v1/ml/versions/${modelName}/promote`,
+      rollback: (modelName: string) => `/api/v1/ml/versions/${modelName}/rollback`,
+      backtest: '/api/v1/ml/backtest',
     },
 
     // Metrics
     metrics: {
-      usage: '/api/metrics/usage',
-      costs: '/api/metrics/costs',
-      performance: '/api/metrics/performance',
+      usage: '/api/v1/metrics/usage',
+      costs: '/api/v1/metrics/costs',
+      performance: '/api/v1/metrics/performance',
     },
   },
   
