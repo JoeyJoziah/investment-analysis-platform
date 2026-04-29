@@ -32,6 +32,7 @@ class SystemStatus(str, Enum):
     PARTIAL_OUTAGE = "partial_outage"
     MAJOR_OUTAGE = "major_outage"
     MAINTENANCE = "maintenance"
+    UNKNOWN = "unknown"  # F-02-003: psutil unavailable on this host
 
 class ServiceStatus(str, Enum):
     RUNNING = "running"
@@ -39,6 +40,7 @@ class ServiceStatus(str, Enum):
     STARTING = "starting"
     STOPPING = "stopping"
     ERROR = "error"
+    UNKNOWN = "unknown"  # F-02-003: psutil-derived state unavailable
 
 class JobStatus(str, Enum):
     PENDING = "pending"
@@ -65,17 +67,27 @@ PROTECTED_CONFIG_SECTIONS = [
 
 # Pydantic models
 class SystemHealth(BaseModel):
+    """System health summary surfaced by /api/admin/system/health.
+
+    Per PRD audit 2026-04 F-02-003: numeric fields are ``Optional`` because
+    psutil cannot supply every metric on every platform (e.g.
+    ``net_connections`` requires elevated privileges on macOS). Fields
+    fabricated by the legacy random.uniform path (request_rate, error_rate,
+    response_time_avg) now come from Prometheus / Grafana — not this
+    endpoint — and are reported as ``None`` here rather than fake numbers.
+    """
     status: SystemStatus
     uptime: int  # seconds
-    cpu_usage: float
-    memory_usage: float
-    disk_usage: float
-    active_connections: int
-    request_rate: float  # requests per second
-    error_rate: float
-    response_time_avg: float  # milliseconds
+    cpu_usage: Optional[float] = None
+    memory_usage: Optional[float] = None
+    disk_usage: Optional[float] = None
+    active_connections: Optional[int] = None
+    request_rate: Optional[float] = None
+    error_rate: Optional[float] = None
+    response_time_avg: Optional[float] = None
     services: Dict[str, ServiceStatus]
     last_check: datetime
+    data_source: Optional[str] = None  # 'psutil' | 'psutil_unavailable'
 
 class User(BaseModel):
     id: str

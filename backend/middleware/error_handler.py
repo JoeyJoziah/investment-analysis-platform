@@ -96,6 +96,63 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+async def model_unavailable_handler(request: Request, exc) -> JSONResponse:
+    """Convert ``ModelUnavailableError`` / ``InsufficientDataError`` to 503.
+
+    Per PRD audit 2026-04 Workstream D / Q4 default: refusing-to-serve when
+    ML models are in DummyLSTM/DummyXGBoost/DummyProphet fallback or when
+    feature data is insufficient is the SEC-conservative posture. Returns
+    the canonical structured payload so the frontend (G3 phase 4) has a
+    stable contract: ``{error, model, reason, request_id}``.
+    """
+    import uuid as _uuid
+    from backend.exceptions import InsufficientDataError, ModelUnavailableError
+
+    if isinstance(exc, ModelUnavailableError):
+        model = exc.model
+        reason = exc.reason
+        rid = exc.request_id or _uuid.uuid4().hex
+    elif isinstance(exc, InsufficientDataError):
+        model = (exc.details or {}).get("metric") or (exc.details or {}).get("feature") or "unknown"
+        reason = exc.reason or "insufficient_data"
+        rid = _uuid.uuid4().hex
+    else:  # pragma: no cover - defensive
+        model = "unknown"
+        reason = "fallback_active"
+        rid = _uuid.uuid4().hex
+
+    logger.warning(
+        "model_unavailable model=%s reason=%s path=%s request_id=%s",
+        model, reason, request.url.path, rid,
+    )
+
+    try:  # Sentry breadcrumb tagged ``model_unavailable``
+        import sentry_sdk
+        sentry_sdk.add_breadcrumb(
+            category="model_unavailable",
+            message=f"503 model_unavailable: {model} ({reason})",
+            level="warning",
+            data={
+                "model": model,
+                "reason": reason,
+                "request_id": rid,
+                "endpoint": request.url.path,
+            },
+        )
+    except Exception:  # pragma: no cover - never let telemetry crash a 503
+        pass
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error": "model_unavailable",
+            "model": model,
+            "reason": reason,
+            "request_id": rid,
+        },
+    )
+
+
 def register_exception_handlers(app):
     """
     Register all exception handlers with the FastAPI app
@@ -106,7 +163,12 @@ def register_exception_handlers(app):
         app = FastAPI()
         register_exception_handlers(app)
     """
+    from backend.exceptions import InsufficientDataError, ModelUnavailableError
+
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(ValidationError, validation_exception_handler)
+    # F-02-003 / F-03-003 / F-03-005: structured 503 ``model_unavailable``
+    app.add_exception_handler(ModelUnavailableError, model_unavailable_handler)
+    app.add_exception_handler(InsufficientDataError, model_unavailable_handler)
     app.add_exception_handler(Exception, general_exception_handler)
