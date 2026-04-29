@@ -491,6 +491,47 @@ class TestCalculateRiskMetricsFromPrices:
 
 
 # =========================================================================
+# F-02-018 fail-first regression: short price lists must NOT return fake
+# hardcoded {beta: 1.15, alpha: 0.02, sharpe_ratio: 1.85, ...} placeholders.
+#
+# Per PRD audit 2026-04 Workstream D / Q4 default (recorded 2026-04-28):
+# fabricating risk metrics for SEC-regulated investment outputs is a
+# compliance exposure. Insufficient data must raise InsufficientDataError so
+# the API can surface HTTP 503 model_unavailable instead of a plausible-but-
+# fake response.
+# =========================================================================
+
+
+class TestCalculateRiskMetricsFromPricesInsufficientDataF02018:
+    """Fail-first contract: short price lists raise, not fabricate."""
+
+    def test_short_prices_raises_insufficient_data_error(self):
+        from backend.exceptions import InsufficientDataError
+        with pytest.raises(InsufficientDataError):
+            calculate_risk_metrics_from_prices([100.0, 101.0, 99.0])
+
+    def test_empty_prices_raises_insufficient_data_error(self):
+        from backend.exceptions import InsufficientDataError
+        with pytest.raises(InsufficientDataError):
+            calculate_risk_metrics_from_prices([])
+
+    def test_short_prices_does_not_return_fake_beta_1_15(self):
+        """Regression guard for the original bug: callers that didn't check
+        len(prices)>=30 surfaced ``beta=1.15, sharpe_ratio=1.85`` to users as
+        ``risk metrics for [TICKER] with no data``."""
+        from backend.exceptions import InsufficientDataError
+        try:
+            result = calculate_risk_metrics_from_prices([100.0, 101.0])
+        except InsufficientDataError:
+            return  # post-fix: passes
+        # pre-fix: function returned the fake dict; explicitly assert it didn't.
+        assert result.get("beta") != 1.15, (
+            "F-02-018 regression: short price list returned fabricated "
+            "beta=1.15 placeholder instead of raising InsufficientDataError"
+        )
+
+
+# =========================================================================
 # calculate_overall_score
 # =========================================================================
 

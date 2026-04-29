@@ -2,6 +2,8 @@
 Custom Exceptions for Investment Analysis Platform
 Provides specialized exceptions for error handling across the application.
 """
+from typing import Optional
+
 
 class AppException(Exception):
     """Base application exception"""
@@ -106,7 +108,7 @@ class InsufficientDataError(AppException):
     Per PRD audit 2026-04 Q4 default: returning fake values for SEC-regulated
     investment outputs is a compliance exposure; refuse instead.
     """
-    def __init__(self, reason: str = "insufficient_data", details: dict | None = None):
+    def __init__(self, reason: str = "insufficient_data", details: Optional[dict] = None):
         self.reason = reason
         self.details = details or {}
         super().__init__(f"Insufficient data: {reason}")
@@ -127,7 +129,7 @@ class ModelUnavailableError(AppException):
         self,
         model: str = "unknown",
         reason: str = "fallback_active",
-        request_id: str | None = None,
+        request_id: Optional[str] = None,
     ):
         self.model = model
         self.reason = reason
