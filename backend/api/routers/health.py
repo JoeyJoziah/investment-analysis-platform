@@ -12,14 +12,41 @@ from backend.security.advanced_rate_limiter import get_default_rate_limiting_rul
 
 router = APIRouter(tags=["health"])
 
+def _get_fallback_models_state() -> Dict[str, Any]:
+    """Return ML model fallback state for the /health response.
+
+    Per PRD audit 2026-04 F-03-003: a deployment running with
+    DummyLSTM/DummyXGBoost/DummyProphet substitutes is producing fabricated
+    investment outputs. The health endpoint surfaces ``fallback_models`` and
+    ``fallback_models_count`` so readiness probes / SRE alerts can fail fast.
+    """
+    try:
+        from backend.ml.model_manager import get_model_manager
+        mgr = get_model_manager()
+        fallback = mgr.get_fallback_models()
+        return {
+            "fallback_models": fallback,
+            "fallback_models_count": len(fallback),
+        }
+    except Exception:  # pragma: no cover - never let health crash on ml import
+        return {"fallback_models": [], "fallback_models_count": 0}
+
+
 @router.get("")
 async def health_check() -> ApiResponse[Dict[str, Any]]:
-    """Basic health check endpoint"""
+    """Basic health check endpoint.
+
+    Includes ML ``fallback_models`` state per PRD audit 2026-04 §3 D /
+    F-03-003. Empty ``fallback_models`` array == healthy production.
+    """
+    fb = _get_fallback_models_state()
+    overall = "healthy" if fb["fallback_models_count"] == 0 else "degraded"
     return success_response(data={
-        "status": "healthy",
+        "status": overall,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": "1.0.0",
-        "service": "investment-analysis-api"
+        "service": "investment-analysis-api",
+        **fb,
     })
 
 @router.get("/readiness")
@@ -64,12 +91,22 @@ async def readiness_check() -> ApiResponse[Dict[str, Any]]:
         errors["database"] = str(e)
         logger.error(f"Database health check failed: {e}")
 
+    # F-03-003: production-critical ML models in Dummy* fallback fail readiness.
+    fb = _get_fallback_models_state()
+    checks["ml_models"] = fb["fallback_models_count"] == 0
+    if not checks["ml_models"]:
+        errors["ml_models"] = (
+            f"{fb['fallback_models_count']} model(s) in fallback: "
+            f"{fb['fallback_models']}"
+        )
+
     all_ready = all(checks.values())
 
     data = {
         "status": "ready" if all_ready else "not ready",
         "checks": checks,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        **fb,
     }
 
     if errors:
