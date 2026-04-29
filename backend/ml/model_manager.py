@@ -433,49 +433,7 @@ class ModelManager:
         """Get a loaded model by name"""
         with self.lock:
             return self.models.get(model_name)
-
-    def is_using_fallback(self, model_name: str) -> bool:
-        """Return True if ``model_name`` is currently a Dummy* fallback.
-
-        Per PRD audit 2026-04 §3 D / Q4 default: model_unavailable state is
-        a refuse-to-serve signal, not a degraded-success signal.
-        """
-        with self.lock:
-            meta = self.model_metadata.get(model_name)
-        if not meta:
-            return True  # absent → treat as unavailable
-        return meta.get("status") == "fallback"
-
-    def get_fallback_models(self) -> List[str]:
-        """List of model names currently in Dummy* fallback state.
-
-        Drives the ``GET /health`` ``fallback_models`` field and the readiness
-        probe. Empty list = healthy production.
-        """
-        with self.lock:
-            return [
-                name for name, meta in self.model_metadata.items()
-                if meta.get("status") == "fallback"
-            ]
-
-    def assert_real_model(self, model_name: str) -> None:
-        """Raise ``ModelUnavailableError`` if ``model_name`` is in fallback.
-
-        Call sites that produce SEC-implicated investment outputs MUST gate
-        with this before serving — fabricated values are a compliance
-        exposure (PRD audit 2026-04 Q4 default, recorded 2026-04-28).
-        """
-        from backend.exceptions import ModelUnavailableError  # local import to avoid cycle
-
-        with self.lock:
-            meta = self.model_metadata.get(model_name)
-        if meta is None:
-            raise ModelUnavailableError(model=model_name, reason="binary_missing")
-        status_ = meta.get("status")
-        if status_ == "fallback":
-            reason = "binary_missing" if meta.get("reason") == "file_not_found" else "fallback_active"
-            raise ModelUnavailableError(model=model_name, reason=reason)
-
+    
     def predict(self, model_name: str, data: Any) -> Any:
         """Make prediction with error handling"""
         try:
