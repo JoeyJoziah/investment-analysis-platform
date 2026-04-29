@@ -23,6 +23,59 @@ from backend.exceptions import InsufficientDataError, ModelUnavailableError
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# OpenAPI snippet — attach via ``responses={**MODEL_UNAVAILABLE_503_RESPONSE}``
+# on any FastAPI route that can refuse-to-serve. Frontend G3-phase-4 consumes
+# this exact shape to render the empty-state component.
+# ---------------------------------------------------------------------------
+
+MODEL_UNAVAILABLE_503_EXAMPLE: Dict[str, Any] = {
+    "error": "model_unavailable",
+    "model": "recommendation_engine",
+    "reason": "fallback_active",
+    "request_id": "9b4f2e1c8a1d4e5b9d4f1c2a3e5d6f78",
+}
+
+MODEL_UNAVAILABLE_503_RESPONSE: Dict[int, Dict[str, Any]] = {
+    503: {
+        "description": (
+            "Model unavailable — the platform refuses to fabricate "
+            "investment outputs when the underlying ML model binaries are "
+            "missing or the feature data is insufficient. See "
+            "docs/api/model-unavailable-503.md."
+        ),
+        "content": {
+            "application/json": {
+                "example": MODEL_UNAVAILABLE_503_EXAMPLE,
+                "schema": {
+                    "type": "object",
+                    "required": ["error", "model", "reason", "request_id"],
+                    "properties": {
+                        "error": {
+                            "type": "string",
+                            "enum": ["model_unavailable"],
+                        },
+                        "model": {"type": "string"},
+                        "reason": {
+                            "type": "string",
+                            "enum": [
+                                "binary_missing",
+                                "fallback_active",
+                                "insufficient_data",
+                                "not_implemented",
+                                "manager_unavailable",
+                                "live_feed_not_configured",
+                            ],
+                        },
+                        "request_id": {"type": "string"},
+                    },
+                },
+            }
+        },
+    }
+}
+
 try:  # pragma: no cover - optional dependency surface
     import sentry_sdk
 except Exception:  # pragma: no cover

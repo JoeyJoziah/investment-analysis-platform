@@ -33,7 +33,10 @@ from backend.services.recommendation_service import (
     RECOMMENDATION_MODEL_TRAINING_DATE,
 )
 from backend.exceptions import ModelUnavailableError, InsufficientDataError
-from backend.api.error_responses import raise_model_unavailable
+from backend.api.error_responses import (
+    MODEL_UNAVAILABLE_503_RESPONSE,
+    raise_model_unavailable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -468,7 +471,10 @@ async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[Portfo
         diversification_score=data["diversification_score"],
     ))
 
-@router.get("/performance/track")
+@router.get(
+    "/performance/track",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def track_recommendation_performance(
     days_back: int = Query(30, le=365),
     status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
@@ -494,7 +500,10 @@ async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str
         "status": "success"
     })
 
-@router.get("/alerts/history")
+@router.get(
+    "/alerts/history",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def get_alert_history(
     days_back: int = Query(7, le=30)
 ) -> ApiResponse[List[Dict[str, Any]]]:
@@ -507,7 +516,10 @@ async def get_alert_history(
     alerts = recommendation_service.generate_alert_history(days_back=days_back)
     return success_response(data=alerts)
 
-@router.post("/backtest")
+@router.post(
+    "/backtest",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def backtest_strategy(
     strategy: RecommendationCategory,
     start_date: date,
