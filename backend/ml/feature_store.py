@@ -650,40 +650,110 @@ class FeatureStore:
                             feature_name: str,
                             reference_period_days: int = 30,
                             current_period_days: int = 7) -> Optional[FeatureDriftMetrics]:
-        """Monitor feature drift over time"""
-        
+        """Monitor feature drift over time using real feature_values rows.
+
+        Per PRD audit 2026-04 F-03-005 / Q4 default: this method previously
+        fabricated reference + current windows from ``np.random.normal()``
+        which caused drift alerts to fire on noise. We now query the
+        ``feature_values`` table directly and raise ``InsufficientDataError``
+        when no real data is available — callers surface that as HTTP 503
+        ``model_unavailable``.
+        """
+        from backend.exceptions import InsufficientDataError
+
         if feature_name not in self.feature_registry:
             logger.error(f"Feature {feature_name} not registered")
             return None
-        
+
+        end_date = datetime.now(timezone.utc)
+        reference_start = end_date - timedelta(
+            days=reference_period_days + current_period_days
+        )
+        reference_end = end_date - timedelta(days=current_period_days)
+        current_start = reference_end
+
+        reference_values = self._load_feature_window(
+            feature_name, reference_start, reference_end,
+        )
+        current_values = self._load_feature_window(
+            feature_name, current_start, end_date,
+        )
+
+        if not reference_values or not current_values:
+            raise InsufficientDataError(
+                reason="insufficient_data",
+                details={
+                    "feature": feature_name,
+                    "reference_count": len(reference_values),
+                    "current_count": len(current_values),
+                    "minimum_required": 1,
+                },
+            )
+
+        reference_data = pd.Series(reference_values)
+        current_data = pd.Series(current_values)
+
         try:
-            # Get historical feature values
-            end_date = datetime.now(timezone.utc)
-            reference_start = end_date - timedelta(days=reference_period_days + current_period_days)
-            reference_end = end_date - timedelta(days=current_period_days)
-            current_start = reference_end
-            
-            # Mock data for demonstration - in real implementation, query feature store
-            reference_data = pd.Series(np.random.normal(0, 1, 1000))
-            current_data = pd.Series(np.random.normal(0.2, 1.2, 200))  # Simulated drift
-            
             drift_metrics = self.drift_detector.detect_drift(
                 feature_name, reference_data, current_data
             )
-            
-            # Store drift metrics
-            self._save_drift_metrics(drift_metrics)
-            
-            # Alert if significant drift detected
-            if drift_metrics.distribution_shift_detected:
-                logger.warning(f"Feature drift detected for {feature_name}: "
-                             f"drift_score={drift_metrics.drift_score:.3f}")
-            
-            return drift_metrics
-            
-        except Exception as e:
-            logger.error(f"Error monitoring drift for feature {feature_name}: {e}")
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error(f"Error monitoring drift for feature {feature_name}: {exc}")
             return None
+
+        self._save_drift_metrics(drift_metrics)
+
+        if drift_metrics.distribution_shift_detected:
+            logger.warning(
+                f"Feature drift detected for {feature_name}: "
+                f"drift_score={drift_metrics.drift_score:.3f}"
+            )
+
+        return drift_metrics
+
+    def _load_feature_window(
+        self,
+        feature_name: str,
+        start: datetime,
+        end: datetime,
+    ) -> List[float]:
+        """Load feature_values rows for ``feature_name`` between ``start`` and ``end``.
+
+        Returns an empty list when ``self.db_engine`` is not configured or
+        when the query yields zero rows. Callers must treat empty as
+        ``InsufficientDataError`` rather than fabricate values (F-03-005).
+        """
+        if self.db_engine is None:
+            return []
+        try:
+            from sqlalchemy import text  # local import to keep top-level light
+
+            sql = text(
+                """
+                SELECT fv.value
+                  FROM feature_values fv
+                  JOIN feature_definitions fd ON fd.id = fv.feature_id
+                 WHERE fd.name = :name
+                   AND fv.computed_at >= :start
+                   AND fv.computed_at < :end
+                """
+            )
+            with self.db_engine.connect() as conn:
+                rows = conn.execute(
+                    sql, {"name": feature_name, "start": start, "end": end}
+                ).fetchall()
+            values: List[float] = []
+            for row in rows:
+                try:
+                    values.append(float(row[0]))
+                except (TypeError, ValueError):
+                    continue
+            return values
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                f"_load_feature_window query failed for {feature_name}: {exc}"
+            )
+            return []
     
     def get_feature_lineage(self, feature_name: str) -> Dict[str, Any]:
         """Get feature lineage and dependencies"""
@@ -729,36 +799,56 @@ class FeatureStore:
         
         return lineage
     
-    def get_feature_statistics(self, feature_names: List[str], 
+    def get_feature_statistics(self, feature_names: List[str],
                              days_back: int = 30) -> Dict[str, Dict[str, Any]]:
-        """Get comprehensive feature statistics"""
-        
-        stats = {}
-        
+        """Get comprehensive feature statistics from the feature store.
+
+        Per PRD audit 2026-04 F-03-005 / Q4 default: previously returned
+        ``{'count': np.random.randint(1000, 10000), 'mean': np.random.normal(...)}``
+        which broke alerting / capacity-planning telemetry. We now compute
+        real summary statistics from ``feature_values`` rows, or raise
+        ``InsufficientDataError`` when no real rows exist.
+        """
+        from backend.exceptions import InsufficientDataError
+
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days_back)
+
+        stats: Dict[str, Dict[str, Any]] = {}
+        missing: List[str] = []
+
         for feature_name in feature_names:
             if feature_name not in self.feature_registry:
                 continue
-            
-            try:
-                # Mock statistics - in real implementation, query feature store
-                feature_stats = {
-                    'count': np.random.randint(1000, 10000),
-                    'mean': np.random.normal(0, 1),
-                    'std': np.random.uniform(0.5, 2.0),
-                    'min': np.random.normal(-3, 0.5),
-                    'max': np.random.normal(3, 0.5),
-                    'null_percentage': np.random.uniform(0, 0.05),
-                    'unique_values': np.random.randint(100, 1000),
-                    'quality_score': np.random.uniform(0.8, 1.0),
-                    'last_updated': datetime.now(timezone.utc).isoformat(),
-                    'freshness_hours': np.random.uniform(0, 24)
-                }
-                
-                stats[feature_name] = feature_stats
-                
-            except Exception as e:
-                logger.error(f"Error getting statistics for feature {feature_name}: {e}")
-        
+
+            values = self._load_feature_window(feature_name, start, end)
+            if not values:
+                missing.append(feature_name)
+                continue
+
+            arr = np.asarray(values, dtype=float)
+            non_null = arr[~np.isnan(arr)]
+            stats[feature_name] = {
+                'count': int(arr.size),
+                'mean': float(non_null.mean()) if non_null.size else None,
+                'std': float(non_null.std(ddof=0)) if non_null.size else None,
+                'min': float(non_null.min()) if non_null.size else None,
+                'max': float(non_null.max()) if non_null.size else None,
+                'null_percentage': (
+                    float((arr.size - non_null.size) / arr.size)
+                    if arr.size else 0.0
+                ),
+                'unique_values': int(np.unique(non_null).size) if non_null.size else 0,
+                'last_updated': end.isoformat(),
+            }
+
+        if missing and not stats:
+            # Nothing real for any requested feature — surface as 503.
+            raise InsufficientDataError(
+                reason="insufficient_data",
+                details={"missing_features": missing, "days_back": days_back},
+            )
+
         return stats
     
     def _generate_cache_key(self, feature_names: List[str], entity_ids: List[str], timestamp: datetime) -> str:
