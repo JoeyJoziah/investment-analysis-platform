@@ -228,10 +228,10 @@ async def test_user_registration_to_data_export(
     Validates that all user data can be exported in machine-readable format
     for GDPR Article 20 (Right to Data Portability) compliance.
 
-    Uses the actual endpoint: GET /api/v1/users/me/data-export
+    Uses the actual endpoint: GET /api/v1/gdpr/users/me/data-export
     """
     # Request data export
-    response = await authenticated_client.get("/api/v1/users/me/data-export")
+    response = await authenticated_client.get("/api/v1/gdpr/users/me/data-export")
 
     assert response.status_code == 200
     data = response.json()
@@ -258,11 +258,11 @@ async def test_consent_affects_data_collection(
     Validates that user consent preferences properly control what data
     is collected and processed (GDPR Article 6 - Lawful Basis).
 
-    Uses the actual endpoints: POST/GET /api/v1/users/me/consent
+    Uses the actual endpoints: POST/GET /api/v1/gdpr/users/me/consent
     """
     # Grant consent for data processing
     response = await authenticated_client.post(
-        "/api/v1/users/me/consent",
+        "/api/v1/gdpr/users/me/consent",
         json={
             "consent_type": "data_processing",
             "granted": True,
@@ -275,7 +275,7 @@ async def test_consent_affects_data_collection(
     assert data["success"] is True
 
     # Verify consent was recorded
-    response = await authenticated_client.get("/api/v1/users/me/consent")
+    response = await authenticated_client.get("/api/v1/gdpr/users/me/consent")
     assert response.status_code == 200
     consent_data = response.json()
     assert consent_data["success"] is True
@@ -304,11 +304,11 @@ async def test_data_deletion_cascades(
     Validates that when user requests account deletion, ALL related data
     is properly deleted (GDPR Article 17 - Right to Erasure).
 
-    Uses the actual endpoint: POST /api/v1/users/me/delete-request
+    Uses the actual endpoint: POST /api/v1/gdpr/users/me/delete-request
     """
     # Request account deletion
     response = await authenticated_client.post(
-        "/api/v1/users/me/delete-request",
+        "/api/v1/gdpr/users/me/delete-request",
         json={
             "reason": "Testing data deletion cascade",
             "confirm": True
@@ -337,14 +337,14 @@ async def test_anonymization_endpoint(
     user_complete_data: dict
 ):
     """
-    Test POST /api/v1/users/me/anonymize endpoint.
+    Test POST /api/v1/gdpr/users/me/anonymize endpoint.
 
     Validates that user data can be anonymized while retaining
     transaction data for regulatory compliance.
     """
     # Make anonymization request
     response = await authenticated_client.post(
-        "/api/v1/users/me/anonymize",
+        "/api/v1/gdpr/users/me/anonymize",
         json={
             "confirm": True,
             "reason": "Testing anonymization endpoint"
@@ -380,7 +380,7 @@ async def test_anonymization_requires_confirmation(
     """
     # Try without confirmation
     response = await authenticated_client.post(
-        "/api/v1/users/me/anonymize",
+        "/api/v1/gdpr/users/me/anonymize",
         json={
             "confirm": False,
             "reason": "Testing without confirmation"
@@ -401,13 +401,13 @@ async def test_gdpr_audit_trail_endpoint(
     user_complete_data: dict
 ):
     """
-    Test GET /api/v1/users/me/audit endpoint.
+    Test GET /api/v1/gdpr/users/me/audit endpoint.
 
     Validates that all data access, modifications, and operations
     are properly logged for compliance auditing (GDPR Article 30).
     """
     # Get audit trail
-    response = await authenticated_client.get("/api/v1/users/me/audit")
+    response = await authenticated_client.get("/api/v1/gdpr/users/me/audit")
 
     assert response.status_code == 200
     data = response.json()
@@ -451,7 +451,7 @@ async def test_audit_trail_pagination(
 
     # Test pagination - page 1 (skip=0, limit=5)
     response = await authenticated_client.get(
-        "/api/v1/users/me/audit?skip=0&limit=5"
+        "/api/v1/gdpr/users/me/audit?skip=0&limit=5"
     )
 
     assert response.status_code == 200
@@ -465,7 +465,7 @@ async def test_audit_trail_pagination(
 
     # Test pagination - page 2 (skip=5, limit=5)
     response = await authenticated_client.get(
-        "/api/v1/users/me/audit?skip=5&limit=5"
+        "/api/v1/gdpr/users/me/audit?skip=5&limit=5"
     )
 
     assert response.status_code == 200

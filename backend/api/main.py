@@ -24,9 +24,8 @@ from backend.api.routers import (
 )
 from backend.api.routers import settings as settings_router
 from backend.api.versioning import (
-    V1DeprecationMiddleware,
     v1_migration_router,
-    v1_migration_metrics
+    v1_migration_metrics,
 )
 from backend.utils.database import init_db, close_db
 from backend.utils.cache import init_cache
@@ -265,13 +264,21 @@ try:
         }
     )
 
-    # 10. ETag Generation - After caching, before compression
+    # 10. ETag Generation - After caching, before compression.
+    # F-01-008: /api/v1/metrics is excluded because the Prometheus scrape
+    # response changes on every request and ETag validation adds no benefit.
     stack.register(
         "etag",
         ETagMiddleware,
         MiddlewarePriority.CACHING - 100,  # Just after cache control
         {
-            "excluded_paths": ["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/health"],
+            "excluded_paths": [
+                "/api/v1/auth/",
+                "/api/v1/admin/",
+                "/api/v1/ws/",
+                "/api/v1/metrics",
+                "/api/health",
+            ],
             "weak_etag": False
         }
     )
@@ -285,19 +292,12 @@ try:
         skip_in_testing=True  # GZip can interfere with test client
     )
 
-    # 12. V1 API Deprecation - After compression
-    if not is_testing:
-        stack.register(
-            "v1_deprecation",
-            V1DeprecationMiddleware,
-            MiddlewarePriority.LOW,
-            {
-                "enable_redirects": False,
-                "grace_period_days": 30,
-                "strict_mode": False
-            },
-            skip_in_testing=True
-        )
+    # F-01-003: V1DeprecationMiddleware was removed (PRD audit 2026-04 / Workstream F).
+    # /api/v1/ is the current canonical prefix, not a sunset legacy prefix.
+    # The middleware emitted Sunset/Deprecation/Warning headers and log spam
+    # on every production request. See backend/api/versioning.py module docstring.
+    # NOTE for cluster B (parked): this middleware-stack section is also touched
+    # by B's auth path; coordinate via PRD §6.1 on rebase.
 
     # Apply all middleware in priority order
     stack.apply(is_testing=is_testing)
@@ -339,7 +339,10 @@ app.include_router(websocket.router, prefix="/api/v1/ws", tags=["websocket"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(cache_management.router, prefix="/api/v1/cache", tags=["cache"])
-app.include_router(gdpr.router, prefix="/api/v1", tags=["gdpr"])
+# F-01-016: gdpr router gets a dedicated /gdpr sub-prefix. Pre-fix it was
+# mounted at the bare /api/v1 prefix, which would land any future bare-/
+# routes inside gdpr.py at the API root and risk collisions.
+app.include_router(gdpr.router, prefix="/api/v1/gdpr", tags=["gdpr"])
 app.include_router(watchlist.router, prefix="/api/v1/watchlists", tags=["watchlists"])
 app.include_router(thesis.router, prefix="/api/v1/thesis", tags=["investment-thesis"])
 app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
