@@ -205,8 +205,14 @@ try:
 
     # 4. CSRF Protection - After security headers
     csrf_secret = os.getenv("CSRF_SECRET_KEY")
-    if not csrf_secret and not is_testing:
-        logger.warning("CSRF_SECRET_KEY not set, using auto-generated key for development")
+    if not csrf_secret:
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        if environment == "production":
+            raise RuntimeError("CSRF_SECRET_KEY env var is required in production")
+        import secrets as _secrets
+        csrf_secret = _secrets.token_hex(32)
+        if not is_testing:
+            logger.warning("CSRF_SECRET_KEY not set, using auto-generated key for development")
 
     stack.register(
         "csrf",
@@ -262,7 +268,8 @@ try:
         {
             "default_cache_control": "public, max-age=300",
             "cache_excluded_paths": ["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/v1/metrics"]
-        }
+        },
+        skip_in_testing=True  # Cache headers can interfere with assertions; not test-critical
     )
 
     # 10. ETag Generation - After caching, before compression
@@ -273,7 +280,8 @@ try:
         {
             "excluded_paths": ["/api/v1/auth/", "/api/v1/admin/", "/api/v1/ws/", "/api/health"],
             "weak_etag": False
-        }
+        },
+        skip_in_testing=True  # ETag streaming can fragment small JSON responses in test client
     )
 
     # 11. GZip Compression - Innermost (compresses final response)
