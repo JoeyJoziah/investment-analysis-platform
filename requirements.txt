@@ -28,8 +28,8 @@ celery==5.4.0
 # ============================================================================
 pandas==2.2.3  # 2.0.0 has no Python 3.12 wheel; 2.2.x has broad 3.10-3.12 wheels
 numpy==1.26.4  # 1.24.0 predates Python 3.12; 1.26.x has 3.12 wheels
-matplotlib==3.7.0
-seaborn==0.12.0
+matplotlib==3.8.4  # 3.7.0 build issues on Python 3.12
+seaborn==0.13.2  # depends on newer pandas/matplotlib
 
 # ============================================================================
 # MACHINE LEARNING
@@ -47,7 +47,7 @@ xgboost==2.1.1
 # LightGBM - GPU support requires compilation with GPU flag
 # For GPU: pip install lightgbm --install-option=--gpu
 # Note: OpenCL required for LightGBM GPU
-lightgbm==4.0.0
+lightgbm==4.5.0  # Python 3.12 wheel availability
 prophet==1.1.5
 shap==0.46.0
 lime==0.2.0.1
@@ -63,7 +63,7 @@ polygon-api-client==1.14.6  # 1.14.1 pins old websockets that conflict with uvic
 yfinance==0.2.40
 ta-lib==0.4.32
 # pandas-ta  # Commented out due to dependency conflicts, using ta-lib instead
-statsmodels==0.14.2
+statsmodels==0.14.4  # Python 3.12 wheel availability
 
 # ============================================================================
 # WEB & API CLIENTS
@@ -134,7 +134,7 @@ validators==0.22.0
 bleach==6.1.0
 rich==13.7.0
 typer==0.12.0
-scipy==1.11.0
+scipy==1.13.1  # 1.11.0 has no Python 3.12 wheel; needs OpenBLAS to build from source
 python-dateutil==2.8.2
 pybreaker==1.2.0
 geoip2==4.8.0
