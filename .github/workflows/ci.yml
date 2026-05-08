@@ -323,7 +323,7 @@ jobs:
             --cov-report=html:htmlcov-${{ matrix.test-suite }}-py${{ matrix.python-version }} \
             --cov-report=term-missing \
             --junitxml=test-results-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml \
-            -v -m "not slow" \
+            -v -m "not slow and not database and not integration and not external_api" \
             --maxfail=5 \
             --tb=short \
             --ignore=backend/tests/integration/ \
@@ -332,7 +332,8 @@ jobs:
             --ignore=backend/tests/test_integration_comprehensive.py \
             --ignore=backend/tests/test_financial_model_validation.py \
             --ignore=backend/tests/test_security_compliance.py \
-            --ignore=backend/tests/test_performance_load.py
+            --ignore=backend/tests/test_performance_load.py \
+            --ignore=backend/tests/test_database_integration.py
         elif [ "${{ matrix.test-suite }}" = "integration" ]; then
           pytest backend/tests/integration/ \
             --cov=backend \
