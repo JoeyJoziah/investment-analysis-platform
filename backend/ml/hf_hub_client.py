@@ -69,8 +69,12 @@ class HuggingFaceHubClient:
             auto_create_repo: Create repository if it doesn't exist
             private: Whether to create private repositories
         """
-        self.token = token or os.getenv("HF_TOKEN")
-        self.repo_id = repo_id or os.getenv("HF_MODEL_REPO", "investment-analysis-models")
+        self.token = token or os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        self.repo_id = repo_id or os.getenv("HF_MODEL_REPO", "")
+        # Validate repo_id has org/name format. Empty or unscoped names cannot be created on HF.
+        if self.repo_id and "/" not in self.repo_id:
+            logger.warning(f"HF_MODEL_REPO '{self.repo_id}' lacks 'org/name' format; disabling HF hub integration.")
+            self.repo_id = ""
 
         # Handle cache directory - use relative path for local dev, /app for Docker
         cache_dir_env = cache_dir or os.getenv("HF_HOME", "./ml_models/.hf_cache")
@@ -101,9 +105,11 @@ class HuggingFaceHubClient:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             logger.warning(f"Using fallback cache directory: {self.cache_dir}")
 
-        # Initialize repository if needed
-        if auto_create_repo and self._check_hf_hub_available():
+        # Initialize repository only when token and properly-scoped repo_id are present.
+        if auto_create_repo and self.repo_id and self.token and self._check_hf_hub_available():
             self._ensure_repo_exists()
+        elif auto_create_repo and not (self.repo_id and self.token):
+            logger.info("HF Hub auto-create skipped: HF_TOKEN and/or HF_MODEL_REPO (org/repo) not set.")
 
         logger.info(f"HuggingFace Hub client initialized for repo: {self.repo_id}")
 
@@ -369,6 +375,8 @@ This is a private repository for internal use.
     def _get_latest_version(self, model_name: str) -> Optional[str]:
         """Get the latest version for a model"""
         if not self._check_hf_hub_available():
+            return None
+        if not self.repo_id or not self.token:
             return None
 
         try:
