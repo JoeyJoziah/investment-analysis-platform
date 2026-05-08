@@ -26,8 +26,8 @@ celery==5.4.0
 # ============================================================================
 # DATA PROCESSING
 # ============================================================================
-pandas==2.0.0
-numpy==1.24.0
+pandas==2.2.3  # 2.0.0 has no Python 3.12 wheel; 2.2.x has broad 3.10-3.12 wheels
+numpy==1.26.4  # 1.24.0 predates Python 3.12; 1.26.x has 3.12 wheels
 matplotlib==3.7.0
 seaborn==0.12.0
 
@@ -39,7 +39,7 @@ scikit-learn==1.5.1
 # For explicit CUDA install: pip install torch --index-url https://download.pytorch.org/whl/cu118
 torch==2.4.0
 transformers==4.43.3
-huggingface_hub==0.20.0
+huggingface_hub==0.24.6  # transformers==4.43.3 requires >=0.23.2
 datasets==2.16.0
 # XGBoost 2.0+ has built-in GPU support (device='cuda')
 # GPU acceleration: 3-4x faster training
