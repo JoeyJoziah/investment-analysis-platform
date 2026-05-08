@@ -6,8 +6,8 @@
 # ============================================================================
 fastapi==0.115.0
 uvicorn[standard]==0.30.1
-pydantic==2.8.2
-pydantic-settings==2.4.0
+pydantic==2.9.2  # 2.8.2 fails forward-ref resolution on ApiResponse[T] in FastAPI handlers
+pydantic-settings==2.6.1  # paired with pydantic 2.9.2
 
 # ============================================================================
 # DATABASE
