@@ -1,6 +1,7 @@
 # AI / LLM Integration Audit
 
-Last updated: 2026-05-08
+Version: 1.0.0
+Last Updated: 2026-05-08
 Status: TradingAgents (LangGraph multi-agent framework) installable; runtime requires LLM provider keys.
 
 ## TL;DR

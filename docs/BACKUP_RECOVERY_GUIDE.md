@@ -1,6 +1,7 @@
 # Backup & Recovery Guide
 
-Last updated: 2026-05-08
+Version: 1.0.0
+Last Updated: 2026-05-08
 Status: scripts in place, S3 bucket + IAM credentials still required to enable cloud archival.
 
 ## TL;DR

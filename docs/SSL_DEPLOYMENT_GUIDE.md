@@ -1,6 +1,7 @@
 # SSL Deployment Guide
 
-Last updated: 2026-05-08
+Version: 1.0.0
+Last Updated: 2026-05-08
 Status: scaffolding present, awaiting domain registration to provision certs.
 
 ## TL;DR
