@@ -191,8 +191,8 @@ class OrchestratorConfig:
     cost_limit_daily_usd: float = 10.0
     
     # Storage
-    models_path: str = "/app/ml_models"
-    logs_path: str = "/app/ml_logs"
+    models_path: str = ""  # populated post-init from env or auto-detect
+    logs_path: str = ""
     checkpoint_interval_minutes: int = 30
     
     # Monitoring
@@ -203,6 +203,18 @@ class OrchestratorConfig:
     max_retries: int = 3
     retry_delay_seconds: int = 300
     failure_alert_threshold: int = 2
+
+    def __post_init__(self):
+        # Resolve paths from env vars or auto-detect project root
+        import os as _os
+        from pathlib import Path as _Path
+        _project_root = _Path(__file__).resolve().parents[3]
+        if not self.models_path:
+            _candidate = _project_root / "ml_models"
+            self.models_path = _os.getenv("ML_MODELS_PATH") or (str(_candidate) if _candidate.exists() else "/app/ml_models")
+        if not self.logs_path:
+            _candidate = _project_root / "ml_logs"
+            self.logs_path = _os.getenv("ML_LOGS_PATH") or (str(_candidate) if _candidate.exists() else "/app/ml_logs")
 
 
 class MLOrchestrator:

@@ -680,7 +680,12 @@ def get_model_manager() -> ModelManager:
     """Get or create the global model manager instance"""
     global _model_manager
     if _model_manager is None:
-        models_path = os.getenv("ML_MODELS_PATH", "/app/ml_models")
+        # Resolve ML_MODELS_PATH; fall back to project_root/ml_models (container-friendly default kept as last resort)
+        models_path = os.getenv("ML_MODELS_PATH")
+        if not models_path:
+            from pathlib import Path as _Path
+            _candidate = _Path(__file__).resolve().parents[2] / "ml_models"
+            models_path = str(_candidate) if _candidate.exists() else "/app/ml_models"
         _model_manager = ModelManager(models_path)
     return _model_manager
 
