@@ -368,12 +368,12 @@ jobs:
       run: |
         if [ -f coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml ]; then
           COVERAGE=$(python -c "
-          import xml.etree.ElementTree as ET
-          tree = ET.parse('coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml')
-          root = tree.getroot()
-          line_rate = float(root.attrib.get('line-rate', 0))
-          print(f'{line_rate * 100:.1f}')
-          ")
+import xml.etree.ElementTree as ET
+tree = ET.parse('coverage-${{ matrix.test-suite }}-py${{ matrix.python-version }}.xml')
+root = tree.getroot()
+line_rate = float(root.attrib.get('line-rate', 0))
+print(f'{line_rate * 100:.1f}')
+")
           echo "### Coverage: ${{ matrix.test-suite }} tests (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
@@ -387,16 +387,16 @@ jobs:
 
           # HARD GATE: Fail if coverage drops below 60% floor
           python -c "
-          import sys
-          coverage = float('${COVERAGE}')
-          if coverage < 60.0:
-              print(f'BLOCKING: Coverage {coverage}% is below the 60% floor. Coverage must not regress.')
-              sys.exit(1)
-          elif coverage < 80.0:
-              print(f'WARNING: Coverage {coverage}% is above 60% floor but below 80% target. Please add tests.')
-          else:
-              print(f'Coverage {coverage}% meets the 80% target.')
-          "
+import sys
+coverage = float('${COVERAGE}')
+if coverage < 60.0:
+    print(f'BLOCKING: Coverage {coverage}% is below the 60% floor. Coverage must not regress.')
+    sys.exit(1)
+elif coverage < 80.0:
+    print(f'WARNING: Coverage {coverage}% is above 60% floor but below 80% target. Please add tests.')
+else:
+    print(f'Coverage {coverage}% meets the 80% target.')
+"
 
           # Summary annotation
           BELOW_FLOOR=$(python -c "print('true' if float('${COVERAGE}') < 60.0 else 'false')")
