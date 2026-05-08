@@ -407,7 +407,7 @@ class TestExecuteTrade:
         mock_stock = MagicMock()
         mock_stock.id = 42
         with patch(
-            'backend.repositories.stock_repository.get_by_symbol',
+            'backend.services.trading_service.stock_repository.get_by_symbol',
             new_callable=AsyncMock,
             return_value=mock_stock,
         ):

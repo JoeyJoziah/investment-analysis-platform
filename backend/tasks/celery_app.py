@@ -284,7 +284,10 @@ celery_app.Task = BaseTask
 # Memory Monitoring and Worker Signals
 # =============================================================================
 from celery.signals import worker_ready, worker_shutdown, task_postrun, task_failure
-import resource
+try:
+    import resource  # POSIX-only
+except ImportError:
+    resource = None
 
 
 def get_memory_usage_mb():
