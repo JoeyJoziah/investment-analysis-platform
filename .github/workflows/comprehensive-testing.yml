@@ -614,6 +614,19 @@ jobs:
 
       - name: Test Docker containers
         run: |
+          # Create stub .env required by docker-compose.yml env_file references
+          if [ ! -f .env ]; then
+            cat > .env <<'ENVEOF'
+DB_PASSWORD=test_password
+POSTGRES_PASSWORD=test_password
+REDIS_PASSWORD=test_redis_password
+SECRET_KEY=test-secret-key-for-ci
+JWT_SECRET_KEY=test-jwt-secret-key-for-ci
+MASTER_SECRET_KEY=test-master-secret-key-for-ci
+FERNET_KEY=
+GRAFANA_PASSWORD=test_grafana_password
+ENVEOF
+          fi
           # Start services
           docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
 

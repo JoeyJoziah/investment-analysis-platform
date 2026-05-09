@@ -68,21 +68,21 @@ statsmodels==0.14.4  # Python 3.12 wheel availability
 # ============================================================================
 # WEB & API CLIENTS
 # ============================================================================
-aiohttp==3.10.2
+aiohttp==3.13.3  # CVE-2025-69223 fix
 httpx==0.27.0
 requests==2.32.3
 beautifulsoup4==4.12.3
-lxml==5.2.2
+lxml==5.4.0  # security updates
 selenium==4.18.1
 webdriver-manager==4.0.1
 
 # ============================================================================
 # SECURITY & AUTHENTICATION
 # ============================================================================
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.5.0  # security updates
 passlib[bcrypt]==1.7.4
-PyJWT==2.9.0
-cryptography==43.0.0
+PyJWT==2.12.0  # CVE-2026-32597 fix
+cryptography==46.0.5  # CVE-2026-26007 fix
 
 # ============================================================================
 # DATA PIPELINE & ORCHESTRATION
@@ -101,7 +101,7 @@ aiokafka==0.11.0
 # ============================================================================
 # NLP & SENTIMENT ANALYSIS
 # ============================================================================
-nltk==3.9.1
+nltk==3.9.4  # CVE-2026-33231 fix
 textblob==0.18.0
 tokenizers==0.21.0  # paired with transformers 4.48
 
