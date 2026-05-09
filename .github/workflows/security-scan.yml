@@ -167,7 +167,7 @@ jobs:
 
     - name: Python dependency security scan with Safety (blocks on vulnerabilities)
       run: |
-        pip install safety
+        pip install 'safety<3.0'  # 3.x changed --output semantics
         safety check \
           --json \
           --output safety-results.json \

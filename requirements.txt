@@ -37,9 +37,9 @@ seaborn==0.13.2  # depends on newer pandas/matplotlib
 scikit-learn==1.5.1
 # PyTorch - GPU support via CUDA is auto-detected
 # For explicit CUDA install: pip install torch --index-url https://download.pytorch.org/whl/cu118
-torch==2.4.0
-transformers==4.43.3
-huggingface_hub==0.24.6  # transformers==4.43.3 requires >=0.23.2
+torch==2.6.0  # CVE-2025-32434 fix
+transformers==4.48.0  # CVE-2024-11392, CVE-2024-11393 fixes
+huggingface_hub==0.24.6  # transformers==4.48.0  # CVE-2024-11392, CVE-2024-11393 fixes requires >=0.23.2
 datasets==2.16.0
 # XGBoost 2.0+ has built-in GPU support (device='cuda')
 # GPU acceleration: 3-4x faster training
@@ -103,7 +103,7 @@ aiokafka==0.11.0
 # ============================================================================
 nltk==3.9.1
 textblob==0.18.0
-tokenizers==0.19.1
+tokenizers==0.21.0  # paired with transformers 4.48
 
 # ============================================================================
 # MONITORING & OBSERVABILITY

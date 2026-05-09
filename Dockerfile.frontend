@@ -1,7 +1,7 @@
 # Multi-stage build for React/Vite frontend
 
 # Build args
-ARG NODE_VERSION=18
+ARG NODE_VERSION=20  # vite 7.x requires Node >=20.19
 
 # Stage 1: Build
 FROM node:${NODE_VERSION}-alpine as builder
