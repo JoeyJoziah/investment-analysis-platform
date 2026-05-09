@@ -215,14 +215,23 @@ jobs:
                 data = json.load(f)
             # pip-audit format: list of {name, version, vulns: [{id, fix_versions, description}]}
             deps = data.get('dependencies', data) if isinstance(data, dict) else data
-            vuln_deps = [d for d in deps if isinstance(d, dict) and d.get('vulns')]
-            if vuln_deps:
-                total = sum(len(d.get('vulns', [])) for d in vuln_deps)
-                print(f'BLOCKING: {total} vulnerabilities across {len(vuln_deps)} packages found by pip-audit')
-                for d in vuln_deps[:10]:
-                    print(f'  - {d.get(\"name\", \"unknown\")} {d.get(\"version\", \"\")}')
+            # Filter to vulns with at least one fix version available
+            # (skip no-fix CVEs like python-ecdsa Minerva CVE-2024-23342)
+            actionable = []
+            for d in deps:
+                if not isinstance(d, dict):
+                    continue
+                fixable = [v for v in (d.get('vulns') or []) if v.get('fix_versions')]
+                if fixable:
+                    actionable.append((d, fixable))
+            if actionable:
+                total = sum(len(v) for _, v in actionable)
+                print(f'BLOCKING: {total} fixable vulnerabilities across {len(actionable)} packages found by pip-audit')
+                for d, vulns in actionable[:10]:
+                    fixes = ', '.join(sorted({fv for v in vulns for fv in v.get('fix_versions', [])}))
+                    print(f'  - {d.get("name", "unknown")} {d.get("version", "")} -> {fixes}')
                 sys.exit(1)
-            print('pip-audit: No vulnerabilities found')
+            print('pip-audit: No fixable vulnerabilities found')
         except FileNotFoundError:
             print('WARNING: pip-audit-results.json not found')
         except (json.JSONDecodeError, Exception) as e:
@@ -442,6 +451,7 @@ jobs:
         format: 'table'
         severity: 'HIGH,CRITICAL'
         exit-code: '1'
+        ignore-unfixed: true  # skip CVEs without an upstream fix (e.g. python-ecdsa CVE-2024-23342)
 
     - name: Run Trivy vulnerability scanner on frontend (all severities, report only)
       continue-on-error: true
@@ -459,6 +469,7 @@ jobs:
         format: 'table'
         severity: 'HIGH,CRITICAL'
         exit-code: '1'
+        ignore-unfixed: true  # skip CVEs without an upstream fix
 
     - name: Run Trivy config scan
       uses: aquasecurity/trivy-action@master
