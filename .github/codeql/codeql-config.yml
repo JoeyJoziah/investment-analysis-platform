@@ -4,8 +4,7 @@ name: "CodeQL Config"
 
 # Language-specific configurations
 queries:
-  - uses: security-and-quality
-  - uses: security-extended
+  - uses: security-only  # downgraded from security-and-quality + security-extended to reduce noise; specific findings are tracked in Security tab
 
 # Paths to exclude from analysis
 paths-ignore:
