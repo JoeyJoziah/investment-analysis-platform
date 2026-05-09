@@ -9,6 +9,7 @@ queries:
 
 # Paths to exclude from analysis
 paths-ignore:
+  - 'backend/TradingAgents/**'  # vendored fork, not maintained by us
   - 'node_modules/**'
   - 'frontend/web/build/**'
   - 'frontend/web/coverage/**'
