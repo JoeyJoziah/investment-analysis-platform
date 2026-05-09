@@ -12,7 +12,7 @@ WORKDIR /build
 COPY frontend/web/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci  # build stage needs devDependencies (vite) — final image is nginx-only
 
 # Copy source code
 COPY frontend/web .

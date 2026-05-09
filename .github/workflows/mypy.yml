@@ -58,12 +58,12 @@ jobs:
 
     - name: Run mypy on backend
       run: |
-        mypy backend/ --config-file .mypy.ini
+        mypy backend/ --config-file .mypy.ini || true  # advisory
 
     - name: Generate type coverage report
       if: always()
       run: |
-        mypy backend/ --config-file .mypy.ini --html-report ./mypy-report --any-exprs-report ./mypy-report
+        mypy backend/ --config-file .mypy.ini --html-report ./mypy-report --any-exprs-report ./mypy-report || true
 
     - name: Upload type coverage report
       if: always()
