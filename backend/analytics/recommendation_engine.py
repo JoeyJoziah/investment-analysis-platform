@@ -65,7 +65,7 @@ from backend.analytics.recommendation_ranking import (
 from backend.analytics.technical_analysis import TechnicalAnalysisEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
-from backend.models.ml_models import ModelManager, PredictionResult
+from backend.ml.runtime_models import ModelManager, PredictionResult
 from backend.data_ingestion.market_scanner import MarketScanner
 from backend.utils.risk_manager import RiskManager
 from backend.utils.portfolio_optimizer import PortfolioOptimizer
