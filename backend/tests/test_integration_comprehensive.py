@@ -27,7 +27,7 @@ from testcontainers.redis import RedisContainer
 
 # Import application modules
 from backend.api.main import app
-from backend.models.database import Base
+from backend.models.unified_models import Base
 from backend.config.database import get_async_db_session as get_database
 from backend.repositories.stock_repository import StockRepository
 from backend.repositories.recommendation_repository import RecommendationRepository

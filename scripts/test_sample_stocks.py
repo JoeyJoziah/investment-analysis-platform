@@ -27,7 +27,7 @@ from backend.analytics.sentiment_analysis import SentimentAnalysisEngine
 from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.utils.cache import get_cache
 from backend.utils.cost_monitor import CostMonitor
-from backend.models.database import get_db_session
+from backend.utils.database import get_db as get_db_session
 from backend.models.unified_models import Stock, PriceHistory
 
 # Initialize colorama
