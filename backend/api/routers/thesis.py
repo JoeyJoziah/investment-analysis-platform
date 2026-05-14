@@ -59,7 +59,7 @@ async def get_thesis_or_404(
     if not thesis:
         # Try direct ID lookup
         from sqlalchemy import select, and_
-        from backend.models.thesis import InvestmentThesis
+        from backend.models.unified_models import InvestmentThesis
 
         query = select(InvestmentThesis).where(InvestmentThesis.id == thesis_id)
         result = await db.execute(query)

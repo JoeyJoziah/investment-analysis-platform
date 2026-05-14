@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from decimal import Decimal
 
-from backend.models.thesis import InvestmentThesis
+from backend.models.unified_models import InvestmentThesis
 from backend.models.unified_models import User, Stock
 from backend.tests.conftest import assert_success_response, assert_api_error_response
 
