@@ -2,7 +2,7 @@
 
 A comprehensive, AI-powered investment analysis and recommendation platform that analyzes 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
 
-**Status**: Production-Ready | **Budget**: <$50/month | **Tests**: 5026 passing | **Endpoints**: 144 across 17 routers
+**Status**: Production-Ready | **Budget**: <$50/month | **Tests**: 5026 passing | **Routers**: 18 registered in `backend/api/main.py` (plus `monitoring.py` router file present but not wired)
 
 ---
 
@@ -46,7 +46,7 @@ A comprehensive, AI-powered investment analysis and recommendation platform that
 ```
 investment-analysis-platform/
 ├── backend/                    # FastAPI backend
-│   ├── api/                    # REST API endpoints (17 routers, 144 endpoints)
+│   ├── api/                    # REST API endpoints (18 routers; see /docs)
 │   ├── models/                 # SQLAlchemy ORM models (unified_models.py is canonical)
 │   ├── services/               # Extracted service layer (10 service modules)
 │   ├── ml/                     # ML pipeline (LSTM, XGBoost, Prophet, FinBERT)
@@ -142,17 +142,33 @@ npm run build
 ## API Endpoints
 
 ### Main API (Port 8000)
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/health` | GET | Health check |
-| `/api/stocks` | GET | List all stocks |
-| `/api/stocks/{ticker}` | GET | Stock details |
-| `/api/recommendations` | GET | AI recommendations |
-| `/api/analysis/{ticker}` | GET | Detailed analysis |
-| `/api/portfolio` | GET/POST | Portfolio management |
-| `/api/watchlists` | GET/POST | Watchlist operations |
-| `/api/ws` | WS | Real-time WebSocket |
-| `/docs` | GET | Swagger UI |
+
+All v1 endpoints are mounted under `/api/v1/...`. The live, authoritative list is at `/docs` (Swagger). Highlights:
+
+| Prefix | Router | Purpose |
+|--------|--------|---------|
+| `/api/health` | `health.py` | Health, readiness, liveness probes |
+| `/api/v1/auth` | `auth.py` | Login, refresh, registration |
+| `/api/v1/stocks` | `stocks.py` | Stock list, details, search |
+| `/api/v1/analysis` | `analysis.py` | Per-ticker analysis (technical, fundamental, sentiment) |
+| `/api/v1/recommendations` | `recommendations.py` | AI buy/hold/sell recommendations |
+| `/api/v1/portfolio` | `portfolio.py` | Portfolio CRUD, performance, rebalancing |
+| `/api/v1/watchlists` | `watchlist.py` | Watchlist CRUD + alerts |
+| `/api/v1/thesis` | `thesis.py` | Investment-thesis tracking |
+| `/api/v1/news` | `news.py` | Aggregated news + sentiment |
+| `/api/v1/ml` | `ml.py` | ML inference + model status |
+| `/api/v1/trading` | `trading.py` | Order placement / paper trading |
+| `/api/v1/agents` | `agents.py` | TradingAgents orchestration |
+| `/api/v1/settings` | `settings.py` | User preferences |
+| `/api/v1/cache` | `cache_management.py` | Cache inspection + warming |
+| `/api/v1/admin` | `admin.py` | Admin-only operations |
+| `/api/v1` (gdpr) | `gdpr.py` | GDPR export/delete/consent |
+| `/api/v1/ws` | `websocket.py` | Real-time WebSocket stream |
+| (versioning) | `backend/api/versioning.py` | V1 migration monitoring (self-prefixed) |
+| `/docs` | — | Swagger UI |
+| `/redoc` | — | ReDoc UI |
+
+> **Note:** `backend/api/routers/monitoring.py` is present but currently not wired into `main.py`. Tracked as a follow-up — see `docs/ANALYSIS_2026-05-14.md`.
 
 ---
 
@@ -240,7 +256,7 @@ pytest -m "not slow"    # Skip tests marked @pytest.mark.slow
 ### Test Status
 - **5026 tests passing**, 8 skipped, 2 xfailed, 0 failed
 - 28 unit test files in `backend/tests/unit/`
-- Integration tests covering all 17 routers
+- Integration tests covering registered routers
 - Security tests for rate limiting and security modules
 
 ---
