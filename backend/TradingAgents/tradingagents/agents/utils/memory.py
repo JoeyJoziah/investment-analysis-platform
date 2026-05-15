@@ -3,8 +3,23 @@ from chromadb.config import Settings
 from openai import OpenAI
 
 
+# Providers whose ``backend_url`` exposes an OpenAI-compatible
+# ``/v1/embeddings`` endpoint. Anything else must be gated off because
+# instantiating ``openai.OpenAI`` against e.g. the Anthropic API would
+# silently mis-route embedding requests (F-04-004).
+_OPENAI_COMPATIBLE_PROVIDERS = {"openai", "openrouter", "ollama"}
+
+
 class FinancialSituationMemory:
     def __init__(self, name, config):
+        provider = (config.get("llm_provider") or "openai").lower()
+        if provider not in _OPENAI_COMPATIBLE_PROVIDERS:
+            raise NotImplementedError(
+                f"FinancialSituationMemory does not support llm_provider={provider!r}. "
+                f"Supported providers: {sorted(_OPENAI_COMPATIBLE_PROVIDERS)}. "
+                f"Embeddings require an OpenAI-compatible /v1/embeddings endpoint."
+            )
+
         if config["backend_url"] == "http://localhost:11434/v1":
             self.embedding = "nomic-embed-text"
         else:
