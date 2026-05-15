@@ -12,6 +12,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from backend.config.settings import settings
+from backend.exceptions import ModelUnavailableError
 from backend.utils.security_logger import sanitize_log_input
 
 logger = logging.getLogger(__name__)
@@ -168,9 +170,24 @@ def list_users(
     """
     Return a filtered, paginated list of users.
 
-    Generates 100 simulated user records, applies optional role and
-    is_active filters, then returns the requested page.
+    Production behaviour (``settings.DEMO_MODE`` False, default): refuses
+    with :class:`ModelUnavailableError`. Per PRD audit 2026-04 §3 D Step 2
+    (Q4 default, recorded 2026-04-28), this endpoint historically fabricated
+    user records via ``random.choice``/``random.randint`` and surfaced them
+    through the authenticated admin ``GET /admin/users`` route — an
+    SEC-regulated platform must not synthesise user-directory data. The
+    real-implementation path (DB query against the ``users`` table) is
+    sequenced for a follow-up scope; until then the endpoint refuses.
+
+    Demo behaviour (``settings.DEMO_MODE`` True): keeps the legacy synthetic
+    100-record generator behind the explicit demo gate.
     """
+    if not settings.DEMO_MODE:
+        raise ModelUnavailableError(
+            model="admin_user_directory",
+            reason="not_implemented",
+        )
+
     users = [build_user_record(i) for i in range(100)]
 
     if role is not None:
