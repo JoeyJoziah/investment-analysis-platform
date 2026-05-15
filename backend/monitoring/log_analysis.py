@@ -582,27 +582,20 @@ class LogAggregator:
     """Aggregates logs from multiple sources."""
 
     def __init__(self):
+        # F-10-017 (PRD audit 2026-04 §3 G4 Phase 3 follow-up): Elasticsearch
+        # was removed to save $15-20/month per PERFORMANCE_OPTIMIZATION.md;
+        # the env var ELASTICSEARCH_URL is never set in production and the
+        # previous `_setup_elasticsearch` ran 20+ lines of dead probing on
+        # every instantiation. The bulk-write paths in
+        # `_bulk_index_to_elasticsearch` already early-return when this
+        # client is None, so setup is now opt-in: callers that genuinely
+        # want Elasticsearch construct an `AsyncElasticsearch` and assign
+        # it explicitly.
         self.elasticsearch_client: Optional[object] = None  # AsyncElasticsearch when available
         self.log_buffers: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
         self.processed_files: Set[str] = set()
-        self._setup_elasticsearch()
 
-    def _setup_elasticsearch(self):
-        """Setup Elasticsearch client if configured and available.
-        Note: Elasticsearch is optional and disabled by default to save $15-20/month.
-        """
-        if not ELASTICSEARCH_AVAILABLE:
-            logger.info("Elasticsearch disabled (not installed) - using file-based logging")
-            return
 
-        es_config = monitoring_config.logging.log_aggregation_endpoint
-        if es_config:
-            try:
-                self.elasticsearch_client = AsyncElasticsearch([es_config])
-                logger.info("Elasticsearch client initialized")
-            except Exception as e:
-                logger.info(f"Elasticsearch not configured (optional): {e}")
-    
     async def aggregate_log_files(self, log_directory: str) -> List[LogEntry]:
         """Aggregate log entries from files."""
         log_entries = []

@@ -5,10 +5,19 @@ Revises: 001_critical_indexes
 Create Date: 2025-08-07
 
 """
+import logging
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
 from datetime import datetime, timedelta
+
+# F-07-016 (PRD audit 2026-04 §3 G4 Phase 2 follow-up): every fallback path
+# in this migration previously swallowed exceptions silently
+# (`except Exception: pass`). Surface them via a module logger so operators
+# can see why a TimescaleDB / hypertable / partitioning step fell through
+# to the manual-partitioning fallback.
+logger = logging.getLogger("alembic.migration.002_partitioning")
 
 
 # revision identifiers, used by Alembic.
@@ -24,9 +33,11 @@ def upgrade():
     # Enable TimescaleDB extension if not already enabled
     try:
         op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
-    except Exception:
-        # Fallback to manual partitioning if TimescaleDB is not available
-        pass
+    except Exception as exc:
+        # Fallback to manual partitioning if TimescaleDB is not available.
+        # Log the exception so operators can distinguish "TimescaleDB not
+        # installed" from a permissions / connection issue.
+        logger.warning("TimescaleDB extension unavailable, falling back to manual partitioning: %s", exc)
     
     # Convert price_history to hypertable (TimescaleDB) or implement manual partitioning
     try:
@@ -54,8 +65,9 @@ def upgrade():
             SELECT add_compression_policy('price_history', INTERVAL '7 days');
         """)
         
-    except Exception:
+    except Exception as exc:
         # Fallback to manual partitioning
+        logger.warning("create_hypertable(price_history) failed, falling back to manual partitioning: %s", exc)
         implement_manual_partitioning_price_history()
     
     # Convert technical_indicators to hypertable
@@ -82,7 +94,8 @@ def upgrade():
             SELECT add_compression_policy('technical_indicators', INTERVAL '7 days');
         """)
         
-    except Exception:
+    except Exception as exc:
+        logger.warning("create_hypertable(technical_indicators) failed, falling back to manual partitioning: %s", exc)
         implement_manual_partitioning_technical_indicators()
     
     # Create continuous aggregates for common queries
@@ -138,8 +151,9 @@ def upgrade():
                 schedule_interval => INTERVAL '1 day');
         """)
         
-    except Exception:
+    except Exception as exc:
         # Create regular materialized views if TimescaleDB is not available
+        logger.warning("TimescaleDB continuous aggregates failed, falling back to regular materialized views: %s", exc)
         create_regular_materialized_views()
     
     # Create retention policy - keep raw data for 5 years
@@ -151,8 +165,8 @@ def upgrade():
         op.execute("""
             SELECT add_retention_policy('technical_indicators', INTERVAL '2 years');
         """)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("add_retention_policy() failed (TimescaleDB feature unavailable?): %s", exc)
     
     # Optimize autovacuum for high-write tables
     op.execute("""
@@ -276,8 +290,8 @@ def downgrade():
     try:
         op.execute("DROP MATERIALIZED VIEW IF EXISTS daily_stock_metrics CASCADE;")
         op.execute("DROP MATERIALIZED VIEW IF EXISTS weekly_stock_metrics CASCADE;")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("DROP MATERIALIZED VIEW failed during downgrade (views may not exist): %s", exc)
     
     # Remove TimescaleDB features if they exist
     try:
@@ -285,8 +299,8 @@ def downgrade():
         op.execute("SELECT remove_compression_policy('technical_indicators');")
         op.execute("SELECT remove_retention_policy('price_history');")
         op.execute("SELECT remove_retention_policy('technical_indicators');")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("remove_compression_policy/remove_retention_policy failed during downgrade (TimescaleDB may be absent): %s", exc)
     
     # Reset autovacuum settings to defaults
     op.execute("""
