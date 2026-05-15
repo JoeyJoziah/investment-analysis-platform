@@ -26,4 +26,8 @@ DEFAULT_CONFIG = {
     "max_recur_limit": 100,
     # Tool settings
     "online_tools": True,
+    # Data residency: OpenAI ``store`` flag on ``responses.create``.
+    # Default False so prompt content is not retained on OpenAI servers
+    # unless explicitly opted in (F-04-005).
+    "openai_store_responses": False,
 }

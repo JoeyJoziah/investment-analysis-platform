@@ -731,7 +731,7 @@ def get_stock_news_openai(ticker, curr_date):
         temperature=1,
         max_output_tokens=4096,
         top_p=1,
-        store=True,
+        store=config.get("openai_store_responses", False),
     )
 
     return response.output[1].content[0].text
@@ -766,7 +766,7 @@ def get_global_news_openai(curr_date):
         temperature=1,
         max_output_tokens=4096,
         top_p=1,
-        store=True,
+        store=config.get("openai_store_responses", False),
     )
 
     return response.output[1].content[0].text
@@ -801,7 +801,7 @@ def get_fundamentals_openai(ticker, curr_date):
         temperature=1,
         max_output_tokens=4096,
         top_p=1,
-        store=True,
+        store=config.get("openai_store_responses", False),
     )
 
     return response.output[1].content[0].text
