@@ -58,13 +58,54 @@ class TradingAgentsGraph:
         )
 
         # Initialize LLMs
-        if self.config["llm_provider"].lower() == "openai" or self.config["llm_provider"] == "ollama" or self.config["llm_provider"] == "openrouter":
-            self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
-        elif self.config["llm_provider"].lower() == "anthropic":
+        provider = self.config["llm_provider"].lower()
+        if provider == "openai":
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+            )
+        elif provider == "openrouter":
+            # OpenRouter requires routing/attribution headers
+            # (https://openrouter.ai/docs/api-reference/overview).
+            openrouter_headers = {
+                "HTTP-Referer": self.config.get(
+                    "openrouter_referer", "https://github.com/TradingAgents"
+                ),
+                "X-Title": self.config.get("openrouter_title", "TradingAgents"),
+            }
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                default_headers=openrouter_headers,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                default_headers=openrouter_headers,
+            )
+        elif provider == "ollama":
+            # Ollama-specific options (num_ctx, num_predict, etc.) must be
+            # threaded through ``model_kwargs`` because they are not part
+            # of the OpenAI chat-completion schema.
+            ollama_model_kwargs = self.config.get("ollama_model_kwargs", {})
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=self.config["backend_url"],
+                model_kwargs=ollama_model_kwargs,
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=self.config["backend_url"],
+                model_kwargs=ollama_model_kwargs,
+            )
+        elif provider == "anthropic":
             self.deep_thinking_llm = ChatAnthropic(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
             self.quick_thinking_llm = ChatAnthropic(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
-        elif self.config["llm_provider"].lower() == "google":
+        elif provider == "google":
             self.deep_thinking_llm = ChatGoogleGenerativeAI(model=self.config["deep_think_llm"])
             self.quick_thinking_llm = ChatGoogleGenerativeAI(model=self.config["quick_think_llm"])
         else:
