@@ -37,7 +37,7 @@ dag = DAG(
     'enhanced_stock_pipeline',
     default_args=default_args,
     description='Enhanced daily stock data ETL pipeline',
-    schedule_interval='0 6 * * *',  # Run at 6 AM daily
+    schedule='0 6 * * *',  # Run at 6 AM daily
     catchup=False,
     tags=['stocks', 'etl', 'production'],
 )

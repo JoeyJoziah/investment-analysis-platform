@@ -112,7 +112,14 @@ default_args = {
     'owner': 'ml-team',
     'depends_on_past': False,
     'start_date': days_ago(1),
-    'email': ['ml-alerts@company.com'],
+    # F-06-009: alert recipients now come from the ``ml_alert_emails``
+    # Airflow Variable (comma-separated). Falls back to empty list when
+    # unset so DAG load does not fail in fresh environments.
+    'email': [
+        e.strip()
+        for e in Variable.get("ml_alert_emails", default_var="").split(",")
+        if e.strip()
+    ],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 2,
@@ -124,7 +131,7 @@ dag = DAG(
     'ml_training_pipeline',
     default_args=default_args,
     description='Automated ML Model Training and Retraining Pipeline',
-    schedule_interval='0 2 * * *',  # Daily at 2 AM
+    schedule='0 2 * * *',  # Daily at 2 AM
     catchup=False,
     max_active_runs=1,
     tags=['ml', 'training', 'production'],
