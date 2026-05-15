@@ -21,6 +21,7 @@ import time
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sqlite3
+from contextlib import closing
 import hashlib
 from dataclasses import dataclass
 # SECURITY: Removed pickle - using JSON for safer serialization
@@ -194,34 +195,33 @@ class MultiSourceStockExtractor:
     
     def _init_progress_db(self):
         """Initialize progress tracking database"""
-        conn = sqlite3.connect(self.progress_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.progress_db_path)) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS extraction_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ticker TEXT,
-                source TEXT,
-                status TEXT,
-                timestamp TIMESTAMP,
-                error_message TEXT,
-                data_quality_score REAL
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS extraction_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT,
+                    source TEXT,
+                    status TEXT,
+                    timestamp TIMESTAMP,
+                    error_message TEXT,
+                    data_quality_score REAL
+                )
+            """)
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ticker_progress (
-                ticker TEXT PRIMARY KEY,
-                last_successful_extraction TIMESTAMP,
-                successful_sources TEXT,
-                failed_sources TEXT,
-                total_attempts INTEGER DEFAULT 0,
-                data_completeness_score REAL DEFAULT 0.0
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS ticker_progress (
+                    ticker TEXT PRIMARY KEY,
+                    last_successful_extraction TIMESTAMP,
+                    successful_sources TEXT,
+                    failed_sources TEXT,
+                    total_attempts INTEGER DEFAULT 0,
+                    data_completeness_score REAL DEFAULT 0.0
+                )
+            """)
         
-        conn.commit()
-        conn.close()
+            conn.commit()
     
     def _can_make_request(self, source: str) -> bool:
         """Check if we can make a request to the source using TokenBucket.
@@ -756,16 +756,15 @@ class MultiSourceStockExtractor:
     def _log_extraction(self, ticker: str, source: str, status: str, error: str):
         """Log extraction attempt to database"""
         try:
-            conn = sqlite3.connect(self.progress_db_path)
-            cursor = conn.cursor()
+            with closing(sqlite3.connect(self.progress_db_path)) as conn:
+                cursor = conn.cursor()
             
-            cursor.execute("""
-                INSERT INTO extraction_log (ticker, source, status, timestamp, error_message)
-                VALUES (?, ?, ?, ?, ?)
-            """, (ticker, source, status, datetime.now().isoformat(), error))
+                cursor.execute("""
+                    INSERT INTO extraction_log (ticker, source, status, timestamp, error_message)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (ticker, source, status, datetime.now().isoformat(), error))
             
-            conn.commit()
-            conn.close()
+                conn.commit()
         except Exception as e:
             logger.debug(f"Error logging extraction: {e}")
     
@@ -868,25 +867,24 @@ class MultiSourceStockExtractor:
     def get_extraction_stats(self) -> Dict:
         """Get statistics about extraction performance"""
         try:
-            conn = sqlite3.connect(self.progress_db_path)
-            cursor = conn.cursor()
+            with closing(sqlite3.connect(self.progress_db_path)) as conn:
+                cursor = conn.cursor()
             
-            # Get overall stats
-            cursor.execute("""
-                SELECT source, status, COUNT(*) as count
-                FROM extraction_log
-                WHERE timestamp > datetime('now', '-24 hours')
-                GROUP BY source, status
-            """)
+                # Get overall stats
+                cursor.execute("""
+                    SELECT source, status, COUNT(*) as count
+                    FROM extraction_log
+                    WHERE timestamp > datetime('now', '-24 hours')
+                    GROUP BY source, status
+                """)
             
-            stats = {'sources': {}}
-            for row in cursor.fetchall():
-                source, status, count = row
-                if source not in stats['sources']:
-                    stats['sources'][source] = {}
-                stats['sources'][source][status] = count
+                stats = {'sources': {}}
+                for row in cursor.fetchall():
+                    source, status, count = row
+                    if source not in stats['sources']:
+                        stats['sources'][source] = {}
+                    stats['sources'][source][status] = count
             
-            conn.close()
             return stats
             
         except Exception as e:
