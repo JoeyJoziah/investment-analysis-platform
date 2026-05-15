@@ -49,17 +49,25 @@ def test_register_router_method_removed_from_version_manager() -> None:
 
 
 def test_no_backend_module_imports_v1_deprecation_middleware() -> None:
-    """No backend module may import the deleted V1DeprecationMiddleware."""
+    """No backend module may import the deleted V1DeprecationMiddleware.
+
+    Scans actual import statements (single-line and parenthesised multi-line)
+    rather than file-wide substrings, so explanatory comments mentioning the
+    removed symbol do not register as offenders.
+    """
+    import re
+
     backend_root = Path(__file__).resolve().parents[2]
+    # Matches `import V1DeprecationMiddleware` and `from ... import (... V1DeprecationMiddleware ...)`
+    single_line = re.compile(r"^\s*(?:from\s+\S+\s+)?import\s+[^\n#]*\bV1DeprecationMiddleware\b", re.MULTILINE)
+    multi_line = re.compile(r"^\s*from\s+\S+\s+import\s*\([^)]*\bV1DeprecationMiddleware\b[^)]*\)", re.MULTILINE | re.DOTALL)
+
     offenders: list[str] = []
     for path in backend_root.rglob("*.py"):
-        # Skip our own assertion file and any pycache.
         if path == Path(__file__) or "__pycache__" in path.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        if "import V1DeprecationMiddleware" in text:
-            offenders.append(str(path))
-        elif "from backend.api.versioning import" in text and "V1DeprecationMiddleware" in text:
+        if single_line.search(text) or multi_line.search(text):
             offenders.append(str(path))
     assert offenders == [], (
         "These files still import the deleted V1DeprecationMiddleware: "
