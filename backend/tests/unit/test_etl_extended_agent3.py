@@ -120,6 +120,19 @@ sys.modules["_etl_pkg"] = _fake_pkg
 sys.modules["_etl_pkg.web_scrapers"] = _ws
 sys.modules["_etl_pkg.rate_limiting"] = _rl
 
+# F-05-005: the extractor modules now do ``from .types import
+# ExtractionResult``. Load the real types module under the synthetic
+# package so relative imports resolve.
+_types_spec = importlib.util.spec_from_file_location(
+    "_etl_pkg.types",
+    _etl_dir / "types.py",
+    submodule_search_locations=[],
+)
+_types = importlib.util.module_from_spec(_types_spec)
+_types.__package__ = "_etl_pkg"
+sys.modules["_etl_pkg.types"] = _types
+_types_spec.loader.exec_module(_types)
+
 _mse_spec = importlib.util.spec_from_file_location(
     "_etl_pkg.multi_source_extractor",
     _etl_dir / "multi_source_extractor.py",
@@ -139,12 +152,18 @@ extract_stocks_data = _mse.extract_stocks_data
 # ---------------------------------------------------------------------------
 # 4. Load unlimited_data_extractor
 # ---------------------------------------------------------------------------
+# F-05-005: unlimited_data_extractor now does ``from .types import
+# ExtractionResult``. Load under the synthetic ``_etl_pkg`` so the
+# relative import resolves to the same stub already registered above.
 _ude_spec = importlib.util.spec_from_file_location(
-    "unlimited_data_extractor",
+    "_etl_pkg.unlimited_data_extractor",
     _etl_dir / "unlimited_data_extractor.py",
+    submodule_search_locations=[],
 )
 _ude = importlib.util.module_from_spec(_ude_spec)
-sys.modules["unlimited_data_extractor"] = _ude
+_ude.__package__ = "_etl_pkg"
+sys.modules["_etl_pkg.unlimited_data_extractor"] = _ude
+sys.modules["unlimited_data_extractor"] = _ude  # legacy alias retained
 _ude_spec.loader.exec_module(_ude)
 
 StockData = _ude.StockData
