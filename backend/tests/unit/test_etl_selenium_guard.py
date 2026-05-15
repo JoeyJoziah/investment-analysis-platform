@@ -21,11 +21,18 @@ import pytest
 
 
 def test_module_imports_without_selenium(monkeypatch: pytest.MonkeyPatch) -> None:
-    """F-05-001: module must import even when selenium is missing."""
+    """F-05-001: module must import even when selenium is missing.
+
+    Synthesises a ``loki_test_etl`` package, copies just the two files
+    we care about (``types.py`` and ``unlimited_data_extractor.py``)
+    into it, and imports under that name. This avoids both pulling in
+    the heavy real ``backend.etl`` package and dealing with relative
+    import edge cases under spec_from_file_location.
+    """
 
     # Drop any cached selenium-touched modules.
     for name in list(sys.modules):
-        if name.startswith("selenium") or name.endswith("unlimited_data_extractor"):
+        if name.startswith("selenium") or "unlimited_data_extractor" in name:
             del sys.modules[name]
 
     real_import = builtins.__import__
@@ -37,24 +44,29 @@ def test_module_imports_without_selenium(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 
-    path = (
-        Path(__file__).resolve().parents[2]
-        / "etl"
-        / "unlimited_data_extractor.py"
-    )
-    spec = importlib.util.spec_from_file_location(
-        "unlimited_data_extractor_under_test", path
-    )
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-
-    # Mock out heavy non-selenium deps so the import doesn't ImportError
-    # for unrelated reasons.
+    etl_dir = Path(__file__).resolve().parents[2] / "etl"
     for heavy in ("aiohttp", "bs4", "pandas", "numpy", "yfinance", "requests"):
-        if heavy not in sys.modules:
-            sys.modules[heavy] = pytest.importorskip(heavy, reason=f"{heavy} not installed")
+        pytest.importorskip(heavy, reason=f"{heavy} not installed")
 
-    spec.loader.exec_module(module)
+    # Build a synthetic package on disk to host the two source files.
+    import tempfile
+    import shutil
+    import textwrap
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pkg = Path(tmp) / "loki_test_etl"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        shutil.copy(etl_dir / "types.py", pkg / "types.py")
+        shutil.copy(
+            etl_dir / "unlimited_data_extractor.py",
+            pkg / "unlimited_data_extractor.py",
+        )
+
+        monkeypatch.syspath_prepend(tmp)
+        module = importlib.import_module(
+            "loki_test_etl.unlimited_data_extractor"
+        )
 
     assert hasattr(module, "SELENIUM_AVAILABLE")
     assert module.SELENIUM_AVAILABLE is False

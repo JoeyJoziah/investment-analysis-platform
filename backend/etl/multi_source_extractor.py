@@ -42,18 +42,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ExtractionResult:
-    ticker: str
-    success: bool
-    data: Optional[Dict] = None
-    source: Optional[str] = None
-    error: Optional[str] = None
-    timestamp: datetime = None
-    
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = datetime.now()
+# F-05-005: re-export canonical ExtractionResult from backend.etl.types
+# so downstream isinstance() checks pass across both extractor modules.
+from .types import ExtractionResult  # noqa: E402
 
 
 @dataclass

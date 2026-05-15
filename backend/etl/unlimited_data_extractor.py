@@ -67,19 +67,11 @@ class StockData:
         self.extra = kwargs
 
 
-@dataclass
-class ExtractionResult:
-    """Result of a data extraction attempt"""
-    ticker: str
-    success: bool
-    data: Any = None
-    source: Optional[str] = None
-    error: Optional[str] = None
-    timestamp: datetime = None
-
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = datetime.now()
+# F-05-005: re-export canonical ExtractionResult from backend.etl.types
+# so isinstance() checks behave consistently across both extractor
+# modules. Relative import keeps the module loadable standalone for the
+# F-05-001 selenium-guard regression test.
+from .types import ExtractionResult  # noqa: E402
 
 
 # Aliases for classes imported by unlimited_extractor_with_fallbacks
