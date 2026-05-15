@@ -21,9 +21,9 @@ Expected speedup with GPU: 3-4x faster training per model
 
 from datetime import datetime, timedelta, timezone
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.bash_operator import BashOperator
-from airflow.sensors.external_task_sensor import ExternalTaskSensor
+from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 import sys
@@ -31,6 +31,8 @@ import os
 import asyncio
 import json
 import logging
+
+import numpy as np
 
 # Add backend to path
 sys.path.append('/app')
