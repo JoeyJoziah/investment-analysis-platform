@@ -167,29 +167,76 @@ def initialize_orchestrator(**context):
 
 
 def check_data_quality(**context):
-    """Check data quality and determine if training should proceed"""
+    """Check data quality and determine if training should proceed.
+
+    F-06-003: ``DataQualityChecker.check_recent_data_quality`` does not
+    exist on the real class. Uses the real public surface:
+    ``validate_price_data`` per recent batch, aggregated through
+    ``generate_quality_report``. Derives the DAG-level thresholds
+    (``missing_data_rate``, ``anomaly_rate``) from the resulting issues.
+    """
+    import pandas as pd
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+
     from backend.utils.data_quality import DataQualityChecker
-    
+
     checker = DataQualityChecker()
-    
-    # Get recent data statistics
-    quality_report = checker.check_recent_data_quality(
-        table="price_history",
-        days_back=7
+    pg = PostgresHook(postgres_conn_id="postgres_default")
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    df = pg.get_pandas_df(
+        f"""
+        SELECT date, symbol, open, high, low, close, volume
+        FROM price_history
+        WHERE date >= '{cutoff}'
+        """
     )
-    
-    # Check quality thresholds
-    if quality_report['missing_data_rate'] > 0.1:
-        logger.warning(f"High missing data rate: {quality_report['missing_data_rate']}")
+
+    if df is None or df.empty:
+        logger.warning("No price_history rows in last 7 days; skipping training")
         return "skip_training"
-    
-    if quality_report['anomaly_rate'] > 0.05:
-        logger.warning(f"High anomaly rate: {quality_report['anomaly_rate']}")
+
+    validation_results = [
+        checker.validate_price_data(group, symbol=str(symbol))
+        for symbol, group in df.groupby("symbol")
+    ]
+
+    quality_report = checker.generate_quality_report(validation_results)
+
+    # Map the aggregated report to the thresholds this DAG cares about.
+    total_issues = sum(
+        len(r.get("issues", [])) for r in validation_results
+    )
+    missing_issues = sum(
+        1
+        for r in validation_results
+        for issue in r.get("issues", [])
+        if issue.get("type") == "missing_values"
+    )
+    anomaly_issues = sum(
+        1
+        for r in validation_results
+        for issue in r.get("issues", [])
+        if issue.get("type") in {"price_outlier", "volume_anomaly"}
+    )
+    denom = max(len(validation_results), 1)
+    missing_data_rate = missing_issues / denom
+    anomaly_rate = anomaly_issues / denom
+    quality_report["missing_data_rate"] = missing_data_rate
+    quality_report["anomaly_rate"] = anomaly_rate
+    quality_report["total_issues"] = total_issues
+
+    if missing_data_rate > 0.1:
+        logger.warning(f"High missing data rate: {missing_data_rate}")
+        return "skip_training"
+
+    if anomaly_rate > 0.05:
+        logger.warning(f"High anomaly rate: {anomaly_rate}")
         return "needs_review"
-    
-    # Store quality report
-    context['task_instance'].xcom_push(key='data_quality_report', value=quality_report)
-    
+
+    context["task_instance"].xcom_push(
+        key="data_quality_report", value=quality_report
+    )
     return "proceed_training"
 
 
