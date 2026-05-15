@@ -1,10 +1,9 @@
-import functools
 import time
 import json
 
 
-def create_trader(llm, memory):
-    def trader_node(state, name):
+def create_trader(llm, memory, name: str = "Trader"):
+    def trader_node(state):
         company_name = state["company_of_interest"]
         investment_plan = state["investment_plan"]
         market_research_report = state["market_report"]
@@ -43,4 +42,4 @@ def create_trader(llm, memory):
             "sender": name,
         }
 
-    return functools.partial(trader_node, name="Trader")
+    return trader_node
