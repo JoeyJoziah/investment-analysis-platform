@@ -50,6 +50,10 @@ class ETLOrchestrator:
     def __init__(self, use_distributed: bool = True, cache_dir: str = "/tmp/stock_cache"):
         # Legacy components (maintained for backward compatibility)
         self.legacy_extractor = DataExtractor()
+        # F-05-007: realtime / single-ticker code paths reference
+        # ``self.extractor`` (etl_orchestrator.py lines 387, 633). Alias
+        # to the legacy extractor so those paths do not AttributeError.
+        self.extractor = self.legacy_extractor
         self.transformer = DataTransformer()
         self.loader = DataLoader()
         self.batch_loader = BatchLoader(self.loader)
