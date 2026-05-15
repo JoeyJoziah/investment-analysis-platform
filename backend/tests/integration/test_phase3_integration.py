@@ -51,7 +51,7 @@ async def test_middleware_stack_execution_order(async_client: AsyncClient):
     # CORS headers may not appear on GET without Origin header, check status
     assert response.status_code == 200
 
-    # Verify V1DeprecationMiddleware didn't block (it's disabled in TESTING mode)
+    # V1DeprecationMiddleware was removed in PRD audit 2026-04 / Workstream F
     assert response.status_code != 410
 
 
@@ -280,7 +280,7 @@ async def test_conftest_changes_dont_break_existing_tests(async_client: AsyncCli
     # Verify TESTING environment variable is set
     assert os.getenv("TESTING", "False").lower() == "true"
 
-    # Verify V1DeprecationMiddleware is disabled in testing
+    # V1DeprecationMiddleware was removed in PRD audit 2026-04 / Workstream F
     response = await async_client.get("/api/health/ping")
     assert response.status_code != 410  # Not blocked by V1 deprecation
 

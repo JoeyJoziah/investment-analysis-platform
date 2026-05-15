@@ -64,9 +64,17 @@ export const initializeApp = createAsyncThunk(
 export const login = createAsyncThunk(
   'app/login',
   async (credentials: { email: string; password: string }) => {
+    // Backend returns ApiResponse envelope: { success, data: { access_token, ... } }
+    // (see backend/api/routers/auth.py and backend/models/api_response.py).
     const response = await apiService.post(apiConfig.endpoints.auth.login, credentials);
-    localStorage.setItem('access_token', response.data.token);
-    return response.data.user;
+    const payload = response.data?.data ?? response.data;
+    const token = payload?.access_token;
+    if (!token) {
+      console.warn('login response missing access_token', response.data);
+      throw new Error('Login response did not include access_token');
+    }
+    localStorage.setItem('access_token', token);
+    return payload?.user;
   }
 );
 

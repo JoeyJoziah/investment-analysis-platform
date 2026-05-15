@@ -174,7 +174,7 @@ class TestDataExport:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export"
+                "/api/v1/gdpr/users/me/data-export"
             )
 
         data = assert_success_response(response, expected_status=200)
@@ -215,7 +215,7 @@ class TestDataExport:
             # Make 3 successful requests
             for i in range(3):
                 response = await authenticated_client.get(
-                    "/api/v1/users/me/data-export"
+                    "/api/v1/gdpr/users/me/data-export"
                 )
                 # Note: rate limiting may not work perfectly in test environment
                 # This test verifies the endpoint structure supports rate limiting
@@ -223,7 +223,7 @@ class TestDataExport:
 
             # 4th request should be rate limited (429) or still work depending on rate limiter
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export"
+                "/api/v1/gdpr/users/me/data-export"
             )
             # Accept both successful response and rate limit error
             assert response.status_code in [200, 429]
@@ -233,7 +233,7 @@ class TestDataExport:
         async_client: AsyncClient
     ):
         """Test data export without authentication returns 401"""
-        response = await async_client.get("/api/v1/users/me/data-export")
+        response = await async_client.get("/api/v1/gdpr/users/me/data-export")
         assert_api_error_response(response, 401)
 
 
@@ -256,7 +256,7 @@ class TestDataDeletion:
         with patch.object(data_deletion, 'request_deletion', new_callable=AsyncMock) as mock_delete:
             mock_delete.return_value = deletion_result
             response = await authenticated_client.post(
-                "/api/v1/users/me/delete-request",
+                "/api/v1/gdpr/users/me/delete-request",
                 json={"reason": "I want to delete my account"},
                     )
 
@@ -284,7 +284,7 @@ class TestDataDeletion:
         with patch.object(data_deletion, 'request_deletion', new_callable=AsyncMock) as mock_request:
             mock_request.return_value = deletion_result
             response = await authenticated_client.post(
-                "/api/v1/users/me/delete-request",
+                "/api/v1/gdpr/users/me/delete-request",
                     )
 
         data = assert_success_response(response, expected_status=200)
@@ -297,7 +297,7 @@ class TestDataDeletion:
         with patch.object(data_deletion, 'process_deletion', new_callable=AsyncMock) as mock_process:
             mock_process.return_value = deletion_processed_result
             response = await authenticated_client.post(
-                f"/api/v1/users/me/delete-request/{data['request_id']}/process",
+                f"/api/v1/gdpr/users/me/delete-request/{data['request_id']}/process",
                     )
 
         processed_data = assert_success_response(response, expected_status=200)
@@ -310,7 +310,7 @@ class TestDataDeletion:
     ):
         """Test deletion request without authentication returns 401"""
         response = await async_client.post(
-            "/api/v1/users/me/delete-request",
+            "/api/v1/gdpr/users/me/delete-request",
             json={"reason": "test"}
         )
         assert_api_error_response(response, 401)
@@ -335,7 +335,7 @@ class TestConsentManagement:
         with patch.object(consent_manager, 'record_consent', new_callable=AsyncMock) as mock_record:
             mock_record.return_value = "consent_rec_123"
             response = await authenticated_client.post(
-                "/api/v1/users/me/consent",
+                "/api/v1/gdpr/users/me/consent",
                 json={
                     "consent_type": "marketing",
                     "granted": True,
@@ -363,7 +363,7 @@ class TestConsentManagement:
         with patch.object(consent_manager, 'get_consent_status', new_callable=AsyncMock) as mock_get:
             mock_get.return_value = consent_status
             response = await authenticated_client.get(
-                "/api/v1/users/me/consent",
+                "/api/v1/gdpr/users/me/consent",
                     )
 
         data = assert_success_response(response, expected_status=200)
@@ -386,12 +386,12 @@ class TestConsentManagement:
     ):
         """Test consent endpoints without authentication returns 401"""
         # Test GET
-        response = await async_client.get("/api/v1/users/me/consent")
+        response = await async_client.get("/api/v1/gdpr/users/me/consent")
         assert_api_error_response(response, 401)
 
         # Test POST
         response = await async_client.post(
-            "/api/v1/users/me/consent",
+            "/api/v1/gdpr/users/me/consent",
             json={
                 "consent_type": "marketing",
                 "granted": True
@@ -419,7 +419,7 @@ class TestDataPortability:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export/json",
+                "/api/v1/gdpr/users/me/data-export/json",
                     )
 
         data = assert_success_response(response, expected_status=200)
@@ -448,7 +448,7 @@ class TestDataPortability:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export",
+                "/api/v1/gdpr/users/me/data-export",
                     )
 
         data = assert_success_response(response, expected_status=200)
@@ -500,7 +500,7 @@ class TestDataPortability:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result_with_ip
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export",
+                "/api/v1/gdpr/users/me/data-export",
                     )
 
         data = assert_success_response(response, expected_status=200)
@@ -536,7 +536,7 @@ class TestGDPRIntegration:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             export_response = await authenticated_client.get(
-                "/api/v1/users/me/data-export",
+                "/api/v1/gdpr/users/me/data-export",
                     )
 
         export_data = assert_success_response(export_response, expected_status=200)
@@ -546,7 +546,7 @@ class TestGDPRIntegration:
         with patch.object(consent_manager, 'get_consent_status', new_callable=AsyncMock) as mock_consent:
             mock_consent.return_value = consent_status
             consent_response = await authenticated_client.get(
-                "/api/v1/users/me/consent",
+                "/api/v1/gdpr/users/me/consent",
                     )
 
         consent_data = assert_success_response(consent_response, expected_status=200)
@@ -556,7 +556,7 @@ class TestGDPRIntegration:
         with patch.object(consent_manager, 'record_consent', new_callable=AsyncMock) as mock_record:
             mock_record.return_value = "consent_rec_125"
             update_response = await authenticated_client.post(
-                "/api/v1/users/me/consent",
+                "/api/v1/gdpr/users/me/consent",
                 json={
                     "consent_type": "marketing",
                     "granted": False
@@ -570,7 +570,7 @@ class TestGDPRIntegration:
         with patch.object(data_deletion, 'request_deletion', new_callable=AsyncMock) as mock_delete:
             mock_delete.return_value = deletion_result
             delete_response = await authenticated_client.post(
-                "/api/v1/users/me/delete-request",
+                "/api/v1/gdpr/users/me/delete-request",
                     )
 
         delete_data = assert_success_response(delete_response, expected_status=200)
@@ -596,7 +596,7 @@ class TestGDPRErrorHandling:
         with patch.object(data_portability, 'export_user_data', new_callable=AsyncMock) as mock_export:
             mock_export.return_value = export_result
             response = await authenticated_client.get(
-                "/api/v1/users/me/data-export?include_categories=invalid_category",
+                "/api/v1/gdpr/users/me/data-export?include_categories=invalid_category",
                     )
 
             # Should either succeed with empty or handle gracefully
@@ -609,7 +609,7 @@ class TestGDPRErrorHandling:
     ):
         """Test recording consent with invalid consent type"""
         response = await authenticated_client.post(
-            "/api/v1/users/me/consent",
+            "/api/v1/gdpr/users/me/consent",
             json={
                 "consent_type": "invalid_type",
                 "granted": True
@@ -632,7 +632,7 @@ class TestGDPRErrorHandling:
 
         with patch.object(data_deletion, 'process_deletion', side_effect=mock_process_error):
             response = await authenticated_client.post(
-                "/api/v1/users/me/delete-request/nonexistent_id/process",
+                "/api/v1/gdpr/users/me/delete-request/nonexistent_id/process",
                     )
 
         assert_api_error_response(response, 404, "not found")

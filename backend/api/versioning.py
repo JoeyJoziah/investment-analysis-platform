@@ -1,29 +1,31 @@
 """
 API Versioning System
-Provides backward compatibility and smooth migration paths for API changes.
 
-This module handles:
+`/api/v1/` is the current stable prefix for this platform. There is no v2
+migration planned; future major versions would mount at `/api/v2/`. The
+historical V1DeprecationMiddleware, V1_TO_V2_ENDPOINT_MAP, and
+create_versioned_router() factory were removed in PRD audit 2026-04 /
+Workstream F because they incorrectly treated the current prefix as legacy
+and emitted Sunset/Deprecation/Warning headers plus log spam on every
+production request.
+
+This module now provides:
 - Version detection from requests (header, URL path, query param)
-- Deprecation warnings and sunset enforcement
-- Automatic redirects from V1 to V2 endpoints
-- V1 usage metrics tracking for migration monitoring
-- Response transformation between API versions
+- Per-version registry metadata (status, dates, change log)
+- Optional response transformers between versions (kept for forward use)
+- V1MigrationMetrics + admin router (kept inert; harmless if unused)
 """
 
 from typing import Optional, Dict, Any, Callable, List, Tuple
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from functools import wraps
 from enum import Enum
 from collections import defaultdict
 import logging
 import warnings
 import asyncio
-import time
 
-from fastapi import APIRouter, Request, HTTPException, Header
-from fastapi.responses import JSONResponse, RedirectResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -144,134 +146,6 @@ class V1MigrationMetrics:
 v1_migration_metrics = V1MigrationMetrics()
 
 
-# =============================================================================
-# V1 TO V2 ENDPOINT MAPPING
-# =============================================================================
-
-# Maps V1 endpoints to their V2 equivalents
-V1_TO_V2_ENDPOINT_MAP: Dict[str, str] = {
-    # Stock endpoints
-    "/api/v1/stocks": "/api/stocks",
-    "/api/v1/stocks/search": "/api/stocks/search",
-    "/api/v1/stocks/sectors": "/api/stocks/sectors",
-    "/api/v1/stock/{symbol}": "/api/stocks/{symbol}",
-    "/api/v1/stock/{symbol}/quote": "/api/stocks/{symbol}/quote",
-    "/api/v1/stock/{symbol}/history": "/api/stocks/{symbol}/history",
-    "/api/v1/stock/{symbol}/statistics": "/api/stocks/{symbol}/statistics",
-
-    # Analysis endpoints
-    "/api/v1/analysis/analyze": "/api/analysis/analyze",
-    "/api/v1/analysis/{symbol}": "/api/analysis/analyze",
-    "/api/v1/analysis/batch": "/api/analysis/batch",
-    "/api/v1/analysis/compare": "/api/analysis/compare",
-    "/api/v1/analysis/indicators/{symbol}": "/api/analysis/indicators/{symbol}",
-    "/api/v1/analysis/sentiment/{symbol}": "/api/analysis/sentiment/{symbol}",
-
-    # Portfolio endpoints
-    "/api/v1/portfolio": "/api/portfolio",
-    "/api/v1/portfolio/{id}": "/api/portfolio/{id}",
-    "/api/v1/portfolio/{id}/holdings": "/api/portfolio/{id}/holdings",
-    "/api/v1/portfolio/{id}/performance": "/api/portfolio/{id}/performance",
-
-    # Auth endpoints (changed significantly in V2)
-    "/api/v1/auth/login": "/api/auth/login",
-    "/api/v1/auth/register": "/api/auth/register",
-    "/api/v1/auth/token": "/api/auth/token",
-    "/api/v1/auth/refresh": "/api/auth/refresh",
-    "/api/v1/auth/me": "/api/auth/me",
-
-    # Recommendations
-    "/api/v1/recommendations": "/api/recommendations",
-    "/api/v1/recommendations/{symbol}": "/api/recommendations/{symbol}",
-
-    # Watchlist (V1 used different structure)
-    "/api/v1/watchlist": "/api/watchlists/default",
-    "/api/v1/watchlist/add/{symbol}": "/api/watchlists/default/symbols/{symbol}",
-    "/api/v1/watchlist/remove/{symbol}": "/api/watchlists/default/symbols/{symbol}",
-}
-
-# Parameter mapping from V1 to V2
-V1_TO_V2_PARAM_MAP: Dict[str, Dict[str, str]] = {
-    "ticker": "symbol",  # V1 used 'ticker', V2 uses 'symbol'
-    "stock_id": "symbol",
-    "page_size": "limit",
-    "page_num": "offset",  # Needs transformation: offset = (page_num - 1) * page_size
-}
-
-
-def map_v1_endpoint_to_v2(v1_path: str) -> Optional[str]:
-    """
-    Map a V1 endpoint path to its V2 equivalent.
-
-    Args:
-        v1_path: The V1 API endpoint path
-
-    Returns:
-        The equivalent V2 path, or None if no mapping exists
-    """
-    # Direct match
-    if v1_path in V1_TO_V2_ENDPOINT_MAP:
-        return V1_TO_V2_ENDPOINT_MAP[v1_path]
-
-    # Pattern matching for parameterized routes
-    for v1_pattern, v2_pattern in V1_TO_V2_ENDPOINT_MAP.items():
-        if "{" in v1_pattern:
-            # Convert pattern to regex-like matching
-            v1_parts = v1_pattern.split("/")
-            path_parts = v1_path.split("/")
-
-            if len(v1_parts) != len(path_parts):
-                continue
-
-            match = True
-            params = {}
-            for v1_part, path_part in zip(v1_parts, path_parts):
-                if v1_part.startswith("{") and v1_part.endswith("}"):
-                    param_name = v1_part[1:-1]
-                    params[param_name] = path_part
-                elif v1_part != path_part:
-                    match = False
-                    break
-
-            if match:
-                # Substitute parameters into V2 pattern
-                v2_path = v2_pattern
-                for param_name, param_value in params.items():
-                    v2_path = v2_path.replace(f"{{{param_name}}}", param_value)
-                return v2_path
-
-    return None
-
-
-def transform_v1_params_to_v2(params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Transform V1 query parameters to V2 format.
-
-    Args:
-        params: V1 query parameters
-
-    Returns:
-        Transformed parameters for V2 API
-    """
-    transformed = {}
-
-    for key, value in params.items():
-        # Check if parameter needs renaming
-        new_key = V1_TO_V2_PARAM_MAP.get(key, key)
-        transformed[new_key] = value
-
-    # Handle pagination transformation
-    if "page_num" in params and "page_size" in params:
-        page_num = int(params["page_num"])
-        page_size = int(params["page_size"])
-        transformed["offset"] = (page_num - 1) * page_size
-        transformed["limit"] = page_size
-        transformed.pop("page_num", None)
-        transformed.pop("page_size", None)
-
-    return transformed
-
-
 class APIVersion(Enum):
     """API version definitions."""
     V1 = "v1"
@@ -370,11 +244,6 @@ class APIVersionManager:
             'deprecated_version_usage': 0,
             'version_errors': 0
         }
-    
-    def register_router(self, version: APIVersion, router: APIRouter) -> None:
-        """Register a router for a specific API version."""
-        self.routers[version] = router
-        logger.info(f"Registered router for API {version.value}")
     
     def register_transformer(
         self,
@@ -672,246 +541,6 @@ version_manager.register_transformer(APIVersion.V2, APIVersion.V3, transform_v2_
 version_manager.register_transformer(APIVersion.V1, APIVersion.V3, transform_v1_to_v3)
 
 
-# Versioned router factory
-def create_versioned_router(version: APIVersion) -> APIRouter:
-    """Create a router for a specific API version."""
-    router = APIRouter(
-        prefix=f"/api/{version.value}",
-        tags=[f"API {version.value}"],
-        responses={
-            410: {"description": "API version no longer supported"},
-            426: {"description": "Upgrade required"}
-        }
-    )
-    
-    # Add version info endpoint
-    @router.get("/version")
-    async def get_version_info():
-        """Get information about this API version."""
-        info = VERSION_REGISTRY.get(version)
-        if info:
-            return info.model_dump()
-        return {"error": "Version information not found"}
-    
-    # Add deprecation headers middleware
-    @router.middleware("http")
-    async def add_version_headers(request: Request, call_next):
-        response = await call_next(request)
-        
-        info = VERSION_REGISTRY.get(version)
-        if info:
-            response.headers["X-API-Version"] = version.value
-            response.headers["X-API-Status"] = info.status.value
-            
-            if info.status == VersionStatus.DEPRECATED:
-                response.headers["X-API-Deprecation-Date"] = info.deprecation_date.isoformat()
-                response.headers["Sunset"] = info.sunset_date.isoformat()
-                response.headers["Link"] = f'</api/{APIVersion.LATEST.value}>; rel="successor-version"'
-        
-        return response
-    
-    version_manager.register_router(version, router)
-    return router
-
-
-# =============================================================================
-# V1 DEPRECATION MIDDLEWARE
-# =============================================================================
-
-class V1DeprecationMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware to handle V1 API deprecation, redirects, and usage tracking.
-
-    This middleware:
-    1. Detects V1 API requests from the URL path
-    2. Tracks V1 usage metrics for migration monitoring
-    3. Adds deprecation/sunset headers to V1 responses
-    4. Optionally redirects V1 requests to V2 equivalents
-    5. Returns 410 Gone for sunset endpoints with migration guidance
-
-    Configuration:
-    - enable_redirects: If True, automatically redirect V1 requests to V2
-    - grace_period_days: Days after sunset to still allow V1 (with warnings)
-    - strict_mode: If True, return 410 immediately after sunset date
-    """
-
-    def __init__(
-        self,
-        app: ASGIApp,
-        enable_redirects: bool = False,
-        grace_period_days: int = 30,
-        strict_mode: bool = False
-    ):
-        super().__init__(app)
-        self.enable_redirects = enable_redirects
-        self.grace_period_days = grace_period_days
-        self.strict_mode = strict_mode
-        self.v1_info = VERSION_REGISTRY.get(APIVersion.V1)
-
-    async def dispatch(self, request: Request, call_next):
-        """Process the request and handle V1 deprecation logic."""
-        path = request.url.path
-
-        # Check if this is a V1 API request
-        if "/api/v1/" in path or path.startswith("/api/v1"):
-            return await self._handle_v1_request(request, call_next)
-
-        # Check for V1 version header
-        version_header = request.headers.get("X-API-Version")
-        if version_header == "v1":
-            return await self._handle_v1_request(request, call_next)
-
-        # Not a V1 request, pass through normally
-        # Track V2/V3 usage
-        if "/api/v2/" in path or "/api/" in path:
-            await v1_migration_metrics.record_version_request("v2")
-        elif "/api/v3/" in path:
-            await v1_migration_metrics.record_version_request("v3")
-
-        response = await call_next(request)
-        return response
-
-    async def _handle_v1_request(self, request: Request, call_next):
-        """Handle a V1 API request with deprecation logic."""
-        path = request.url.path
-        method = request.method
-        client_id = request.headers.get("X-Client-ID") or request.client.host if request.client else None
-        user_agent = request.headers.get("User-Agent")
-
-        # Track V1 usage
-        await v1_migration_metrics.record_v1_request(
-            endpoint=path,
-            client_id=client_id,
-            user_agent=user_agent
-        )
-
-        # Check sunset status
-        now = datetime.now(timezone.utc)
-        is_past_sunset = self.v1_info and self.v1_info.sunset_date and now > self.v1_info.sunset_date
-        grace_period_end = (
-            self.v1_info.sunset_date + timedelta(days=self.grace_period_days)
-            if self.v1_info and self.v1_info.sunset_date
-            else None
-        )
-        is_past_grace_period = grace_period_end and now > grace_period_end
-
-        # Strict mode: Return 410 immediately after sunset
-        if self.strict_mode and is_past_sunset:
-            return await self._return_sunset_response(request, path)
-
-        # Past grace period: Return 410
-        if is_past_grace_period:
-            return await self._return_sunset_response(request, path)
-
-        # Check if we should redirect
-        if self.enable_redirects:
-            v2_path = map_v1_endpoint_to_v2(path)
-            if v2_path:
-                await v1_migration_metrics.record_redirect()
-                return await self._redirect_to_v2(request, v2_path)
-
-        # Allow the request but add deprecation headers
-        response = await call_next(request)
-
-        # Add deprecation headers
-        response = await self._add_deprecation_headers(response, is_past_sunset)
-
-        # Log warning for V1 usage
-        logger.warning(
-            f"V1 API request: {method} {path} from client={client_id}. "
-            f"V1 is {'SUNSET' if is_past_sunset else 'DEPRECATED'}. "
-            f"Please migrate to V2/V3."
-        )
-
-        return response
-
-    async def _return_sunset_response(self, request: Request, path: str) -> JSONResponse:
-        """Return a 410 Gone response with migration guidance."""
-        v2_path = map_v1_endpoint_to_v2(path)
-
-        response_body = {
-            "error": "API version no longer supported",
-            "code": "API_VERSION_SUNSET",
-            "message": (
-                f"API V1 was sunset on {self.v1_info.sunset_date.strftime('%Y-%m-%d') if self.v1_info else 'N/A'}. "
-                f"Please migrate to API V2 or V3."
-            ),
-            "migration": {
-                "current_endpoint": path,
-                "suggested_endpoint": v2_path or "See migration guide",
-                "migration_guide": "/api/docs/migration/v1-to-v2",
-                "latest_version": APIVersion.LATEST.value,
-                "documentation": "/api/docs"
-            },
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        return JSONResponse(
-            status_code=410,
-            content=response_body,
-            headers={
-                "X-API-Version": "v1",
-                "X-API-Status": "sunset",
-                "Sunset": self.v1_info.sunset_date.isoformat() if self.v1_info else "",
-                "Link": f'</api/{APIVersion.LATEST.value}>; rel="successor-version"',
-                "X-Migration-Guide": "/api/docs/migration/v1-to-v2"
-            }
-        )
-
-    async def _redirect_to_v2(self, request: Request, v2_path: str) -> RedirectResponse:
-        """Redirect a V1 request to its V2 equivalent."""
-        # Transform query parameters
-        v2_params = transform_v1_params_to_v2(dict(request.query_params))
-
-        # Build the redirect URL
-        query_string = "&".join(f"{k}={v}" for k, v in v2_params.items()) if v2_params else ""
-        redirect_url = f"{v2_path}?{query_string}" if query_string else v2_path
-
-        logger.info(f"Redirecting V1 request {request.url.path} to V2: {redirect_url}")
-
-        return RedirectResponse(
-            url=redirect_url,
-            status_code=308,  # Permanent redirect, preserves method
-            headers={
-                "X-Redirect-Reason": "V1 API sunset - automatically redirected to V2",
-                "X-Original-Path": request.url.path,
-                "X-Migration-Guide": "/api/docs/migration/v1-to-v2"
-            }
-        )
-
-    async def _add_deprecation_headers(self, response, is_past_sunset: bool):
-        """Add deprecation headers to a V1 response."""
-        if self.v1_info:
-            # RFC 8594 Sunset header
-            if self.v1_info.sunset_date:
-                response.headers["Sunset"] = self.v1_info.sunset_date.strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                )
-
-            # RFC 8288 Link header for successor version
-            response.headers["Link"] = f'</api/{APIVersion.LATEST.value}>; rel="successor-version"'
-
-            # Deprecation header (draft-ietf-httpapi-deprecation-header)
-            if self.v1_info.deprecation_date:
-                response.headers["Deprecation"] = self.v1_info.deprecation_date.strftime(
-                    "%a, %d %b %Y %H:%M:%S GMT"
-                )
-
-            # Custom headers for additional context
-            response.headers["X-API-Version"] = "v1"
-            response.headers["X-API-Status"] = "sunset" if is_past_sunset else "deprecated"
-            response.headers["X-Migration-Guide"] = "/api/docs/migration/v1-to-v2"
-
-            # Warning header (RFC 7234)
-            warning_msg = (
-                f'299 - "API V1 is {"sunset" if is_past_sunset else "deprecated"}. '
-                f'Please migrate to V2 or V3. See /api/docs/migration/v1-to-v2"'
-            )
-            response.headers["Warning"] = warning_msg
-
-        return response
-
-
 # =============================================================================
 # V1 MIGRATION ROUTER (Admin endpoints for monitoring migration)
 # =============================================================================
@@ -951,22 +580,10 @@ async def get_v1_clients():
     }
 
 
-@v1_migration_router.get("/endpoint-mapping")
-async def get_endpoint_mapping():
-    """
-    Get the complete V1 to V2 endpoint mapping.
-
-    Useful for clients to understand how to migrate their API calls.
-    """
-    return {
-        "status": "success",
-        "data": {
-            "endpoint_map": V1_TO_V2_ENDPOINT_MAP,
-            "parameter_map": V1_TO_V2_PARAM_MAP,
-            "breaking_changes": VERSION_REGISTRY[APIVersion.V2].breaking_changes
-        },
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+# NOTE: GET /endpoint-mapping was removed in PRD audit 2026-04 / Workstream F.
+# It exposed the now-deleted V1_TO_V2_ENDPOINT_MAP, which was always wrong
+# (mapped current /api/v1/* to non-existent /api/* targets) and had zero
+# call sites.
 
 
 @v1_migration_router.get("/version-info")
