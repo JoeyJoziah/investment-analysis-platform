@@ -1,0 +1,46 @@
+name: Workflow Injection Guard
+
+# Per PRD audit 2026-04 §3 G3 Phase 1 (F-14-001/002/003): static guard that
+# fails CI if any workflow regresses on the shell-injection or plaintext-HTTP
+# patterns the Wave 1 + Wave 3 G3 fixes closed. Acceptance gates
+# AT-G3-1.1 and AT-G3-1.3 from the workpaper run here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: AT-G3-1 acceptance gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AT-G3-1.1 — no untrusted github.event.* fields inlined into shell vars
+        run: |
+          set -euo pipefail
+          # Catches `VAR="${{ github.event.* }}"` shell-style assignments inside
+          # run: blocks. The safe pattern is `env: VAR: ${{ ... }}` followed by
+          # `VAR="$VAR"` (or just `"$VAR"`) inside the script.
+          if grep -nE '(AUTHOR|TITLE|BODY|MESSAGE|NAME|TEXT|URL|REASON|COMMENT)="\$\{\{ *github\.event' .github/workflows/*.yml; then
+            echo "::error::Workflow shell-injection regression (F-14-001/002). Move the value to an env: block and dereference with \"\$VAR\"."
+            exit 1
+          fi
+
+      - name: AT-G3-1.3 / F-13-009 — no plaintext-HTTP downloads from prdownloads.sourceforge.net
+        run: |
+          set -euo pipefail
+          # Catch wget OR curl HTTP (no -s requirement) plus bare URLs in shell.
+          if grep -rnE 'http://prdownloads\.sourceforge\.net' \
+              .github/workflows/ Dockerfile* infrastructure/ 2>/dev/null \
+              | grep -vE 'workflow-injection-guard\.yml|::error::'; then
+            echo "::error::Plaintext-HTTP TA-Lib download regression (F-14-003/F-13-009). Use https://github.com/ta-lib/ta-lib/releases/... + sha256sum -c."
+            exit 1
+          fi

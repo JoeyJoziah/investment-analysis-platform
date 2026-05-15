@@ -27,9 +27,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TA-Lib (required for technical analysis)
-# Use SourceForge URL and install bash + update autoconf files for arm64 QEMU compatibility
+# F-13-009 / F-14-003: HTTPS GitHub release + sha256 verification (was: plaintext
+# HTTP from prdownloads.sourceforge.net with no checksum — MITM path to root-on-
+# build-host). Mirrors the workflow-side fix in
+# .github/workflows/comprehensive-testing.yml and the optimized variant in
+# infrastructure/docker/backend/Dockerfile.optimized.
 RUN apt-get update && apt-get install -y --no-install-recommends bash autoconf automake libtool && \
-    curl -L http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz | tar xz && \
+    TA_LIB_VERSION="0.4.0" && \
+    TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651" && \
+    curl -fsSL --proto '=https' --tlsv1.2 \
+        "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/ta-lib-${TA_LIB_VERSION}-src.tar.gz" \
+        -o ta-lib-src.tar.gz && \
+    echo "${TA_LIB_SHA256}  ta-lib-src.tar.gz" | sha256sum -c - && \
+    tar -xzf ta-lib-src.tar.gz && \
     cd ta-lib && \
     cp /usr/share/automake-*/config.guess . && \
     cp /usr/share/automake-*/config.sub . && \
@@ -37,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends bash autoconf a
     make && \
     make install && \
     cd .. && \
-    rm -rf ta-lib && \
+    rm -rf ta-lib ta-lib-src.tar.gz && \
     apt-get purge -y autoconf automake libtool && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
