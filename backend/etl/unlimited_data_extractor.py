@@ -18,11 +18,26 @@ from urllib.parse import quote
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor
 import requests
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+# F-05-001: selenium is an optional dependency. Top-level imports made
+# this whole module unimportable in environments without selenium
+# (e.g. CI, minimal containers, fresh-clone smoke tests), which in turn
+# broke ``from backend.etl.data_extractor import DataExtractor``.
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
+    SELENIUM_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised in selenium-less envs
+    webdriver = None  # type: ignore[assignment]
+    Options = None  # type: ignore[assignment]
+    By = None  # type: ignore[assignment]
+    WebDriverWait = None  # type: ignore[assignment]
+    EC = None  # type: ignore[assignment]
+
+    SELENIUM_AVAILABLE = False
 import os
 from dataclasses import dataclass, field
 
@@ -77,14 +92,20 @@ class UnlimitedDataExtractor:
     """Extract stock data without rate limits using web scraping and free sources"""
     
     def __init__(self):
-        # Configure Selenium for headless scraping
-        self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless')
-        self.chrome_options.add_argument('--no-sandbox')
-        self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument('--disable-gpu')
-        self.chrome_options.add_argument('--window-size=1920x1080')
-        self.chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        # F-05-001: only build Selenium Options when selenium is importable.
+        # Code paths that need a driver must check SELENIUM_AVAILABLE first.
+        if SELENIUM_AVAILABLE:
+            self.chrome_options = Options()
+            self.chrome_options.add_argument('--headless')
+            self.chrome_options.add_argument('--no-sandbox')
+            self.chrome_options.add_argument('--disable-dev-shm-usage')
+            self.chrome_options.add_argument('--disable-gpu')
+            self.chrome_options.add_argument('--window-size=1920x1080')
+            self.chrome_options.add_argument(
+                '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            )
+        else:
+            self.chrome_options = None
         
         # Session management
         self.session = None
@@ -103,6 +124,12 @@ class UnlimitedDataExtractor:
     
     def get_driver(self):
         """Get or create Selenium driver"""
+        if not SELENIUM_AVAILABLE:
+            logger.warning(
+                "Selenium is not installed; driver-based extraction unavailable"
+            )
+            self.driver = None
+            return self.driver
         if not self.driver:
             try:
                 self.driver = webdriver.Chrome(options=self.chrome_options)
