@@ -12,7 +12,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from langgraph.prebuilt import ToolNode
 
-from tradingagents.agents import *
+from tradingagents.agents import Toolkit
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.agents.utils.memory import FinancialSituationMemory
 from tradingagents.agents.utils.agent_states import (
