@@ -80,7 +80,11 @@ webdriver-manager==4.0.1
 # SECURITY & AUTHENTICATION
 # ============================================================================
 python-jose[cryptography]==3.5.0  # security updates
-passlib[bcrypt]==1.7.4
+passlib==1.7.4
+# Pin bcrypt<4.1: passlib 1.7.4 init crashes on bcrypt>=4.1 (ValueError "password
+# cannot be longer than 72 bytes") because detect_wrap_bug() calls bcrypt.hashpw
+# with a long secret. Backend POST /api/v1/auth/login returns 500 otherwise.
+bcrypt>=4.0.1,<4.1
 PyJWT==2.12.0  # CVE-2026-32597 fix
 cryptography==46.0.5  # CVE-2026-26007 fix
 

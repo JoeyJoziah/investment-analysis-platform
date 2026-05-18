@@ -184,3 +184,11 @@ env/
 frontend/web/.loki/
 
 excalidraw/
+
+# E2E session artifacts (do not commit)
+/_backend.log
+/_backend.err.log
+/_frontend.log
+/_frontend.err.log
+/frontend/web/test-results/
+/frontend/web/playwright-report/

@@ -194,7 +194,7 @@ async def login(
         )
 
     # Update last login
-    user.last_login = datetime.now(timezone.utc)
+    user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
     # Create token - use email as sub (consistent with get_current_user lookup)
@@ -225,7 +225,7 @@ async def login_alt(
         )
 
     # Update last login
-    db_user.last_login = datetime.now(timezone.utc)
+    db_user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
     # Create token - use email as sub (consistent with get_current_user lookup)
