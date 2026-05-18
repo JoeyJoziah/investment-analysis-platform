@@ -14,27 +14,30 @@ import joblib
 def create_sample_model():
     """Create a minimal sample model"""
     print("Creating minimal sample model...")
-    
-    # Create directories
-    os.makedirs('backend/ml_models', exist_ok=True)
-    os.makedirs('backend/ml_logs', exist_ok=True)
-    
+
+    # F-03-007: anchor paths to project root regardless of cwd.
+    _project_root = Path(__file__).resolve().parent.parent.parent
+    _models_dir = _project_root / "backend" / "ml_models"
+    _logs_dir = _project_root / "backend" / "ml_logs"
+    _models_dir.mkdir(parents=True, exist_ok=True)
+    _logs_dir.mkdir(parents=True, exist_ok=True)
+
     # Create simple dummy model (using sklearn)
     from sklearn.linear_model import LinearRegression
-    
+
     # Generate sample data
     X = np.random.randn(100, 5)
     y = np.random.randn(100)
-    
+
     # Train model
     model = LinearRegression()
     model.fit(X, y)
-    
+
     # Save model
     # SECURITY: Use joblib instead of pickle for safer serialization
-    model_path = 'backend/ml_models/sample_model.pkl'
+    model_path = str(_models_dir / "sample_model.pkl")
     joblib.dump(model, model_path)
-    
+
     # Save metadata
     metadata = {
         'timestamp': datetime.now().isoformat(),
@@ -44,8 +47,8 @@ def create_sample_model():
         'samples': 100,
         'score': float(model.score(X, y))
     }
-    
-    metadata_path = 'backend/ml_logs/sample_model_metadata.json'
+
+    metadata_path = str(_logs_dir / "sample_model_metadata.json")
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
     
