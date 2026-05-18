@@ -14,8 +14,15 @@ sentinel when every client either failed or is not configured.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from datetime import datetime, timezone
+
+if TYPE_CHECKING:
+    # ``BaseAPIClient`` is used only for type annotations. Importing it
+    # at runtime would drag in the backend.config chain (Pydantic
+    # Settings, secrets manager, etc.) which is too heavy for the
+    # surface this module presents.
+    from backend.data_ingestion.base_client import BaseAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +39,16 @@ class SmartDataFetcher:
         """
         self.cache_manager = cache_manager
         self.rate_limiter = rate_limiter
-        self._clients: Dict[str, Any] = {}
+        # ``None`` values are cached for clients that failed to
+        # initialize (e.g. missing API key) so we don't retry them
+        # on every fetch.
+        self._clients: Dict[str, Optional["BaseAPIClient"]] = {}
 
     # ------------------------------------------------------------------
     # Client lazy init
     # ------------------------------------------------------------------
 
-    def _get_client(self, name: str):
+    def _get_client(self, name: str) -> Optional["BaseAPIClient"]:
         """Lazily build the requested client, swallowing config errors.
 
         Returns ``None`` if the client is missing required configuration
@@ -47,7 +57,7 @@ class SmartDataFetcher:
         if name in self._clients:
             return self._clients[name]
 
-        client = None
+        client: Optional["BaseAPIClient"] = None
         try:
             if name == "finnhub":
                 from backend.data_ingestion.finnhub_client import FinnhubClient

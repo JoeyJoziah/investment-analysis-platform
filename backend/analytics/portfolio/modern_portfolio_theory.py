@@ -10,6 +10,8 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 import logging
 
+from scipy.optimize import minimize  # F-09-010: SLSQP mean-variance solver
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,9 +80,8 @@ class PortfolioOptimizer:
 
         # F-09-010: previous implementation always returned equal
         # weights, ignoring ``target_return`` / ``target_volatility``.
-        # Replace with a real mean-variance optimizer via scipy.
-        from scipy.optimize import minimize
-
+        # Replace with a real mean-variance optimizer via scipy
+        # (``scipy.optimize.minimize`` imported at module top).
         er = np.asarray(expected_returns, dtype=float)
         cov = np.asarray(cov_matrix, dtype=float)
 

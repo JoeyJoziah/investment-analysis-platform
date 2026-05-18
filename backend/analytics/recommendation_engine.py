@@ -16,6 +16,7 @@ statements continue to work without modification.
 """
 
 import asyncio
+import os
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
@@ -94,9 +95,8 @@ class RecommendationEngine:
         # F-09-008: source from the fundamental engine so the two
         # stay in lockstep instead of drifting silently.
         # F-09-009: portfolio size is now operator-controlled.
-        import os as _os
         self.risk_free_rate = self.fundamental_engine.risk_free_rate
-        self.portfolio_size = float(_os.getenv("DEFAULT_PORTFOLIO_SIZE", "100000"))
+        self.portfolio_size = float(os.getenv("DEFAULT_PORTFOLIO_SIZE", "100000"))
 
         self.thresholds = {
             'strong_buy':  0.8,
