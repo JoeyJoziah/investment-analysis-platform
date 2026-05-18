@@ -32,8 +32,33 @@ from backend.services.recommendation_service import (
     RECOMMENDATION_MODEL_VERSION,
     RECOMMENDATION_MODEL_TRAINING_DATE,
 )
+from backend.exceptions import ModelUnavailableError, InsufficientDataError
+from backend.api.error_responses import (
+    MODEL_UNAVAILABLE_503_RESPONSE,
+    raise_model_unavailable,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _refuse_when_models_in_fallback(model: str = "recommendation_engine") -> None:
+    """Gate F-02-003 / F-03-003: refuse to serve random.uniform fabrications.
+
+    Per Q4 default: when ``settings.DEMO_MODE`` is False (production) and the
+    ML models are in DummyLSTM/DummyXGBoost/DummyProphet fallback, raise an
+    HTTP 503 ``model_unavailable`` instead of returning the legacy random-
+    data response. ``DEMO_MODE=true`` preserves the legacy synthetic path for
+    demo environments only.
+    """
+    if settings.DEMO_MODE:
+        return
+    try:
+        mgr = get_model_manager()
+    except Exception:  # pragma: no cover - never let the gate crash the request
+        raise_model_unavailable(model=model, reason="manager_unavailable")
+        return
+    if mgr.get_fallback_models():
+        raise_model_unavailable(model=model, reason="fallback_active")
 
 router = APIRouter(tags=["recommendations"])
 
@@ -446,12 +471,21 @@ async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[Portfo
         diversification_score=data["diversification_score"],
     ))
 
-@router.get("/performance/track")
+@router.get(
+    "/performance/track",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def track_recommendation_performance(
     days_back: int = Query(30, le=365),
     status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
 ) -> ApiResponse[List[RecommendationPerformance]]:
-    """Track performance of past recommendations"""
+    """Track performance of past recommendations.
+
+    F-02-003: refuses with 503 ``model_unavailable`` in production when ML
+    models are in fallback (recommendation engine cannot produce real
+    performance records without the underlying model binaries).
+    """
+    _refuse_when_models_in_fallback(model="recommendation_performance")
     perf_data = recommendation_service.generate_performance_records(
         days_back=days_back,
         status_filter=status,
@@ -466,22 +500,39 @@ async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str
         "status": "success"
     })
 
-@router.get("/alerts/history")
+@router.get(
+    "/alerts/history",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def get_alert_history(
     days_back: int = Query(7, le=30)
 ) -> ApiResponse[List[Dict[str, Any]]]:
-    """Get history of recommendation alerts"""
+    """Get history of recommendation alerts.
+
+    F-02-003: refuses with 503 in production when models are in fallback —
+    the alert stream is downstream of the random-recommendation generator.
+    """
+    _refuse_when_models_in_fallback(model="recommendation_alerts")
     alerts = recommendation_service.generate_alert_history(days_back=days_back)
     return success_response(data=alerts)
 
-@router.post("/backtest")
+@router.post(
+    "/backtest",
+    responses={**MODEL_UNAVAILABLE_503_RESPONSE},
+)
 async def backtest_strategy(
     strategy: RecommendationCategory,
     start_date: date,
     end_date: date,
     initial_capital: float = 100000
 ) -> ApiResponse[Dict[str, Any]]:
-    """Backtest a recommendation strategy"""
+    """Backtest a recommendation strategy.
+
+    F-02-003: backtest results are SEC-implicated investment outputs. When
+    the underlying ML models are unavailable, we refuse with HTTP 503 rather
+    than ship random.uniform total_return / sharpe_ratio fabrications.
+    """
+    _refuse_when_models_in_fallback(model="recommendation_backtest")
     result = recommendation_service.run_backtest(
         strategy=strategy.value,
         start_date=start_date,

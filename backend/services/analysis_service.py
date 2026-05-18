@@ -279,52 +279,53 @@ def generate_insights(analysis: Dict) -> List[str]:
 
 
 def calculate_risk_metrics_from_prices(prices: List[float]) -> Dict[str, Any]:
+    """Calculate risk metrics from a list of closing prices.
+
+    Raises:
+        InsufficientDataError: When fewer than 30 price observations are
+            available. Per PRD audit 2026-04 F-02-018 / Q4 default
+            (recorded 2026-04-28), short-circuit branches must NOT return
+            hardcoded plausible-but-fake risk metrics. Callers must surface
+            this as HTTP 503 ``model_unavailable``.
     """
-    Calculate risk metrics from a list of closing prices.
+    from backend.exceptions import InsufficientDataError  # local: avoid import cycle
 
-    Returns a dict of risk metrics fields for use in RiskMetrics construction.
-    Returns fallback values when insufficient data.
-    """
-    if prices and len(prices) >= 30:
-        returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
-
-        volatility = statistics.stdev(returns) if len(returns) > 1 else 0.0
-        mean_return = statistics.mean(returns) if returns else 0.0
-
-        sharpe_ratio = (
-            (mean_return * 252) / (volatility * math.sqrt(252))
-            if volatility > 0 else 0.0
+    if not prices or len(prices) < 30:
+        raise InsufficientDataError(
+            reason="insufficient_data",
+            details={
+                "metric": "risk_metrics",
+                "have": len(prices) if prices else 0,
+                "need": 30,
+            },
         )
 
-        return {
-            "beta": None,
-            "alpha": mean_return * 252,
-            "sharpe_ratio": sharpe_ratio,
-            "sortino_ratio": sharpe_ratio * 1.2,
-            "max_drawdown": min(returns) if returns else 0.0,
-            "var_95": (
-                statistics.quantiles(returns, n=20)[0]
-                if len(returns) > 20
-                else min(returns, default=0.0)
-            ),
-            "cvar_95": min(returns) if returns else 0.0,
-            "correlation_with_market": None,
-            "risk_adjusted_return": mean_return / volatility if volatility > 0 else 0.0,
-            "overall_risk_score": min(100, max(0, (volatility * 100) * 2))
-        }
-    else:
-        return {
-            "beta": 1.15,
-            "alpha": 0.02,
-            "sharpe_ratio": 1.85,
-            "sortino_ratio": 2.10,
-            "max_drawdown": -0.15,
-            "var_95": -0.025,
-            "cvar_95": -0.035,
-            "correlation_with_market": 0.75,
-            "risk_adjusted_return": 0.18,
-            "overall_risk_score": 42.0
-        }
+    returns = [(prices[i] - prices[i - 1]) / prices[i - 1] for i in range(1, len(prices))]
+
+    volatility = statistics.stdev(returns) if len(returns) > 1 else 0.0
+    mean_return = statistics.mean(returns) if returns else 0.0
+
+    sharpe_ratio = (
+        (mean_return * 252) / (volatility * math.sqrt(252))
+        if volatility > 0 else 0.0
+    )
+
+    return {
+        "beta": None,
+        "alpha": mean_return * 252,
+        "sharpe_ratio": sharpe_ratio,
+        "sortino_ratio": sharpe_ratio * 1.2,
+        "max_drawdown": min(returns) if returns else 0.0,
+        "var_95": (
+            statistics.quantiles(returns, n=20)[0]
+            if len(returns) > 20
+            else min(returns, default=0.0)
+        ),
+        "cvar_95": min(returns) if returns else 0.0,
+        "correlation_with_market": None,
+        "risk_adjusted_return": mean_return / volatility if volatility > 0 else 0.0,
+        "overall_risk_score": min(100, max(0, (volatility * 100) * 2))
+    }
 
 
 def calculate_overall_score(

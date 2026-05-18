@@ -18,6 +18,15 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     TESTING: bool = False  # Set to True in test environments to disable certain middleware
     ENVIRONMENT: str = "production"
+    # F-02-003 / F-03-003 / Q4 default (PRD audit 2026-04, recorded 2026-04-28):
+    # When False (default), endpoints that previously returned random.uniform()
+    # placeholder values must instead refuse with HTTP 503 model_unavailable.
+    # Setting DEMO_MODE=true gates the legacy synthetic responses behind an
+    # explicit opt-in for non-production demo environments only. NEVER enable
+    # in environments accessible to external users — the platform is
+    # SEC-regulated and shipping fabricated investment outputs is a
+    # compliance exposure.
+    DEMO_MODE: bool = False
     SECRET_KEY: str
     JWT_SECRET_KEY: str
     LOG_LEVEL: str = "INFO"

@@ -276,6 +276,18 @@ class TestBuildDailyRecommendations:
 # =========================================================================
 
 class TestRunBacktest:
+    """Exercises the legacy synthetic backtest behind ``DEMO_MODE=True``.
+
+    Production refusal (``DEMO_MODE=False`` raising ``ModelUnavailableError``)
+    is covered by ``test_f02003_service_layer_gating.py`` per PRD audit
+    2026-04 §3 D Step 2.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _demo_mode(self, monkeypatch):
+        from backend.config.settings import settings
+        monkeypatch.setattr(settings, "DEMO_MODE", True)
+        yield
 
     def test_returns_strategy_and_period(self, service):
         """Result must echo back the strategy name and date period."""
@@ -332,6 +344,17 @@ class TestRunBacktest:
 # =========================================================================
 
 class TestGeneratePerformanceRecords:
+    """Exercises legacy synthetic records behind ``DEMO_MODE=True``.
+
+    Production refusal covered by ``test_f02003_service_layer_gating.py``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _demo_mode(self, monkeypatch):
+        from backend.config.settings import settings
+        monkeypatch.setattr(settings, "DEMO_MODE", True)
+        yield
+
 
     def test_default_generates_20_records(self, service):
         """With no filter the raw generation produces 20 records."""
@@ -414,6 +437,17 @@ class TestBuildPortfolioRecommendations:
 # =========================================================================
 
 class TestGenerateAlertHistory:
+    """Exercises legacy synthetic alert history behind ``DEMO_MODE=True``.
+
+    Production refusal covered by ``test_f02003_service_layer_gating.py``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _demo_mode(self, monkeypatch):
+        from backend.config.settings import settings
+        monkeypatch.setattr(settings, "DEMO_MODE", True)
+        yield
+
 
     def test_returns_ten_alerts(self, service):
         """Default call should produce exactly 10 alerts."""

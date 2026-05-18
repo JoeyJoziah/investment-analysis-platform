@@ -155,6 +155,18 @@ class TestBuildUserRecord:
 
 
 class TestListUsers:
+    """Exercises the legacy synthetic listing behind ``DEMO_MODE=True``.
+
+    Production refusal (``DEMO_MODE=False`` raising ``ModelUnavailableError``)
+    is covered by ``test_f02003_service_layer_gating.py`` per PRD audit
+    2026-04 §3 D Step 2.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _demo_mode(self, monkeypatch):
+        from backend.config.settings import settings
+        monkeypatch.setattr(settings, "DEMO_MODE", True)
+        yield
 
     def test_default_returns_list(self):
         """Default call returns a list of dicts."""

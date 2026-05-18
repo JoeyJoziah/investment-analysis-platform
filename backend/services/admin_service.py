@@ -7,13 +7,41 @@ API analytics, system metrics, job management, configuration, and maintenance mo
 import logging
 import os
 import random
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from backend.config.settings import settings
+from backend.exceptions import ModelUnavailableError
 from backend.utils.security_logger import sanitize_log_input
 
 logger = logging.getLogger(__name__)
+
+# F-02-003 (PRD audit 2026-04 / Q4 default): admin/system endpoints must
+# surface real OS-level metrics rather than random.uniform() fabrications.
+try:  # pragma: no cover - environment-dependent
+    import psutil  # type: ignore
+    # Prime cpu_percent() so the first non-blocking call returns a real
+    # value rather than the documented 0.0 sentinel — otherwise two
+    # adjacent /system/health calls swing 0→N and look like random data.
+    try:
+        psutil.cpu_percent(interval=None)
+    except Exception:
+        pass
+    _PSUTIL_AVAILABLE = True
+except Exception:
+    psutil = None  # type: ignore[assignment]
+    _PSUTIL_AVAILABLE = False
+
+# Process start time used as the uptime anchor when /proc/uptime is not
+# available (e.g. macOS dev machines).
+_PROCESS_START_MONOTONIC = time.monotonic()
+
+
+def _process_uptime_seconds() -> int:
+    """Best-effort uptime since process start, in whole seconds."""
+    return int(max(0.0, time.monotonic() - _PROCESS_START_MONOTONIC))
 
 
 # ---------------------------------------------------------------------------
@@ -21,22 +49,71 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def get_system_health_data() -> Dict[str, Any]:
-    """
-    Aggregate system health metrics.
+    """Aggregate system health metrics from real OS counters.
 
-    Returns a dict matching the SystemHealth schema with realistic simulated
-    values for all monitored services.
+    Per PRD audit 2026-04 F-02-003 / Q4 default (recorded 2026-04-28): the
+    pre-fix implementation returned ``random.uniform(20, 80)`` for CPU/mem/
+    disk every call, which made admin telemetry non-credible (two adjacent
+    calls returned wildly different numbers with no real load change).
+
+    psutil-backed values are deterministic-ish (system state changes
+    naturally between calls but not by tens of percent at random). When
+    psutil is unavailable the function returns an explicit
+    ``status: 'unknown'`` rather than fabricated numbers — callers should
+    treat this the same as the 503 ``model_unavailable`` empty-state.
     """
+    if not _PSUTIL_AVAILABLE:
+        # Acceptance gate per workpaper §3.3: integration test must observe
+        # psutil-backed real numbers — never random.uniform.
+        return {
+            "status": "unknown",
+            "uptime": _process_uptime_seconds(),
+            "cpu_usage": None,
+            "memory_usage": None,
+            "disk_usage": None,
+            "active_connections": None,
+            "request_rate": None,
+            "error_rate": None,
+            "response_time_avg": None,
+            "services": {
+                "api": "running",
+                "database": "unknown",
+                "cache": "unknown",
+                "worker": "unknown",
+                "scheduler": "unknown",
+                "websocket": "unknown",
+            },
+            "last_check": datetime.now(timezone.utc),
+            "data_source": "psutil_unavailable",
+        }
+
+    # Use a tiny sampling interval so the cpu_percent value reflects current
+    # state, not the cumulative-since-last-call delta which can be 0.0.
+    cpu_usage = psutil.cpu_percent(interval=0.05)
+    vmem = psutil.virtual_memory()
+    try:
+        disk = psutil.disk_usage("/").percent
+    except Exception:
+        disk = None
+    try:
+        active_connections = len(psutil.net_connections(kind="inet"))
+    except Exception:
+        # Some environments deny net_connections without elevated privileges.
+        active_connections = None
+
     return {
         "status": "operational",
-        "uptime": random.randint(86400, 864000),
-        "cpu_usage": random.uniform(20, 80),
-        "memory_usage": random.uniform(30, 70),
-        "disk_usage": random.uniform(40, 60),
-        "active_connections": random.randint(10, 100),
-        "request_rate": random.uniform(10, 100),
-        "error_rate": random.uniform(0, 5),
-        "response_time_avg": random.uniform(50, 200),
+        "uptime": _process_uptime_seconds(),
+        "cpu_usage": float(cpu_usage),
+        "memory_usage": float(vmem.percent),
+        "disk_usage": float(disk) if disk is not None else None,
+        "active_connections": active_connections,
+        # request_rate / error_rate / response_time_avg are observability
+        # signals that should come from Prometheus, not be fabricated. We
+        # surface None and rely on /metrics + Grafana for the real series.
+        "request_rate": None,
+        "error_rate": None,
+        "response_time_avg": None,
         "services": {
             "api": "running",
             "database": "running",
@@ -46,6 +123,7 @@ def get_system_health_data() -> Dict[str, Any]:
             "websocket": "running",
         },
         "last_check": datetime.now(timezone.utc),
+        "data_source": "psutil",
     }
 
 
@@ -92,9 +170,24 @@ def list_users(
     """
     Return a filtered, paginated list of users.
 
-    Generates 100 simulated user records, applies optional role and
-    is_active filters, then returns the requested page.
+    Production behaviour (``settings.DEMO_MODE`` False, default): refuses
+    with :class:`ModelUnavailableError`. Per PRD audit 2026-04 §3 D Step 2
+    (Q4 default, recorded 2026-04-28), this endpoint historically fabricated
+    user records via ``random.choice``/``random.randint`` and surfaced them
+    through the authenticated admin ``GET /admin/users`` route — an
+    SEC-regulated platform must not synthesise user-directory data. The
+    real-implementation path (DB query against the ``users`` table) is
+    sequenced for a follow-up scope; until then the endpoint refuses.
+
+    Demo behaviour (``settings.DEMO_MODE`` True): keeps the legacy synthetic
+    100-record generator behind the explicit demo gate.
     """
+    if not settings.DEMO_MODE:
+        raise ModelUnavailableError(
+            model="admin_user_directory",
+            reason="not_implemented",
+        )
+
     users = [build_user_record(i) for i in range(100)]
 
     if role is not None:

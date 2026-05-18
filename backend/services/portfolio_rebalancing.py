@@ -10,6 +10,9 @@ import uuid
 from typing import Dict, List, Any, Optional
 from datetime import datetime, date, timedelta, timezone
 
+from backend.config.settings import settings
+from backend.exceptions import ModelUnavailableError
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,17 +21,24 @@ def generate_performance_data_points(
     period: str,
     benchmark: str = "SPY",
 ) -> Dict[str, Any]:
-    """
-    Generate portfolio performance data points over the requested period.
+    """Generate portfolio performance data points over the requested period.
 
-    Args:
-        portfolio_id: Portfolio ID
-        period: One of 1D, 1W, 1M, 3M, 6M, 1Y, 3Y, 5Y, ALL
-        benchmark: Benchmark ticker symbol
+    Per PRD audit 2026-04 F-02-003 / Q4 default: this function previously
+    returned ``random.uniform``-derived chart data and metrics. It is now
+    gated behind ``settings.DEMO_MODE`` so production raises
+    ``ModelUnavailableError`` (surfaced as HTTP 503 ``model_unavailable``
+    by the portfolio router) rather than fabricating chart values.
 
-    Returns:
-        Dictionary with data_points list and aggregated metrics
+    The full real implementation requires a portfolio time-series store; the
+    G2a workstream owns the ML/analytics path that will populate it. Until
+    that lands, refusing-to-serve is the SEC-conservative posture.
     """
+    if not settings.DEMO_MODE:
+        raise ModelUnavailableError(
+            model="portfolio_performance",
+            reason="not_implemented",
+        )
+
     period_map = {
         "1D": 24,
         "1W": 7,
@@ -59,6 +69,7 @@ def generate_performance_data_points(
     return {
         "portfolio_id": portfolio_id,
         "period": period,
+        "data_source": "simulated",  # F-02-003: explicit demo tag
         "data_points": data_points,
         "metrics": {
             "total_return": round(total_return, 4),
