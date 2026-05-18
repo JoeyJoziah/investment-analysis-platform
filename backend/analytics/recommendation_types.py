@@ -76,6 +76,11 @@ class StockRecommendation:
     recommended_allocation: float  # Percentage of portfolio
     max_position_size: float       # Dollar amount
 
+    # Ranking score — composite ordering metric assigned by the
+    # ranking layer; consumers expect it on every recommendation dict
+    # but it was previously absent from the dataclass (F-09-004).
+    ranking_score: float = field(default=0.0)
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for storage."""
         return {
@@ -105,4 +110,5 @@ class StockRecommendation:
             'valid_until': self.valid_until.isoformat(),
             'recommended_allocation': self.recommended_allocation,
             'max_position_size': self.max_position_size,
+            'ranking_score': self.ranking_score,
         }

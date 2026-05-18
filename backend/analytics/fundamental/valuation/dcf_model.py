@@ -56,7 +56,8 @@ class DCFModel:
         growth_rates: Optional[List[float]] = None,
         discount_rate: Optional[float] = None,
         shares_outstanding: float = 1.0,
-        current_price: float = 0.0
+        current_price: float = 0.0,
+        terminal_growth_rate: Optional[float] = None,
     ) -> DCFResult:
         """
         Calculate intrinsic value using DCF model.
@@ -67,6 +68,11 @@ class DCFModel:
             discount_rate: Discount rate (WACC)
             shares_outstanding: Number of shares outstanding
             current_price: Current stock price
+            terminal_growth_rate: Override the instance-level
+                ``self.terminal_growth_rate`` for this call only.
+                Added for F-09-003 so sensitivity_analysis can vary the
+                terminal growth rate without mutating shared instance
+                state.
 
         Returns:
             DCFResult with valuation metrics
@@ -78,6 +84,15 @@ class DCFModel:
             # Default declining growth assumption
             growth_rates = [0.15, 0.12, 0.10, 0.08, 0.05]
 
+        # F-09-003: prefer the per-call override; fall back to the
+        # instance default. Reading via a local keeps the rest of the
+        # method side-effect-free.
+        _tgr = (
+            terminal_growth_rate
+            if terminal_growth_rate is not None
+            else self.terminal_growth_rate
+        )
+
         # Project future free cash flows
         projected_fcf = []
         fcf = free_cash_flow
@@ -88,12 +103,12 @@ class DCFModel:
 
         # Pad with terminal growth if needed
         while len(projected_fcf) < self.projection_years:
-            fcf = projected_fcf[-1] * (1 + self.terminal_growth_rate)
+            fcf = projected_fcf[-1] * (1 + _tgr)
             projected_fcf.append(fcf)
 
         # Calculate terminal value (Gordon Growth Model)
-        terminal_fcf = projected_fcf[-1] * (1 + self.terminal_growth_rate)
-        terminal_value = terminal_fcf / (discount_rate - self.terminal_growth_rate)
+        terminal_fcf = projected_fcf[-1] * (1 + _tgr)
+        terminal_value = terminal_fcf / (discount_rate - _tgr)
 
         # Calculate present values
         pv_fcfs = 0
@@ -177,14 +192,18 @@ class DCFModel:
             'values': []
         }
 
+        # F-09-003: previously mutated ``self.terminal_growth_rate``
+        # mid-loop which left the instance in a non-deterministic state
+        # after sensitivity_analysis returned. Pass ``gr`` per call
+        # instead so ``self`` is unchanged on exit.
         for dr in discount_rates:
             row = []
             for gr in growth_rates:
-                self.terminal_growth_rate = gr
                 result = self.calculate_intrinsic_value(
                     free_cash_flow=free_cash_flow,
                     discount_rate=dr,
-                    shares_outstanding=shares_outstanding
+                    shares_outstanding=shares_outstanding,
+                    terminal_growth_rate=gr,
                 )
                 row.append(result.intrinsic_value)
             results['values'].append(row)

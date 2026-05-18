@@ -398,35 +398,85 @@ class SentimentAnalysisEngine:
         return top_words
     
     async def get_news_sentiment(self, ticker: str, limit: int = 10) -> SentimentResult:
+        """Get sentiment from news articles via SmartDataFetcher.
+
+        F-09-006: previously a hardcoded neutral placeholder. Now that
+        F-05-004 has wired SmartDataFetcher to real clients
+        (Finnhub.get_news), this delegates to that surface and runs the
+        existing analyze_stock_sentiment batch path over the headline +
+        summary text. Returns a neutral fallback (with a warning logged)
+        only when the fetcher reports ``source: "unavailable"``.
         """
-        Get sentiment from news articles (simplified - returns neutral for now)
-        In a full implementation, this would fetch and analyze real news data
-        """
-        # Placeholder implementation
-        return SentimentResult(
-            score=0.0,
-            confidence=0.5,
-            label='neutral',
-            breakdown={'source': 'news_placeholder'},
-            keywords=[ticker.lower(), 'news'],
-            sources_analyzed=0,
-            timestamp=datetime.now(timezone.utc)
-        )
-    
+        try:
+            from backend.data_ingestion.smart_data_fetcher import get_smart_fetcher
+            fetcher = await get_smart_fetcher()
+            payload = await fetcher.fetch_stock_data(ticker, "news")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"get_news_sentiment: fetcher error for {ticker}: {e}")
+            payload = None
+
+        articles = (payload or {}).get("articles", []) if payload else []
+        if not articles or (payload or {}).get("source") == "unavailable":
+            logger.warning(
+                f"get_news_sentiment: no news available for {ticker}; "
+                "returning neutral fallback"
+            )
+            return SentimentResult(
+                score=0.0,
+                confidence=0.0,
+                label='neutral',
+                breakdown={'source': 'news_unavailable'},
+                keywords=[ticker.lower(), 'news'],
+                sources_analyzed=0,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        texts: List[str] = []
+        for art in articles[:limit]:
+            headline = art.get("headline") or art.get("title") or ""
+            summary = art.get("summary") or art.get("description") or ""
+            combined = f"{headline} {summary}".strip()
+            if combined:
+                texts.append(combined)
+
+        if not texts:
+            return SentimentResult(
+                score=0.0,
+                confidence=0.0,
+                label='neutral',
+                breakdown={'source': 'news_empty_texts'},
+                keywords=[ticker.lower(), 'news'],
+                sources_analyzed=0,
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        return await self.analyze_stock_sentiment(ticker, texts)
+
     async def get_social_sentiment(self, ticker: str, limit: int = 50) -> SentimentResult:
+        """Social-media sentiment is not yet wired.
+
+        F-09-006: SmartDataFetcher does not yet expose a social-media
+        endpoint (Reddit/X/StockTwits ingestion is out of scope for
+        the 2026-04 audit cycle). We log a loud warning and return a
+        zero-confidence neutral sentinel so downstream averaging code
+        does not crash, but consumers must check ``confidence == 0.0``
+        / ``sources_analyzed == 0`` to detect the no-data path.
         """
-        Get sentiment from social media (simplified - returns neutral for now)
-        In a full implementation, this would fetch and analyze real social media data
-        """
-        # Placeholder implementation
+        logger.warning(
+            "get_social_sentiment is not implemented (F-09-006): "
+            "no social-media ingestion source. Returning neutral "
+            "sentinel for ticker=%s. Implement after social ingestion "
+            "lands.",
+            ticker,
+        )
         return SentimentResult(
             score=0.0,
-            confidence=0.5,
+            confidence=0.0,  # was 0.5 — that was a lie
             label='neutral',
-            breakdown={'source': 'social_placeholder'},
+            breakdown={'source': 'social_unimplemented'},
             keywords=[ticker.lower(), 'social'],
             sources_analyzed=0,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
         )
     
     async def analyze_comprehensive_sentiment(self, ticker: str) -> Dict[str, Any]:

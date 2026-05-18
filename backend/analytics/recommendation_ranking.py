@@ -110,8 +110,15 @@ async def optimize_recommendations(
     recommendations: List[StockRecommendation],
     risk_tolerance: str,
     portfolio_optimizer: "PortfolioOptimizer",
+    portfolio_size: float = 100_000,
 ) -> List[StockRecommendation]:
-    """Apply portfolio optimization to a ranked list of recommendations."""
+    """Apply portfolio optimization to a ranked list of recommendations.
+
+    F-09-009: ``portfolio_size`` is now a parameter (default $100k for
+    backward compatibility) instead of a hardcoded constant. Callers
+    should pass the operator-configured value so position-size dollars
+    track the actual portfolio.
+    """
     if len(recommendations) < 2:
         return recommendations
 
@@ -144,7 +151,7 @@ async def optimize_recommendations(
     for rec, weight in zip(recommendations, optimal_weights):
         if weight > 0.01:
             rec.recommended_allocation = weight
-            rec.max_position_size = weight * 100_000
+            rec.max_position_size = weight * portfolio_size
             optimized_recs.append(rec)
 
     optimized_recs.sort(key=lambda x: x.recommended_allocation, reverse=True)

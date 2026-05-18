@@ -18,12 +18,20 @@ from typing import Dict, Any, Optional
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+# F-03-007: anchor log path to the project root (__file__-relative)
+# so that running training from any cwd writes to the same directory
+# instead of creating a stray ``backend/ml_logs/`` next to the caller.
+_ML_LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "ml_logs"
+_ML_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(f'backend/ml_logs/training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'),
+        logging.FileHandler(
+            _ML_LOGS_DIR / f'training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        ),
         logging.StreamHandler()
     ]
 )

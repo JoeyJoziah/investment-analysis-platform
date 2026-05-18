@@ -16,6 +16,7 @@ statements continue to work without modification.
 """
 
 import asyncio
+import os
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Any
@@ -91,6 +92,12 @@ class RecommendationEngine:
         self.market_scanner = MarketScanner()
         self.risk_manager = RiskManager()
         self.portfolio_optimizer = PortfolioOptimizer()
+
+        # F-09-008: source from the fundamental engine so the two
+        # stay in lockstep instead of drifting silently.
+        # F-09-009: portfolio size is now operator-controlled.
+        self.risk_free_rate = self.fundamental_engine.risk_free_rate
+        self.portfolio_size = float(os.getenv("DEFAULT_PORTFOLIO_SIZE", "100000"))
 
         self.thresholds = {
             'strong_buy':  0.8,
@@ -347,7 +354,28 @@ class RecommendationEngine:
         if not text_data:
             return {'overall_sentiment': {'score': 0.0, 'label': 'neutral', 'confidence': 0.0}}
 
-        return await self.sentiment_engine.analyze_sentiment(ticker, text_data)
+        # F-09-001: ``analyze_sentiment(text: str, source: str)`` is the
+        # per-text entrypoint and rejects the list-of-dicts shape this
+        # method assembles. The batch entrypoint is
+        # ``analyze_stock_sentiment(ticker, texts: List[str])``.
+        # Adapter pattern: feed it the extracted ``text`` field, then
+        # map the SentimentResult back to the legacy dict shape that
+        # downstream consumers (line ~480) read via
+        # ``sentiment_analysis.get('overall_sentiment', ...)``.
+        result = await self.sentiment_engine.analyze_stock_sentiment(
+            ticker, [item['text'] for item in text_data if item.get('text')]
+        )
+        return {
+            'overall_sentiment': {
+                'score': result.score,
+                'label': result.label,
+                'confidence': result.confidence,
+            },
+            'breakdown': result.breakdown,
+            'keywords': result.keywords,
+            'sources_analyzed': result.sources_analyzed,
+            'timestamp': result.timestamp,
+        }
 
     async def _run_ml_predictions(
         self, ticker: str, stock_data: Dict
@@ -406,8 +434,10 @@ class RecommendationEngine:
         volatility = returns.std() * np.sqrt(252)
         beta = stock_data.get('beta', 1.0)
 
-        risk_free_rate = 0.045
-        excess_returns = returns - risk_free_rate / 252
+        # F-09-008: use the engine-level risk-free rate (synced with
+        # FundamentalAnalysisEngine.risk_free_rate) instead of a local
+        # 0.045 constant.
+        excess_returns = returns - self.risk_free_rate / 252
         sharpe_ratio = (
             (excess_returns.mean() * 252) / (returns.std() * np.sqrt(252))
             if returns.std() > 0
@@ -520,7 +550,10 @@ class RecommendationEngine:
         )
         catalysts = find_catalysts(stock_data, sentiment_analysis, fundamental_analysis)
 
-        position_sizing = calculate_position_sizing(confidence, risk_metrics, action)
+        position_sizing = calculate_position_sizing(
+            confidence, risk_metrics, action,
+            portfolio_size=self.portfolio_size,  # F-09-009
+        )
 
         priority = calculate_priority(risk_adjusted_score, confidence, opportunities)
 
@@ -590,7 +623,10 @@ class RecommendationEngine:
         return find_catalysts(stock_data, sentiment, fundamental)
 
     def _calculate_position_sizing(self, confidence, risk_metrics, action):
-        return calculate_position_sizing(confidence, risk_metrics, action)
+        return calculate_position_sizing(
+            confidence, risk_metrics, action,
+            portfolio_size=self.portfolio_size,  # F-09-009
+        )
 
     def _calculate_priority(self, score, confidence, opportunities):
         return calculate_priority(score, confidence, opportunities)
@@ -602,7 +638,10 @@ class RecommendationEngine:
         return rank_recommendations(recommendations)
 
     async def _optimize_recommendations(self, recommendations, risk_tolerance):
-        return await optimize_recommendations(recommendations, risk_tolerance, self.portfolio_optimizer)
+        return await optimize_recommendations(
+            recommendations, risk_tolerance, self.portfolio_optimizer,
+            portfolio_size=self.portfolio_size,  # F-09-009
+        )
 
     # Also keep the generate_report helper using summary directly
 
