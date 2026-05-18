@@ -50,6 +50,10 @@ class ETLOrchestrator:
     def __init__(self, use_distributed: bool = True, cache_dir: str = "/tmp/stock_cache"):
         # Legacy components (maintained for backward compatibility)
         self.legacy_extractor = DataExtractor()
+        # F-05-007: realtime / single-ticker code paths reference
+        # ``self.extractor`` (etl_orchestrator.py lines 387, 633). Alias
+        # to the legacy extractor so those paths do not AttributeError.
+        self.extractor = self.legacy_extractor
         self.transformer = DataTransformer()
         self.loader = DataLoader()
         self.batch_loader = BatchLoader(self.loader)
@@ -142,28 +146,69 @@ class ETLOrchestrator:
             
             logger.info(f"Created {len(job_ids)} processing jobs")
             
-            # Start distributed processing
+            # F-05-002: bound the monitor loop. The original version only
+            # counted ``status == 'completed'`` jobs, so any failed/cancelled
+            # job left the loop spinning forever. We now:
+            #   - count terminal states (completed | failed | cancelled |
+            #     error) toward the exit condition
+            #   - enforce ``max_wait_seconds`` so a stuck processor cannot
+            #     hang the pipeline indefinitely
+            #   - cancel ``processing_task`` in ``finally`` so a leaked
+            #     task does not survive the exit
+            max_wait_seconds = int(
+                os.getenv("ETL_DISTRIBUTED_MAX_WAIT_SECONDS", "7200")
+            )
+            poll_interval_seconds = 30
+            terminal_states = {"completed", "failed", "cancelled", "error"}
+
             processing_task = asyncio.create_task(
                 self.distributed_processor.start_processing()
             )
-            
-            # Monitor progress
-            completed_jobs = 0
-            while completed_jobs < len(job_ids):
-                await asyncio.sleep(30)  # Check every 30 seconds
-                
-                completed_count = 0
-                for job_id in job_ids:
-                    status = self.distributed_processor.get_job_status(job_id)
-                    if status and status['status'] == 'completed':
-                        completed_count += 1
-                
-                if completed_count > completed_jobs:
-                    completed_jobs = completed_count
-                    logger.info(f"Progress: {completed_jobs}/{len(job_ids)} jobs completed")
-            
-            # Stop processing and collect results
-            self.distributed_processor.stop_processing()
+
+            start_time = asyncio.get_event_loop().time()
+            try:
+                terminal_jobs = 0
+                while terminal_jobs < len(job_ids):
+                    elapsed = asyncio.get_event_loop().time() - start_time
+                    if elapsed > max_wait_seconds:
+                        logger.warning(
+                            f"Distributed pipeline exceeded "
+                            f"max_wait_seconds={max_wait_seconds}; aborting "
+                            f"with {terminal_jobs}/{len(job_ids)} jobs terminal"
+                        )
+                        self.metrics["errors"].append(
+                            f"distributed_pipeline_timeout after {elapsed:.0f}s"
+                        )
+                        break
+
+                    await asyncio.sleep(poll_interval_seconds)
+
+                    terminal_count = 0
+                    completed_count = 0
+                    failed_count = 0
+                    for job_id in job_ids:
+                        status = self.distributed_processor.get_job_status(job_id)
+                        if status and status["status"] in terminal_states:
+                            terminal_count += 1
+                            if status["status"] == "completed":
+                                completed_count += 1
+                            else:
+                                failed_count += 1
+
+                    if terminal_count > terminal_jobs:
+                        terminal_jobs = terminal_count
+                        logger.info(
+                            f"Progress: {terminal_jobs}/{len(job_ids)} jobs terminal "
+                            f"({completed_count} ok, {failed_count} failed)"
+                        )
+            finally:
+                self.distributed_processor.stop_processing()
+                if not processing_task.done():
+                    processing_task.cancel()
+                    try:
+                        await processing_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
             
             # Update metrics from processor stats
             processor_stats = self.distributed_processor.get_processor_stats()

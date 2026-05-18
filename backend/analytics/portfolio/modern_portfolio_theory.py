@@ -10,6 +10,8 @@ from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 import logging
 
+from scipy.optimize import minimize  # F-09-010: SLSQP mean-variance solver
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,13 +78,72 @@ class PortfolioOptimizer:
         expected_returns = returns.mean() * 252  # Annualize
         cov_matrix = returns.cov() * 252  # Annualize
 
-        # Simple equal weight as baseline
-        weights = np.array([1.0 / n_assets] * n_assets)
+        # F-09-010: previous implementation always returned equal
+        # weights, ignoring ``target_return`` / ``target_volatility``.
+        # Replace with a real mean-variance optimizer via scipy
+        # (``scipy.optimize.minimize`` imported at module top).
+        er = np.asarray(expected_returns, dtype=float)
+        cov = np.asarray(cov_matrix, dtype=float)
+
+        def _portfolio_var(w: np.ndarray) -> float:
+            return float(np.dot(w.T, np.dot(cov, w)))
+
+        def _portfolio_ret(w: np.ndarray) -> float:
+            return float(np.dot(w, er))
+
+        def _neg_sharpe(w: np.ndarray) -> float:
+            ret = _portfolio_ret(w)
+            vol = np.sqrt(_portfolio_var(w))
+            if vol <= 0:
+                return 0.0
+            return -(ret - self.risk_free_rate) / vol
+
+        # Long-only, fully invested.
+        bounds = tuple((0.0, 1.0) for _ in range(n_assets))
+        sum_to_one = {"type": "eq", "fun": lambda w: float(np.sum(w) - 1.0)}
+        x0 = np.array([1.0 / n_assets] * n_assets)
+
+        if target_return is not None:
+            # Minimize variance subject to ``w·er >= target_return``.
+            constraints = [
+                sum_to_one,
+                {"type": "ineq", "fun": lambda w: _portfolio_ret(w) - float(target_return)},
+            ]
+            res = minimize(_portfolio_var, x0, method="SLSQP",
+                           bounds=bounds, constraints=constraints)
+        elif target_volatility is not None:
+            # Maximize return subject to ``vol <= target_volatility``.
+            constraints = [
+                sum_to_one,
+                {"type": "ineq",
+                 "fun": lambda w: float(target_volatility) - np.sqrt(_portfolio_var(w))},
+            ]
+            res = minimize(lambda w: -_portfolio_ret(w), x0, method="SLSQP",
+                           bounds=bounds, constraints=constraints)
+        else:
+            # No target → maximize Sharpe.
+            res = minimize(_neg_sharpe, x0, method="SLSQP",
+                           bounds=bounds, constraints=[sum_to_one])
+
+        if res.success:
+            weights = np.asarray(res.x, dtype=float)
+        else:
+            # Solver failed → fall back to equal weights with a logger
+            # warning rather than silently returning bad weights.
+            import logging
+            logging.getLogger(__name__).warning(
+                "MPT solver did not converge (%s); falling back to equal weights",
+                getattr(res, "message", "no message"),
+            )
+            weights = x0
 
         # Calculate portfolio metrics
-        portfolio_return = np.dot(weights, expected_returns)
-        portfolio_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-        sharpe = (portfolio_return - self.risk_free_rate) / portfolio_vol if portfolio_vol > 0 else 0
+        portfolio_return = _portfolio_ret(weights)
+        portfolio_vol = float(np.sqrt(_portfolio_var(weights)))
+        sharpe = (
+            (portfolio_return - self.risk_free_rate) / portfolio_vol
+            if portfolio_vol > 0 else 0.0
+        )
 
         weight_dict = dict(zip(assets, weights))
 

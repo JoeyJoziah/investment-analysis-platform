@@ -37,7 +37,7 @@ dag = DAG(
     'enhanced_stock_pipeline',
     default_args=default_args,
     description='Enhanced daily stock data ETL pipeline',
-    schedule_interval='0 6 * * *',  # Run at 6 AM daily
+    schedule='0 6 * * *',  # Run at 6 AM daily
     catchup=False,
     tags=['stocks', 'etl', 'production'],
 )
@@ -248,33 +248,51 @@ def cleanup_and_optimize(**context):
     # Additional cleanup via SQL
     pg_hook = PostgresHook(postgres_conn_id='postgres_default')
     
-    cleanup_queries = [
+    transactional_queries = [
         # Archive old recommendations
         """
-        UPDATE recommendations 
-        SET is_active = false 
+        UPDATE recommendations
+        SET is_active = false
         WHERE created_at < CURRENT_DATE - INTERVAL '30 days'
         AND is_active = true
         """,
-        
         # Clean up old pipeline logs
         """
-        DELETE FROM pipeline_logs 
+        DELETE FROM pipeline_logs
         WHERE run_date < CURRENT_DATE - INTERVAL '90 days'
         """,
-        
-        # Vacuum and analyze for performance
+    ]
+
+    # F-06-004: VACUUM cannot run inside a transaction block. PostgresHook.run
+    # wraps statements in a transaction by default, which produces
+    # ``ERROR: VACUUM cannot run inside a transaction block``. Drop to a raw
+    # psycopg2 connection with isolation level AUTOCOMMIT (= 0) for the
+    # maintenance commands.
+    vacuum_queries = [
         "VACUUM ANALYZE price_history",
         "VACUUM ANALYZE technical_indicators",
-        "VACUUM ANALYZE recommendations"
+        "VACUUM ANALYZE recommendations",
     ]
-    
-    for query in cleanup_queries:
+
+    for query in transactional_queries:
         try:
             pg_hook.run(query)
             logging.info(f"Executed cleanup: {query[:50]}...")
         except Exception as e:
             logging.error(f"Cleanup query failed: {e}")
+
+    conn = pg_hook.get_conn()
+    try:
+        conn.set_isolation_level(0)  # ISOLATION_LEVEL_AUTOCOMMIT
+        with conn.cursor() as cur:
+            for query in vacuum_queries:
+                try:
+                    cur.execute(query)
+                    logging.info(f"Executed maintenance: {query}")
+                except Exception as e:
+                    logging.error(f"Maintenance query failed: {e}")
+    finally:
+        conn.close()
     
     logging.info("Cleanup and optimization completed")
 

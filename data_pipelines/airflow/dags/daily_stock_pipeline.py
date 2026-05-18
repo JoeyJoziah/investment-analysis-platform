@@ -38,8 +38,6 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.task_group import TaskGroup
-from airflow.models import Pool
-from airflow.utils.db import create_session
 from airflow.exceptions import AirflowException
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import yfinance as yf
@@ -119,7 +117,7 @@ dag = DAG(
     'daily_stock_pipeline',
     default_args=default_args,
     description='Optimized daily stock data ingestion with native parallel processing (6000+ stocks)',
-    schedule_interval='0 6 * * 1-5',  # 6 AM ET, weekdays only
+    schedule='0 6 * * 1-5',  # 6 AM ET, weekdays only
     catchup=False,
     max_active_runs=1,  # Prevent overlapping runs
     max_active_tasks=MAX_ACTIVE_TIS_PER_DAG,  # Limit concurrent tasks
@@ -163,17 +161,11 @@ class MarketHoursSensor(BaseSensorOperator):
         return is_after_close
 
 
-def ensure_pool_exists():
-    """Ensure the API rate limiting pool exists"""
-    with create_session() as session:
-        pool = session.query(Pool).filter(Pool.pool == POOL_NAME).first()
-        if not pool:
-            pool = Pool(pool=POOL_NAME, slots=POOL_SLOTS, description='Pool for stock API rate limiting')
-            session.add(pool)
-            session.commit()
-            logger.info(f"Created pool '{POOL_NAME}' with {POOL_SLOTS} slots")
-        else:
-            logger.info(f"Pool '{POOL_NAME}' already exists with {pool.slots} slots")
+# F-06-006: ``airflow.utils.db.create_session`` was removed from public
+# API; runtime pool creation from DAG code is also discouraged. Create
+# the pool at deployment time with:
+#     airflow pools set stock_api_pool 8 "Pool for stock API rate limiting"
+# The DAG references the pool by name via ``POOL_NAME``.
 
 
 def get_all_active_stocks(**context) -> List[str]:
@@ -775,13 +767,7 @@ def calculate_indicators_parallel(**context) -> Dict[str, Any]:
 
 
 def calculate_rsi(prices: List[float], period: int = 14) -> float:
-    """
-    Calculate RSI indicator.
-
-    DEPRECATED: This function is kept for backward compatibility.
-    The main indicator calculation now uses PostgreSQL window functions
-    in calculate_indicators_parallel() for better performance.
-    """
+    """Calculate RSI indicator (fallback path)."""
     if len(prices) < period:
         return 50.0
 
@@ -798,13 +784,7 @@ def calculate_rsi(prices: List[float], period: int = 14) -> float:
 
 
 def calculate_macd(prices: List[float]) -> Tuple[float, float]:
-    """
-    Calculate MACD indicator.
-
-    DEPRECATED: This function is kept for backward compatibility.
-    The main indicator calculation now uses PostgreSQL window functions
-    in calculate_indicators_parallel() for better performance.
-    """
+    """Calculate MACD indicator (fallback path)."""
     if len(prices) < 26:
         return 0.0, 0.0
 
@@ -1568,8 +1548,8 @@ Parallelism Configuration:
 # DAG TASK DEFINITIONS WITH NATIVE PARALLELISM
 # ============================================================================
 
-# Initialize pool on DAG load
-ensure_pool_exists()
+# F-06-006: pool now created at deployment time via ``airflow pools set``;
+# DAG load no longer mutates the metadata DB.
 
 with dag:
     # -------------------------------------------------------------------------
@@ -1676,19 +1656,3 @@ with dag:
     fetch_group >> indicator_group >> finalize_group >> summary_task >> end_task
 
 
-# ============================================================================
-# LEGACY FUNCTIONS (kept for backwards compatibility and fallback)
-# These use ThreadPoolExecutor approach - superseded by native Airflow parallelism
-# Can be used if Airflow version < 2.3 doesn't support dynamic task mapping
-# ============================================================================
-
-# NOTE: The following functions are DEPRECATED but kept for reference:
-# - parallel_fetch_stock_data(): Uses ThreadPoolExecutor in single task
-# - calculate_indicators_parallel(): Uses sequential batch processing
-# - process_stock_batch(): Original batch processor
-# - fetch_batch_data_worker(): Worker for ThreadPoolExecutor
-#
-# The new approach (above) uses:
-# - prepare_stock_batches() + fetch_stock_batch.expand() for true parallelism
-# - prepare_indicator_batches() + calculate_indicators_batch.expand()
-# - Each batch is a separate Airflow task with individual monitoring/retry

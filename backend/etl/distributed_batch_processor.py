@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple, Set
 from dataclasses import dataclass, asdict
@@ -96,51 +97,50 @@ class DistributedBatchProcessor:
     
     def _init_job_db(self):
         """Initialize job tracking database"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS batch_jobs (
-                job_id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                priority INTEGER,
-                created_at TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                progress INTEGER DEFAULT 0,
-                total_tickers INTEGER,
-                successful_extractions INTEGER DEFAULT 0,
-                failed_extractions INTEGER DEFAULT 0,
-                error_message TEXT,
-                config_json TEXT
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS batch_jobs (
+                    job_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    priority INTEGER,
+                    created_at TIMESTAMP,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    progress INTEGER DEFAULT 0,
+                    total_tickers INTEGER,
+                    successful_extractions INTEGER DEFAULT 0,
+                    failed_extractions INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    config_json TEXT
+                )
+            """)
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS job_tickers (
-                job_id TEXT,
-                ticker TEXT,
-                status TEXT,
-                extraction_source TEXT,
-                extracted_at TIMESTAMP,
-                error_message TEXT,
-                FOREIGN KEY (job_id) REFERENCES batch_jobs (job_id)
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS job_tickers (
+                    job_id TEXT,
+                    ticker TEXT,
+                    status TEXT,
+                    extraction_source TEXT,
+                    extracted_at TIMESTAMP,
+                    error_message TEXT,
+                    FOREIGN KEY (job_id) REFERENCES batch_jobs (job_id)
+                )
+            """)
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processor_stats (
-                timestamp TIMESTAMP PRIMARY KEY,
-                total_jobs_running INTEGER,
-                tickers_per_minute REAL,
-                success_rate REAL,
-                avg_time_per_ticker REAL,
-                memory_usage_mb REAL
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS processor_stats (
+                    timestamp TIMESTAMP PRIMARY KEY,
+                    total_jobs_running INTEGER,
+                    tickers_per_minute REAL,
+                    success_rate REAL,
+                    avg_time_per_ticker REAL,
+                    memory_usage_mb REAL
+                )
+            """)
         
-        conn.commit()
-        conn.close()
+            conn.commit()
     
     def create_job(self, tickers: List[str], priority: int = 1, job_id: str = None) -> str:
         """Create a new batch job"""
@@ -190,36 +190,34 @@ class DistributedBatchProcessor:
     
     def _save_job_to_db(self, job: BatchJob):
         """Save job to database"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("""
-            INSERT OR REPLACE INTO batch_jobs 
-            (job_id, status, priority, created_at, started_at, completed_at, 
-             progress, total_tickers, successful_extractions, failed_extractions, 
-             error_message, config_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            job.job_id, job.status, job.priority,
-            job.created_at.isoformat() if job.created_at else None,
-            job.started_at.isoformat() if job.started_at else None,
-            job.completed_at.isoformat() if job.completed_at else None,
-            job.progress, job.total_tickers,
-            job.successful_extractions, job.failed_extractions,
-            job.error_message, json.dumps(asdict(self.config), default=str)
-        ))
+            cursor.execute("""
+                INSERT OR REPLACE INTO batch_jobs 
+                (job_id, status, priority, created_at, started_at, completed_at, 
+                 progress, total_tickers, successful_extractions, failed_extractions, 
+                 error_message, config_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                job.job_id, job.status, job.priority,
+                job.created_at.isoformat() if job.created_at else None,
+                job.started_at.isoformat() if job.started_at else None,
+                job.completed_at.isoformat() if job.completed_at else None,
+                job.progress, job.total_tickers,
+                job.successful_extractions, job.failed_extractions,
+                job.error_message, json.dumps(asdict(self.config), default=str)
+            ))
         
-        conn.commit()
-        conn.close()
+            conn.commit()
     
     def _load_job_from_db(self, job_id: str) -> Optional[BatchJob]:
         """Load job from database"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("SELECT * FROM batch_jobs WHERE job_id = ?", (job_id,))
-        row = cursor.fetchone()
-        conn.close()
+            cursor.execute("SELECT * FROM batch_jobs WHERE job_id = ?", (job_id,))
+            row = cursor.fetchone()
         
         if not row:
             return None
@@ -259,32 +257,31 @@ class DistributedBatchProcessor:
     
     def list_jobs(self, status_filter: str = None) -> List[Dict]:
         """List all jobs, optionally filtered by status"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
         
-        if status_filter:
-            cursor.execute(
-                "SELECT job_id, status, priority, progress, total_tickers, created_at FROM batch_jobs WHERE status = ? ORDER BY priority, created_at",
-                (status_filter,)
-            )
-        else:
-            cursor.execute(
-                "SELECT job_id, status, priority, progress, total_tickers, created_at FROM batch_jobs ORDER BY priority, created_at"
-            )
+            if status_filter:
+                cursor.execute(
+                    "SELECT job_id, status, priority, progress, total_tickers, created_at FROM batch_jobs WHERE status = ? ORDER BY priority, created_at",
+                    (status_filter,)
+                )
+            else:
+                cursor.execute(
+                    "SELECT job_id, status, priority, progress, total_tickers, created_at FROM batch_jobs ORDER BY priority, created_at"
+                )
         
-        jobs = []
-        for row in cursor.fetchall():
-            jobs.append({
-                'job_id': row[0],
-                'status': row[1],
-                'priority': row[2],
-                'progress': row[3],
-                'total_tickers': row[4],
-                'completion_percentage': (row[3] / row[4] * 100) if row[4] > 0 else 0,
-                'created_at': row[5]
-            })
+            jobs = []
+            for row in cursor.fetchall():
+                jobs.append({
+                    'job_id': row[0],
+                    'status': row[1],
+                    'priority': row[2],
+                    'progress': row[3],
+                    'total_tickers': row[4],
+                    'completion_percentage': (row[3] / row[4] * 100) if row[4] > 0 else 0,
+                    'created_at': row[5]
+                })
         
-        conn.close()
         return jobs
     
     async def _process_single_job(self, job: BatchJob) -> BatchJob:
@@ -442,79 +439,77 @@ class DistributedBatchProcessor:
     
     def _load_pending_jobs(self):
         """Load pending jobs from database"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
         
-        cursor.execute("""
-            SELECT job_id FROM batch_jobs 
-            WHERE status = 'pending'
-            ORDER BY priority, created_at
-            LIMIT 20
-        """)
+            cursor.execute("""
+                SELECT job_id FROM batch_jobs 
+                WHERE status = 'pending'
+                ORDER BY priority, created_at
+                LIMIT 20
+            """)
         
-        for row in cursor.fetchall():
-            job_id = row[0]
+            for row in cursor.fetchall():
+                job_id = row[0]
             
-            # Load job data from file
-            job_file = self.jobs_dir / f"{job_id}.json"
-            if job_file.exists():
-                try:
-                    with open(job_file, 'r') as f:
-                        job_data = json.load(f)
-                        job = BatchJob(
-                            job_id=job_data['job_id'],
-                            tickers=job_data['tickers'],
-                            status=job_data['status'],
-                            priority=job_data['priority'],
-                            created_at=datetime.fromisoformat(job_data['created_at']),
-                            total_tickers=job_data['total_tickers']
-                        )
-                        self.job_queue.append(job)
-                except Exception as e:
-                    logger.error(f"Error loading job {job_id}: {e}")
+                # Load job data from file
+                job_file = self.jobs_dir / f"{job_id}.json"
+                if job_file.exists():
+                    try:
+                        with open(job_file, 'r') as f:
+                            job_data = json.load(f)
+                            job = BatchJob(
+                                job_id=job_data['job_id'],
+                                tickers=job_data['tickers'],
+                                status=job_data['status'],
+                                priority=job_data['priority'],
+                                created_at=datetime.fromisoformat(job_data['created_at']),
+                                total_tickers=job_data['total_tickers']
+                            )
+                            self.job_queue.append(job)
+                    except Exception as e:
+                        logger.error(f"Error loading job {job_id}: {e}")
         
-        conn.close()
     
     def _update_stats(self):
         """Update processor statistics"""
         try:
-            conn = sqlite3.connect(self.job_db_path)
-            cursor = conn.cursor()
+            with closing(sqlite3.connect(self.job_db_path)) as conn:
+                cursor = conn.cursor()
             
-            # Calculate current metrics
-            current_time = datetime.now()
-            running_jobs = len(self.active_jobs)
+                # Calculate current metrics
+                current_time = datetime.now()
+                running_jobs = len(self.active_jobs)
             
-            # Calculate tickers per minute (last hour)
-            hour_ago = (current_time - timedelta(hours=1)).isoformat()
-            cursor.execute("""
-                SELECT COUNT(*) FROM job_tickers 
-                WHERE extracted_at > ? AND status = 'success'
-            """, (hour_ago,))
+                # Calculate tickers per minute (last hour)
+                hour_ago = (current_time - timedelta(hours=1)).isoformat()
+                cursor.execute("""
+                    SELECT COUNT(*) FROM job_tickers 
+                    WHERE extracted_at > ? AND status = 'success'
+                """, (hour_ago,))
             
-            tickers_last_hour = cursor.fetchone()[0] or 0
-            tickers_per_minute = tickers_last_hour / 60.0 if tickers_last_hour > 0 else 0
+                tickers_last_hour = cursor.fetchone()[0] or 0
+                tickers_per_minute = tickers_last_hour / 60.0 if tickers_last_hour > 0 else 0
             
-            # Calculate success rate (last hour)
-            cursor.execute("""
-                SELECT 
-                    SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
-                FROM job_tickers 
-                WHERE extracted_at > ?
-            """, (hour_ago,))
+                # Calculate success rate (last hour)
+                cursor.execute("""
+                    SELECT 
+                        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
+                    FROM job_tickers 
+                    WHERE extracted_at > ?
+                """, (hour_ago,))
             
-            result = cursor.fetchone()
-            success_rate = result[0] if result and result[0] else 0
+                result = cursor.fetchone()
+                success_rate = result[0] if result and result[0] else 0
             
-            # Insert stats
-            cursor.execute("""
-                INSERT INTO processor_stats 
-                (timestamp, total_jobs_running, tickers_per_minute, success_rate, avg_time_per_ticker)
-                VALUES (?, ?, ?, ?, ?)
-            """, (current_time.isoformat(), running_jobs, tickers_per_minute, success_rate, 0))
+                # Insert stats
+                cursor.execute("""
+                    INSERT INTO processor_stats 
+                    (timestamp, total_jobs_running, tickers_per_minute, success_rate, avg_time_per_ticker)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (current_time.isoformat(), running_jobs, tickers_per_minute, success_rate, 0))
             
-            conn.commit()
-            conn.close()
+                conn.commit()
             
         except Exception as e:
             logger.debug(f"Error updating stats: {e}")
@@ -531,21 +526,19 @@ class DistributedBatchProcessor:
             del self.active_jobs[job_id]
             
             # Update job status
-            conn = sqlite3.connect(self.job_db_path)
-            cursor = conn.cursor()
-            cursor.execute("UPDATE batch_jobs SET status = 'paused' WHERE job_id = ?", (job_id,))
-            conn.commit()
-            conn.close()
+            with closing(sqlite3.connect(self.job_db_path)) as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE batch_jobs SET status = 'paused' WHERE job_id = ?", (job_id,))
+                conn.commit()
             
             logger.info(f"Paused job {job_id}")
     
     def resume_job(self, job_id: str):
         """Resume a paused job"""
-        conn = sqlite3.connect(self.job_db_path)
-        cursor = conn.cursor()
-        cursor.execute("UPDATE batch_jobs SET status = 'pending' WHERE job_id = ?", (job_id,))
-        conn.commit()
-        conn.close()
+        with closing(sqlite3.connect(self.job_db_path)) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE batch_jobs SET status = 'pending' WHERE job_id = ?", (job_id,))
+            conn.commit()
         
         logger.info(f"Resumed job {job_id}")
     

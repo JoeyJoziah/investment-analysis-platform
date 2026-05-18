@@ -135,7 +135,11 @@ _dl = _load_etl_module("data_loader")
 # data_validator (no relative imports)
 _dv = _load_etl_module("data_validator")
 
-# unlimited_data_extractor (relative: none, but uses selenium etc. -- all stubbed)
+# F-05-005: both extractor modules now do ``from .types import ExtractionResult``.
+# Register the real types module so the relative import resolves.
+_types = _load_etl_module("types")
+
+# unlimited_data_extractor (relative: .types, plus selenium etc. -- all stubbed)
 _ude = _load_etl_module("unlimited_data_extractor")
 
 # intelligent_cache_system (no relative imports)
