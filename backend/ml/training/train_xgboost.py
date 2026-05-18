@@ -172,7 +172,27 @@ class XGBoostTrainer:
         return train_df, val_df, test_df
 
     def prepare_features(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        """Prepare features and targets for training."""
+        """Prepare features and targets for training.
+
+        F-03-004: the previous implementation called
+        ``np.nan_to_num(y, nan=0.0)`` on the target, turning every
+        end-of-series look-ahead truncated row (where ``future_return_*``
+        is NaN by construction) into a zero label. The resulting label
+        distribution had a spike at exactly 0.0 that the model learned
+        to predict, collapsing R² ≤ 0 and producing all-zero feature
+        importances. The fix:
+
+        - Drop rows where the target is NaN (those rows have no usable
+          ground truth — synthesizing zero is worse than dropping).
+        - Drop feature columns that are all-NaN or zero-variance after
+          target-row drop; otherwise ``nan_to_num`` would convert them
+          to constant zeros that XGBoost can't split on and they'd
+          end up in ``feature_columns`` with zero importance, polluting
+          downstream feature-importance reports.
+        - Only then ``nan_to_num`` the remaining feature NaNs (early-
+          window indicators); these survive as real signal once the
+          column has variance.
+        """
         # Define feature columns (exclude non-numeric and target columns)
         exclude_cols = [
             'date', 'ticker', 'sector', 'industry',
@@ -181,8 +201,45 @@ class XGBoostTrainer:
             'risk_adj_return_1d', 'risk_adj_return_5d', 'risk_adj_return_10d', 'risk_adj_return_20d'
         ]
 
-        self.feature_columns = [c for c in df.columns if c not in exclude_cols
-                                and df[c].dtype in ['float64', 'float32', 'int64', 'int32']]
+        # F-03-004: drop rows where target is NaN BEFORE picking
+        # feature columns — otherwise an all-NaN-in-trimmed-rows column
+        # could falsely look populated when sized against the original
+        # frame.
+        target_col = self.target_column
+        valid = df[target_col].notna()
+        dropped = int((~valid).sum())
+        if dropped:
+            logger.info(
+                f"prepare_features: dropping {dropped} rows with NaN "
+                f"{target_col} (F-03-004)"
+            )
+        df = df.loc[valid].reset_index(drop=True)
+
+        # First-pass candidate features.
+        candidate_cols = [
+            c for c in df.columns
+            if c not in exclude_cols
+            and df[c].dtype in ['float64', 'float32', 'int64', 'int32']
+        ]
+
+        # F-03-004: drop dead (all-NaN) and constant columns. They would
+        # collapse to zero variance after nan_to_num, contribute no
+        # split information to XGBoost, and silently inflate
+        # ``feature_columns`` with zero-importance entries.
+        kept: List[str] = []
+        for c in candidate_cols:
+            col = df[c]
+            if col.isna().all():
+                logger.info(f"prepare_features: dropping all-NaN column {c!r}")
+                continue
+            # Use nunique on non-NaN values to detect constants.
+            if col.dropna().nunique() <= 1:
+                logger.info(
+                    f"prepare_features: dropping zero-variance column {c!r}"
+                )
+                continue
+            kept.append(c)
+        self.feature_columns = kept
 
         logger.info(f"Using {len(self.feature_columns)} features")
 
@@ -190,9 +247,10 @@ class XGBoostTrainer:
         X = df[self.feature_columns].values
         y = df[self.target_column].values
 
-        # Handle NaN values
+        # Remaining feature NaNs (early-window indicators etc.) get
+        # zero-filled — only AFTER we've already dropped target NaNs
+        # and zero-variance columns, so the fill is signal-preserving.
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-        y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
 
         return X, y
 
