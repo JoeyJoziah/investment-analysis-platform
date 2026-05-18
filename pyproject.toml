@@ -147,3 +147,9 @@ disable = [
     "R0913",  # too-many-arguments
     "W0622",  # redefined-builtin
 ]
+[tool.bandit]
+# Skip MD5/SHA1 weak-crypto checks: all uses are non-security (cache keys, dedup hashing, etc).
+# B303 = use of insecure MD2/MD4/MD5/SHA1 hash function.
+# B324 = use of weak hash function (md5, sha1) without usedforsecurity=False.
+skips = ["B303", "B324"]
+exclude_dirs = ["backend/tests", "backend/TradingAgents"]

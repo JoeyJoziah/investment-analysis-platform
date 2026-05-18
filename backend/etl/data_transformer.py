@@ -13,9 +13,13 @@ from sklearn.preprocessing import StandardScaler, RobustScaler
 try:
     import talib
     HAS_TALIB = True
+    ta = None
 except ImportError:
     HAS_TALIB = False
-    import pandas_ta as ta
+    try:
+        import pandas_ta as ta
+    except ImportError:
+        ta = None  # No technical analysis library available; transformer will skip indicators
 
 logger = logging.getLogger(__name__)
 

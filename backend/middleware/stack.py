@@ -150,7 +150,7 @@ class MiddlewareStack:
 
         self.middlewares.append(registration)
         logger.debug(
-            f"Registered middleware: {name} (priority={priority.name}:{priority.value})"
+            f"Registered middleware: {name} (priority={getattr(priority, 'name', int(priority))}:{getattr(priority, 'value', int(priority))})"
         )
 
         return self
@@ -170,7 +170,7 @@ class MiddlewareStack:
         # This ensures outermost middleware (highest priority) is added first
         sorted_middlewares = sorted(
             self.middlewares,
-            key=lambda m: m.priority.value,
+            key=lambda m: int(m.priority),
             reverse=True  # Highest priority first
         )
 
@@ -199,7 +199,7 @@ class MiddlewareStack:
                 )
                 logger.info(
                     f"  ✓ {middleware.name} "
-                    f"(priority={middleware.priority.name}:{middleware.priority.value})"
+                    f"(priority={getattr(middleware.priority, 'name', str(int(middleware.priority)))}:{int(middleware.priority)})"
                 )
                 applied_count += 1
 
@@ -227,7 +227,7 @@ class MiddlewareStack:
 
         sorted_middlewares = sorted(
             self.middlewares,
-            key=lambda m: m.priority.value,
+            key=lambda m: int(m.priority),
             reverse=True
         )
 
@@ -239,7 +239,7 @@ class MiddlewareStack:
             testing_flag = " [skip in testing]" if middleware.skip_in_testing else ""
             lines.append(
                 f"{i:2d}. {status} {middleware.name:20s} "
-                f"(priority={middleware.priority.value:5d}){testing_flag}"
+                f"(priority={int(middleware.priority):5d}){testing_flag}"
             )
 
         lines.append("=" * 60)

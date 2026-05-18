@@ -75,7 +75,7 @@ _ensure_stub("openai", {"OpenAI": MagicMock})
 
 _TRADING_AGENTS_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), os.pardir, os.pardir,
-    "TradingAgents", "tradingagents",
+    "_archive_TradingAgents_fork_pre_2026-05-12", "tradingagents",
 ))
 
 

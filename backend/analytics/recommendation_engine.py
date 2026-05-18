@@ -82,11 +82,12 @@ class RecommendationEngine:
     and the sub-engine lifecycle.
     """
 
-    def __init__(self):
+    def __init__(self, model_manager=None):
         self.technical_engine = TechnicalAnalysisEngine()
         self.fundamental_engine = FundamentalAnalysisEngine()
         self.sentiment_engine = SentimentAnalysisEngine()
-        self.model_manager = ModelManager()
+        # Allow caller to inject a pre-configured model manager (DI), otherwise build one
+        self.model_manager = model_manager if model_manager is not None else ModelManager()
         self.market_scanner = MarketScanner()
         self.risk_manager = RiskManager()
         self.portfolio_optimizer = PortfolioOptimizer()

@@ -6,8 +6,6 @@ LSTM, XGBoost, Prophet, or ensemble models. Integrates with the existing
 ModelManager and ML pipeline infrastructure with Redis-backed caching.
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
 import logging

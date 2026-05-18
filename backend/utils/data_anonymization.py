@@ -15,8 +15,25 @@ from backend.utils.monitoring import data_anonymization_operations
 # Initialize Faker for generating fake data
 fake = Faker()
 
-# Encryption key for reversible anonymization
-ENCRYPTION_KEY = settings.GDPR_ENCRYPTION_KEY.encode() if getattr(settings, 'GDPR_ENCRYPTION_KEY', None) else Fernet.generate_key()
+# Encryption key for reversible anonymization. Validate any user-supplied key
+# before passing to Fernet so a malformed value falls back to a generated key
+# instead of crashing module import.
+def _resolve_gdpr_key():
+    raw = getattr(settings, 'GDPR_ENCRYPTION_KEY', None)
+    if raw:
+        try:
+            key_bytes = raw.encode() if isinstance(raw, str) else raw
+            Fernet(key_bytes)  # validates length + base64 encoding
+            return key_bytes
+        except Exception:  # noqa: BLE001 - any decode/length failure means use a fresh key
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                'GDPR_ENCRYPTION_KEY is set but not a valid Fernet key; '
+                'using an ephemeral generated key for this process.'
+            )
+    return Fernet.generate_key()
+
+ENCRYPTION_KEY = _resolve_gdpr_key()
 fernet = Fernet(ENCRYPTION_KEY)
 
 
