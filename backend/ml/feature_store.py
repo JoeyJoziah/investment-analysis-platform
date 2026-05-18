@@ -346,6 +346,14 @@ class FeatureStore:
             'rsi_14d': self._compute_rsi_14d,
             'sma_20d': self._compute_sma_20d,
             'ema_20d': self._compute_ema_20d,
+            # F-03-008: ML_PIPELINE_DOCUMENTATION.md advertised MACD and
+            # Bollinger Bands as builtin features but the computations
+            # were never implemented. Adds them so the documented
+            # surface and the runtime surface agree.
+            'macd': self._compute_macd,
+            'macd_signal': self._compute_macd_signal,
+            'bollinger_upper_20d': self._compute_bollinger_upper_20d,
+            'bollinger_lower_20d': self._compute_bollinger_lower_20d,
             'pe_ratio': self._compute_pe_ratio,
             'market_cap': self._compute_market_cap
         }
@@ -574,6 +582,101 @@ class FeatureStore:
         
         return pd.Series(ema_values, index=entity_ids)
     
+    # F-03-008: MACD and Bollinger Bands implementations follow.
+    # All four share a small helper that returns the per-entity close
+    # series, sorted by date.
+
+    def _entity_close_series(
+        self,
+        entity_id: str,
+        price_data: pd.DataFrame,
+    ) -> pd.Series:
+        rows = price_data[price_data['ticker'] == entity_id].sort_values('date')
+        return rows['close'].astype(float)
+
+    def _compute_macd(self, entity_ids: List[str], timestamp: datetime,
+                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """MACD = EMA(12) - EMA(26) on closing prices."""
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 26:
+                    ema_fast = closes.ewm(span=12, adjust=False).mean().iloc[-1]
+                    ema_slow = closes.ewm(span=26, adjust=False).mean().iloc[-1]
+                    values.append(float(ema_fast - ema_slow))
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing MACD for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
+    def _compute_macd_signal(self, entity_ids: List[str], timestamp: datetime,
+                            data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """MACD signal line = EMA(9) of the MACD series."""
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 26 + 9:
+                    macd_series = (
+                        closes.ewm(span=12, adjust=False).mean()
+                        - closes.ewm(span=26, adjust=False).mean()
+                    )
+                    signal = macd_series.ewm(span=9, adjust=False).mean().iloc[-1]
+                    values.append(float(signal))
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing MACD signal for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
+    def _compute_bollinger_upper_20d(self, entity_ids: List[str], timestamp: datetime,
+                                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """20-day Bollinger upper band = SMA(20) + 2 * std(20)."""
+        return self._compute_bollinger_band(entity_ids, data_sources, k=2.0)
+
+    def _compute_bollinger_lower_20d(self, entity_ids: List[str], timestamp: datetime,
+                                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """20-day Bollinger lower band = SMA(20) - 2 * std(20)."""
+        return self._compute_bollinger_band(entity_ids, data_sources, k=-2.0)
+
+    def _compute_bollinger_band(
+        self,
+        entity_ids: List[str],
+        data_sources: Dict[str, pd.DataFrame],
+        k: float,
+    ) -> pd.Series:
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 20:
+                    window = closes.tail(20)
+                    mean = float(window.mean())
+                    std = float(window.std(ddof=0))
+                    values.append(mean + k * std)
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing Bollinger band for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
     def _compute_pe_ratio(self, entity_ids: List[str], timestamp: datetime,
                         data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
         """Compute P/E ratio"""
