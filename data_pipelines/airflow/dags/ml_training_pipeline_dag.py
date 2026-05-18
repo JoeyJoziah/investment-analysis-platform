@@ -543,45 +543,60 @@ def train_models(**context):
 
 
 def evaluate_models(**context):
-    """Evaluate and compare trained models"""
-    
-    async def _evaluate_models():
-        registry = ModelRegistry()
-        monitor = ModelMonitor()
-        
-        training_results = context['task_instance'].xcom_pull(key='training_results')
-        
-        evaluation_results = []
-        
-        for result in training_results:
-            if result['status'] == 'completed':
-                model_name = result['model_name']
-                
-                # Get model from registry
-                model_version = await registry.get_model(model_name)
-                
-                if model_version:
-                    # Calculate additional metrics
-                    metrics = monitor.calculate_metrics(
-                        y_true=np.random.randn(100),  # Would use actual test data
-                        y_pred=np.random.randn(100),  # Would use actual predictions
-                        model_type='regression'
-                    )
-                    
-                    evaluation_results.append({
-                        'model_name': model_name,
-                        'version': model_version.version,
-                        'training_metrics': result['metrics'],
-                        'test_metrics': metrics.to_dict(),
-                        'ranking_score': metrics.r2  # Or custom ranking metric
-                    })
-        
-        # Rank models
-        evaluation_results.sort(key=lambda x: x.get('ranking_score', 0), reverse=True)
-        
-        return evaluation_results
-    
-    evaluation_results = asyncio.run(_evaluate_models())
+    """Evaluate and compare trained models on the persisted held-out test set.
+
+    F-06-008: previously called ``monitor.calculate_metrics`` with
+    ``y_true=np.random.randn(100)`` and ``y_pred=np.random.randn(100)``
+    — every "evaluation" report was uncorrelated noise. Now delegates
+    to ``backend.ml.training.evaluate_models.ModelEvaluator.run_evaluation``,
+    which loads the persisted ``test_data.parquet`` (the held-out test
+    set written by the upstream prepare-data step), loads each saved
+    model + scaler + config, and produces real MSE/MAE/R²/direction
+    metrics over the held-out data.
+
+    The DAG fails loud (AirflowException) if the held-out parquet is
+    missing — silent fallback to random noise (the previous behavior)
+    masked a broken upstream split-and-persist step for months.
+    """
+    from pathlib import Path
+    from airflow.exceptions import AirflowException
+
+    from backend.ml.training.evaluate_models import ModelEvaluator
+
+    data_dir = Variable.get("ml_data_dir", default_var="data/ml_training/processed")
+    model_dir = Variable.get("ml_model_dir", default_var="ml_models")
+
+    test_path = Path(data_dir) / "test_data.parquet"
+    if not test_path.exists():
+        raise AirflowException(
+            f"F-06-008: held-out test set not found at {test_path}. "
+            f"Upstream prepare-data step must persist ``test_data.parquet`` "
+            f"before evaluate_models can run. Refusing to fall back to "
+            f"random-data metrics (the legacy behavior)."
+        )
+
+    evaluator = ModelEvaluator(data_dir=str(data_dir), model_dir=str(model_dir))
+    report = evaluator.run_evaluation()
+
+    evaluation_results: List[Dict[str, Any]] = []
+    training_results = context['task_instance'].xcom_pull(key='training_results') or []
+    training_by_name = {
+        r['model_name']: r for r in training_results if r.get('status') == 'completed'
+    }
+
+    for model_result in report.get('model_results', []):
+        model_name = model_result['model']
+        training_entry = training_by_name.get(model_name, {})
+        evaluation_results.append({
+            'model_name': model_name,
+            'training_metrics': training_entry.get('metrics'),
+            'test_metrics': model_result,
+            # Use R² as the ranking score (higher = better fit).
+            'ranking_score': float(model_result.get('r2', 0.0)),
+        })
+
+    # Rank models
+    evaluation_results.sort(key=lambda x: x.get('ranking_score', 0.0), reverse=True)
     
     # Store results
     context['task_instance'].xcom_push(key='evaluation_results', value=evaluation_results)
