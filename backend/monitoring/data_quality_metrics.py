@@ -539,6 +539,50 @@ class DataQualityMetricsCollector:
 dq_metrics = DataQualityMetricsCollector()
 
 
+def get_quality_summary() -> Dict[str, Dict[str, Any]]:
+    """Aggregated per-data-type quality summary.
+
+    Audit fix 2026-04 / F-10-003: previously this symbol did not exist;
+    ``backend.monitoring.metrics_collector.collect_data_quality_metrics``
+    silently swallowed the resulting ImportError every 10s collection cycle,
+    producing zero data-quality Prometheus output.
+
+    The collector iterates ``quality_history`` (per-symbol) and projects it
+    into the per-data-type shape the metrics collector expects:
+
+        {
+            "<data_type_or_symbol>": {
+                "quality_score": float,   # 0..1, average across recent checks
+                "missing_percent": float, # placeholder (not tracked here)
+                "staleness": {provider: seconds, ...}  # optional, omitted
+            }
+        }
+
+    Until per-data-type history is added, we use the symbol key as the
+    data-type bucket — the collector tolerates arbitrary keys (it only
+    iterates and labels the metric with the key). If history is empty,
+    returns ``{}`` so the collector cycle remains a no-op rather than
+    crashing.
+
+    Returns:
+        Mapping of data type / symbol key to summary dict. Empty when no
+        quality checks have been recorded yet.
+    """
+    summary: Dict[str, Dict[str, Any]] = {}
+    history = getattr(dq_metrics, "quality_history", {}) or {}
+    for key, checks in history.items():
+        if not checks:
+            continue
+        scores = [c.get("score", 0) for c in checks]
+        if not scores:
+            continue
+        summary[key] = {
+            "quality_score": sum(scores) / len(scores),
+            "missing_percent": 0.0,
+        }
+    return summary
+
+
 # Integration function for existing data quality checks
 async def check_data_quality_with_metrics(
     df,

@@ -22,8 +22,8 @@ from enum import Enum
 import json
 import hashlib
 import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 import aiohttp
 import pandas as pd
@@ -406,7 +406,7 @@ class RealTimeAlertManager:
                 return
             
             # Create message
-            msg = MimeMultipart()
+            msg = MIMEMultipart()
             msg['From'] = from_email
             msg['To'] = ', '.join(to_emails)
             msg['Subject'] = f"[{alert.severity.value.upper()}] {alert.title}"
@@ -417,7 +417,7 @@ class RealTimeAlertManager:
             
             # Create HTML body
             html_body = self._create_email_html(alert)
-            msg.attach(MimeText(html_body, 'html'))
+            msg.attach(MIMEText(html_body, 'html'))
             
             # Send email
             with smtplib.SMTP(smtp_server, smtp_port) as server:

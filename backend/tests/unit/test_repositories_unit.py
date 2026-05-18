@@ -860,18 +860,17 @@ class TestSortParamsDataclass:
 #   - on success the session.commit() should be invoked
 #   - on a raised exception the session.rollback() should be invoked
 #
-# Both tests are EXPECTED TO FAIL until scope-07 fixes F-07-002. We mark them
-# xfail(strict=True) so CI does not flood red, but flipping their state to
-# passing will fail strict mode and force scope-07 to remove the marker.
+# Cascade-from-scope-07 (audit 2026-04 G4 phase 1, 2026-04-28):
+# F-07-002 fix landed (backend/repositories/base.py:transaction now correctly
+# wraps @asynccontextmanager around get_db_session and commit/rollback).
+# The xfail(strict=True) markers below have been removed so CI proves the
+# contract holds. See PR for the fail-first commit-pair on F-07-002 and the
+# new tests at tests/database/test_transactions.py.
 
 class TestAsyncBaseRepositoryTransaction:
     """F-15-011: real test of AsyncBaseRepository.transaction() async-generator bug."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="cascade-to-scope-07-fix (F-07-002 transaction async-generator bug)",
-    )
     async def test_transaction_commits_on_success(self):
         """`async with repo.transaction() as session:` should commit on success."""
         from contextlib import asynccontextmanager
@@ -902,10 +901,6 @@ class TestAsyncBaseRepositoryTransaction:
         assert mock_session.rollback.await_count == 0
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        strict=True,
-        reason="cascade-to-scope-07-fix (F-07-002 transaction async-generator bug)",
-    )
     async def test_transaction_rolls_back_on_exception(self):
         """`async with repo.transaction(): raise` should rollback."""
         from contextlib import asynccontextmanager
