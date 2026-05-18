@@ -63,11 +63,21 @@ def test_weights_only_value_is_true_not_false() -> None:
 
 
 def test_expected_callsite_count_unchanged() -> None:
-    """F-03-002: still exactly 5 callsites after the patch."""
+    """F-03-002: every torch.load callsite in backend/ml/ is guarded.
+
+    Originally 5 callsites at audit time. After commit f5dd8ac on main
+    (file-relocation refactor that introduced ``runtime_models.py``)
+    the count is 7 — this PR guards the 2 new state_dict loads too.
+    The meaningful contract is in
+    ``test_every_torch_load_call_passes_weights_only``; this test
+    just records the current expected count so unexpected new
+    callsites (e.g. a future refactor) get flagged for review.
+    """
 
     count = 0
     for py in _ML_DIR.rglob("*.py"):
         count += len(re.findall(r"torch\.load\(", py.read_text()))
-    assert count == 5, (
-        f"expected 5 torch.load callsites in backend/ml/, found {count}"
+    assert count == 7, (
+        f"expected 7 torch.load callsites in backend/ml/ post f5dd8ac, "
+        f"found {count}"
     )

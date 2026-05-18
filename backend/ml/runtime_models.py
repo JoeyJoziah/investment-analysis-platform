@@ -307,11 +307,13 @@ class ModelManager:
         
         # Try to load pre-trained weights
         try:
+            # F-03-002: state_dict-only loads are tensor primitives —
+            # weights_only=True is always safe and blocks pickle RCE.
             self.models['lstm'].load_state_dict(
-                torch.load('models/lstm_weights.pth', map_location=self.device)
+                torch.load('models/lstm_weights.pth', map_location=self.device, weights_only=True)
             )
             self.models['transformer'].load_state_dict(
-                torch.load('models/transformer_weights.pth', map_location=self.device)
+                torch.load('models/transformer_weights.pth', map_location=self.device, weights_only=True)
             )
             
             self.models['xgboost'] = joblib.load('models/xgboost_model.pkl')
