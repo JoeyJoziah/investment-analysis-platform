@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from backend.analytics.recommendation_engine import RecommendationEngine, StockRecommendation
+from backend.analytics.recommendation_types import RecommendationAction
 from backend.utils.llm_budget_manager import LLMBudgetManager, BudgetExceededException, LLMCircuitBreaker
 from backend.utils.cache_manager import CacheManager
 from backend.data_ingestion.smart_data_fetcher import SmartDataFetcher
@@ -39,27 +40,30 @@ class EnhancedStockRecommendation(StockRecommendation):
     def __post_init__(self):
         if self.agents_used is None:
             self.agents_used = []
-        
-        # Calculate hybrid score if agent analysis available
-        if self.agent_analysis and hasattr(self, 'overall_score'):
+
+        # F-09-005: ``overall_score`` was never declared on the parent
+        # StockRecommendation dataclass. Use ``confidence`` as the
+        # traditional-analysis score for the hybrid calculation (the
+        # field that is actually populated for every recommendation).
+        if self.agent_analysis is not None:
             self.hybrid_score = self._calculate_hybrid_score()
-    
+
     def _calculate_hybrid_score(self) -> float:
         """Calculate hybrid score combining traditional and agent analysis"""
         if not self.agent_analysis:
-            return self.overall_score
-        
+            return self.confidence
+
         # Get agent confidence (0-1 scale)
         agent_conf = self.agent_confidence or 0.5
-        
+
         # Weight traditional vs agent analysis based on agent confidence
         agent_weight = min(agent_conf, 0.4)  # Max 40% weight to agents
         traditional_weight = 1.0 - agent_weight
-        
+
         # Assume agent provides a score (this would need to be extracted from actual agent output)
         agent_score = self._extract_agent_score()
-        
-        hybrid = (traditional_weight * self.overall_score + 
+
+        hybrid = (traditional_weight * self.confidence +
                  agent_weight * agent_score)
         
         return max(0.0, min(1.0, hybrid))  # Clamp to [0,1]
@@ -165,7 +169,6 @@ class HybridAnalysisEngine:
             )
             
             logger.debug(f"Traditional analysis complete for {ticker} - "
-                        f"Score: {traditional_result.overall_score:.2f}, "
                         f"Confidence: {traditional_result.confidence:.2f}")
             
             # Step 2: Determine if we should enhance with agents
@@ -413,25 +416,70 @@ class HybridAnalysisEngine:
         return EnhancedStockRecommendation(**enhanced_data)
     
     def _create_error_recommendation(
-        self, 
-        ticker: str, 
+        self,
+        ticker: str,
         error: str,
-        start_time: datetime
+        start_time: datetime,
     ) -> EnhancedStockRecommendation:
-        """Create minimal recommendation when analysis fails"""
-        analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-        
+        """Create minimal recommendation when analysis fails.
+
+        F-09-005: previously passed ``recommendation="HOLD"`` and
+        ``overall_score=0.5`` — neither is a field on
+        StockRecommendation/EnhancedStockRecommendation, and a slew of
+        parent-required fields were missing, so constructing this
+        TypeError'd on every error path.
+
+        Now constructs a fully-populated dataclass with safe defaults
+        and uses the real fields: ``action=HOLD`` (not
+        ``recommendation``) and ``confidence=0.1`` (with the inherited
+        score columns set to 0.0).
+        """
+        now = datetime.now(timezone.utc)
+        analysis_duration = (now - start_time).total_seconds()
+
         return EnhancedStockRecommendation(
+            # Identity
             ticker=ticker,
-            recommendation="HOLD",
-            overall_score=0.5,
+            action=RecommendationAction.HOLD,
             confidence=0.1,
+            priority=10,  # lowest priority for error path
+            # Price targets (zeroed)
+            entry_price=0.0,
             target_price=0.0,
-            risks=["Analysis failed: " + error],
+            stop_loss=0.0,
+            expected_return=0.0,
+            time_horizon_days=0,
+            # Risk metrics (zeroed)
+            risk_score=0.0,
+            volatility=0.0,
+            beta=0.0,
+            sharpe_ratio=0.0,
+            max_drawdown=0.0,
+            # Analysis scores (zeroed)
+            technical_score=0.0,
+            fundamental_score=0.0,
+            sentiment_score=0.0,
+            ml_prediction_score=0.0,
+            # Detail dicts
+            technical_analysis={},
+            fundamental_analysis={},
+            sentiment_analysis={},
+            ml_predictions={},
+            # Reasoning
+            key_factors=[],
+            risks=[f"Analysis failed: {error}"],
             opportunities=[],
+            catalysts=[],
+            # Metadata
+            generated_at=now,
+            valid_until=now,
+            # Position sizing (zeroed)
+            recommended_allocation=0.0,
+            max_position_size=0.0,
+            # Enhanced fields
             analysis_duration=analysis_duration,
             complexity_level="error",
-            agents_used=[]
+            agents_used=[],
         )
     
     async def _update_stats(self, cost: float, start_time: datetime, used_agents: bool):
