@@ -37,6 +37,7 @@ from backend.models.unified_models import (
     AuditLog,
     SystemMetrics,
     CostMetrics,
+    InvestmentThesis,
 )
 
 __all__ = [
@@ -72,4 +73,5 @@ __all__ = [
     "AuditLog",
     "SystemMetrics",
     "CostMetrics",
+    "InvestmentThesis",
 ]

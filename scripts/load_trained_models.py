@@ -18,7 +18,7 @@ current_dir = Path(__file__).parent.parent
 sys.path.append(str(current_dir))
 
 from backend.ml.model_manager import get_model_manager
-from backend.models.ml_models import ModelManager
+from backend.ml.runtime_models import ModelManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

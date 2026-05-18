@@ -16,7 +16,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List
 
-from backend.models.ml_models import PredictionResult
+from backend.ml.runtime_models import PredictionResult
 
 
 class RecommendationAction(Enum):

@@ -47,7 +47,7 @@ except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired) as _docke
 from testcontainers.postgres import PostgresContainer
 
 from backend.config.database import get_async_db_session, initialize_database, cleanup_database
-from backend.models.database import Base
+from backend.models.unified_models import Base
 from backend.models.unified_models import (
     User, Stock, Portfolio, Position, Transaction,
     PriceHistory, Recommendation, Alert

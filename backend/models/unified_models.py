@@ -9,7 +9,7 @@ from sqlalchemy import (
     CheckConstraint, Enum as SQLEnum, DECIMAL, BigInteger, func
 )
 from sqlalchemy.orm import DeclarativeBase, relationship, backref
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 import uuid
 
@@ -1167,3 +1167,54 @@ class WatchlistItem(Base):
 
 # Fundamental alias: tables.py used "Fundamental" (singular), unified uses "Fundamentals"
 Fundamental = Fundamentals
+
+# ============================================================================
+# INVESTMENT THESIS (merged from former backend/models/thesis.py)
+# ============================================================================
+
+class InvestmentThesis(Base):
+    """
+    Investment thesis documentation for stocks.
+    Captures comprehensive investment rationale, analysis, and decision-making process.
+    """
+    __tablename__ = "investment_thesis"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    investment_objective = Column(Text, nullable=False, comment="Primary investment goal (growth, income, preservation)")
+    time_horizon = Column(String(50), nullable=False, comment="Expected holding period (short/medium/long-term)")
+    target_price = Column(DECIMAL(10, 2), nullable=True, comment="Target price based on valuation")
+
+    business_model = Column(Text, nullable=True, comment="Description of how the company makes money")
+    competitive_advantages = Column(Text, nullable=True, comment="Moats and competitive positioning")
+
+    financial_health = Column(Text, nullable=True, comment="Analysis of balance sheet, cash flow, profitability")
+
+    growth_drivers = Column(Text, nullable=True, comment="Key factors driving future growth")
+    risks = Column(Text, nullable=True, comment="Risk assessment and mitigation strategies")
+
+    valuation_rationale = Column(Text, nullable=True, comment="Valuation methodology and price targets")
+
+    exit_strategy = Column(Text, nullable=True, comment="Conditions for selling or rebalancing")
+
+    content = Column(Text, nullable=True, comment="Complete thesis in markdown format")
+
+    version = Column(Integer, default=1, nullable=False, comment="Version number for tracking updates")
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    user = relationship("User", backref="investment_theses")
+    stock = relationship("Stock", backref="investment_theses")
+
+    __table_args__ = (
+        Index('idx_thesis_user_stock', 'user_id', 'stock_id'),
+        Index('idx_thesis_updated_at', 'updated_at'),
+        Index('idx_thesis_user_updated', 'user_id', 'updated_at'),
+    )
+
+    def __repr__(self):
+        return f"<InvestmentThesis(id={self.id}, user_id={self.user_id}, stock_id={self.stock_id}, version={self.version})>"

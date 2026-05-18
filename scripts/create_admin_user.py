@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from backend.models.database import User
+from backend.models.unified_models import User
 from backend.auth.oauth2 import get_password_hash
 from backend.config.settings import settings
 import logging
