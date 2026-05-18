@@ -34,7 +34,19 @@ _FS_PATH = (
 
 
 def _load_feature_store(monkeypatch: pytest.MonkeyPatch):
-    """Load feature_store with heavy deps stubbed where possible."""
+    """Load feature_store with heavy deps stubbed where possible.
+
+    Earlier tests in the same session (notably
+    test_etl_extended_agent2.py) install MagicMocks at
+    ``sys.modules["backend.ml"]`` which break feature_store's
+    ``from backend.ml.feature_types import ...`` lookup. Drop those
+    polluted entries before loading so we get a clean import on the
+    real package path.
+    """
+
+    for name in list(sys.modules):
+        if name == "backend" or name.startswith("backend."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
 
     spec = importlib.util.spec_from_file_location(
         "feature_store_under_test", _FS_PATH
