@@ -218,7 +218,10 @@ class ModelManager:
     def _load_pytorch_model(self, path: Path):
         """Load PyTorch model with error handling"""
         try:
-            model = torch.load(path, map_location='cpu')
+            # F-03-002: weights_only=True blocks pickle RCE. Full-model
+            # artifacts that fail with WeightsUnpickler must register their
+            # constructor classes via torch.serialization.add_safe_globals.
+            model = torch.load(path, map_location='cpu', weights_only=True)
             model.eval()
             return model
         except Exception as e:
@@ -297,7 +300,9 @@ class ModelManager:
                 num_layers=config['num_layers'],
                 dropout=config['dropout']
             )
-            model.load_state_dict(torch.load(path, map_location='cpu'))
+            # F-03-002: state_dict-only loads are tensor primitives —
+            # weights_only=True is always safe here.
+            model.load_state_dict(torch.load(path, map_location='cpu', weights_only=True))
             model.eval()
 
             # Return wrapper with config and scaler

@@ -591,7 +591,9 @@ class ModelVersionManager:
             
             # Load model based on type
             if model_version.model_type == ModelType.PYTORCH:
-                model = torch.load(model_path, map_location='cpu')
+                # F-03-002: see artifact_manager.py for the weights_only=True
+                # rationale and the safe_globals escalation path.
+                model = torch.load(model_path, map_location='cpu', weights_only=True)
             elif model_version.model_type in [ModelType.SKLEARN, ModelType.ENSEMBLE]:
                 model = joblib.load(model_path)
             else:

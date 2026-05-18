@@ -88,7 +88,8 @@ class ModelEvaluator:
                 num_layers=config['num_layers'],
                 dropout=config['dropout']
             )
-            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+            # F-03-002: state_dict-only — weights_only=True is always safe.
+            model.load_state_dict(torch.load(model_path, map_location='cpu', weights_only=True))
             model.eval()
 
             # Load scaler
