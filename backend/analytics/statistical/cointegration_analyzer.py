@@ -16,9 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 class CointegrationMethod(Enum):
-    """Methods for cointegration testing."""
+    """Methods for cointegration testing.
+
+    F-09-007: ``JOHANSEN`` was removed because the previous
+    ``_johansen_test`` silently fell back to Engle-Granger — callers
+    selecting JOHANSEN believed they were getting a different
+    statistical test. If real Johansen support is needed later,
+    implement via ``statsmodels.tsa.vector_ar.vecm.coint_johansen`` and
+    add the enum value back.
+    """
     ENGLE_GRANGER = "engle_granger"
-    JOHANSEN = "johansen"
 
 
 @dataclass
@@ -93,8 +100,15 @@ class CointegrationAnalyzer:
         """
         if method == CointegrationMethod.ENGLE_GRANGER:
             return self._engle_granger_test(series1, series2)
-        else:
-            return self._johansen_test(series1, series2)
+        # F-09-007: only ENGLE_GRANGER is supported. Fail loud rather
+        # than silently routing to a different test (the legacy
+        # behavior).
+        raise NotImplementedError(
+            f"Unsupported cointegration method: {method!r}. "
+            "Only CointegrationMethod.ENGLE_GRANGER is implemented; "
+            "Johansen was removed because the prior implementation "
+            "silently delegated to Engle-Granger."
+        )
 
     def _engle_granger_test(
         self,
@@ -185,17 +199,11 @@ class CointegrationAnalyzer:
             half_life=half_life
         )
 
-    def _johansen_test(
-        self,
-        series1: pd.Series,
-        series2: pd.Series
-    ) -> CointegrationResult:
-        """
-        Perform Johansen cointegration test.
-        (Simplified implementation - for full version use statsmodels)
-        """
-        # For now, fall back to Engle-Granger
-        return self._engle_granger_test(series1, series2)
+    # F-09-007: _johansen_test removed — it silently returned
+    # Engle-Granger results, which gave callers false confidence that
+    # they had run a different test. If Johansen is ever needed,
+    # implement properly via statsmodels.tsa.vector_ar.vecm.coint_johansen
+    # and add the enum value back.
 
     def _calculate_half_life(self, spread: np.ndarray) -> float:
         """Calculate mean reversion half-life using OLS."""
