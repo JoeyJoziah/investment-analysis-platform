@@ -371,9 +371,15 @@ def find_catalysts(
 def calculate_position_sizing(
     confidence: float,
     risk_metrics: Dict,
-    action: RecommendationAction
+    action: RecommendationAction,
+    portfolio_size: float = 100_000,
 ) -> Dict[str, float]:
-    """Calculate recommended position sizing via a safety-adjusted Kelly Criterion."""
+    """Calculate recommended position sizing via a safety-adjusted Kelly Criterion.
+
+    F-09-009: ``portfolio_size`` is now a parameter (default $100k for
+    backward compatibility) so the dollar position size scales with
+    the operator-configured portfolio.
+    """
     p = confidence
     q = 1 - p
     b = 2  # Assume 2:1 reward/risk ratio
@@ -395,7 +401,6 @@ def calculate_position_sizing(
     allocation = min(safe_kelly * risk_adjustment, max_allocation)
     allocation = max(0.0, allocation)
 
-    portfolio_size = 100_000
     max_size = allocation * portfolio_size
 
     return {
