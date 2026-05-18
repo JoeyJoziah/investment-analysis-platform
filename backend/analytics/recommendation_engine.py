@@ -346,7 +346,28 @@ class RecommendationEngine:
         if not text_data:
             return {'overall_sentiment': {'score': 0.0, 'label': 'neutral', 'confidence': 0.0}}
 
-        return await self.sentiment_engine.analyze_sentiment(ticker, text_data)
+        # F-09-001: ``analyze_sentiment(text: str, source: str)`` is the
+        # per-text entrypoint and rejects the list-of-dicts shape this
+        # method assembles. The batch entrypoint is
+        # ``analyze_stock_sentiment(ticker, texts: List[str])``.
+        # Adapter pattern: feed it the extracted ``text`` field, then
+        # map the SentimentResult back to the legacy dict shape that
+        # downstream consumers (line ~480) read via
+        # ``sentiment_analysis.get('overall_sentiment', ...)``.
+        result = await self.sentiment_engine.analyze_stock_sentiment(
+            ticker, [item['text'] for item in text_data if item.get('text')]
+        )
+        return {
+            'overall_sentiment': {
+                'score': result.score,
+                'label': result.label,
+                'confidence': result.confidence,
+            },
+            'breakdown': result.breakdown,
+            'keywords': result.keywords,
+            'sources_analyzed': result.sources_analyzed,
+            'timestamp': result.timestamp,
+        }
 
     async def _run_ml_predictions(
         self, ticker: str, stock_data: Dict
