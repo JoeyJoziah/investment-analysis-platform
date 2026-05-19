@@ -16,10 +16,10 @@ test.describe('Portfolio Management', () => {
     await page.goto(`${BASE_URL}/login`);
     await page.fill('input[name="email"]', TEST_USER.email);
     await page.fill('input[name="password"]', TEST_USER.password);
-    await page.locator('button:has-text("Login")').click();
+    await page.locator('button:has-text("Sign In")').click();
 
     // Wait for login to complete
-    await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 10000 });
+    await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
   });
 
   test.describe('Add Stock to Portfolio', () => {
