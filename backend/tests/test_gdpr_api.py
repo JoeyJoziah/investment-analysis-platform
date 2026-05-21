@@ -636,3 +636,28 @@ class TestGDPRErrorHandling:
                     )
 
         assert_api_error_response(response, 404, "not found")
+
+
+# ============================================================================
+# ENDPOINT AUTHORIZATION REGRESSION TESTS (#198)
+# Previously these three endpoints were reachable with no authentication.
+# ============================================================================
+
+class TestGDPREndpointAuthorization:
+    """Regression: process/audit require auth; retention requires admin (#198)."""
+
+    async def test_process_deletion_requires_auth(self, async_client: AsyncClient):
+        response = await async_client.post(
+            "/api/v1/gdpr/users/me/delete-request/some_request_id/process"
+        )
+        assert_api_error_response(response, 401)
+
+    async def test_deletion_audit_requires_auth(self, async_client: AsyncClient):
+        response = await async_client.get(
+            "/api/v1/gdpr/users/me/delete-request/some_request_id/audit"
+        )
+        assert_api_error_response(response, 401)
+
+    async def test_retention_enforce_requires_auth(self, async_client: AsyncClient):
+        response = await async_client.post("/api/v1/gdpr/admin/retention/enforce")
+        assert_api_error_response(response, 401)

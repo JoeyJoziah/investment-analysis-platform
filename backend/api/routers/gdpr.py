@@ -19,7 +19,7 @@ import logging
 
 from backend.config.database import get_async_db_session
 from backend.models.unified_models import User
-from backend.auth.oauth2 import get_current_user
+from backend.auth.oauth2 import get_current_user, get_current_admin_user
 from backend.compliance.gdpr import retention_manager
 from backend.models.api_response import ApiResponse, success_response
 from backend.security.rate_limiter import rate_limit, RateLimitCategory, RateLimitRule
@@ -229,6 +229,7 @@ async def request_deletion(
 async def process_deletion_request(
     request_id: str,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeleteRequestResponse]:
     """Process a pending deletion request."""
@@ -261,6 +262,7 @@ async def process_deletion_request(
 async def get_deletion_audit(
     request_id: str,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeletionAuditResponse]:
     """Get audit trail for a deletion request"""
@@ -514,6 +516,7 @@ async def get_retention_report(
 async def enforce_retention_policies(
     request: Request,
     background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
     """Enforce data retention policies (admin only)."""
