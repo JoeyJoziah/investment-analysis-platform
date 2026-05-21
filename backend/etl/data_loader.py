@@ -23,6 +23,18 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of tables eligible for retention cleanup. Table identifiers are NEVER
+# taken from caller-supplied input unchecked: cleanup_old_data() validates each
+# requested table against this set before any identifier is interpolated into SQL,
+# and binds the retention window as a query parameter. (Security: prevents SQLi.)
+_RETENTION_TABLES = frozenset({
+    'price_history',
+    'technical_indicators',
+    'news_sentiment',
+    'ml_predictions',
+    'recommendations',
+})
+
 
 class DataLoader:
     """Load transformed data into PostgreSQL/TimescaleDB"""
@@ -439,12 +451,20 @@ class DataLoader:
             
             with self.get_connection() as conn:
                 for table, days in retention_days.items():
+                    if table not in _RETENTION_TABLES:
+                        logger.warning("Skipping cleanup for unknown table: %r", table)
+                        continue
+                    try:
+                        days = int(days)
+                    except (TypeError, ValueError):
+                        logger.warning("Skipping %s: invalid retention days %r", table, days)
+                        continue
                     if table == 'recommendations':
                         # Archive old recommendations
                         query = text(f"""
                             UPDATE {table} 
                             SET is_active = false 
-                            WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '{days} days'
+                            WHERE created_at < CURRENT_TIMESTAMP - (:days * INTERVAL '1 day')
                             AND is_active = true
                         """)
                     else:
@@ -452,10 +472,10 @@ class DataLoader:
                         date_column = 'date' if table != 'ml_predictions' else 'prediction_date'
                         query = text(f"""
                             DELETE FROM {table} 
-                            WHERE {date_column} < CURRENT_TIMESTAMP - INTERVAL '{days} days'
+                            WHERE {date_column} < CURRENT_TIMESTAMP - (:days * INTERVAL '1 day')
                         """)
                     
-                    result = conn.execute(query)
+                    result = conn.execute(query, {"days": days})
                     conn.commit()
                     
                     logger.info(f"Cleaned up {result.rowcount} rows from {table}")
