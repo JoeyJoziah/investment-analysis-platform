@@ -67,7 +67,18 @@ class CostMonitor:
         """
         if provider not in self.api_limits:
             return True
-        
+
+        # Lazy-init the Redis connection. If it isn't available, fail OPEN (allow the
+        # call) instead of crashing the request with "'NoneType' object has no attribute
+        # 'incr'" -- rate-limit accounting must never take down a real data request.
+        if self.redis is None:
+            try:
+                await self.initialize()
+            except Exception as e:
+                logger.warning("cost_monitor: Redis init failed, skipping limit check: %s", e)
+        if self.redis is None:
+            return True
+
         limits = self.api_limits[provider]
         current_time = datetime.now(timezone.utc)
         
@@ -125,6 +136,8 @@ class CostMonitor:
     
     async def _update_usage_counters(self, provider: str):
         """Update real-time usage counters"""
+        if self.redis is None:
+            return  # Redis unavailable -- skip counter updates (cost tracking is best-effort)
         current_date = datetime.now(timezone.utc).strftime('%Y%m%d')
         
         # Increment provider-specific counter
