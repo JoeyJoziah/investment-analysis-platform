@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Container,
   Paper,
@@ -28,10 +28,33 @@ import {
 import type { AlertItem, NewAlertInput } from '../components/settings/SettingsTabs';
 import { ApiKeysForm } from '../components/settings/SettingsForm';
 import type { ApiKeysState } from '../components/settings/SettingsForm';
+import { apiService } from '../services/api.service';
+import { apiConfig } from '../config/api.config';
+
+// The `/api/v1/auth/me` payload stored at state.app.user carries `full_name`
+// (and `email`) at runtime. The declared `User` type uses `name`, so read both
+// keys defensively without widening to `any`.
+const resolveUserName = (user: { name?: string; full_name?: string } | null | undefined): string =>
+  user?.full_name ?? user?.name ?? '';
 
 const Settings: React.FC = () => {
   const dispatch = useAppDispatch();
   const { themeMode, user } = useAppSelector((state) => state.app);
+
+  // Pre-fill the Profile form from the logged-in user. `user` may briefly be
+  // null on first render (before GET /api/v1/auth/me resolves), so we seed from
+  // whatever is present and sync via useEffect once the user loads.
+  const [profile, setProfile] = useState({
+    name: resolveUserName(user),
+    email: user?.email ?? '',
+  });
+
+  useEffect(() => {
+    setProfile({
+      name: resolveUserName(user),
+      email: user?.email ?? '',
+    });
+  }, [user]);
 
   const [tabValue, setTabValue] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -81,13 +104,30 @@ const Settings: React.FC = () => {
     );
   };
 
-  const handleSaveApiKeys = () => {
-    dispatch(
-      addNotification({
-        type: 'success',
-        message: 'API keys saved successfully',
-      })
-    );
+  const handleSaveApiKeys = async () => {
+    // Map the UI's camelCase fields to the backend snake_case contract. Blank fields
+    // are sent as empty strings and ignored server-side (so they aren't overwritten).
+    const payload = {
+      alpha_vantage: apiKeys.alphaVantage,
+      finnhub: apiKeys.finnhub,
+      polygon: apiKeys.polygon,
+      news_api: apiKeys.newsApi,
+    };
+    try {
+      await apiService.put(apiConfig.endpoints.settings.apiKeys, payload);
+      dispatch(
+        addNotification({
+          type: 'success',
+          message: 'API keys saved. Restart the backend for all data providers to pick them up.',
+        })
+      );
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err as { message?: string })?.message ||
+        'Failed to save API keys';
+      dispatch(addNotification({ type: 'error', message: detail }));
+    }
   };
 
   const handleAddAlert = () => {
@@ -156,8 +196,9 @@ const Settings: React.FC = () => {
 
         <TabPanel value={tabValue} index={0}>
           <ProfileTab
-            userName={user?.name || ''}
-            userEmail={user?.email || ''}
+            key={`${profile.name}|${profile.email}`}
+            userName={profile.name}
+            userEmail={profile.email}
             timezone={preferences.timezone}
             onTimezoneChange={(timezone) =>
               setPreferences({ ...preferences, timezone })
