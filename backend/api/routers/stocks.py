@@ -22,6 +22,7 @@ from backend.config.database import get_async_db_session
 from backend.repositories import price_repository  # noqa: F401 -- used by tests
 from backend.models.unified_models import User
 from backend.auth.oauth2 import get_current_user
+from backend.config.settings import settings
 from backend.utils.api_cache_decorators import (
     cache_stock_data,
     cache_analysis_result,
@@ -34,6 +35,7 @@ from backend.services.stocks_service import (
     get_real_time_quote,  # noqa: F401 -- re-exported for test patch paths
     fetch_company_overview,  # noqa: F401 -- re-exported
 )
+from backend.services.news_service import fetch_news
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -641,6 +643,506 @@ async def get_stock_statistics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving stock statistics: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Stock-detail routes consumed by the frontend Analysis page.
+#
+# Placed among the other "/{symbol}/..." routes (FastAPI matches the more
+# specific literal paths first, so these never shadow the bare "/{symbol}"
+# detail route). All payloads use camelCase keys matching the frontend
+# TypeScript interfaces and are wrapped by ``success_response``.
+#
+# Data strategy (no fabricated financials): serve from our DB / existing
+# services first, fall back to existing provider helpers only when needed,
+# and otherwise return graceful EMPTY payloads. Representative/sample data is
+# only ever produced under ``settings.DEMO_MODE`` (production default = real
+# data only), mirroring the recommendations router pattern.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{symbol}/chart")
+@api_cache(data_type="daily_prices", ttl_override={'l1': 3600, 'l2': 14400, 'l3': 86400})
+async def get_stock_chart(
+    symbol: str = Path(..., description="Stock symbol"),
+    interval: str = Query("1d", description="Bar interval (e.g. 1d)"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Get historical OHLC bars for a stock chart.
+
+    Serves from stored price history (``stocks_service.get_price_history``).
+    Returns ``data: []`` when no history is stored yet — the frontend renders
+    a graceful empty chart state.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        price_history = await stocks_service.get_price_history(
+            symbol=symbol, start_date=None, end_date=None, limit=252, db=db,
+        )
+
+        # Repository returns newest-first; present chart bars oldest-first.
+        bars = [
+            {
+                "date": (
+                    price.date.isoformat()
+                    if hasattr(price.date, "isoformat")
+                    else str(price.date)
+                ),
+                "open": float(price.open),
+                "high": float(price.high),
+                "low": float(price.low),
+                "close": float(price.close),
+                "volume": int(price.volume),
+            }
+            for price in reversed(price_history or [])
+        ]
+
+        return success_response(data={
+            "ticker": symbol,
+            "interval": interval,
+            "data": bars,
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving chart for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving stock chart: {str(e)}",
+        )
+
+
+def _neutral_technical_indicators() -> Dict[str, Any]:
+    """Graceful all-zero/neutral technical payload (no fabricated values)."""
+    return {
+        "rsi": 0,
+        "macd": {"macd": 0, "signal": 0, "histogram": 0},
+        "sma": {"sma20": 0, "sma50": 0, "sma200": 0},
+        "ema": {"ema12": 0, "ema26": 0},
+        "bollingerBands": {"upper": 0, "middle": 0, "lower": 0},
+        "stochastic": {"k": 0, "d": 0},
+        "atr": 0,
+        "adx": 0,
+        "obv": 0,
+        "volumeProfile": [],
+        "signals": {
+            "trend": "neutral",
+            "momentum": "weak",
+            "volatility": "low",
+            "recommendation": "hold",
+        },
+    }
+
+
+@router.get("/{symbol}/technical")
+@cache_analysis_result(ttl_hours=2)
+async def get_stock_technical(
+    symbol: str = Path(..., description="Stock symbol"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Compute technical indicators from stored price history.
+
+    Reuses the indicator functions backing
+    ``backend.analytics.technical_analysis`` (the same engine used by the
+    analysis router). When there is insufficient stored history to compute,
+    returns the structured payload with zeroed numeric fields and neutral
+    signals rather than fabricating values.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        price_history = await stocks_service.get_price_history(
+            symbol=symbol, start_date=None, end_date=None, limit=252, db=db,
+        )
+
+        # Need a reasonable window to compute meaningful indicators.
+        if not price_history or len(price_history) < 35:
+            return success_response(data=_neutral_technical_indicators())
+
+        import numpy as np
+        from backend.analytics.technical_analysis import (
+            calculate_rsi,
+            calculate_macd,
+            calculate_ema,
+            calculate_bollinger_bands,
+            calculate_stochastic,
+            calculate_atr,
+            calculate_adx,
+        )
+
+        # Repository is newest-first; indicator functions expect chronological.
+        ordered = list(reversed(price_history))
+        close = np.array([float(p.close) for p in ordered], dtype=float)
+        high = np.array([float(p.high) for p in ordered], dtype=float)
+        low = np.array([float(p.low) for p in ordered], dtype=float)
+        volume = np.array([float(p.volume) for p in ordered], dtype=float)
+
+        def _sma(arr: "np.ndarray", window: int):
+            """Simple moving average of the last *window* values, or None."""
+            if len(arr) < window:
+                return None
+            return round(float(np.mean(arr[-window:])), 4)
+
+        rsi_value = round(float(calculate_rsi(close)), 4)
+        macd_data = calculate_macd(close)
+        bb_data = calculate_bollinger_bands(close)
+        stoch_data = calculate_stochastic(high, low, close)
+        atr_value = round(float(calculate_atr(high, low, close)), 4)
+        adx_data = calculate_adx(high, low, close)
+
+        sma20 = _sma(close, 20)
+        sma50 = _sma(close, 50)
+        sma200 = _sma(close, 200)
+
+        # On-Balance Volume from real closes/volumes.
+        obv = 0.0
+        for i in range(1, len(close)):
+            if close[i] > close[i - 1]:
+                obv += volume[i]
+            elif close[i] < close[i - 1]:
+                obv -= volume[i]
+
+        # Volume profile: aggregate real volume into price buckets.
+        volume_profile: List[Dict[str, float]] = []
+        if len(close) >= 2 and float(np.max(close)) > float(np.min(close)):
+            num_bins = 10
+            edges = np.linspace(float(np.min(close)), float(np.max(close)), num_bins + 1)
+            for b in range(num_bins):
+                mask = (close >= edges[b]) & (
+                    close <= edges[b + 1] if b == num_bins - 1 else close < edges[b + 1]
+                )
+                bucket_volume = float(np.sum(volume[mask]))
+                if bucket_volume > 0:
+                    volume_profile.append({
+                        "price": round(float((edges[b] + edges[b + 1]) / 2), 4),
+                        "volume": round(bucket_volume, 2),
+                    })
+
+        # Derive qualitative signals from the real computed indicators.
+        last_close = float(close[-1])
+        if sma50 is not None and sma20 is not None:
+            if last_close > sma20 > sma50:
+                trend = "bullish"
+            elif last_close < sma20 < sma50:
+                trend = "bearish"
+            else:
+                trend = "neutral"
+        else:
+            trend = "neutral"
+
+        if rsi_value >= 60 or rsi_value <= 40:
+            momentum = "strong"
+        elif 45 <= rsi_value <= 55:
+            momentum = "weak"
+        else:
+            momentum = "moderate"
+
+        atr_pct = (atr_value / last_close) if last_close else 0.0
+        if atr_pct >= 0.03:
+            volatility = "high"
+        elif atr_pct >= 0.015:
+            volatility = "medium"
+        else:
+            volatility = "low"
+
+        if trend == "bullish" and rsi_value < 70:
+            recommendation = "buy" if rsi_value < 60 else "hold"
+        elif trend == "bearish" and rsi_value > 30:
+            recommendation = "sell" if rsi_value > 40 else "hold"
+        else:
+            recommendation = "hold"
+
+        payload = {
+            "rsi": rsi_value,
+            "macd": {
+                "macd": round(float(macd_data.get("macd", 0)), 4),
+                "signal": round(float(macd_data.get("signal", 0)), 4),
+                "histogram": round(float(macd_data.get("histogram", 0)), 4),
+            },
+            "sma": {
+                "sma20": sma20 if sma20 is not None else 0,
+                "sma50": sma50 if sma50 is not None else 0,
+                "sma200": sma200 if sma200 is not None else 0,
+            },
+            "ema": {
+                "ema12": round(float(calculate_ema(close, 12)), 4),
+                "ema26": round(float(calculate_ema(close, 26)), 4),
+            },
+            "bollingerBands": {
+                "upper": round(float(bb_data.get("upper", 0)), 4),
+                "middle": round(float(bb_data.get("middle", 0)), 4),
+                "lower": round(float(bb_data.get("lower", 0)), 4),
+            },
+            "stochastic": {
+                "k": round(float(stoch_data.get("k", 0)), 4),
+                "d": round(float(stoch_data.get("d", 0)), 4),
+            },
+            "atr": atr_value,
+            "adx": round(float(adx_data.get("adx", 0)), 4),
+            "obv": round(obv, 2),
+            "volumeProfile": volume_profile,
+            "signals": {
+                "trend": trend,
+                "momentum": momentum,
+                "volatility": volatility,
+                "recommendation": recommendation,
+            },
+        }
+
+        return success_response(data=payload)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error computing technical indicators for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error computing technical indicators: {str(e)}",
+        )
+
+
+@router.get("/{symbol}/fundamental")
+# NOTE: intentionally NOT decorated with @cache_analysis_result — that cache
+# wrapper swallows the HTTPException(404) we raise for "no fundamentals stored"
+# and returns None, which fails response validation as a 500. The DB read here
+# is cheap, so we skip caching to keep the clean 404.
+async def get_stock_fundamental(
+    symbol: str = Path(..., description="Stock symbol"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Get fundamental financials for a stock from stored data.
+
+    Reads the latest ``Fundamentals`` row from our database. Fields we have
+    not yet ingested are returned as ``null`` (the frontend tolerates missing
+    fundamentals). Returns HTTP 404 only when there is no fundamentals record
+    at all for the symbol. No ratios are fabricated.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        fundamentals = await stocks_service.get_latest_fundamentals(symbol=symbol, db=db)
+
+        if not fundamentals:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No fundamental data stored for symbol '{symbol}'",
+            )
+
+        def _num(value):
+            """Coerce a stored Decimal/float to float, preserving None."""
+            return float(value) if value is not None else None
+
+        payload = {
+            # Income statement
+            "revenue": _num(fundamentals.revenue),
+            # Growth metrics are not stored as columns yet — left null until ingested.
+            "revenueGrowth": None,
+            "earnings": _num(fundamentals.net_income),
+            "earningsGrowth": None,
+            "profitMargin": _num(fundamentals.net_margin),
+            "operatingMargin": _num(fundamentals.operating_margin),
+            # Returns / leverage ratios
+            "roe": _num(fundamentals.roe),
+            "roa": _num(fundamentals.roa),
+            "debtToEquity": _num(fundamentals.debt_to_equity),
+            "currentRatio": _num(fundamentals.current_ratio),
+            "quickRatio": _num(fundamentals.quick_ratio),
+            # Cash flow / valuation
+            "freeCashFlow": _num(fundamentals.free_cash_flow),
+            # Per-share book value is not a stored column; derive only from real
+            # equity / shares when both are available, else null.
+            "bookValue": None,
+            "priceToBook": _num(fundamentals.pb_ratio),
+            "priceToSales": _num(fundamentals.ps_ratio),
+            "pegRatio": _num(fundamentals.peg_ratio),
+            "forwardPE": _num(fundamentals.pe_ratio),
+            # Dividend / ownership / short-interest are not stored yet — null.
+            "dividendRate": None,
+            "payoutRatio": None,
+            "insiderOwnership": None,
+            "institutionalOwnership": None,
+            "shortInterest": None,
+            # Analyst ratings are not stored yet — return an empty consensus
+            # rather than fabricating analyst counts.
+            "analystRating": {
+                "consensus": "",
+                "targetPrice": 0,
+                "strongBuy": 0,
+                "buy": 0,
+                "hold": 0,
+                "sell": 0,
+                "strongSell": 0,
+            },
+        }
+
+        # Derive book value per share only from genuinely stored real values.
+        target_stock = await stocks_service.get_stock_detail(symbol=symbol, db=db)
+        shares = getattr(target_stock, "shares_outstanding", None) if target_stock else None
+        if fundamentals.total_equity is not None and shares:
+            payload["bookValue"] = round(float(fundamentals.total_equity) / float(shares), 4)
+
+        return success_response(data=payload)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving fundamentals for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving fundamental data: {str(e)}",
+        )
+
+
+@router.get("/{symbol}/news")
+async def get_stock_news(
+    symbol: str = Path(..., description="Stock symbol"),
+    limit: int = Query(20, ge=1, le=50, description="Maximum number of articles"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[List[Dict[str, Any]]]:
+    """
+    Get per-ticker financial news.
+
+    Reuses ``backend.services.news_service.fetch_news`` (Finnhub -> NewsAPI ->
+    MarketAux fallback chain with caching and keyword sentiment scoring).
+    Returns an empty list when no provider returns articles.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        raw_articles = await fetch_news(symbols=[symbol], limit=limit)
+
+        articles = [
+            {
+                "id": article["id"],
+                "title": article.get("title", ""),
+                "summary": article.get("description") or "",
+                "url": article.get("url", ""),
+                "source": article.get("source", ""),
+                "publishedAt": (
+                    article["published_at"].isoformat()
+                    if hasattr(article.get("published_at"), "isoformat")
+                    else str(article.get("published_at", ""))
+                ),
+                "sentiment": article.get("sentiment") or "neutral",
+                "relevanceScore": (
+                    abs(float(article["sentiment_score"]))
+                    if article.get("sentiment_score") is not None
+                    else 0
+                ),
+            }
+            for article in (raw_articles or [])
+        ]
+
+        return success_response(data=articles)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving news for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving stock news: {str(e)}",
+        )
+
+
+@router.get("/{symbol}/options")
+async def get_stock_options(
+    symbol: str = Path(..., description="Stock symbol"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[Dict[str, Any]]:
+    """
+    Get the options chain for a stock.
+
+    Free-tier providers in use do not supply options data, so this returns a
+    graceful empty chain. The structure matches the frontend interface so the
+    options tab renders an empty state. No options data is fabricated; when an
+    options provider is integrated this endpoint will populate from it.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        return success_response(data={
+            "ticker": symbol,
+            "expirationDates": [],
+            "calls": [],
+            "puts": [],
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving options for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving options chain: {str(e)}",
+        )
+
+
+@router.get("/{symbol}/similar")
+@cache_analysis_result(ttl_hours=6)
+async def get_similar_stocks(
+    symbol: str = Path(..., description="Stock symbol"),
+    limit: int = Query(6, ge=1, le=20, description="Maximum number of peers"),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[List[Dict[str, Any]]]:
+    """
+    Get similar / peer stocks computed from real data in our database.
+
+    Peers are same-sector active stocks (excluding the symbol itself).
+    ``changePercent`` is derived from each peer's latest stored prices and
+    ``correlation`` is a real Pearson correlation of overlapping daily returns
+    (``0.0`` when there is insufficient shared history — never fabricated).
+    Returns an empty list when no peers exist.
+    """
+    try:
+        if not validate_stock_symbol(symbol):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid stock symbol format: '{symbol}'",
+            )
+
+        symbol = symbol.upper()
+        peers = await stocks_service.get_similar_stocks(symbol=symbol, limit=limit, db=db)
+        return success_response(data=peers)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving similar stocks for {symbol}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving similar stocks: {str(e)}",
         )
 
 

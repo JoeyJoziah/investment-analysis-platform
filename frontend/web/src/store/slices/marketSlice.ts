@@ -107,12 +107,24 @@ const initialState: MarketState = {
   lastUpdated: null,
 };
 
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual market payload (e.g. .indices, .gainers) rather than the
+// envelope — otherwise those fields are undefined and the pages render empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 // Async thunks
 export const fetchMarketOverview = createAsyncThunk(
   'market/fetchOverview',
   async () => {
     const response = await apiService.get('/api/v1/market/overview');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -120,7 +132,7 @@ export const fetchMarketIndices = createAsyncThunk(
   'market/fetchIndices',
   async () => {
     const response = await apiService.get('/api/v1/market/indices');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -128,7 +140,7 @@ export const fetchMarketMovers = createAsyncThunk(
   'market/fetchMovers',
   async () => {
     const response = await apiService.get('/api/v1/market/movers');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -136,7 +148,7 @@ export const fetchSectorPerformance = createAsyncThunk(
   'market/fetchSectors',
   async () => {
     const response = await apiService.get('/api/v1/market/sectors');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -144,7 +156,7 @@ export const fetchMarketNews = createAsyncThunk(
   'market/fetchNews',
   async (params?: { limit?: number; category?: string }) => {
     const response = await apiService.get('/api/v1/market/news', { params });
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -152,7 +164,7 @@ export const fetchHeatmapData = createAsyncThunk(
   'market/fetchHeatmap',
   async (params?: { index?: string; sector?: string }) => {
     const response = await apiService.get('/api/v1/market/heatmap', { params });
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -160,7 +172,7 @@ export const fetchEconomicCalendar = createAsyncThunk(
   'market/fetchCalendar',
   async () => {
     const response = await apiService.get('/api/v1/market/calendar');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 

@@ -367,6 +367,179 @@ class StocksService:
         )
 
     # ------------------------------------------------------------------
+    # Fundamentals
+    # ------------------------------------------------------------------
+
+    async def get_latest_fundamentals(
+        self,
+        *,
+        symbol: str,
+        db: AsyncSession,
+    ):
+        """
+        Return the most recent ``Fundamentals`` ORM row for *symbol* (or ``None``).
+
+        Reads only from our database — fundamentals are ingested separately
+        (SEC filings / provider sync) and built up over time. We never
+        fabricate ratios here.
+        """
+        from sqlalchemy import select, desc
+        from backend.models.unified_models import Fundamentals, Stock
+
+        query = (
+            select(Fundamentals)
+            .join(Stock, Fundamentals.stock_id == Stock.id)
+            .where(Stock.symbol == symbol.upper())
+            .order_by(desc(Fundamentals.period_date))
+            .limit(1)
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    # ------------------------------------------------------------------
+    # Similar / peer stocks (same sector, real data only)
+    # ------------------------------------------------------------------
+
+    async def get_similar_stocks(
+        self,
+        *,
+        symbol: str,
+        limit: int,
+        db: AsyncSession,
+    ) -> List[Dict[str, Any]]:
+        """
+        Return up to *limit* real peer stocks in the same sector as *symbol*.
+
+        Peers are sourced from our database (same ``sector_id``, active and
+        tradable, excluding the target symbol). ``changePercent`` and
+        ``correlation`` are computed from stored price history only. When a
+        value cannot be computed from real data it is returned as ``0.0``
+        rather than fabricated.
+        """
+        from sqlalchemy import select, and_
+        from backend.models.unified_models import Stock
+
+        symbol = symbol.upper()
+
+        target = await stock_repository.get_by_symbol(symbol, session=db)
+        if not target or target.sector_id is None:
+            return []
+
+        # Fetch same-sector peers (small over-fetch so we can rank by market cap)
+        peers_query = (
+            select(Stock)
+            .where(
+                and_(
+                    Stock.sector_id == target.sector_id,
+                    Stock.symbol != symbol,
+                    Stock.is_active == True,  # noqa: E712 - SQLAlchemy boolean filter
+                    Stock.is_tradable == True,  # noqa: E712
+                )
+            )
+            .order_by(Stock.market_cap.desc().nullslast())
+            .limit(limit)
+        )
+        result = await db.execute(peers_query)
+        peers = result.scalars().all()
+        if not peers:
+            return []
+
+        # Pre-load the target's recent closes once for correlation.
+        target_history = await price_repository.get_price_history(
+            symbol=symbol,
+            start_date=date.today() - timedelta(days=120),
+            end_date=date.today(),
+            limit=90,
+            session=db,
+        )
+        # Repository returns newest-first; reverse to chronological order.
+        target_closes_by_date = {
+            p.date: float(p.close) for p in target_history
+        }
+
+        peer_results: List[Dict[str, Any]] = []
+        for peer in peers:
+            peer_history = await price_repository.get_price_history(
+                symbol=peer.symbol,
+                start_date=date.today() - timedelta(days=120),
+                end_date=date.today(),
+                limit=90,
+                session=db,
+            )
+
+            change_percent = self._latest_change_percent(peer_history)
+            correlation = self._price_correlation(
+                target_closes_by_date,
+                {p.date: float(p.close) for p in peer_history},
+            )
+
+            peer_results.append({
+                "ticker": peer.symbol,
+                "name": peer.name,
+                "correlation": correlation,
+                "changePercent": change_percent,
+            })
+
+        return peer_results
+
+    @staticmethod
+    def _latest_change_percent(price_history: List) -> float:
+        """Compute the latest day-over-day percent change from real prices.
+
+        ``price_history`` is newest-first (per the repository contract).
+        Returns ``0.0`` when there are fewer than two real price rows.
+        """
+        if not price_history or len(price_history) < 2:
+            return 0.0
+        latest = float(price_history[0].close)
+        previous = float(price_history[1].close)
+        if previous == 0:
+            return 0.0
+        return round((latest - previous) / previous * 100, 4)
+
+    @staticmethod
+    def _price_correlation(
+        a_closes_by_date: Dict[date, float],
+        b_closes_by_date: Dict[date, float],
+    ) -> float:
+        """Pearson correlation of daily returns over overlapping dates.
+
+        Returns ``0.0`` when there is insufficient overlapping real history
+        (fewer than ~20 shared trading days) instead of fabricating a value.
+        """
+        common_dates = sorted(set(a_closes_by_date) & set(b_closes_by_date))
+        if len(common_dates) < 21:
+            return 0.0
+
+        a_series = [a_closes_by_date[d] for d in common_dates]
+        b_series = [b_closes_by_date[d] for d in common_dates]
+
+        a_returns = [
+            (a_series[i] - a_series[i - 1]) / a_series[i - 1]
+            for i in range(1, len(a_series))
+            if a_series[i - 1] != 0
+        ]
+        b_returns = [
+            (b_series[i] - b_series[i - 1]) / b_series[i - 1]
+            for i in range(1, len(b_series))
+            if b_series[i - 1] != 0
+        ]
+        n = min(len(a_returns), len(b_returns))
+        if n < 20:
+            return 0.0
+        a_returns, b_returns = a_returns[:n], b_returns[:n]
+
+        mean_a = sum(a_returns) / n
+        mean_b = sum(b_returns) / n
+        cov = sum((a_returns[i] - mean_a) * (b_returns[i] - mean_b) for i in range(n))
+        var_a = sum((x - mean_a) ** 2 for x in a_returns)
+        var_b = sum((x - mean_b) ** 2 for x in b_returns)
+        denom = (var_a * var_b) ** 0.5
+        if denom == 0:
+            return 0.0
+        return round(cov / denom, 4)
+
+    # ------------------------------------------------------------------
     # Alerts
     # ------------------------------------------------------------------
 

@@ -182,6 +182,18 @@ const initialState: StockState = {
   error: null,
 };
 
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual payload rather than the envelope — otherwise the consumed
+// fields are undefined and the page renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 // Async thunks
 export const fetchStockData = createAsyncThunk(
   'stock/fetchData',
@@ -196,8 +208,11 @@ export const fetchStockData = createAsyncThunk(
       apiService.get(`/api/v1/stocks/${ticker}/news`),
     ]);
 
+    // r.value is the axios response, so r.value.data is the ApiResponse ENVELOPE.
+    // Unwrap one more level via unwrapData so callers receive the real payload
+    // (r.value.data.data) for quote/technical/fundamental/news.
     const dataOf = (r: PromiseSettledResult<{ data: unknown }>): unknown =>
-      r.status === 'fulfilled' ? r.value.data : null;
+      r.status === 'fulfilled' ? unwrapData(r.value.data) : null;
 
     const rawQuote = dataOf(quoteR);
     if (!rawQuote) {
@@ -248,7 +263,7 @@ export const fetchStockChart = createAsyncThunk(
     const response = await apiService.get(`/api/v1/stocks/${ticker}/chart`, {
       params: { interval },
     });
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -256,7 +271,7 @@ export const fetchOptionsChain = createAsyncThunk(
   'stock/fetchOptions',
   async (ticker: string) => {
     const response = await apiService.get(`/api/v1/stocks/${ticker}/options`);
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -266,7 +281,7 @@ export const searchStocks = createAsyncThunk(
     const response = await apiService.get('/api/v1/stocks/search', {
       params: { q: query },
     });
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -274,7 +289,7 @@ export const fetchSimilarStocks = createAsyncThunk(
   'stock/fetchSimilar',
   async (ticker: string) => {
     const response = await apiService.get(`/api/v1/stocks/${ticker}/similar`);
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 

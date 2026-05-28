@@ -159,11 +159,24 @@ const initialState: DashboardState = {
   error: null,
 };
 
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual dashboard payload (e.g. .marketOverview, .portfolioSummary)
+// rather than the envelope — otherwise those fields are undefined and the
+// dashboard renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 export const fetchDashboardData = createAsyncThunk(
   'dashboard/fetchData',
   async () => {
     const response = await apiService.get('/api/v1/dashboard');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -171,7 +184,7 @@ export const fetchMarketOverview = createAsyncThunk(
   'dashboard/fetchMarketOverview',
   async () => {
     const response = await apiService.get('/api/v1/market/overview');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -179,7 +192,7 @@ export const fetchPortfolioSummary = createAsyncThunk(
   'dashboard/fetchPortfolioSummary',
   async () => {
     const response = await apiService.get('/api/v1/portfolio/summary');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 
@@ -187,7 +200,7 @@ export const fetchCostMetrics = createAsyncThunk(
   'dashboard/fetchCostMetrics',
   async () => {
     const response = await apiService.get('/api/v1/admin/metrics');
-    return response.data;
+    return unwrapData(response.data);
   }
 );
 

@@ -20,7 +20,7 @@ from backend.api.routers import (
     stocks, analysis, recommendations, portfolio,
     auth, health, admin, cache_management,
     websocket, agents, gdpr, watchlist, thesis,
-    news, ml, trading,
+    news, ml, trading, market, dashboard,
 )
 from backend.api.routers import settings as settings_router
 from backend.api.versioning import (
@@ -371,6 +371,8 @@ app.include_router(thesis.router, prefix="/api/v1/thesis", tags=["investment-the
 app.include_router(news.router, prefix="/api/v1/news", tags=["news"])
 app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
 app.include_router(trading.router, prefix="/api/v1/trading", tags=["trading"])
+app.include_router(market.router, prefix="/api/v1/market", tags=["market"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(settings_router.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(v1_migration_router)  # V1 migration monitoring endpoints (self-prefixed)
 
