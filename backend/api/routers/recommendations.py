@@ -366,6 +366,7 @@ async def get_daily_recommendations(
     """Get daily curated recommendations powered by ML models and market analysis."""
     target_date = date_param or date.today()
     logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
+    _refuse_when_models_in_fallback(model="recommendation_engine")
 
     try:
         result = await rec_service.build_daily_recommendations(
@@ -415,6 +416,7 @@ async def get_recommendations(
     order: str = Query("desc", pattern="^(asc|desc)$")
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Get list of recommendations with filters"""
+    _refuse_when_models_in_fallback(model="recommendation_engine")
     recs_data = recommendation_service.generate_filtered_recommendations(
         count=50,
         recommendation_type=recommendation_type.value if recommendation_type else None,
@@ -431,6 +433,7 @@ async def get_recommendations(
 @router.get("/{recommendation_id}")
 async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
     """Get detailed information about a specific recommendation"""
+    _refuse_when_models_in_fallback(model="recommendation_engine")
     rec = generate_recommendation()
     rec.id = recommendation_id
     return success_response(data=rec)
@@ -441,6 +444,7 @@ async def filter_recommendations(
     limit: int = Query(20, le=100)
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Advanced filtering of recommendations"""
+    _refuse_when_models_in_fallback(model="recommendation_engine")
     recs_data = recommendation_service.generate_filtered_recommendations(
         count=100,
         categories=[c.value for c in filter_params.categories] if filter_params.categories else None,
@@ -461,6 +465,7 @@ async def filter_recommendations(
 @router.get("/portfolio/{portfolio_id}")
 async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
     """Get personalized recommendations for a specific portfolio"""
+    _refuse_when_models_in_fallback(model="portfolio_recommendations")
     data = recommendation_service.build_portfolio_recommendations(portfolio_id=portfolio_id)
     return success_response(data=PortfolioRecommendation(
         portfolio_id=data["portfolio_id"],
@@ -549,6 +554,7 @@ async def get_trending_recommendations(
     rec_service = Depends(get_recommendation_service)
 ) -> ApiResponse[List[Dict[str, Any]]]:
     """Get trending recommendations based on market momentum and analysis."""
+    _refuse_when_models_in_fallback(model="recommendation_engine")
     timeframe_map = {"1h": "1h", "24h": "1d", "7d": "1w", "30d": "1m"}
 
     try:
