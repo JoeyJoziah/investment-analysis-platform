@@ -27,7 +27,7 @@ import {
 } from '../components/settings/SettingsTabs';
 import type { AlertItem, NewAlertInput } from '../components/settings/SettingsTabs';
 import { ApiKeysForm } from '../components/settings/SettingsForm';
-import type { ApiKeysState } from '../components/settings/SettingsForm';
+import type { ApiKeysState, ApiKeysConfiguredStatus } from '../components/settings/SettingsForm';
 import { apiService } from '../services/api.service';
 import { apiConfig } from '../config/api.config';
 
@@ -64,6 +64,46 @@ const Settings: React.FC = () => {
     polygon: '',
     newsApi: '',
   });
+  // Masked configured-status from the backend so the user can see which keys
+  // are already saved (and not blindly re-enter, which can overwrite a good
+  // key). The GET endpoint never returns full secrets — only masked previews.
+  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeysConfiguredStatus>({});
+
+  const loadApiKeyStatus = React.useCallback(async () => {
+    type KeyStatus = { configured?: boolean; masked?: string | null };
+    type StatusMap = Record<string, KeyStatus>;
+    try {
+      const resp = await apiService.get<{ data?: StatusMap } & StatusMap>(
+        apiConfig.endpoints.settings.apiKeys
+      );
+      const data: StatusMap | undefined = resp.data?.data ?? resp.data;
+      if (!data) return;
+      setApiKeyStatus({
+        alphaVantage: data.alpha_vantage && {
+          configured: !!data.alpha_vantage.configured,
+          masked: data.alpha_vantage.masked ?? null,
+        },
+        finnhub: data.finnhub && {
+          configured: !!data.finnhub.configured,
+          masked: data.finnhub.masked ?? null,
+        },
+        polygon: data.polygon && {
+          configured: !!data.polygon.configured,
+          masked: data.polygon.masked ?? null,
+        },
+        newsApi: data.news_api && {
+          configured: !!data.news_api.configured,
+          masked: data.news_api.masked ?? null,
+        },
+      });
+    } catch {
+      // Status is a convenience; ignore failures (form still works).
+    }
+  }, []);
+
+  useEffect(() => {
+    loadApiKeyStatus();
+  }, [loadApiKeyStatus]);
   const [preferences, setPreferences] = useState({
     defaultView: 'dashboard',
     autoRefresh: true,
@@ -115,6 +155,10 @@ const Settings: React.FC = () => {
     };
     try {
       await apiService.put(apiConfig.endpoints.settings.apiKeys, payload);
+      // Clear the typed values and refresh the masked status so the saved
+      // (masked) keys are reflected and aren't accidentally re-submitted.
+      setApiKeys({ alphaVantage: '', finnhub: '', polygon: '', newsApi: '' });
+      await loadApiKeyStatus();
       dispatch(
         addNotification({
           type: 'success',
@@ -261,6 +305,7 @@ const Settings: React.FC = () => {
             onApiKeysChange={setApiKeys}
             onToggleShowPassword={() => setShowPassword(!showPassword)}
             onSave={handleSaveApiKeys}
+            configuredStatus={apiKeyStatus}
           />
         </TabPanel>
 
