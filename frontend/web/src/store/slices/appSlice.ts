@@ -15,6 +15,43 @@ interface User {
   };
 }
 
+// The backend `/api/v1/auth/me` payload uses snake_case `full_name` and an
+// integer `id`. Normalize it into the camelCase `User` shape the UI renders so
+// the Profile form (and anything reading state.app.user) gets `name`/`email`.
+interface BackendUser {
+  id?: string | number;
+  email?: string;
+  full_name?: string;
+  name?: string;
+  preferences?: User['preferences'];
+}
+
+const normalizeUser = (raw: unknown): User | null => {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const u = raw as BackendUser;
+  if (u.email == null && u.full_name == null && u.name == null) {
+    return null;
+  }
+  return {
+    id: u.id != null ? String(u.id) : '',
+    email: u.email ?? '',
+    name: u.full_name ?? u.name ?? '',
+    preferences: u.preferences,
+  };
+};
+
+// Axios response bodies default to `unknown`; describe the ApiResponse envelope
+// ({ success, data: T }) so reading `.data?.data` type-checks. `Partial<T>`
+// tolerates an un-enveloped payload landing directly on `.data`.
+type Envelope<T> = { data?: T } & Partial<T>;
+
+interface LoginData {
+  access_token?: string;
+  user?: BackendUser;
+}
+
 interface AppState {
   isInitialized: boolean;
   isAuthenticated: boolean;
@@ -50,9 +87,11 @@ export const initializeApp = createAsyncThunk(
       // Check for stored auth token
       const token = localStorage.getItem('access_token');
       if (token) {
-        // Verify token and get user info using centralized endpoint config
-        const response = await apiService.get(apiConfig.endpoints.auth.profile);
-        return { isAuthenticated: true, user: response.data };
+        // Verify token and get user info using centralized endpoint config.
+        // Backend returns the ApiResponse envelope { success, data: {...user} }.
+        const response = await apiService.get<Envelope<BackendUser>>(apiConfig.endpoints.auth.profile);
+        const raw = response.data?.data ?? response.data;
+        return { isAuthenticated: true, user: normalizeUser(raw) };
       }
       return { isAuthenticated: false, user: null };
     } catch (error) {
@@ -66,15 +105,25 @@ export const login = createAsyncThunk(
   async (credentials: { email: string; password: string }) => {
     // Backend returns ApiResponse envelope: { success, data: { access_token, ... } }
     // (see backend/api/routers/auth.py and backend/models/api_response.py).
-    const response = await apiService.post(apiConfig.endpoints.auth.login, credentials);
+    const response = await apiService.post<Envelope<LoginData>>(apiConfig.endpoints.auth.login, credentials);
     const payload = response.data?.data ?? response.data;
     const token = payload?.access_token;
     if (!token) {
-      console.warn('login response missing access_token', response.data);
       throw new Error('Login response did not include access_token');
     }
     localStorage.setItem('access_token', token);
-    return payload?.user;
+
+    // The backend login response only carries the token (no user object), so
+    // fetch the profile to populate state.app.user. The request interceptor
+    // attaches the token we just stored. Keep login successful even if /me
+    // hiccups — initializeApp will repopulate the user on the next mount.
+    try {
+      const profileResp = await apiService.get<Envelope<BackendUser>>(apiConfig.endpoints.auth.profile);
+      const raw = profileResp.data?.data ?? profileResp.data;
+      return normalizeUser(raw);
+    } catch {
+      return normalizeUser(payload?.user);
+    }
   }
 );
 

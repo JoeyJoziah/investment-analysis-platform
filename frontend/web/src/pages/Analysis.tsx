@@ -23,7 +23,7 @@ import {
   fetchSimilarStocks,
   selectStock,
 } from '../store/slices/stockSlice';
-import { addToWatchlist, removeFromWatchlist } from '../store/slices/portfolioSlice';
+import { addToWatchlist, removeFromWatchlist, fetchWatchlist } from '../store/slices/portfolioSlice';
 import { addNotification } from '../store/slices/appSlice';
 import { AnalysisHeader, EmptyTickerView, LoadingErrorView } from '../components/analysis/AnalysisFilters';
 import { ChartTabContent, TechnicalTabContent } from '../components/analysis/AnalysisCharts';
@@ -88,6 +88,12 @@ const Analysis: React.FC = () => {
       dispatch(fetchOptionsChain(ticker));
     }
   }, [dispatch, ticker, chartInterval]);
+
+  // Load the default watchlist once so the "add to watchlist" star reflects the
+  // real saved state and the optimistic add/remove reducers can update it.
+  useEffect(() => {
+    dispatch(fetchWatchlist());
+  }, [dispatch]);
 
   const handleRefresh = () => {
     if (ticker) {

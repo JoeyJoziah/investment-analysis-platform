@@ -107,6 +107,18 @@ const initialState: PortfolioState = {
   lastUpdated: null,
 };
 
+// The backend wraps successful watchlist responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual Watchlist/WatchlistItem (not the envelope) — otherwise
+// state.watchlist.items is undefined and the list silently renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 // Async thunks
 export const fetchPortfolio = createAsyncThunk(
   'portfolio/fetchPortfolio',
@@ -146,7 +158,7 @@ export const fetchWatchlist = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get('/api/v1/watchlists/default');
-      return response.data;
+      return unwrapData<Watchlist>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlist');
@@ -165,7 +177,7 @@ export const addToWatchlist = createAsyncThunk(
         target_price: targetPrice,
         notes,
       });
-      return response.data;
+      return unwrapData<WatchlistItem>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to add to watchlist');
@@ -205,7 +217,7 @@ export const updateWatchlistItem = createAsyncThunk(
         `/api/v1/watchlists/${watchlistId}/items/${itemId}`,
         updates
       );
-      return response.data;
+      return unwrapData<WatchlistItem>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to update watchlist item');
@@ -219,7 +231,7 @@ export const fetchAllWatchlists = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await apiService.get('/api/v1/watchlists');
-      return response.data;
+      return unwrapData(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlists');
@@ -240,7 +252,7 @@ export const createWatchlist = createAsyncThunk(
         description,
         is_public: isPublic,
       });
-      return response.data;
+      return unwrapData<Watchlist>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to create watchlist');

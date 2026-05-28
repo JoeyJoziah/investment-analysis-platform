@@ -49,6 +49,7 @@ import { toggleTheme, toggleSidebar, logout } from '../../store/slices/appSlice'
 import { SkipToMainContent } from '../../utils/accessibility';
 import SearchModal from '../SearchModal';
 import NotificationPanel from '../NotificationPanel';
+import NotificationToaster from '../NotificationToaster';
 import WebSocketIndicator from '../WebSocketIndicator';
 
 const drawerWidth = 240;
@@ -363,6 +364,8 @@ const Layout: React.FC = () => {
         open={Boolean(anchorElNotif)}
         onClose={handleCloseNotifications}
       />
+
+      <NotificationToaster />
 
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </Box>

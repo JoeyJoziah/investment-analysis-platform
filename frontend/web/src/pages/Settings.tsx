@@ -31,11 +31,11 @@ import type { ApiKeysState } from '../components/settings/SettingsForm';
 import { apiService } from '../services/api.service';
 import { apiConfig } from '../config/api.config';
 
-// The `/api/v1/auth/me` payload stored at state.app.user carries `full_name`
-// (and `email`) at runtime. The declared `User` type uses `name`, so read both
-// keys defensively without widening to `any`.
+// state.app.user is normalized to the camelCase `User` shape (name/email) in
+// appSlice. Read `full_name` too as a defensive fallback in case an
+// un-normalized payload ever reaches here.
 const resolveUserName = (user: { name?: string; full_name?: string } | null | undefined): string =>
-  user?.full_name ?? user?.name ?? '';
+  user?.name ?? user?.full_name ?? '';
 
 const Settings: React.FC = () => {
   const dispatch = useAppDispatch();
