@@ -203,9 +203,9 @@ try:
     )
 
     # 4. CSRF Protection - After security headers
+    environment = os.getenv("ENVIRONMENT", "development").lower()
     csrf_secret = os.getenv("CSRF_SECRET_KEY")
     if not csrf_secret:
-        environment = os.getenv("ENVIRONMENT", "development").lower()
         if environment == "production":
             raise RuntimeError("CSRF_SECRET_KEY env var is required in production")
         import secrets as _secrets
@@ -213,25 +213,40 @@ try:
         if not is_testing:
             logger.warning("CSRF_SECRET_KEY not set, using auto-generated key for development")
 
-    stack.register(
-        "csrf",
-        CSRFMiddleware,
-        MiddlewarePriority.CSRF,
-        {"config": CSRFConfig(secret_key=csrf_secret)},
-        skip_in_testing=True  # CSRF interferes with test client
-    )
+    # The CSRF double-submit cookie requires HTTPS (cookie_secure) and a JS-readable
+    # cookie to echo back; neither holds over plain-HTTP localhost, so the flow is
+    # unusable in development and blocks authenticated mutations (e.g. logout). Skip
+    # it in development only -- production and other environments still enforce CSRF.
+    if environment == "development":
+        if not is_testing:
+            logger.warning("CSRF protection disabled in development environment (HTTP localhost)")
+    else:
+        stack.register(
+            "csrf",
+            CSRFMiddleware,
+            MiddlewarePriority.CSRF,
+            {"config": CSRFConfig(secret_key=csrf_secret)},
+            skip_in_testing=True  # CSRF interferes with test client
+        )
 
     # 5. Rate Limiting - After CSRF
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    rate_limit_rules = get_default_rate_limiting_rules()
+    # Skip in development: the SPA's polling + CORS preflight traffic trips the local
+    # limits, and a rate-limited OPTIONS preflight surfaces in the browser as an
+    # opaque "Network Error" (the real request never fires). Production still enforces it.
+    if environment == "development":
+        if not is_testing:
+            logger.warning("Rate limiting disabled in development environment")
+    else:
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        rate_limit_rules = get_default_rate_limiting_rules()
 
-    stack.register(
-        "rate_limiting",
-        RateLimitingMiddleware,
-        MiddlewarePriority.RATE_LIMITING,
-        {"rules": rate_limit_rules, "redis_url": redis_url},
-        skip_in_testing=True  # Rate limiting can interfere with tests
-    )
+        stack.register(
+            "rate_limiting",
+            RateLimitingMiddleware,
+            MiddlewarePriority.RATE_LIMITING,
+            {"rules": rate_limit_rules, "redis_url": redis_url},
+            skip_in_testing=True  # Rate limiting can interfere with tests
+        )
 
     # 6. Request Size Limits - After rate limiting
     stack.register(
