@@ -153,23 +153,30 @@ const Analysis: React.FC = () => {
     }
   };
 
+  // Defensive coercion: guard against undefined/NaN so a missing field never crashes
+  // the render with "Cannot read properties of undefined (reading 'toFixed')".
+  const safeNum = (value: number) =>
+    typeof value === 'number' && isFinite(value) ? value : 0;
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(value);
+    }).format(safeNum(value));
   };
 
   const formatPercent = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+    const n = safeNum(value);
+    return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
   };
 
   const formatLargeNumber = (value: number) => {
-    if (value >= 1e12) return `${(value / 1e12).toFixed(2)}T`;
-    if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-    if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
-    if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
-    return value.toFixed(0);
+    const n = safeNum(value);
+    if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+    if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+    return n.toFixed(0);
   };
 
   if (!ticker) {

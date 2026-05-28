@@ -199,11 +199,38 @@ export const fetchStockData = createAsyncThunk(
     const dataOf = (r: PromiseSettledResult<{ data: unknown }>): unknown =>
       r.status === 'fulfilled' ? r.value.data : null;
 
-    const quote = dataOf(quoteR);
-    if (!quote) {
+    const rawQuote = dataOf(quoteR);
+    if (!rawQuote) {
       // Only fail the whole load if even the quote is unavailable.
       throw new Error(`No quote data available for ${ticker}`);
     }
+
+    // The backend returns snake_case quote fields; map them to the camelCase StockQuote
+    // shape the UI renders so values display and undefined fields never crash *.toFixed().
+    const q = rawQuote as Record<string, unknown>;
+    const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    const quote = {
+      ticker: str(q.symbol ?? q.ticker) || ticker,
+      companyName: str(q.company_name ?? q.companyName ?? q.name),
+      price: num(q.price),
+      change: num(q.change),
+      changePercent: num(q.change_percent ?? q.changePercent),
+      volume: num(q.volume),
+      avgVolume: num(q.avg_volume ?? q.avgVolume),
+      marketCap: num(q.market_cap ?? q.marketCap),
+      peRatio: num(q.pe_ratio ?? q.peRatio),
+      week52High: num(q.fifty_two_week_high ?? q.week52High),
+      week52Low: num(q.fifty_two_week_low ?? q.week52Low),
+      dividendYield: num(q.dividend_yield ?? q.dividendYield),
+      beta: num(q.beta),
+      eps: num(q.eps),
+      open: num(q.open),
+      high: num(q.high),
+      low: num(q.low),
+      previousClose: num(q.previous_close ?? q.previousClose),
+      timestamp: str(q.timestamp),
+    };
 
     return {
       ticker,
