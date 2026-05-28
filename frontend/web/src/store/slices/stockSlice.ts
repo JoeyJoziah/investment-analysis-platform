@@ -187,10 +187,10 @@ export const fetchStockData = createAsyncThunk(
   'stock/fetchData',
   async (ticker: string) => {
     const [quote, technical, fundamental, news] = await Promise.all([
-      apiService.get(`/stocks/${ticker}/quote`),
-      apiService.get(`/stocks/${ticker}/technical`),
-      apiService.get(`/stocks/${ticker}/fundamental`),
-      apiService.get(`/stocks/${ticker}/news`),
+      apiService.get(`/api/v1/stocks/${ticker}/quote`),
+      apiService.get(`/api/v1/stocks/${ticker}/technical`),
+      apiService.get(`/api/v1/stocks/${ticker}/fundamental`),
+      apiService.get(`/api/v1/stocks/${ticker}/news`),
     ]);
     
     return {
@@ -206,7 +206,7 @@ export const fetchStockData = createAsyncThunk(
 export const fetchStockChart = createAsyncThunk(
   'stock/fetchChart',
   async ({ ticker, interval }: { ticker: string; interval: string }) => {
-    const response = await apiService.get(`/stocks/${ticker}/chart`, {
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/chart`, {
       params: { interval },
     });
     return response.data;
@@ -216,7 +216,7 @@ export const fetchStockChart = createAsyncThunk(
 export const fetchOptionsChain = createAsyncThunk(
   'stock/fetchOptions',
   async (ticker: string) => {
-    const response = await apiService.get(`/stocks/${ticker}/options`);
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/options`);
     return response.data;
   }
 );
@@ -224,7 +224,7 @@ export const fetchOptionsChain = createAsyncThunk(
 export const searchStocks = createAsyncThunk(
   'stock/search',
   async (query: string) => {
-    const response = await apiService.get('/stocks/search', {
+    const response = await apiService.get('/api/v1/stocks/search', {
       params: { q: query },
     });
     return response.data;
@@ -234,7 +234,7 @@ export const searchStocks = createAsyncThunk(
 export const fetchSimilarStocks = createAsyncThunk(
   'stock/fetchSimilar',
   async (ticker: string) => {
-    const response = await apiService.get(`/stocks/${ticker}/similar`);
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/similar`);
     return response.data;
   }
 );

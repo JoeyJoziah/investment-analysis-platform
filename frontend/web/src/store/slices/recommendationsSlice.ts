@@ -89,7 +89,7 @@ export const fetchRecommendations = createAsyncThunk(
         queryParams.append(key, value.toString());
       }
     });
-    const response = await apiService.get(`/recommendations?${queryParams.toString()}`);
+    const response = await apiService.get(`/api/v1/recommendations?${queryParams.toString()}`);
     return response.data;
   }
 );
@@ -97,7 +97,7 @@ export const fetchRecommendations = createAsyncThunk(
 export const fetchRecommendationByTicker = createAsyncThunk(
   'recommendations/fetchByTicker',
   async (ticker: string) => {
-    const response = await apiService.get(`/recommendations/${ticker}`);
+    const response = await apiService.get(`/api/v1/recommendations/${ticker}`);
     return response.data;
   }
 );
@@ -105,7 +105,7 @@ export const fetchRecommendationByTicker = createAsyncThunk(
 export const generateRecommendation = createAsyncThunk(
   'recommendations/generate',
   async (ticker: string) => {
-    const response = await apiService.post(`/recommendations/generate`, { ticker });
+    const response = await apiService.post(`/api/v1/recommendations/generate`, { ticker });
     return response.data;
   }
 );

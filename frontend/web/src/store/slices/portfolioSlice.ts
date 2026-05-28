@@ -111,7 +111,7 @@ const initialState: PortfolioState = {
 export const fetchPortfolio = createAsyncThunk(
   'portfolio/fetchPortfolio',
   async () => {
-    const response = await apiService.get('/portfolio');
+    const response = await apiService.get('/api/v1/portfolio');
     return response.data;
   }
 );
@@ -119,7 +119,7 @@ export const fetchPortfolio = createAsyncThunk(
 export const fetchTransactions = createAsyncThunk(
   'portfolio/fetchTransactions',
   async (params?: { limit?: number; offset?: number }) => {
-    const response = await apiService.get('/portfolio/transactions', { params });
+    const response = await apiService.get('/api/v1/portfolio/transactions', { params });
     return response.data;
   }
 );
@@ -127,7 +127,7 @@ export const fetchTransactions = createAsyncThunk(
 export const addTransaction = createAsyncThunk(
   'portfolio/addTransaction',
   async (transaction: Omit<Transaction, 'id'>) => {
-    const response = await apiService.post('/portfolio/transactions', transaction);
+    const response = await apiService.post('/api/v1/portfolio/transactions', transaction);
     return response.data;
   }
 );
@@ -135,7 +135,7 @@ export const addTransaction = createAsyncThunk(
 export const deletePosition = createAsyncThunk(
   'portfolio/deletePosition',
   async (positionId: string) => {
-    await apiService.delete(`/portfolio/positions/${positionId}`);
+    await apiService.delete(`/api/v1/portfolio/positions/${positionId}`);
     return positionId;
   }
 );
@@ -145,7 +145,7 @@ export const fetchWatchlist = createAsyncThunk(
   'portfolio/fetchWatchlist',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get('/api/watchlists/default');
+      const response = await apiService.get('/api/v1/watchlists/default');
       return response.data;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
@@ -161,7 +161,7 @@ export const addToWatchlist = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await apiService.post(`/api/watchlists/default/symbols/${symbol}`, {
+      const response = await apiService.post(`/api/v1/watchlists/default/symbols/${symbol}`, {
         target_price: targetPrice,
         notes,
       });
@@ -177,7 +177,7 @@ export const removeFromWatchlist = createAsyncThunk(
   'portfolio/removeFromWatchlist',
   async (symbol: string, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/watchlists/default/symbols/${symbol}`);
+      await apiService.delete(`/api/v1/watchlists/default/symbols/${symbol}`);
       return symbol;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
@@ -202,7 +202,7 @@ export const updateWatchlistItem = createAsyncThunk(
   ) => {
     try {
       const response = await apiService.put(
-        `/api/watchlists/${watchlistId}/items/${itemId}`,
+        `/api/v1/watchlists/${watchlistId}/items/${itemId}`,
         updates
       );
       return response.data;
@@ -218,7 +218,7 @@ export const fetchAllWatchlists = createAsyncThunk(
   'portfolio/fetchAllWatchlists',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get('/api/watchlists');
+      const response = await apiService.get('/api/v1/watchlists');
       return response.data;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
@@ -235,7 +235,7 @@ export const createWatchlist = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await apiService.post('/api/watchlists', {
+      const response = await apiService.post('/api/v1/watchlists', {
         name,
         description,
         is_public: isPublic,
@@ -253,7 +253,7 @@ export const deleteWatchlist = createAsyncThunk(
   'portfolio/deleteWatchlist',
   async (watchlistId: number, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/watchlists/${watchlistId}`);
+      await apiService.delete(`/api/v1/watchlists/${watchlistId}`);
       return watchlistId;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };

@@ -162,7 +162,7 @@ const initialState: DashboardState = {
 export const fetchDashboardData = createAsyncThunk(
   'dashboard/fetchData',
   async () => {
-    const response = await apiService.get('/dashboard');
+    const response = await apiService.get('/api/v1/dashboard');
     return response.data;
   }
 );
@@ -170,7 +170,7 @@ export const fetchDashboardData = createAsyncThunk(
 export const fetchMarketOverview = createAsyncThunk(
   'dashboard/fetchMarketOverview',
   async () => {
-    const response = await apiService.get('/market/overview');
+    const response = await apiService.get('/api/v1/market/overview');
     return response.data;
   }
 );
@@ -178,7 +178,7 @@ export const fetchMarketOverview = createAsyncThunk(
 export const fetchPortfolioSummary = createAsyncThunk(
   'dashboard/fetchPortfolioSummary',
   async () => {
-    const response = await apiService.get('/portfolio/summary');
+    const response = await apiService.get('/api/v1/portfolio/summary');
     return response.data;
   }
 );
@@ -186,7 +186,7 @@ export const fetchPortfolioSummary = createAsyncThunk(
 export const fetchCostMetrics = createAsyncThunk(
   'dashboard/fetchCostMetrics',
   async () => {
-    const response = await apiService.get('/admin/cost-metrics');
+    const response = await apiService.get('/api/v1/admin/metrics');
     return response.data;
   }
 );

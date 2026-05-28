@@ -62,7 +62,7 @@ const Register: React.FC = () => {
 
     try {
       await apiService.auth.register({
-        name: fullName.trim(),
+        full_name: fullName.trim(),
         email: email.trim(),
         password,
       });

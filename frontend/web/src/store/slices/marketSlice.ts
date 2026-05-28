@@ -111,7 +111,7 @@ const initialState: MarketState = {
 export const fetchMarketOverview = createAsyncThunk(
   'market/fetchOverview',
   async () => {
-    const response = await apiService.get('/market/overview');
+    const response = await apiService.get('/api/v1/market/overview');
     return response.data;
   }
 );
@@ -119,7 +119,7 @@ export const fetchMarketOverview = createAsyncThunk(
 export const fetchMarketIndices = createAsyncThunk(
   'market/fetchIndices',
   async () => {
-    const response = await apiService.get('/market/indices');
+    const response = await apiService.get('/api/v1/market/indices');
     return response.data;
   }
 );
@@ -127,7 +127,7 @@ export const fetchMarketIndices = createAsyncThunk(
 export const fetchMarketMovers = createAsyncThunk(
   'market/fetchMovers',
   async () => {
-    const response = await apiService.get('/market/movers');
+    const response = await apiService.get('/api/v1/market/movers');
     return response.data;
   }
 );
@@ -135,7 +135,7 @@ export const fetchMarketMovers = createAsyncThunk(
 export const fetchSectorPerformance = createAsyncThunk(
   'market/fetchSectors',
   async () => {
-    const response = await apiService.get('/market/sectors');
+    const response = await apiService.get('/api/v1/market/sectors');
     return response.data;
   }
 );
@@ -143,7 +143,7 @@ export const fetchSectorPerformance = createAsyncThunk(
 export const fetchMarketNews = createAsyncThunk(
   'market/fetchNews',
   async (params?: { limit?: number; category?: string }) => {
-    const response = await apiService.get('/market/news', { params });
+    const response = await apiService.get('/api/v1/market/news', { params });
     return response.data;
   }
 );
@@ -151,7 +151,7 @@ export const fetchMarketNews = createAsyncThunk(
 export const fetchHeatmapData = createAsyncThunk(
   'market/fetchHeatmap',
   async (params?: { index?: string; sector?: string }) => {
-    const response = await apiService.get('/market/heatmap', { params });
+    const response = await apiService.get('/api/v1/market/heatmap', { params });
     return response.data;
   }
 );
@@ -159,7 +159,7 @@ export const fetchHeatmapData = createAsyncThunk(
 export const fetchEconomicCalendar = createAsyncThunk(
   'market/fetchCalendar',
   async () => {
-    const response = await apiService.get('/market/calendar');
+    const response = await apiService.get('/api/v1/market/calendar');
     return response.data;
   }
 );
