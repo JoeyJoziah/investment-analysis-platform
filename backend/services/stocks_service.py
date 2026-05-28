@@ -205,11 +205,21 @@ class StocksService:
         data_source: str,
     ) -> Dict[str, Any]:
         """Transform raw external provider data into a normalised quote dict."""
-        current_price = float(quote_data.get('price', quote_data.get('c', 0)))
-        previous_close = float(quote_data.get('previous_close', quote_data.get('pc', current_price)))
+        current_price = float(quote_data.get('price', quote_data.get('c', 0)) or 0)
+        previous_close = float(quote_data.get('previous_close', quote_data.get('pc', 0)) or 0)
+        open_price = float(quote_data.get('open', quote_data.get('o', 0)) or 0)
 
-        change = current_price - previous_close if previous_close else 0.0
-        change_percent = (change / previous_close * 100) if previous_close else 0.0
+        # Providers (e.g. Finnhub when the market is closed / pre-open) sometimes
+        # return current price `c` = 0 while previous close `pc` and OHLC are
+        # real. Reporting $0.00 / -100% (0 - pc) is fabricated movement, so fall
+        # back to the last known price (previous close, else open) shown flat.
+        if current_price <= 0:
+            current_price = previous_close or open_price
+            change = 0.0
+            change_percent = 0.0
+        else:
+            change = current_price - previous_close if previous_close else 0.0
+            change_percent = (change / previous_close * 100) if previous_close else 0.0
 
         return {
             "symbol": symbol,
