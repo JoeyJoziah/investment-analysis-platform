@@ -181,6 +181,8 @@ describe('Watchlist', () => {
 
     renderWithProviders(<Watchlist />, { preloadedState: errorState });
 
-    expect(screen.getByText('Failed to load watchlist')).toBeInTheDocument();
+    // BUG-3 fix: watchlist errors now render a friendly empty-state notice
+    // instead of the raw error string.
+    expect(screen.getByText(/your watchlist isn.t available yet/i)).toBeInTheDocument();
   });
 });

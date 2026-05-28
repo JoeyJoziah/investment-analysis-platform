@@ -33,6 +33,7 @@ import {
 } from '../store/slices/portfolioSlice';
 import { addNotification } from '../store/slices/appSlice';
 import { usePortfolioWebSocket } from '../hooks/usePortfolioWebSocket';
+import { env } from '../utils/env';
 import {
   PositionsTabContent,
   PerformanceTabContent,
@@ -236,30 +237,32 @@ const Portfolio: React.FC = () => {
           <Typography variant="h4" fontWeight="bold">
             Portfolio
           </Typography>
-          <Badge
-            badgeContent={isConnected ? 'LIVE' : 'OFFLINE'}
-            color={isConnected ? 'success' : 'error'}
-            sx={{
-              '& .MuiBadge-badge': {
-                position: 'relative',
-                transform: 'none',
-                top: 0,
-                right: 0,
-              },
-            }}
-          >
-            <WebSocketIcon
+          {env.ENABLE_WEBSOCKETS && (
+            <Badge
+              badgeContent={isConnected ? 'LIVE' : 'OFFLINE'}
+              color={isConnected ? 'success' : 'error'}
               sx={{
-                color: isConnected ? 'success.main' : 'error.main',
-                animation: isConnected ? 'pulse 1s infinite' : 'none',
-                '@keyframes pulse': {
-                  '0%': { opacity: 1 },
-                  '50%': { opacity: 0.5 },
-                  '100%': { opacity: 1 },
+                '& .MuiBadge-badge': {
+                  position: 'relative',
+                  transform: 'none',
+                  top: 0,
+                  right: 0,
                 },
               }}
-            />
-          </Badge>
+            >
+              <WebSocketIcon
+                sx={{
+                  color: isConnected ? 'success.main' : 'error.main',
+                  animation: isConnected ? 'pulse 1s infinite' : 'none',
+                  '@keyframes pulse': {
+                    '0%': { opacity: 1 },
+                    '50%': { opacity: 0.5 },
+                    '100%': { opacity: 1 },
+                  },
+                }}
+              />
+            </Badge>
+          )}
           {latency > 0 && (
             <Typography variant="caption" color="textSecondary">
               Latency: {latency}ms
@@ -286,8 +289,10 @@ const Portfolio: React.FC = () => {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {/40[34]|not found|no data|network/i.test(error)
+            ? 'No portfolio data is available yet — create a portfolio or add positions to get started.'
+            : error}
         </Alert>
       )}
 

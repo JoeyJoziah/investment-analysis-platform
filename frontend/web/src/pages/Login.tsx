@@ -46,8 +46,8 @@ const Login: React.FC = () => {
   };
 
   const handleDemoLogin = () => {
-    setEmail('demo@investai.com');
-    setPassword('demo123');
+    setEmail('demo@invest.com');
+    setPassword('Demo12345!');
   };
 
   return (
@@ -150,9 +150,9 @@ const Login: React.FC = () => {
                 <Typography variant="caption" color="text.secondary">
                   Demo credentials:
                   <br />
-                  Email: demo@investai.com
+                  Email: demo@invest.com
                   <br />
-                  Password: demo123
+                  Password: Demo12345!
                 </Typography>
               </Box>
             )}

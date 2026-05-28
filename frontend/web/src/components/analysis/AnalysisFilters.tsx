@@ -259,10 +259,13 @@ export const LoadingErrorView: React.FC<LoadingErrorViewProps> = ({
   }
 
   if (error) {
+    const noData = /40[34]|not found|no data|network|unavailable/i.test(error);
     return (
       <Container maxWidth="xl">
-        <Alert severity="error" sx={{ mt: 3 }}>
-          {error}
+        <Alert severity={noData ? 'info' : 'error'} sx={{ mt: 3 }}>
+          {noData
+            ? 'No analysis data is available for this ticker yet — market/analysis data sources are not wired up in this environment.'
+            : error}
         </Alert>
       </Container>
     );

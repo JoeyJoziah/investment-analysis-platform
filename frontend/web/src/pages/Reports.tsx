@@ -73,20 +73,9 @@ const REPORT_TYPES: readonly ReportType[] = [
   { id: 'risk-analysis', title: 'Risk Analysis', description: 'VaR, drawdown, correlation, and stress tests', icon: <Security />, color: '#82ca9d' },
 ];
 
-const INITIAL_RECENT: readonly RecentReport[] = [
-  { id: 'rpt-001', name: 'Portfolio Performance - Q4 2025', type: 'portfolio-performance', format: 'PDF', status: 'ready', generatedAt: '2026-02-28T14:30:00Z', fileSize: '2.4 MB', dateRange: 'Oct 1 - Dec 31, 2025' },
-  { id: 'rpt-002', name: 'Holdings Summary - Feb 2026', type: 'holdings-summary', format: 'Excel', status: 'ready', generatedAt: '2026-02-27T09:15:00Z', fileSize: '1.1 MB', dateRange: 'Feb 1 - 28, 2026' },
-  { id: 'rpt-003', name: 'Transaction History - YTD', type: 'transaction-history', format: 'CSV', status: 'processing', generatedAt: '2026-03-01T08:00:00Z', fileSize: '--', dateRange: 'Jan 1 - Mar 1, 2026' },
-  { id: 'rpt-004', name: 'Tax Loss Harvesting - 2025', type: 'tax-loss-harvesting', format: 'PDF', status: 'ready', generatedAt: '2026-01-15T11:45:00Z', fileSize: '3.8 MB', dateRange: 'Jan 1 - Dec 31, 2025' },
-  { id: 'rpt-005', name: 'Risk Analysis - Feb 2026', type: 'risk-analysis', format: 'PDF', status: 'failed', generatedAt: '2026-02-25T16:20:00Z', fileSize: '--', dateRange: 'Feb 1 - 25, 2026' },
-  { id: 'rpt-006', name: 'Dividend Income - 2025', type: 'dividend-income', format: 'Excel', status: 'ready', generatedAt: '2026-01-10T10:00:00Z', fileSize: '0.9 MB', dateRange: 'Jan 1 - Dec 31, 2025' },
-];
+const INITIAL_RECENT: readonly RecentReport[] = [];
 
-const INITIAL_SCHEDULED: readonly ScheduledReport[] = [
-  { id: 'sch-001', name: 'Monthly Portfolio Performance', type: 'portfolio-performance', frequency: 'monthly', delivery: 'email', enabled: true, nextRun: '2026-04-01T08:00:00Z', lastRun: '2026-03-01T08:00:00Z' },
-  { id: 'sch-002', name: 'Weekly Holdings Summary', type: 'holdings-summary', frequency: 'weekly', delivery: 'download', enabled: true, nextRun: '2026-03-07T08:00:00Z', lastRun: '2026-02-28T08:00:00Z' },
-  { id: 'sch-003', name: 'Quarterly Tax Report', type: 'tax-loss-harvesting', frequency: 'quarterly', delivery: 'email', enabled: false, nextRun: '2026-07-01T08:00:00Z', lastRun: '2026-01-01T08:00:00Z' },
-];
+const INITIAL_SCHEDULED: readonly ScheduledReport[] = [];
 
 const STATUS_CONFIG: Record<ReportStatus, { label: string; color: 'success' | 'warning' | 'error' }> = {
   ready: { label: 'Ready', color: 'success' },
@@ -117,6 +106,18 @@ const fmtShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// Format a Date as a YYYY-MM-DD string for <input type="date"> values.
+const toInputDate = (d: Date) => d.toISOString().split('T')[0];
+
+// Default the generator to a recent 30-day window computed at runtime,
+// so the form never ships stale hardcoded dates.
+const defaultDateRange = (): { startDate: string; endDate: string } => {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  return { startDate: toInputDate(start), endDate: toInputDate(end) };
+};
 
 // --- Stat Card ---
 
@@ -150,7 +151,7 @@ const Reports: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [recentReports, setRecentReports] = useState<readonly RecentReport[]>(INITIAL_RECENT);
   const [scheduledReports, setScheduledReports] = useState<readonly ScheduledReport[]>(INITIAL_SCHEDULED);
-  const [form, setForm] = useState<GeneratorForm>({ reportType: '', startDate: '2026-02-01', endDate: '2026-03-01', format: 'PDF' });
+  const [form, setForm] = useState<GeneratorForm>(() => ({ reportType: '', ...defaultDateRange(), format: 'PDF' }));
 
   // Computed
   const reportsThisMonth = useMemo(() => {

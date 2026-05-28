@@ -2,9 +2,17 @@ import React from 'react';
 import { Box, Tooltip, Typography } from '@mui/material';
 import { Circle } from '@mui/icons-material';
 import { useAppSelector } from '../../hooks/redux';
+import { env } from '../../utils/env';
 
 const WebSocketIndicator: React.FC = () => {
   const { webSocketConnected } = useAppSelector((state) => state.app);
+
+  // Real-time updates are opt-in (VITE_ENABLE_WEBSOCKETS). When disabled -- e.g. local
+  // dev with no socket server -- hide the indicator rather than show an alarming
+  // permanent red "Offline" badge.
+  if (!env.ENABLE_WEBSOCKETS) {
+    return null;
+  }
 
   return (
     <Tooltip
