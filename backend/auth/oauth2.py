@@ -172,45 +172,54 @@ def create_tokens(user: User, request: Optional[Request] = None) -> dict:
 
 
 def decode_access_token(token: str) -> TokenData:
-    """Decode and validate JWT token using enhanced JWT manager"""
+    """Decode and validate a JWT access token.
+
+    Primary path: the structured jwt_manager (RS256). Fallback: the HS256 tokens minted
+    by backend.api.routers.auth (login/register), signed with JWT_SECRET_KEY. The
+    fallback lets a single login token be accepted across ALL oauth2-protected endpoints
+    (settings, recommendations, etc.), not only auth.py's own /me. This reuses the
+    already-trusted auth.py token -- it does not introduce a new trust path or weaken
+    the RS256 path (the HS256 secret is the server-side JWT_SECRET_KEY).
+    """
+    payload = None
     try:
-        jwt_manager = get_jwt_manager()
-        payload = jwt_manager.verify_token(token, TokenType.ACCESS)
-        
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
+        payload = get_jwt_manager().verify_token(token, TokenType.ACCESS)
+    except Exception:
+        payload = None
+
+    if not payload:
+        try:
+            payload = jwt.decode(
+                token,
+                SecurityConfig.JWT_SECRET_KEY,
+                algorithms=[
+                    SecurityConfig.JWT_ALGORITHM,
+                    SecurityConfig.JWT_ALGORITHM_FALLBACK,
+                ],
             )
-        
-        username: str = payload.get("sub")
-        user_id: int = payload.get("user_id")
-        scopes: list = payload.get("scopes", [])
-        
-        if username is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Could not validate credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        token_data = TokenData(
-            username=username,
-            user_id=user_id,
-            scopes=scopes
-        )
-        return token_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error decoding token: {e}")
+        except Exception as e:
+            logger.warning(f"Token rejected by jwt_manager and HS256 fallback: {e}")
+            payload = None
+
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    username: str = payload.get("sub")
+    user_id = payload.get("user_id")
+    scopes = payload.get("scopes", [])
+
+    if username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return TokenData(username=username, user_id=user_id, scopes=scopes)
 
 
 def verify_token(token: str) -> Optional[Dict[str, Any]]:
@@ -233,8 +242,12 @@ async def get_current_user(
 ) -> User:
     """Get current authenticated user"""
     token_data = decode_access_token(token)
-    
-    user = db.query(User).filter(User.username == token_data.username).first()
+
+    # Login/register tokens carry the user's email in `sub`; jwt_manager tokens may
+    # carry a username. Match either so a single token type works across all endpoints.
+    user = db.query(User).filter(
+        (User.email == token_data.username) | (User.username == token_data.username)
+    ).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
