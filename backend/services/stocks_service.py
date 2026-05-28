@@ -205,21 +205,38 @@ class StocksService:
         data_source: str,
     ) -> Dict[str, Any]:
         """Transform raw external provider data into a normalised quote dict."""
-        current_price = float(quote_data.get('price', quote_data.get('c', 0)) or 0)
+        # Provider clients normalize price under different keys: FinnhubClient
+        # uses `current_price`, AlphaVantageClient uses `price`; raw payloads use
+        # `c`. Read all so the current price isn't silently lost (which made the
+        # whole quote fall back to a flat previous close).
+        current_price = float(
+            quote_data.get('current_price',
+                quote_data.get('price',
+                    quote_data.get('c', 0))) or 0
+        )
         previous_close = float(quote_data.get('previous_close', quote_data.get('pc', 0)) or 0)
         open_price = float(quote_data.get('open', quote_data.get('o', 0)) or 0)
 
         # Providers (e.g. Finnhub when the market is closed / pre-open) sometimes
-        # return current price `c` = 0 while previous close `pc` and OHLC are
-        # real. Reporting $0.00 / -100% (0 - pc) is fabricated movement, so fall
-        # back to the last known price (previous close, else open) shown flat.
+        # return a current price of 0 while previous close and OHLC are real.
+        # Reporting $0.00 / -100% (0 - pc) is fabricated movement, so fall back
+        # to the last known price (previous close, else open) shown flat.
         if current_price <= 0:
             current_price = previous_close or open_price
             change = 0.0
             change_percent = 0.0
+        elif previous_close > 0:
+            change = current_price - previous_close
+            change_percent = change / previous_close * 100
         else:
-            change = current_price - previous_close if previous_close else 0.0
-            change_percent = (change / previous_close * 100) if previous_close else 0.0
+            # Price but no previous close (e.g. AlphaVantage): use the provider's
+            # own change fields rather than computing a delta against 0.
+            change = float(quote_data.get('change', quote_data.get('d', 0)) or 0)
+            change_percent = float(
+                quote_data.get('percent_change',
+                    quote_data.get('change_percent',
+                        quote_data.get('dp', 0))) or 0
+            )
 
         return {
             "symbol": symbol,
