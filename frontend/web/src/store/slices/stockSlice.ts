@@ -186,19 +186,31 @@ const initialState: StockState = {
 export const fetchStockData = createAsyncThunk(
   'stock/fetchData',
   async (ticker: string) => {
-    const [quote, technical, fundamental, news] = await Promise.all([
+    // Use allSettled so a missing/optional sub-endpoint (technical, fundamental and
+    // news are not all implemented yet -> 404) does NOT discard the working quote.
+    // The quote is the primary data; the rest are best-effort.
+    const [quoteR, technicalR, fundamentalR, newsR] = await Promise.allSettled([
       apiService.get(`/api/v1/stocks/${ticker}/quote`),
       apiService.get(`/api/v1/stocks/${ticker}/technical`),
       apiService.get(`/api/v1/stocks/${ticker}/fundamental`),
       apiService.get(`/api/v1/stocks/${ticker}/news`),
     ]);
-    
+
+    const dataOf = (r: PromiseSettledResult<{ data: unknown }>): unknown =>
+      r.status === 'fulfilled' ? r.value.data : null;
+
+    const quote = dataOf(quoteR);
+    if (!quote) {
+      // Only fail the whole load if even the quote is unavailable.
+      throw new Error(`No quote data available for ${ticker}`);
+    }
+
     return {
       ticker,
-      quote: quote.data,
-      technical: technical.data,
-      fundamental: fundamental.data,
-      news: news.data,
+      quote,
+      technical: dataOf(technicalR),
+      fundamental: dataOf(fundamentalR),
+      news: dataOf(newsR),
     };
   }
 );
