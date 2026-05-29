@@ -144,6 +144,20 @@ export interface OptionsChain {
   }>;
 }
 
+export interface SimilarStock {
+  ticker: string;
+  name: string;
+  correlation: number;
+  changePercent: number;
+}
+
+export interface StockSearchResult {
+  ticker: string;
+  name: string;
+  exchange: string;
+  type: string;
+}
+
 interface StockState {
   selectedTicker: string | null;
   quote: StockQuote | null;
@@ -152,20 +166,20 @@ interface StockState {
   fundamentalData: FundamentalData | null;
   news: StockNews[];
   optionsChain: OptionsChain | null;
-  similarStocks: Array<{
-    ticker: string;
-    name: string;
-    correlation: number;
-    changePercent: number;
-  }>;
-  searchResults: Array<{
-    ticker: string;
-    name: string;
-    exchange: string;
-    type: string;
-  }>;
+  similarStocks: SimilarStock[];
+  searchResults: StockSearchResult[];
   isLoading: boolean;
   error: string | null;
+}
+
+// Resolved payload for fetchStockData. The quote is always present (the thunk
+// throws otherwise); technical/fundamental/news are best-effort and may be null.
+export interface StockDataPayload {
+  ticker: string;
+  quote: StockQuote;
+  technical: TechnicalIndicators | null;
+  fundamental: FundamentalData | null;
+  news: StockNews[];
 }
 
 const initialState: StockState = {
@@ -195,7 +209,7 @@ const unwrapData = <T = unknown>(body: unknown): T => {
 };
 
 // Async thunks
-export const fetchStockData = createAsyncThunk(
+export const fetchStockData = createAsyncThunk<StockDataPayload, string>(
   'stock/fetchData',
   async (ticker: string) => {
     // Use allSettled so a missing/optional sub-endpoint (technical, fundamental and
@@ -225,7 +239,7 @@ export const fetchStockData = createAsyncThunk(
     const q = rawQuote as Record<string, unknown>;
     const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
     const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-    const quote = {
+    const quote: StockQuote = {
       ticker: str(q.symbol ?? q.ticker) || ticker,
       companyName: str(q.company_name ?? q.companyName ?? q.name),
       price: num(q.price),
@@ -250,42 +264,47 @@ export const fetchStockData = createAsyncThunk(
     return {
       ticker,
       quote,
-      technical: dataOf(technicalR),
-      fundamental: dataOf(fundamentalR),
-      news: dataOf(newsR),
+      // technical/fundamental are best-effort: dataOf returns the unwrapped
+      // payload or null. news falls back to [] so the reducer always gets an array.
+      technical: dataOf(technicalR) as TechnicalIndicators | null,
+      fundamental: dataOf(fundamentalR) as FundamentalData | null,
+      news: (dataOf(newsR) as StockNews[] | null) ?? [],
     };
   }
 );
 
-export const fetchStockChart = createAsyncThunk(
+export const fetchStockChart = createAsyncThunk<
+  StockChart,
+  { ticker: string; interval: string }
+>(
   'stock/fetchChart',
   async ({ ticker, interval }: { ticker: string; interval: string }) => {
     const response = await apiService.get(`/api/v1/stocks/${ticker}/chart`, {
       params: { interval },
     });
-    return unwrapData(response.data);
+    return unwrapData<StockChart>(response.data);
   }
 );
 
-export const fetchOptionsChain = createAsyncThunk(
+export const fetchOptionsChain = createAsyncThunk<OptionsChain, string>(
   'stock/fetchOptions',
   async (ticker: string) => {
     const response = await apiService.get(`/api/v1/stocks/${ticker}/options`);
-    return unwrapData(response.data);
+    return unwrapData<OptionsChain>(response.data);
   }
 );
 
-export const searchStocks = createAsyncThunk(
+export const searchStocks = createAsyncThunk<StockSearchResult[], string>(
   'stock/search',
   async (query: string) => {
     const response = await apiService.get('/api/v1/stocks/search', {
       params: { q: query },
     });
-    return unwrapData(response.data);
+    return unwrapData<StockSearchResult[]>(response.data);
   }
 );
 
-export const fetchSimilarStocks = createAsyncThunk(
+export const fetchSimilarStocks = createAsyncThunk<SimilarStock[], string>(
   'stock/fetchSimilar',
   async (ticker: string) => {
     const response = await apiService.get(`/api/v1/stocks/${ticker}/similar`);

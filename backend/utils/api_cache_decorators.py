@@ -25,6 +25,18 @@ from backend.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# Only JSON-serializable scalar values are safe to fold into a deterministic
+# cache key. Non-scalar arguments such as a FastAPI ``Request``, a SQLAlchemy
+# ``AsyncSession``, the ``async_generator`` produced by the DB-session
+# dependency, or ORM/model objects stringify via ``object.__repr__`` (which
+# embeds a per-instance ``id()``). That made affected routes effectively
+# uncacheable, occasionally collision-prone, and surfaced the runtime warning
+# "'async_generator' object does not support the asynchronous context manager
+# protocol". We therefore include scalar values only and skip everything else.
+# NOTE: ``bool`` is intentionally listed even though it is a subclass of
+# ``int`` -- listing it documents intent and is harmless for isinstance.
+_SERIALIZABLE = (str, int, float, bool)
+
 
 def generate_cache_key(
     func_name: str, 
@@ -37,15 +49,23 @@ def generate_cache_key(
     Generate a consistent cache key for API responses
     """
     key_parts = [func_name]
-    
-    # Add function arguments
+
+    # Add function arguments -- only scalar (JSON-serializable) values are
+    # deterministic. Skip Request / AsyncSession / async_generator / ORM
+    # objects whose repr embeds a per-instance id() (see _SERIALIZABLE above).
     if args:
-        key_parts.extend([str(arg) for arg in args])
-    
+        key_parts.extend(str(a) for a in args if isinstance(a, _SERIALIZABLE))
+
     if kwargs:
-        # Sort kwargs for consistent key generation
+        # Sort kwargs for consistent key generation, then keep only scalar
+        # values so two calls differing solely by a non-serializable kwarg
+        # (e.g. a different AsyncSession instance) produce the SAME key.
         sorted_kwargs = sorted(kwargs.items())
-        key_parts.extend([f"{k}={v}" for k, v in sorted_kwargs])
+        key_parts.extend(
+            f"{k}={v}"
+            for k, v in sorted_kwargs
+            if isinstance(v, _SERIALIZABLE)
+        )
     
     # Add request parameters if provided
     if request:

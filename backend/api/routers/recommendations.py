@@ -60,6 +60,26 @@ def _refuse_when_models_in_fallback(model: str = "recommendation_engine") -> Non
     if mgr.get_fallback_models():
         raise_model_unavailable(model=model, reason="fallback_active")
 
+
+def _ml_models_in_fallback() -> bool:
+    """Return True when the ML recommendation models are in dummy fallback.
+
+    Used to decide between the ML-powered path (models loaded) and the
+    transparent rules-based screen (models down). In ``DEMO_MODE`` we keep the
+    ML/synthetic path so demo environments are unaffected; in production the
+    rules-based screen replaces the old refuse/fabricate behavior.
+    """
+    if settings.DEMO_MODE:
+        return False
+    try:
+        mgr = get_model_manager()
+    except Exception:  # pragma: no cover - never let the gate crash the request
+        return True
+    try:
+        return bool(mgr.get_fallback_models())
+    except Exception:  # pragma: no cover
+        return True
+
 router = APIRouter(tags=["recommendations"])
 
 # ============================================================================
@@ -270,6 +290,77 @@ def _dicts_to_details(items: List[Any]) -> List[RecommendationDetail]:
     """Convert a list of service dicts to RecommendationDetail models."""
     return [_dict_to_detail(r) for r in items]
 
+
+def _empty_daily(target_date: date) -> DailyRecommendations:
+    """Honest empty daily digest used when no real data qualifies.
+
+    Contains NO fabricated picks — graceful-empty per the no-synthetic-data
+    rule. Watchlist/avoid lists are empty rather than hardcoded tickers.
+    """
+    return DailyRecommendations(
+        date=target_date,
+        market_outlook="No recommendations available for the requested date.",
+        top_picks=[],
+        watchlist=[],
+        avoid_list=[],
+        sector_focus="N/A",
+        market_sentiment=0.0,
+        risk_assessment="Insufficient data to assess risk.",
+        special_situations=[],
+    )
+
+
+def _build_daily_from_rules(
+    target_date: date,
+    recs: List[RecommendationDetail],
+) -> DailyRecommendations:
+    """Assemble a DailyRecommendations digest from rules-based screen output.
+
+    All fields are derived deterministically from the real, ranked screen
+    results; there is no random content. Returns an honest empty digest when
+    the screen produced nothing.
+    """
+    if not recs:
+        return _empty_daily(target_date)
+
+    top_picks = recs[:5]
+    watchlist = [r.symbol for r in recs[5:12]]
+    avoid_list = [
+        r.symbol for r in recs
+        if r.recommendation_type in (RecommendationType.SELL, RecommendationType.STRONG_SELL)
+    ][:5]
+
+    sentiment_map = {
+        RecommendationType.STRONG_BUY: 1.0,
+        RecommendationType.BUY: 0.5,
+        RecommendationType.HOLD: 0.0,
+        RecommendationType.SELL: -0.5,
+        RecommendationType.STRONG_SELL: -1.0,
+    }
+    sentiment_scores = [sentiment_map.get(r.recommendation_type, 0.0) for r in top_picks]
+    market_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0.0
+
+    sector_counts: Dict[str, int] = {}
+    for r in top_picks:
+        if r.sector and r.sector != "Unknown":
+            sector_counts[r.sector] = sector_counts.get(r.sector, 0) + 1
+    sector_focus = max(sector_counts.items(), key=lambda x: x[1])[0] if sector_counts else "N/A"
+
+    return DailyRecommendations(
+        date=target_date,
+        market_outlook=(
+            "Rules-based screen over stored historical data "
+            "(60-day momentum + P/E valuation). Not ML-generated."
+        ),
+        top_picks=top_picks,
+        watchlist=watchlist,
+        avoid_list=avoid_list,
+        sector_focus=sector_focus,
+        market_sentiment=round(market_sentiment, 3),
+        risk_assessment="Derived from a transparent rules-based screen.",
+        special_situations=[],
+    )
+
 # ============================================================================
 # Router-level functions
 # These functions are kept at module level because tests import them directly
@@ -321,6 +412,31 @@ async def generate_ml_powered_recommendations(
     return _dicts_to_details(raw)
 
 
+async def generate_rules_based_recommendations(
+    risk_level: Optional[RiskLevel] = None,
+    categories: Optional[List[RecommendationCategory]] = None,
+    limit: int = 10,
+    db_session: AsyncSession = None,
+) -> List[RecommendationDetail]:
+    """
+    Generate transparent, deterministic rules-based recommendations.
+
+    Delegates to the service layer while passing module-level repository
+    references so that test patches on this module propagate correctly. This is
+    the no-ML screen used when the ML models are unavailable; it derives all
+    outputs from real stored price history + fundamentals and NEVER fabricates.
+    """
+    raw = await recommendation_service.generate_rules_based_recommendations(
+        risk_level=risk_level.value if risk_level else None,
+        categories=[c.value for c in categories] if categories else None,
+        limit=limit,
+        db_session=db_session,
+        stock_repo=stock_repository,
+        price_repo=price_repository,
+    )
+    return _dicts_to_details(raw)
+
+
 async def generate_personalized_recommendations(
     user_id: int,
     portfolio_id: Optional[str] = None,
@@ -363,10 +479,29 @@ async def get_daily_recommendations(
     db: AsyncSession = Depends(get_async_db_session),
     rec_service = Depends(get_recommendation_service)
 ) -> ApiResponse[DailyRecommendations]:
-    """Get daily curated recommendations powered by ML models and market analysis."""
+    """Get daily curated recommendations.
+
+    Uses the ML-powered digest when models are loaded; otherwise falls back to
+    the transparent rules-based screen over real stored data. NEVER returns
+    fabricated (random) recommendations — on real failure with no qualifying
+    data it returns an empty digest.
+    """
     target_date = date_param or date.today()
     logger.info(f"Generating daily recommendations for {target_date}, risk level: {risk_level}")
-    _refuse_when_models_in_fallback(model="recommendation_engine")
+
+    if _ml_models_in_fallback():
+        # Production with ML models down: serve the deterministic rules-based
+        # screen instead of refusing or fabricating.
+        try:
+            recs = await generate_rules_based_recommendations(
+                risk_level=risk_level,
+                limit=15,
+                db_session=db,
+            )
+            return success_response(data=_build_daily_from_rules(target_date, recs))
+        except Exception as e:
+            logger.error(f"Error generating rules-based daily recommendations: {e}")
+            return success_response(data=_empty_daily(target_date))
 
     try:
         result = await rec_service.build_daily_recommendations(
@@ -391,18 +526,44 @@ async def get_daily_recommendations(
     except Exception as e:
         logger.error(f"Error generating daily recommendations: {e}")
         await handle_api_error(e, "generate daily recommendations")
+        # No synthetic fallback: return an honest empty digest.
+        return success_response(data=_empty_daily(target_date))
 
-        return success_response(data=DailyRecommendations(
-            date=target_date,
-            market_outlook="Market analysis temporarily unavailable",
-            top_picks=[generate_recommendation() for _ in range(5)],
-            watchlist=["AAPL", "GOOGL", "MSFT", "NVDA", "AMD"],
-            avoid_list=[],
-            sector_focus="Technology",
-            market_sentiment=0.0,
-            risk_assessment="Analysis unavailable",
-            special_situations=[]
-        ))
+def _filter_and_sort_details(
+    recs: List[RecommendationDetail],
+    *,
+    recommendation_type: Optional[RecommendationType] = None,
+    category: Optional[RecommendationCategory] = None,
+    risk_level: Optional[RiskLevel] = None,
+    min_confidence: float = 0.0,
+    sort_by: str = "confidence_score",
+    order: str = "desc",
+    limit: int = 10,
+    offset: int = 0,
+) -> List[RecommendationDetail]:
+    """Apply single-value filters, sorting, and pagination to real screen output.
+
+    Operates on already-computed RecommendationDetail objects (no fabrication);
+    just narrows/orders the deterministic rules-based results.
+    """
+    filtered = [
+        r for r in recs
+        if (recommendation_type is None or r.recommendation_type == recommendation_type)
+        and (category is None or r.category == category)
+        and (risk_level is None or r.risk_level == risk_level)
+        and r.confidence_score >= min_confidence
+    ]
+
+    reverse = (order == "desc")
+    if sort_by == "confidence_score":
+        filtered.sort(key=lambda r: r.confidence_score, reverse=reverse)
+    elif sort_by == "expected_return":
+        filtered.sort(key=lambda r: r.expected_return, reverse=reverse)
+    elif sort_by == "created_at":
+        filtered.sort(key=lambda r: r.created_at, reverse=reverse)
+
+    return filtered[offset:offset + limit]
+
 
 @router.get("/list")
 async def get_recommendations(
@@ -413,22 +574,46 @@ async def get_recommendations(
     risk_level: Optional[RiskLevel] = None,
     min_confidence: float = Query(0.0, ge=0, le=1),
     sort_by: str = Query("confidence_score", pattern="^(confidence_score|expected_return|created_at)$"),
-    order: str = Query("desc", pattern="^(asc|desc)$")
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[List[RecommendationDetail]]:
-    """Get list of recommendations with filters"""
-    _refuse_when_models_in_fallback(model="recommendation_engine")
-    recs_data = recommendation_service.generate_filtered_recommendations(
-        count=50,
-        recommendation_type=recommendation_type.value if recommendation_type else None,
-        category=category.value if category else None,
-        risk_level=risk_level.value if risk_level else None,
+    """Get list of recommendations with filters.
+
+    Backed by the transparent rules-based screen over real stored data when ML
+    models are unavailable, and by the ML path when models are loaded. Returns
+    an empty list (never random) when no real data qualifies.
+    """
+    try:
+        if _ml_models_in_fallback():
+            screened = await generate_rules_based_recommendations(
+                risk_level=risk_level,
+                categories=[category] if category else None,
+                limit=max(limit + offset, 50),
+                db_session=db,
+            )
+        else:
+            screened = await generate_ml_powered_recommendations(
+                risk_level=risk_level,
+                categories=[category] if category else None,
+                limit=max(limit + offset, 50),
+                db_session=db,
+            )
+    except Exception as e:
+        logger.error(f"Error generating recommendations list: {e}")
+        return success_response(data=[])
+
+    result = _filter_and_sort_details(
+        screened,
+        recommendation_type=recommendation_type,
+        category=category,
+        risk_level=risk_level,
         min_confidence=min_confidence,
         sort_by=sort_by,
         order=order,
         limit=limit,
         offset=offset,
     )
-    return success_response(data=_dicts_to_details(recs_data))
+    return success_response(data=result)
 
 @router.get("/{recommendation_id}")
 async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
@@ -441,26 +626,51 @@ async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[Recom
 @router.post("/filter")
 async def filter_recommendations(
     filter_params: RecommendationFilter,
-    limit: int = Query(20, le=100)
+    limit: int = Query(20, le=100),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[List[RecommendationDetail]]:
-    """Advanced filtering of recommendations"""
-    _refuse_when_models_in_fallback(model="recommendation_engine")
-    recs_data = recommendation_service.generate_filtered_recommendations(
-        count=100,
-        categories=[c.value for c in filter_params.categories] if filter_params.categories else None,
-        risk_levels=[r.value for r in filter_params.risk_levels] if filter_params.risk_levels else None,
-        time_horizons=[t.value for t in filter_params.time_horizons] if filter_params.time_horizons else None,
-        min_confidence=filter_params.min_confidence or 0.0,
-        min_expected_return=filter_params.min_expected_return,
-        sectors=filter_params.sectors,
-        market_cap_min=filter_params.market_cap_min,
-        market_cap_max=filter_params.market_cap_max,
-        sort_by="confidence_score",
-        order="desc",
-        limit=limit,
-        offset=0,
-    )
-    return success_response(data=_dicts_to_details(recs_data))
+    """Advanced filtering of recommendations.
+
+    Backed by the rules-based screen (or ML path when models are loaded). All
+    filters are applied to real, deterministic screen output; returns an empty
+    list (never random) when nothing qualifies.
+    """
+    try:
+        if _ml_models_in_fallback():
+            screened = await generate_rules_based_recommendations(
+                categories=filter_params.categories,
+                limit=200,
+                db_session=db,
+            )
+        else:
+            screened = await generate_ml_powered_recommendations(
+                categories=filter_params.categories,
+                limit=200,
+                db_session=db,
+            )
+    except Exception as e:
+        logger.error(f"Error generating filtered recommendations: {e}")
+        return success_response(data=[])
+
+    categories = set(filter_params.categories) if filter_params.categories else None
+    risk_levels = set(filter_params.risk_levels) if filter_params.risk_levels else None
+    time_horizons = set(filter_params.time_horizons) if filter_params.time_horizons else None
+    sectors = set(filter_params.sectors) if filter_params.sectors else None
+    min_confidence = filter_params.min_confidence or 0.0
+
+    filtered = [
+        r for r in screened
+        if (categories is None or r.category in categories)
+        and (risk_levels is None or r.risk_level in risk_levels)
+        and (time_horizons is None or r.time_horizon in time_horizons)
+        and (sectors is None or r.sector in sectors)
+        and r.confidence_score >= min_confidence
+        and (filter_params.min_expected_return is None or r.expected_return >= filter_params.min_expected_return)
+        and (filter_params.market_cap_min is None or r.market_cap >= filter_params.market_cap_min)
+        and (filter_params.market_cap_max is None or r.market_cap <= filter_params.market_cap_max)
+    ]
+    filtered.sort(key=lambda r: r.confidence_score, reverse=True)
+    return success_response(data=filtered[:limit])
 
 @router.get("/portfolio/{portfolio_id}")
 async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
@@ -551,11 +761,43 @@ async def get_trending_recommendations(
     timeframe: str = Query("24h", pattern="^(1h|24h|7d|30d)$"),
     limit: int = Query(10, le=50),
     risk_tolerance: str = Query("moderate", pattern="^(conservative|moderate|aggressive)$"),
-    rec_service = Depends(get_recommendation_service)
+    rec_service = Depends(get_recommendation_service),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[List[Dict[str, Any]]]:
-    """Get trending recommendations based on market momentum and analysis."""
-    _refuse_when_models_in_fallback(model="recommendation_engine")
+    """Get trending recommendations based on real momentum analysis.
+
+    Uses the ML engine when models are loaded; otherwise ranks by the
+    transparent rules-based screen (60-day momentum). NEVER returns the legacy
+    random ``generate_trending_fallback`` content — on failure returns [].
+    """
     timeframe_map = {"1h": "1h", "24h": "1d", "7d": "1w", "30d": "1m"}
+
+    if _ml_models_in_fallback():
+        # Rules-based: derive trending entries from the deterministic screen.
+        try:
+            screened = await generate_rules_based_recommendations(
+                risk_level=risk_tolerance,
+                limit=limit,
+                db_session=db,
+            )
+        except Exception as e:
+            logger.error(f"Error getting rules-based trending recommendations: {e}")
+            return success_response(data=[])
+
+        trending = [
+            {
+                "symbol": r.symbol,
+                "recommendation_type": r.recommendation_type.value,
+                "confidence": r.confidence_score,
+                "expected_return": r.expected_return,
+                "views": None,
+                "saves": None,
+                "trending_score": round(r.confidence_score * 100, 2),
+                "timeframe": timeframe,
+            }
+            for r in screened
+        ]
+        return success_response(data=trending)
 
     try:
         trending = await rec_service.get_trending(
@@ -572,9 +814,5 @@ async def get_trending_recommendations(
 
     except Exception as e:
         logger.error(f"Error getting trending recommendations: {e}")
-        fallback = recommendation_service.generate_trending_fallback(
-            symbols=["NVDA", "TSLA", "AAPL", "AMD", "GOOGL", "META", "AMZN", "MSFT"],
-            limit=limit,
-            timeframe=timeframe,
-        )
-        return success_response(data=fallback)
+        # No synthetic fallback: return empty rather than random content.
+        return success_response(data=[])

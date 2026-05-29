@@ -109,43 +109,58 @@ interface CostMetricsState {
   emergencyMode: boolean;
 }
 
+interface DashboardMarketOverview {
+  indices: MarketIndex[];
+  heatmap: HeatmapEntry[];
+  sectors: Sector[];
+}
+
+interface DashboardPortfolioSummary {
+  totalValue: number;
+  totalCost: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  dayChange: number;
+  dayChangePercent: number;
+  weekChange: number;
+  monthChange: number;
+  yearChange: number;
+  activePositions: number;
+  performanceHistory: Array<{ date: string; value: number }>;
+  topGainers: PositionSummary[];
+  topLosers: PositionSummary[];
+  allocation: AllocationEntry[];
+  riskMetrics: {
+    sharpeRatio: number;
+    beta: number;
+    standardDeviation: number;
+    maxDrawdown: number;
+  };
+  diversificationScore: number;
+  cashBalance: number;
+  marginUsed: number;
+}
+
 interface DashboardState {
-  marketOverview: {
-    indices: MarketIndex[];
-    heatmap: HeatmapEntry[];
-    sectors: Sector[];
-  } | null;
+  marketOverview: DashboardMarketOverview | null;
   topRecommendations: Recommendation[];
-  portfolioSummary: {
-    totalValue: number;
-    totalCost: number;
-    totalReturn: number;
-    totalReturnPercent: number;
-    dayChange: number;
-    dayChangePercent: number;
-    weekChange: number;
-    monthChange: number;
-    yearChange: number;
-    activePositions: number;
-    performanceHistory: Array<{ date: string; value: number }>;
-    topGainers: PositionSummary[];
-    topLosers: PositionSummary[];
-    allocation: AllocationEntry[];
-    riskMetrics: {
-      sharpeRatio: number;
-      beta: number;
-      standardDeviation: number;
-      maxDrawdown: number;
-    };
-    diversificationScore: number;
-    cashBalance: number;
-    marginUsed: number;
-  } | null;
+  portfolioSummary: DashboardPortfolioSummary | null;
   recentNews: NewsItem[];
   marketSentiment: MarketSentimentState | null;
   costMetrics: CostMetricsState | null;
   loading: boolean;
   error: string | null;
+}
+
+// Resolved payload for the aggregate dashboard endpoint. Reuses the nested
+// interfaces above so the fulfilled reducer sees concrete field types.
+interface DashboardDataPayload {
+  marketOverview: DashboardMarketOverview | null;
+  topRecommendations: Recommendation[];
+  portfolioSummary: DashboardPortfolioSummary | null;
+  recentNews: NewsItem[];
+  marketSentiment: MarketSentimentState | null;
+  costMetrics: CostMetricsState | null;
 }
 
 const initialState: DashboardState = {
@@ -172,35 +187,35 @@ const unwrapData = <T = unknown>(body: unknown): T => {
   return body as T;
 };
 
-export const fetchDashboardData = createAsyncThunk(
+export const fetchDashboardData = createAsyncThunk<DashboardDataPayload>(
   'dashboard/fetchData',
   async () => {
     const response = await apiService.get('/api/v1/dashboard');
-    return unwrapData(response.data);
+    return unwrapData<DashboardDataPayload>(response.data);
   }
 );
 
-export const fetchMarketOverview = createAsyncThunk(
+export const fetchMarketOverview = createAsyncThunk<DashboardMarketOverview>(
   'dashboard/fetchMarketOverview',
   async () => {
     const response = await apiService.get('/api/v1/market/overview');
-    return unwrapData(response.data);
+    return unwrapData<DashboardMarketOverview>(response.data);
   }
 );
 
-export const fetchPortfolioSummary = createAsyncThunk(
+export const fetchPortfolioSummary = createAsyncThunk<DashboardPortfolioSummary>(
   'dashboard/fetchPortfolioSummary',
   async () => {
     const response = await apiService.get('/api/v1/portfolio/summary');
-    return unwrapData(response.data);
+    return unwrapData<DashboardPortfolioSummary>(response.data);
   }
 );
 
-export const fetchCostMetrics = createAsyncThunk(
+export const fetchCostMetrics = createAsyncThunk<CostMetricsState>(
   'dashboard/fetchCostMetrics',
   async () => {
     const response = await apiService.get('/api/v1/admin/metrics');
-    return unwrapData(response.data);
+    return unwrapData<CostMetricsState>(response.data);
   }
 );
 

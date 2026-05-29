@@ -80,7 +80,17 @@ interface FetchRecommendationsParams {
   sortOrder?: string;
 }
 
-export const fetchRecommendations = createAsyncThunk(
+// The list endpoint may return either a bare array or a paginated envelope
+// ({ recommendations, total }). Model both so the fulfilled reducer can read
+// `.recommendations`/`.total` without falling back to `unknown`.
+type RecommendationsListPayload =
+  | Recommendation[]
+  | { recommendations: Recommendation[]; total: number };
+
+export const fetchRecommendations = createAsyncThunk<
+  RecommendationsListPayload,
+  FetchRecommendationsParams | undefined
+>(
   'recommendations/fetchRecommendations',
   async (params: FetchRecommendationsParams = {}) => {
     const queryParams = new URLSearchParams();
@@ -89,23 +99,27 @@ export const fetchRecommendations = createAsyncThunk(
         queryParams.append(key, value.toString());
       }
     });
-    const response = await apiService.get(`/api/v1/recommendations?${queryParams.toString()}`);
+    const response = await apiService.get<RecommendationsListPayload>(
+      `/api/v1/recommendations?${queryParams.toString()}`
+    );
     return response.data;
   }
 );
 
-export const fetchRecommendationByTicker = createAsyncThunk(
+export const fetchRecommendationByTicker = createAsyncThunk<Recommendation, string>(
   'recommendations/fetchByTicker',
   async (ticker: string) => {
-    const response = await apiService.get(`/api/v1/recommendations/${ticker}`);
+    const response = await apiService.get<Recommendation>(`/api/v1/recommendations/${ticker}`);
     return response.data;
   }
 );
 
-export const generateRecommendation = createAsyncThunk(
+export const generateRecommendation = createAsyncThunk<Recommendation, string>(
   'recommendations/generate',
   async (ticker: string) => {
-    const response = await apiService.post(`/api/v1/recommendations/generate`, { ticker });
+    const response = await apiService.post<Recommendation>(`/api/v1/recommendations/generate`, {
+      ticker,
+    });
     return response.data;
   }
 );
@@ -130,10 +144,12 @@ const applyFilters = (state: RecommendationsState) => {
     filtered = filtered.filter(r => r.potential_return >= state.filters.minReturn);
   }
 
-  // Apply sorting
+  // Apply sorting. sortBy is constrained to keys of Recommendation, so the
+  // field access is type-safe; created_at is converted to an epoch for ordering.
   filtered.sort((a, b) => {
-    let aValue: any = a[state.sortBy];
-    let bValue: any = b[state.sortBy];
+    const sortKey: keyof Recommendation = state.sortBy;
+    let aValue: number | string = a[sortKey];
+    let bValue: number | string = b[sortKey];
 
     if (state.sortBy === 'created_at') {
       aValue = new Date(aValue).getTime();
@@ -160,7 +176,7 @@ const recommendationsSlice = createSlice({
     },
     setSorting: (state, action: PayloadAction<{ sortBy?: string; sortOrder?: string }>) => {
       if (action.payload.sortBy) {
-        state.sortBy = action.payload.sortBy as any;
+        state.sortBy = action.payload.sortBy as RecommendationsState['sortBy'];
       }
       if (action.payload.sortOrder) {
         state.sortOrder = action.payload.sortOrder as 'asc' | 'desc';
@@ -200,8 +216,15 @@ const recommendationsSlice = createSlice({
       })
       .addCase(fetchRecommendations.fulfilled, (state, action) => {
         state.loading = false;
-        state.recommendations = action.payload.recommendations || action.payload;
-        state.pagination.total = action.payload.total || state.recommendations.length;
+        // Payload is either a bare array or a { recommendations, total } envelope.
+        const payload = action.payload;
+        if (Array.isArray(payload)) {
+          state.recommendations = payload;
+          state.pagination.total = payload.length;
+        } else {
+          state.recommendations = payload.recommendations;
+          state.pagination.total = payload.total || payload.recommendations.length;
+        }
         applyFilters(state);
       })
       .addCase(fetchRecommendations.rejected, (state, action) => {

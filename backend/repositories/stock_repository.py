@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 import logging
 
 from sqlalchemy import select, func, case, and_, or_, desc, asc, text
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload, joinedload, aliased
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.repositories.base import AsyncCRUDRepository, FilterCriteria, SortParams, PaginationParams
@@ -454,6 +454,7 @@ class StockRepository(AsyncCRUDRepository[Stock]):
         limit: int = 100,
         by_market_cap: bool = True,
         *,
+        require_market_cap: bool = True,
         session: Optional[AsyncSession] = None
     ) -> List[Stock]:
         """
@@ -462,27 +463,32 @@ class StockRepository(AsyncCRUDRepository[Stock]):
         Args:
             limit: Maximum number of stocks to return
             by_market_cap: Whether to order by market cap (default True)
+            require_market_cap: When True (default) only return stocks that have
+                a market cap. Pass False for screens that just need a universe
+                of active stocks with price history (market cap is enriched
+                lazily over time, so requiring it would silently empty the
+                universe before enrichment has run).
             session: Optional existing session
 
         Returns:
             List of top stocks
         """
         async def _get_top_stocks(session: AsyncSession) -> List[Stock]:
+            conditions = [Stock.is_active == True, Stock.is_tradable == True]
+            if require_market_cap:
+                conditions.append(Stock.market_cap.is_not(None))
+
             # Add eager loading to prevent N+1 queries
             query = select(Stock).options(
                 selectinload(Stock.exchange),
                 selectinload(Stock.sector),
                 selectinload(Stock.industry)
-            ).where(
-                and_(
-                    Stock.is_active == True,
-                    Stock.is_tradable == True,
-                    Stock.market_cap.is_not(None)
-                )
-            )
+            ).where(and_(*conditions))
 
             if by_market_cap:
-                query = query.order_by(Stock.market_cap.desc())
+                # nullslast so stocks without an enriched market cap still appear
+                # (ranked last) instead of being dropped entirely.
+                query = query.order_by(Stock.market_cap.desc().nullslast())
             else:
                 query = query.order_by(Stock.symbol.asc())
 
@@ -496,6 +502,82 @@ class StockRepository(AsyncCRUDRepository[Stock]):
         else:
             async with get_db_session(readonly=True) as session:
                 return await _get_top_stocks(session)
+
+    async def get_bulk_latest_fundamentals(
+        self,
+        symbols: List[str],
+        *,
+        session: Optional[AsyncSession] = None
+    ) -> Dict[str, Fundamentals]:
+        """
+        Batch fetch the most-recent ``Fundamentals`` row per symbol in a single
+        query. Mirrors the window-function pattern used by
+        ``price_repository.get_bulk_price_history`` to avoid an N+1 loop.
+
+        Selects the row with the greatest ``period_date`` for each stock (using
+        ``filing_date`` then ``id`` as deterministic tiebreakers so the result
+        is stable when two periods share a date).
+
+        Args:
+            symbols: List of stock symbols (case-insensitive).
+            session: Optional existing session.
+
+        Returns:
+            Dictionary mapping uppercase symbol -> latest ``Fundamentals`` row.
+            Symbols with no fundamentals are simply absent from the result.
+        """
+        if not symbols:
+            return {}
+
+        async def _get_bulk_fundamentals(session: AsyncSession) -> Dict[str, Fundamentals]:
+            normalized_symbols = [s.upper() for s in symbols]
+
+            # Window function: rank fundamentals rows per stock by recency.
+            ranked = (
+                select(
+                    Fundamentals,
+                    Stock.symbol.label("symbol"),
+                    func.row_number().over(
+                        partition_by=Fundamentals.stock_id,
+                        order_by=(
+                            Fundamentals.period_date.desc(),
+                            Fundamentals.filing_date.desc().nullslast(),
+                            Fundamentals.id.desc(),
+                        ),
+                    ).label("row_num"),
+                )
+                .join(Stock, Fundamentals.stock_id == Stock.id)
+                .where(Stock.symbol.in_(normalized_symbols))
+                .subquery()
+            )
+
+            # Re-hydrate the Fundamentals ORM entity from the subquery so callers
+            # get a normal model instance (matching the bulk-price pattern).
+            fundamentals_alias = aliased(Fundamentals, ranked)
+            final_query = (
+                select(fundamentals_alias, ranked.c.symbol)
+                .where(ranked.c.row_num == 1)
+            )
+
+            result = await session.execute(final_query)
+
+            latest: Dict[str, Fundamentals] = {}
+            for row in result:
+                symbol = row.symbol
+                if symbol not in latest:
+                    latest[symbol] = row[0]
+
+            logger.debug(
+                "Bulk fetched latest fundamentals for %d/%d symbols in single query",
+                len(latest), len(normalized_symbols),
+            )
+            return latest
+
+        if session:
+            return await _get_bulk_fundamentals(session)
+        else:
+            async with get_db_session(readonly=True) as session:
+                return await _get_bulk_fundamentals(session)
 
 
 # Create repository instance

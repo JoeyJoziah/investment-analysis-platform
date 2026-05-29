@@ -52,6 +52,38 @@ SEC_LIMITATIONS_STATEMENT = (
 RECOMMENDATION_MODEL_VERSION = "1.0.0"
 RECOMMENDATION_MODEL_TRAINING_DATE = "2025-12-15"
 
+# =============================================================================
+# RULES-BASED QUANTITATIVE SCREEN (no ML, transparent, deterministic)
+# =============================================================================
+
+# Honest algorithm label for the transparent screen. This MUST NOT claim
+# machine learning — the screen is a deterministic momentum + valuation rank
+# over stored historical data (PRD audit 2026-05 Lane C, no-synthetic-data rule).
+RULES_BASED_ALGORITHM_TYPE = "rules-based quantitative screen"
+
+# Standalone methodology disclosure for the rules-based screen. Used instead of
+# SEC_METHODOLOGY_DISCLOSURE_TEMPLATE so the text accurately describes the
+# transparent momentum + P/E percentile methodology rather than an ML model.
+RULES_BASED_METHODOLOGY_DISCLOSURE = (
+    "This recommendation was generated using a transparent, rules-based "
+    "quantitative screen over stored historical data. It does NOT use machine "
+    "learning, neural networks, or predictive models. Momentum is measured as "
+    "the trailing 60-trading-day price return computed from end-of-day closing "
+    "prices. Valuation is measured as the cross-sectional percentile rank of the "
+    "price-to-earnings (P/E) ratio across the screened universe (a lower P/E "
+    "ranks more favorably), with the PEG ratio used as a tiebreaker. The "
+    "composite score equally weights momentum percentile and inverse-valuation "
+    "percentile when both inputs are available, and uses momentum alone "
+    "otherwise. Recommendation tiers and confidence are derived deterministically "
+    "from the composite rank; identical inputs always produce identical outputs."
+)
+
+# Trading-day window for the momentum signal and the minimum rows required.
+MOMENTUM_WINDOW_DAYS = 60
+MOMENTUM_MIN_ROWS = 30
+# Bound on the momentum component used to derive the target price.
+TARGET_PRICE_MOMENTUM_CLAMP = 0.30
+
 
 class RecommendationService:
     """
@@ -84,7 +116,8 @@ class RecommendationService:
         self,
         algorithm_type: str = "ML-powered quantitative",
         data_sources: Optional[List[str]] = None,
-        confidence_score: float = 0.5
+        confidence_score: float = 0.5,
+        methodology_disclosure: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Generate SEC 2025 compliant disclosure for a recommendation.
@@ -93,6 +126,10 @@ class RecommendationService:
             algorithm_type: Description of the algorithm used
             data_sources: List of data sources with timestamps
             confidence_score: Model confidence score (0-1)
+            methodology_disclosure: Optional explicit methodology text. When
+                provided it is used verbatim instead of the generic ML template
+                — required for the rules-based screen so the disclosure does not
+                misrepresent a transparent screen as machine learning.
 
         Returns:
             Dictionary with all SEC required disclosure fields
@@ -114,12 +151,14 @@ class RecommendationService:
         else:
             confidence_level = "low"
 
-        # Generate methodology disclosure
-        methodology_disclosure = SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
-            algorithm_type=algorithm_type,
-            model_version=RECOMMENDATION_MODEL_VERSION,
-            training_date=RECOMMENDATION_MODEL_TRAINING_DATE
-        )
+        # Generate methodology disclosure. An explicit override (rules-based
+        # screen) is used verbatim; otherwise fall back to the generic template.
+        if methodology_disclosure is None:
+            methodology_disclosure = SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
+                algorithm_type=algorithm_type,
+                model_version=RECOMMENDATION_MODEL_VERSION,
+                training_date=RECOMMENDATION_MODEL_TRAINING_DATE
+            )
 
         return {
             "methodology_disclosure": methodology_disclosure,
@@ -499,6 +538,357 @@ class RecommendationService:
         except Exception as e:
             logger.error(f"Error generating ML recommendations: {e}")
             return [self.generate_sample_recommendation() for _ in range(min(limit, 5))]
+
+    # =========================================================================
+    # Rules-Based Quantitative Screen (transparent, deterministic, no ML)
+    # =========================================================================
+
+    @staticmethod
+    def _compute_momentum_return(price_history: List[Any]) -> Optional[float]:
+        """Compute the trailing 60-trading-day return from stored closes.
+
+        ``price_history`` is chronological (oldest first), matching
+        ``get_bulk_price_history``. Requires at least ``MOMENTUM_MIN_ROWS`` rows.
+        Uses the longest available window in [30, 60] when fewer than 60 rows
+        exist. Returns ``None`` when the requirement is not met or the lookback
+        close is non-positive.
+
+        Returns:
+            ``(close[-1] / close[-window] - 1)`` as a float, or ``None``.
+        """
+        if not price_history or len(price_history) < MOMENTUM_MIN_ROWS:
+            return None
+
+        # Window = 60 when available, otherwise the longest window >= 30.
+        window = min(MOMENTUM_WINDOW_DAYS, len(price_history))
+        if window < MOMENTUM_MIN_ROWS:
+            return None
+
+        latest_close = float(price_history[-1].close)
+        lookback_close = float(price_history[-window].close)
+        if lookback_close <= 0:
+            return None
+
+        return latest_close / lookback_close - 1.0
+
+    @staticmethod
+    def _percentile_ranks(values: List[float]) -> List[float]:
+        """Compute fractional percentile ranks in [0, 1] for ``values``.
+
+        Higher raw value -> higher percentile. Ties share the average rank so
+        the mapping is deterministic. A single value maps to 0.5; an empty list
+        returns an empty list.
+        """
+        n = len(values)
+        if n == 0:
+            return []
+        if n == 1:
+            return [0.5]
+
+        # Rank each value by the count of strictly-smaller plus half of equal
+        # values (midrank), normalized to [0, 1]. Deterministic and tie-safe.
+        ranks: List[float] = []
+        for v in values:
+            less = sum(1 for o in values if o < v)
+            equal = sum(1 for o in values if o == v)
+            midrank = less + (equal - 1) / 2.0
+            ranks.append(midrank / (n - 1))
+        return ranks
+
+    @staticmethod
+    def _recommendation_type_for_percentile(composite_pct: float) -> str:
+        """Map a composite percentile in [0, 1] to a recommendation tier."""
+        if composite_pct >= 0.80:
+            return "strong_buy"
+        if composite_pct >= 0.60:
+            return "buy"
+        if composite_pct >= 0.40:
+            return "hold"
+        if composite_pct >= 0.20:
+            return "sell"
+        return "strong_sell"
+
+    async def generate_rules_based_recommendations(
+        self,
+        risk_level: Optional[str] = None,
+        categories: Optional[List[str]] = None,
+        limit: int = 10,
+        db_session: Optional[AsyncSession] = None,
+        *,
+        stock_repo: Any = _UNSET,
+        price_repo: Any = _UNSET,
+        universe_limit: int = 503,
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate recommendations from a transparent, deterministic rules-based
+        screen over REAL stored data only. NEVER fabricates: when data is
+        insufficient the corresponding symbol is skipped, and if no symbol
+        qualifies an empty list is returned.
+
+        Screen definition:
+          * Momentum = trailing 60-trading-day price return from stored closes
+            (longest window in [30, 60] when fewer than 60 rows; symbols with
+            < 30 rows are skipped).
+          * Valuation = cross-sectional percentile of P/E across the scored
+            universe (lower P/E ranks better); PEG used as a tiebreaker. Symbols
+            without fundamentals are scored momentum-only.
+          * Composite = 0.5 * momentum_pct + 0.5 * (1 - pe_pct) when both are
+            available, else the momentum percentile.
+          * Tier from composite percentile; confidence = 0.5 + 0.45 * composite
+            (deterministic, never random).
+          * target_price = current_price * (1 + clamp(momentum_60d, -0.3, 0.3)).
+
+        Args:
+            risk_level: Optional risk level string carried onto each rec.
+            categories: Optional category whitelist (post-filter).
+            limit: Maximum number of recommendations to return.
+            db_session: Database session for repository queries.
+            stock_repo: Optional stock repository override (test patching).
+            price_repo: Optional price repository override (test patching).
+            universe_limit: Max stocks pulled from ``get_top_stocks``.
+
+        Returns:
+            List of recommendation dictionaries (possibly empty).
+        """
+        if stock_repo is _UNSET or price_repo is _UNSET:
+            from backend.repositories import (
+                stock_repository as _stock_repo,
+                price_repository as _price_repo,
+            )
+            stock_repo = _stock_repo if stock_repo is _UNSET else stock_repo
+            price_repo = _price_repo if price_repo is _UNSET else price_repo
+
+        logger.info(
+            "Generating rules-based recommendations (limit=%s, risk=%s)",
+            limit, risk_level,
+        )
+
+        # 1. Universe of candidate stocks (real, stored). Do NOT require a
+        # market cap here -- the screen only needs stocks with price history;
+        # market cap is enriched lazily, so requiring it would empty the
+        # universe before enrichment has run.
+        top_stocks = await stock_repo.get_top_stocks(
+            limit=universe_limit,
+            by_market_cap=True,
+            require_market_cap=False,
+            session=db_session,
+        )
+        if not top_stocks:
+            logger.warning("Rules-based screen: no stocks in universe -> []")
+            return []
+
+        symbols = [stock.symbol for stock in top_stocks]
+
+        # 2. Bulk fetch price history + latest fundamentals (batch, not per-symbol).
+        # Pull a generous lookback so >= 60 trading days are available.
+        price_histories = await price_repo.get_bulk_price_history(
+            symbols=symbols,
+            start_date=datetime.now(timezone.utc).date() - timedelta(days=400),
+            end_date=datetime.now(timezone.utc).date(),
+            limit_per_symbol=MOMENTUM_WINDOW_DAYS + 5,
+            session=db_session,
+        )
+        fundamentals_by_symbol = await stock_repo.get_bulk_latest_fundamentals(
+            symbols=symbols,
+            session=db_session,
+        )
+
+        # 3. First pass: compute momentum + collect raw signals per qualifying symbol.
+        scored: List[Dict[str, Any]] = []
+        for stock in top_stocks:
+            history = price_histories.get(stock.symbol) or []
+            momentum = self._compute_momentum_return(history)
+            if momentum is None:
+                # Missing price data or below the row threshold -> skip (graceful-empty).
+                continue
+
+            fundamentals = fundamentals_by_symbol.get(stock.symbol)
+            pe_ratio = None
+            peg_ratio = None
+            if fundamentals is not None:
+                pe = getattr(fundamentals, "pe_ratio", None)
+                # Only positive P/E participates in the valuation rank; a
+                # non-positive or missing P/E falls back to momentum-only.
+                if pe is not None and float(pe) > 0:
+                    pe_ratio = float(pe)
+                    peg = getattr(fundamentals, "peg_ratio", None)
+                    peg_ratio = float(peg) if peg is not None else None
+
+            scored.append({
+                "stock": stock,
+                "history": history,
+                "fundamentals": fundamentals,
+                "momentum": momentum,
+                "current_price": float(history[-1].close),
+                "pe_ratio": pe_ratio,
+                "peg_ratio": peg_ratio,
+            })
+
+        if not scored:
+            logger.warning("Rules-based screen: no symbol met the data threshold -> []")
+            return []
+
+        # 4. Percentile ranks across the scored universe.
+        momentum_pcts = self._percentile_ranks([s["momentum"] for s in scored])
+
+        # Valuation percentile is computed only over symbols with a usable P/E.
+        # pe_percentile ranks the RAW P/E (higher P/E -> higher percentile); the
+        # PEG ratio is folded in as a small tiebreaker (higher PEG -> slightly
+        # higher percentile, i.e. also "more expensive"). The composite then
+        # uses (1 - pe_percentile) so that a LOWER P/E ranks more favorably.
+        valuation_indices = [i for i, s in enumerate(scored) if s["pe_ratio"] is not None]
+        pe_pct_by_index: Dict[int, float] = {}
+        if valuation_indices:
+            def _pe_rank_key(i: int) -> float:
+                s = scored[i]
+                peg_term = s["peg_ratio"] if s["peg_ratio"] is not None else 0.0
+                return s["pe_ratio"] + 1e-6 * peg_term
+            ranked_values = [_pe_rank_key(i) for i in valuation_indices]
+            pe_percentiles = self._percentile_ranks(ranked_values)
+            for idx, pct in zip(valuation_indices, pe_percentiles):
+                pe_pct_by_index[idx] = pct  # higher = more expensive
+
+        # 5. Composite score per symbol.
+        for i, s in enumerate(scored):
+            momentum_pct = momentum_pcts[i]
+            if i in pe_pct_by_index:
+                pe_percentile = pe_pct_by_index[i]
+                # Lower P/E (lower percentile) -> higher inverse-valuation term.
+                inverse_valuation = 1.0 - pe_percentile
+                composite = 0.5 * momentum_pct + 0.5 * inverse_valuation
+                s["pe_percentile"] = pe_percentile
+                s["valuation_pct"] = inverse_valuation
+            else:
+                composite = momentum_pct
+                s["pe_percentile"] = None
+                s["valuation_pct"] = None
+            s["momentum_pct"] = momentum_pct
+            s["composite"] = composite
+
+        # 6. Rank the universe by composite (deterministic tiebreak by symbol).
+        scored.sort(key=lambda s: (s["composite"], s["stock"].symbol), reverse=True)
+
+        # Percentile of each symbol's composite drives the recommendation tier.
+        composite_pcts = self._percentile_ranks([s["composite"] for s in scored])
+        for s, c_pct in zip(scored, composite_pcts):
+            s["composite_pct"] = c_pct
+
+        # 7. Build recommendation dicts (real values only).
+        recommendations: List[Dict[str, Any]] = []
+        for s in scored:
+            if len(recommendations) >= limit:
+                break
+
+            stock = s["stock"]
+            momentum = s["momentum"]
+            composite = s["composite"]
+            current_price = s["current_price"]
+
+            # Deterministic confidence from the composite score.
+            confidence_score = round(0.5 + 0.45 * composite, 4)
+
+            # Target price from clamped momentum (no random).
+            clamped_momentum = max(
+                -TARGET_PRICE_MOMENTUM_CLAMP,
+                min(TARGET_PRICE_MOMENTUM_CLAMP, momentum),
+            )
+            target_price = current_price * (1 + clamped_momentum)
+            expected_return = (target_price - current_price) / current_price if current_price else 0.0
+
+            recommendation_type = self._recommendation_type_for_percentile(s["composite_pct"])
+
+            # Category derived from real characteristics; momentum-led screen.
+            category = "momentum"
+            if s["valuation_pct"] is not None and s["valuation_pct"] >= 0.6:
+                category = "value"
+            if categories and category not in categories:
+                continue
+
+            fundamentals = s["fundamentals"]
+            fundamental_metrics: Dict[str, Any] = {
+                "pe_ratio": s["pe_ratio"],
+                "peg_ratio": s["peg_ratio"],
+            }
+            if fundamentals is not None:
+                for field in ("pb_ratio", "roe", "net_margin", "debt_to_equity", "revenue", "eps"):
+                    val = getattr(fundamentals, field, None)
+                    fundamental_metrics[field] = float(val) if val is not None else None
+                period_date = getattr(fundamentals, "period_date", None)
+                fundamental_metrics["period_date"] = (
+                    period_date.isoformat() if period_date is not None else None
+                )
+
+            key_factors = [
+                f"60-day momentum: {momentum:+.1%}",
+                f"Momentum percentile: {s['momentum_pct']:.0%}",
+            ]
+            if s["valuation_pct"] is not None:
+                key_factors.append(f"Valuation percentile (lower P/E better): {s['valuation_pct']:.0%}")
+            else:
+                key_factors.append("Valuation: no fundamentals on file (momentum-only score)")
+
+            sec_disclosure = self.generate_sec_disclosure(
+                algorithm_type=RULES_BASED_ALGORITHM_TYPE,
+                data_sources=[
+                    f"Stored end-of-day price history - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+                    (
+                        f"Stored fundamentals (period {fundamental_metrics.get('period_date')})"
+                        if fundamentals is not None
+                        else "Fundamentals: none on file for this symbol"
+                    ),
+                ],
+                confidence_score=confidence_score,
+                methodology_disclosure=RULES_BASED_METHODOLOGY_DISCLOSURE,
+            )
+
+            recommendations.append({
+                "id": f"RULES-{stock.symbol}-{int(datetime.now(timezone.utc).timestamp())}",
+                "symbol": stock.symbol,
+                "company_name": stock.name,
+                "recommendation_type": recommendation_type,
+                "category": category,
+                "confidence_score": confidence_score,
+                "target_price": round(target_price, 2),
+                "current_price": round(current_price, 2),
+                "expected_return": round(expected_return, 4),
+                "time_horizon": "medium_term",
+                "risk_level": risk_level or "moderate",
+                "created_at": datetime.now(timezone.utc),
+                "valid_until": datetime.now(timezone.utc) + timedelta(days=7),
+                "reasoning": (
+                    "Rules-based screen ranking on trailing 60-day price momentum "
+                    "and cross-sectional P/E valuation over stored historical data."
+                ),
+                "key_factors": key_factors,
+                "technical_signals": {
+                    "momentum_60d": round(momentum, 4),
+                    "momentum_percentile": round(s["momentum_pct"], 4),
+                    "price_trend": "bullish" if momentum > 0 else "bearish",
+                },
+                "fundamental_metrics": fundamental_metrics,
+                "risk_factors": [
+                    "Market volatility",
+                    "Screen does not consider forward-looking events",
+                    "Backward-looking momentum may not persist",
+                ],
+                "entry_points": [round(current_price * 0.98, 2), round(current_price * 0.95, 2)],
+                "exit_points": [round(target_price * 0.95, 2), round(target_price, 2)],
+                "stop_loss": round(current_price * 0.92, 2),
+                # stock.sector is a Sector ORM relationship (use .name); tolerate
+                # a plain string too. RecommendationDetail.sector wants a string.
+                "sector": (
+                    stock.sector if isinstance(stock.sector, str)
+                    else getattr(stock.sector, "name", None)
+                ) or "Unknown",
+                "market_cap": stock.market_cap or 0,
+                "volume": s["history"][-1].volume if s["history"] else 0,
+                "analyst_consensus": None,
+                "similar_stocks": [],
+                "sec_disclosure": sec_disclosure,
+            })
+
+        logger.info("Rules-based screen produced %d recommendations", len(recommendations))
+        return recommendations
 
     # =========================================================================
     # Personalized Recommendation Generation

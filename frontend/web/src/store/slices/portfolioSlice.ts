@@ -119,27 +119,41 @@ const unwrapData = <T = unknown>(body: unknown): T => {
   return body as T;
 };
 
+// Resolved payload for the portfolio endpoint, consumed by the fulfilled reducer.
+export interface PortfolioPayload {
+  positions: Position[];
+  metrics: PortfolioMetrics;
+}
+
 // Async thunks
-export const fetchPortfolio = createAsyncThunk(
+export const fetchPortfolio = createAsyncThunk<PortfolioPayload>(
   'portfolio/fetchPortfolio',
   async () => {
-    const response = await apiService.get('/api/v1/portfolio');
+    const response = await apiService.get<PortfolioPayload>('/api/v1/portfolio');
     return response.data;
   }
 );
 
-export const fetchTransactions = createAsyncThunk(
+export const fetchTransactions = createAsyncThunk<
+  Transaction[],
+  { limit?: number; offset?: number } | undefined
+>(
   'portfolio/fetchTransactions',
   async (params?: { limit?: number; offset?: number }) => {
-    const response = await apiService.get('/api/v1/portfolio/transactions', { params });
+    const response = await apiService.get<Transaction[]>('/api/v1/portfolio/transactions', {
+      params,
+    });
     return response.data;
   }
 );
 
-export const addTransaction = createAsyncThunk(
+export const addTransaction = createAsyncThunk<Transaction, Omit<Transaction, 'id'>>(
   'portfolio/addTransaction',
   async (transaction: Omit<Transaction, 'id'>) => {
-    const response = await apiService.post('/api/v1/portfolio/transactions', transaction);
+    const response = await apiService.post<Transaction>(
+      '/api/v1/portfolio/transactions',
+      transaction
+    );
     return response.data;
   }
 );
