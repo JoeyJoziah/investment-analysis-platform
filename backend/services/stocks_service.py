@@ -192,7 +192,20 @@ class StocksService:
 
         if real_time_data:
             data_source = real_time_data.get('source', 'external_api')
-            return self._build_quote_from_external(symbol, real_time_data, data_source)
+            quote = self._build_quote_from_external(symbol, real_time_data, data_source)
+
+            # Enrich with company-overview fundamentals (market cap, P/E,
+            # 52-week range) that the provider /quote endpoint omits. Best
+            # effort: a failure here must never change the returned quote.
+            await self._enrich_quote_with_overview(symbol, quote)
+
+            # Write-through: persist the REAL provider OHLCV we just fetched so
+            # the database accumulates real coverage over time. Best effort:
+            # persistence errors are logged and swallowed so they can never
+            # break or slow the response. No extra provider calls are made.
+            await self._persist_external_quote(symbol, real_time_data, quote, db)
+
+            return quote
 
         # Fallback to database
         logger.info(f"Falling back to database for {symbol}")
@@ -248,7 +261,7 @@ class StocksService:
             "open": float(quote_data.get('open', quote_data.get('o'))) if quote_data.get('open') or quote_data.get('o') else None,
             "high": float(quote_data.get('high', quote_data.get('h'))) if quote_data.get('high') or quote_data.get('h') else None,
             "low": float(quote_data.get('low', quote_data.get('l'))) if quote_data.get('low') or quote_data.get('l') else None,
-            "previous_close": previous_close if previous_close != current_price else None,
+            "previous_close": previous_close if previous_close and previous_close != current_price else None,
             "bid": float(quote_data.get('bid')) if quote_data.get('bid') else None,
             "ask": float(quote_data.get('ask')) if quote_data.get('ask') else None,
             "fifty_two_week_high": float(quote_data.get('52_week_high')) if quote_data.get('52_week_high') else None,
@@ -258,6 +271,250 @@ class StocksService:
             "last_updated": datetime.now(timezone.utc),
             "is_real_time": True,
         }
+
+    async def _enrich_quote_with_overview(
+        self,
+        symbol: str,
+        quote: Dict[str, Any],
+    ) -> None:
+        """
+        Populate company-overview fundamentals on *quote* in place.
+
+        The provider ``/quote`` endpoint returns only OHLCV + change, so
+        ``market_cap``, ``pe_ratio`` and the 52-week range are missing (today
+        they surface as 0/null in the API response). This pulls them from the
+        already-cached ``fetch_company_overview`` helper and maps the provider
+        keys onto the quote field names the API/frontend expect.
+
+        Compliance: values are only set when the overview genuinely provides a
+        non-zero figure. When the overview is unavailable (or a field is
+        absent/0) the field is left as whatever the quote already had -- we
+        never fabricate or coerce a real 0 into a fake number. Any value
+        already present on the quote (e.g. a provider that did include it) is
+        preserved and not overwritten.
+
+        Best effort: any error is logged and swallowed so enrichment can never
+        break the returned quote.
+        """
+        try:
+            overview = await fetch_company_overview(symbol)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(f"Overview enrichment failed for {symbol}: {e}")
+            return
+
+        if not overview:
+            return
+
+        # Map provider overview keys -> quote field names. AlphaVantage and the
+        # Finnhub profile fallback both expose these under the keys below.
+        field_map = {
+            "market_cap": "market_cap",
+            "pe_ratio": "pe_ratio",
+            "52_week_high": "fifty_two_week_high",
+            "52_week_low": "fifty_two_week_low",
+        }
+
+        for source_key, quote_key in field_map.items():
+            # Do not clobber a real value the quote already carried.
+            if quote.get(quote_key):
+                continue
+
+            raw = overview.get(source_key)
+            value = self._coerce_positive_number(raw)
+            if value is not None:
+                quote[quote_key] = value
+
+    @staticmethod
+    def _coerce_positive_number(raw: Any) -> Optional[float]:
+        """Return *raw* as a positive float, or ``None`` when absent/0/invalid.
+
+        Overview providers default missing numerics to 0; treating those as
+        real values would surface fabricated $0 market caps / P/E ratios, so a
+        non-positive or unparseable figure is reported as ``None`` (unknown).
+        """
+        if raw is None:
+            return None
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    async def _persist_external_quote(
+        self,
+        symbol: str,
+        quote_data: Dict[str, Any],
+        quote: Dict[str, Any],
+        db: AsyncSession,
+    ) -> None:
+        """
+        Write-through persistence of a freshly-fetched external quote.
+
+        Ensures a ``stocks`` row exists for *symbol* (creating a minimal real
+        row when missing) and inserts TODAY's ``price_history`` row using the
+        REAL OHLCV from the provider quote -- but only when we don't already
+        have a row for today (the daily backfill owns the authoritative
+        end-of-day bar, so we never clobber or duplicate it).
+
+        Compliance: the open/high/low/close written are the provider's own
+        values. ``close`` is the current price; ``open``/``high``/``low`` come
+        straight from the provider and are NOT synthesised to equal the close.
+        Volume is the provider's reported volume (0 for Finnhub, which does not
+        return intraday volume on /quote) -- never invented.
+
+        Best effort: wrapped in try/except. Any failure is logged and swallowed
+        so a write error can never change or slow the returned quote. Adds no
+        extra provider API calls -- it only persists data already fetched.
+        """
+        try:
+            close_price = quote.get("price")
+            if not close_price or close_price <= 0:
+                # No real, positive close to anchor a row -- skip rather than
+                # persist a meaningless/zero price.
+                return
+
+            stock = await stock_repository.get_by_symbol(symbol, session=db)
+            if stock is None:
+                stock = await self._create_minimal_stock(symbol, db)
+            if stock is None:
+                return
+
+            price_date = self._resolve_price_date(quote_data, quote)
+
+            # bulk_upsert_prices conflict-resolves on the PK, not (stock_id,
+            # date), so re-writing a date we already have (e.g. from the daily
+            # backfill) raises a unique-constraint error. Skip when today's row
+            # already exists -- the displayed quote is served live from the
+            # provider regardless, and the daily backfill refreshes the EOD bar.
+            from sqlalchemy import select as _select
+            from backend.models.unified_models import PriceHistory
+
+            existing = await db.execute(
+                _select(PriceHistory.id)
+                .where(
+                    PriceHistory.stock_id == stock.id,
+                    PriceHistory.date == price_date,
+                )
+                .limit(1)
+            )
+            if existing.first() is not None:
+                return
+
+            # Use the provider's REAL OHLC. Fall back to the close only when a
+            # field is genuinely absent so the NOT NULL columns are satisfied;
+            # this is the honest "last known price" rather than fabricated
+            # intraday movement.
+            open_price = self._extract_price(quote_data, ("open", "o"))
+            high_price = self._extract_price(quote_data, ("high", "h"))
+            low_price = self._extract_price(quote_data, ("low", "l"))
+            volume = self._extract_volume(quote_data)
+
+            row = {
+                "stock_id": stock.id,
+                "date": price_date,
+                "open": Decimal(str(open_price if open_price is not None else close_price)),
+                "high": Decimal(str(high_price if high_price is not None else close_price)),
+                "low": Decimal(str(low_price if low_price is not None else close_price)),
+                "close": Decimal(str(close_price)),
+                "volume": int(volume),
+            }
+
+            affected = await price_repository.bulk_upsert_prices([row], session=db)
+            logger.debug(
+                f"Write-through persisted quote for {symbol} on {price_date} "
+                f"({affected} row(s) affected)"
+            )
+        except Exception as e:
+            # Persistence is strictly best-effort; never propagate.
+            logger.warning(f"Write-through persistence failed for {symbol}: {e}")
+
+    async def _create_minimal_stock(
+        self,
+        symbol: str,
+        db: AsyncSession,
+    ):
+        """
+        Create a minimal real ``stocks`` row for *symbol* when one is missing.
+
+        Only writes data we actually know: the symbol and, when the cached
+        company overview provides it, the real company name. Nullable fields
+        are left null -- we do NOT fabricate market cap, sector, exchange, etc.
+        Returns the created Stock (or ``None`` if creation was not possible).
+        """
+        try:
+            name = symbol
+            try:
+                overview = await fetch_company_overview(symbol)
+                if overview and overview.get("name"):
+                    name = overview["name"]
+            except Exception:  # pragma: no cover - defensive
+                pass
+
+            created = await stock_repository.create(
+                {"symbol": symbol, "name": name},
+                session=db,
+            )
+            return created
+        except Exception as e:
+            logger.warning(f"Could not create minimal stock row for {symbol}: {e}")
+            return None
+
+    @staticmethod
+    def _extract_price(quote_data: Dict[str, Any], keys: tuple) -> Optional[float]:
+        """Return the first present positive price among *keys*, else ``None``."""
+        for key in keys:
+            raw = quote_data.get(key)
+            if raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value
+        return None
+
+    @staticmethod
+    def _extract_volume(quote_data: Dict[str, Any]) -> int:
+        """Return the provider's reported volume (0 when absent -- never invented)."""
+        raw = quote_data.get("volume", quote_data.get("v", 0))
+        try:
+            value = int(raw or 0)
+        except (TypeError, ValueError):
+            return 0
+        return value if value > 0 else 0
+
+    @staticmethod
+    def _resolve_price_date(quote_data: Dict[str, Any], quote: Dict[str, Any]) -> datetime:
+        """
+        Resolve the date to store the price row under.
+
+        Uses the provider quote's timestamp date when parseable, otherwise the
+        quote's own timestamp, otherwise today's UTC date. The value is
+        normalised to midnight because ``PriceHistory.date`` is a daily column
+        whose unique constraint is ``(stock_id, date)``.
+        """
+        ts = quote_data.get("timestamp")
+        resolved: Optional[datetime] = None
+
+        if isinstance(ts, str):
+            try:
+                resolved = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                resolved = None
+        elif isinstance(ts, datetime):
+            resolved = ts
+
+        if resolved is None:
+            quote_ts = quote.get("timestamp")
+            if isinstance(quote_ts, datetime):
+                resolved = quote_ts
+
+        if resolved is None:
+            resolved = datetime.now(timezone.utc)
+
+        # Normalise to midnight so repeated intraday quotes upsert one row/day.
+        return datetime(resolved.year, resolved.month, resolved.day)
 
     async def _build_quote_from_db(
         self,

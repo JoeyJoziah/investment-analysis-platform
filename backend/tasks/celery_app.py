@@ -132,7 +132,18 @@ celery_app.conf.update(
             'schedule': crontab(hour=16, minute=30),  # 4:30 PM EST (after market close)
             'options': {'queue': 'data_ingestion'}
         },
-        
+
+        # Daily real-OHLC candle refresh for the active universe.
+        # Runs once/day after US market close so the latest settled daily candle
+        # is available. Internally throttled + cost_monitor-gated to stay under
+        # Finnhub's 60/min free-tier limit. This is the real-history feed behind
+        # charts/technical/statistics/similar/movers.
+        'backfill-daily-prices': {
+            'task': 'backend.tasks.data_tasks.backfill_daily_prices',
+            'schedule': crontab(hour=22, minute=0),  # 22:00 UTC (~5 PM EST, post-close)
+            'options': {'queue': 'data_ingestion'}
+        },
+
         # Analysis tasks
         'daily-analysis': {
             'task': 'backend.tasks.analysis_tasks.run_daily_analysis',
