@@ -34,9 +34,65 @@ logger = logging.getLogger(__name__)
 class Environment(str, Enum):
     """Application environments"""
     DEVELOPMENT = "development"
-    TESTING = "testing" 
+    TESTING = "testing"
     STAGING = "staging"
     PRODUCTION = "production"
+
+
+class InsecureSecretError(RuntimeError):
+    """Raised when a required secret is missing in a production environment.
+
+    Finding #201: Production must never fall back to an ephemeral, in-process
+    secret (e.g. ``secrets.token_urlsafe(32)``). Ephemeral secrets silently
+    invalidate tokens/sessions across restarts and across worker processes, and
+    are not covered by the production assertions in settings.py.
+    """
+
+
+def _is_production_environment() -> bool:
+    """Return True when the application is running in production.
+
+    Reads the live ``ENVIRONMENT`` value rather than a snapshot so the check is
+    correct under monkeypatched environments in tests.
+    """
+    return os.getenv("ENVIRONMENT", settings.ENVIRONMENT).strip().lower() == "production"
+
+
+def _require_secret(env_var: str, dev_default: str) -> str:
+    """Resolve a required secret with fail-fast behaviour in production.
+
+    In production a missing/empty environment variable raises
+    ``InsecureSecretError`` at import/startup time instead of silently
+    generating an ephemeral value. Outside production a stable, clearly-marked
+    development default is returned so local/test runs do not require secrets.
+
+    Args:
+        env_var: Name of the environment variable holding the secret.
+        dev_default: Deterministic placeholder used ONLY outside production.
+
+    Returns:
+        The configured secret string.
+
+    Raises:
+        InsecureSecretError: If running in production and the secret is unset.
+    """
+    value = os.getenv(env_var)
+    if value:
+        return value
+
+    if _is_production_environment():
+        raise InsecureSecretError(
+            f"{env_var} must be set in production. Refusing to start with an "
+            f"ephemeral auto-generated secret, which would invalidate tokens and "
+            f"sessions across restarts and worker processes."
+        )
+
+    logger.warning(
+        "%s is not set; using an insecure development default. "
+        "This is acceptable only outside production.",
+        env_var,
+    )
+    return dev_default
 
 
 class SecurityConfig:
@@ -68,7 +124,12 @@ class SecurityConfig:
     ]
     
     # Session Settings
-    SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32))
+    # Finding #201: fail fast in production instead of generating an ephemeral
+    # secret that would invalidate sessions across restarts/workers.
+    SESSION_SECRET_KEY = _require_secret(
+        "SESSION_SECRET_KEY",
+        "dev-only-insecure-session-secret-do-not-use-in-production",
+    )
     SESSION_MAX_AGE = 3600  # 1 hour
     
     # Rate Limiting
@@ -148,8 +209,13 @@ class SecurityConfig:
     JWT_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_RESET_TOKEN_EXPIRE_MINUTES", "15"))
 
     # Secret key for HS256 algorithm (fallback/legacy)
-    # In production, this MUST be set via environment variable
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+    # In production, this MUST be set via environment variable.
+    # Finding #201: fail fast in production instead of generating an ephemeral
+    # secret that would invalidate tokens across restarts/workers.
+    JWT_SECRET_KEY = _require_secret(
+        "JWT_SECRET_KEY",
+        "dev-only-insecure-jwt-secret-do-not-use-in-production",
+    )
 
     # Token issuer and audience for validation
     JWT_ISSUER = "investment-analysis-app"
