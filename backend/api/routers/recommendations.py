@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -364,21 +365,26 @@ async def get_daily_recommendations(
             special_situations=result["special_situations"],
         ))
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error generating daily recommendations: {e}")
-        await handle_api_error(e, "generate daily recommendations")
-
-        return success_response(data=DailyRecommendations(
-            date=target_date,
-            market_outlook="Market analysis temporarily unavailable",
-            top_picks=[generate_recommendation() for _ in range(5)],
-            watchlist=["AAPL", "GOOGL", "MSFT", "NVDA", "AMD"],
-            avoid_list=[],
-            sector_focus="Technology",
-            market_sentiment=0.0,
-            risk_assessment="Analysis unavailable",
-            special_situations=[]
-        ))
+        if os.getenv("BOOTSTRAP_MODELS"):
+            return success_response(data=DailyRecommendations(
+                date=target_date,
+                market_outlook="Market analysis temporarily unavailable (bootstrap mode)",
+                top_picks=[],
+                watchlist=[],
+                avoid_list=[],
+                sector_focus="N/A",
+                market_sentiment=0.0,
+                risk_assessment="Bootstrap mode — not production data",
+                special_situations=[],
+            ))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Recommendation service temporarily unavailable. Please try again later.",
+        )
 
 @router.get("/list")
 async def get_recommendations(
@@ -389,7 +395,8 @@ async def get_recommendations(
     risk_level: Optional[RiskLevel] = None,
     min_confidence: float = Query(0.0, ge=0, le=1),
     sort_by: str = Query("confidence_score", pattern="^(confidence_score|expected_return|created_at)$"),
-    order: str = Query("desc", pattern="^(asc|desc)$")
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Get list of recommendations with filters"""
     recs_data = recommendation_service.generate_filtered_recommendations(
@@ -406,7 +413,10 @@ async def get_recommendations(
     return success_response(data=_dicts_to_details(recs_data))
 
 @router.get("/{recommendation_id}")
-async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[RecommendationDetail]:
+async def get_recommendation_detail(
+    recommendation_id: str,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[RecommendationDetail]:
     """Get detailed information about a specific recommendation"""
     rec = generate_recommendation()
     rec.id = recommendation_id
@@ -415,7 +425,8 @@ async def get_recommendation_detail(recommendation_id: str) -> ApiResponse[Recom
 @router.post("/filter")
 async def filter_recommendations(
     filter_params: RecommendationFilter,
-    limit: int = Query(20, le=100)
+    limit: int = Query(20, le=100),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[List[RecommendationDetail]]:
     """Advanced filtering of recommendations"""
     recs_data = recommendation_service.generate_filtered_recommendations(
@@ -436,8 +447,29 @@ async def filter_recommendations(
     return success_response(data=_dicts_to_details(recs_data))
 
 @router.get("/portfolio/{portfolio_id}")
-async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[PortfolioRecommendation]:
+async def get_portfolio_recommendations(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
+) -> ApiResponse[PortfolioRecommendation]:
     """Get personalized recommendations for a specific portfolio"""
+    # Ownership check: verify the portfolio belongs to the requesting user.
+    portfolio = await portfolio_repository.get_portfolio_with_positions(
+        int(portfolio_id), session=db
+    ) if portfolio_id.isdigit() else None
+
+    if portfolio is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio {portfolio_id} not found",
+        )
+
+    if portfolio.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this portfolio",
+        )
+
     data = recommendation_service.build_portfolio_recommendations(portfolio_id=portfolio_id)
     return success_response(data=PortfolioRecommendation(
         portfolio_id=data["portfolio_id"],
@@ -451,7 +483,8 @@ async def get_portfolio_recommendations(portfolio_id: str) -> ApiResponse[Portfo
 @router.get("/performance/track")
 async def track_recommendation_performance(
     days_back: int = Query(30, le=365),
-    status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$")
+    status: Optional[str] = Query(None, pattern="^(active|closed|stopped_out)$"),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[List[RecommendationPerformance]]:
     """Track performance of past recommendations"""
     perf_data = recommendation_service.generate_performance_records(
@@ -461,7 +494,10 @@ async def track_recommendation_performance(
     return success_response(data=[RecommendationPerformance(**p) for p in perf_data])
 
 @router.post("/alerts/settings")
-async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str, str]]:
+async def update_alert_settings(
+    settings: AlertSettings,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, str]]:
     """Update recommendation alert settings"""
     return success_response(data={
         "message": "Alert settings updated successfully",
@@ -470,7 +506,8 @@ async def update_alert_settings(settings: AlertSettings) -> ApiResponse[Dict[str
 
 @router.get("/alerts/history")
 async def get_alert_history(
-    days_back: int = Query(7, le=30)
+    days_back: int = Query(7, le=30),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[List[Dict[str, Any]]]:
     """Get history of recommendation alerts"""
     alerts = recommendation_service.generate_alert_history(days_back=days_back)
@@ -481,7 +518,8 @@ async def backtest_strategy(
     strategy: RecommendationCategory,
     start_date: date,
     end_date: date,
-    initial_capital: float = 100000
+    initial_capital: float = 100000,
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[Dict[str, Any]]:
     """Backtest a recommendation strategy"""
     result = recommendation_service.run_backtest(
@@ -497,7 +535,8 @@ async def get_trending_recommendations(
     timeframe: str = Query("24h", pattern="^(1h|24h|7d|30d)$"),
     limit: int = Query(10, le=50),
     risk_tolerance: str = Query("moderate", pattern="^(conservative|moderate|aggressive)$"),
-    rec_service = Depends(get_recommendation_service)
+    current_user: User = Depends(get_current_user),
+    rec_service = Depends(get_recommendation_service),
 ) -> ApiResponse[List[Dict[str, Any]]]:
     """Get trending recommendations based on market momentum and analysis."""
     timeframe_map = {"1h": "1h", "24h": "1d", "7d": "1w", "30d": "1m"}
@@ -515,11 +554,11 @@ async def get_trending_recommendations(
             rec["timeframe"] = timeframe
         return success_response(data=trending)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting trending recommendations: {e}")
-        fallback = recommendation_service.generate_trending_fallback(
-            symbols=["NVDA", "TSLA", "AAPL", "AMD", "GOOGL", "META", "AMZN", "MSFT"],
-            limit=limit,
-            timeframe=timeframe,
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Trending recommendations service temporarily unavailable. Please try again later.",
         )
-        return success_response(data=fallback)
