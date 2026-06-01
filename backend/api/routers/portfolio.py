@@ -432,9 +432,21 @@ async def get_transactions(
     symbol: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[List[Transaction]]:
     """Get portfolio transaction history"""
+
+    # Verify portfolio ownership before returning any transaction data.
+    ownership = await service.compute_portfolio_detail(
+        portfolio_id=portfolio_id, user_id=current_user.id, db=db
+    )
+    if ownership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio '{portfolio_id}' not found or access denied",
+        )
 
     raw_transactions = service.generate_transaction_list(
         portfolio_id=portfolio_id,
@@ -469,9 +481,21 @@ async def get_portfolio_performance(
     portfolio_id: str,
     period: str = Query("1M", pattern="^(1D|1W|1M|3M|6M|1Y|3Y|5Y|ALL)$"),
     benchmark: str = "SPY",
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Get portfolio performance over time"""
+
+    # Verify portfolio ownership before returning performance data.
+    ownership = await service.compute_portfolio_detail(
+        portfolio_id=portfolio_id, user_id=current_user.id, db=db
+    )
+    if ownership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio '{portfolio_id}' not found or access denied",
+        )
 
     result = service.generate_performance_data_points(
         portfolio_id=portfolio_id,
@@ -520,8 +544,23 @@ async def rebalance_portfolio(
     return success_response(data=result)
 
 @router.get("/{portfolio_id}/watchlist")
-async def get_watchlist(portfolio_id: str) -> ApiResponse[List[WatchlistItem]]:
+async def get_watchlist(
+    portfolio_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
+    service: PortfolioService = Depends(get_portfolio_service),
+) -> ApiResponse[List[WatchlistItem]]:
     """Get portfolio watchlist"""
+
+    # Verify portfolio ownership before returning watchlist data.
+    ownership = await service.compute_portfolio_detail(
+        portfolio_id=portfolio_id, user_id=current_user.id, db=db
+    )
+    if ownership is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio '{portfolio_id}' not found or access denied",
+        )
 
     # Watchlist is stored in the database; return an empty list until DB integration is complete.
     return success_response(data=[])
