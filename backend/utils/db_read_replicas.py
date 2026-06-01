@@ -1,10 +1,24 @@
 """
 Database Read Replica Management
 Provides intelligent routing of read queries to replicas and writes to primary.
+
+Connection-pool budget (finding #202):
+  Postgres max_connections ceiling = DB_MAX_CONNECTIONS (default 50, per database_optimized.py).
+  Allocation (primary 1 + 2 replicas, matching database_optimized.py total_required=26):
+    primary:  pool_size=8, max_overflow=4  → max 12 connections
+    replica1: pool_size=5, max_overflow=2  → max  7 connections
+    replica2: pool_size=5, max_overflow=2  → max  7 connections
+    ─────────────────────────────────────────────────────────────
+    grand total:                              max 26 connections
+  Remaining 24 connections are reserved for Celery workers, Airflow, admin/maintenance.
+  All sizes are configurable via environment variables (see _get_pool_config).
+  A construction-time guard raises PoolBudgetExceededError when the computed total
+  would exceed DB_MAX_CONNECTIONS before any engine is created.
 """
 
 import asyncio
 import logging
+import os
 import random
 from typing import Optional, List, Dict, Any, AsyncGenerator
 from contextlib import asynccontextmanager
@@ -23,6 +37,80 @@ from sqlalchemy.exc import OperationalError, DBAPIError
 from backend.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Pool budget constants & helpers (finding #202)
+# ---------------------------------------------------------------------------
+
+# Hard ceiling documented in database_optimized.py (PostgreSQL max_connections).
+# Override via DB_MAX_CONNECTIONS env var when running a larger Postgres instance.
+_DEFAULT_MAX_CONNECTIONS: int = 50
+
+# Safe-default pool sizes that keep the grand total under the ceiling.
+#   primary:  8 + 4  = 12 max connections
+#   replica:  5 + 2  =  7 max connections  (per replica)
+# With 2 replicas: 12 + 7 + 7 = 26 (matches database_optimized.py total_required=26)
+_DEFAULT_PRIMARY_POOL_SIZE: int = 8
+_DEFAULT_PRIMARY_MAX_OVERFLOW: int = 4
+_DEFAULT_REPLICA_POOL_SIZE: int = 5
+_DEFAULT_REPLICA_MAX_OVERFLOW: int = 2
+
+
+class PoolBudgetExceededError(RuntimeError):
+    """Raised when the configured pool sizes would exceed the Postgres connection budget."""
+
+
+def _get_pool_config() -> Dict[str, int]:
+    """
+    Read pool sizing from environment variables, falling back to safe defaults.
+
+    Environment variables (all optional):
+        DB_MAX_CONNECTIONS        — Postgres max_connections ceiling (default 50)
+        DB_PRIMARY_POOL_SIZE      — primary pool_size   (default 8)
+        DB_PRIMARY_MAX_OVERFLOW   — primary max_overflow (default 4)
+        DB_REPLICA_POOL_SIZE      — per-replica pool_size   (default 5)
+        DB_REPLICA_MAX_OVERFLOW   — per-replica max_overflow (default 2)
+
+    Returns:
+        Dict with keys: max_connections, primary_pool_size, primary_max_overflow,
+        replica_pool_size, replica_max_overflow.
+    """
+    return {
+        "max_connections": int(os.environ.get("DB_MAX_CONNECTIONS", _DEFAULT_MAX_CONNECTIONS)),
+        "primary_pool_size": int(os.environ.get("DB_PRIMARY_POOL_SIZE", _DEFAULT_PRIMARY_POOL_SIZE)),
+        "primary_max_overflow": int(os.environ.get("DB_PRIMARY_MAX_OVERFLOW", _DEFAULT_PRIMARY_MAX_OVERFLOW)),
+        "replica_pool_size": int(os.environ.get("DB_REPLICA_POOL_SIZE", _DEFAULT_REPLICA_POOL_SIZE)),
+        "replica_max_overflow": int(os.environ.get("DB_REPLICA_MAX_OVERFLOW", _DEFAULT_REPLICA_MAX_OVERFLOW)),
+    }
+
+
+def _assert_pool_budget(pool_cfg: Dict[str, int], replica_count: int) -> None:
+    """
+    Validate that the configured pool sizes stay within the Postgres connection budget.
+
+    Grand total = (primary_pool_size + primary_max_overflow)
+                + replica_count × (replica_pool_size + replica_max_overflow)
+
+    Args:
+        pool_cfg:      Dict returned by _get_pool_config().
+        replica_count: Number of replica instances that will be created.
+
+    Raises:
+        PoolBudgetExceededError: If the computed grand total exceeds max_connections.
+    """
+    primary_max = pool_cfg["primary_pool_size"] + pool_cfg["primary_max_overflow"]
+    per_replica_max = pool_cfg["replica_pool_size"] + pool_cfg["replica_max_overflow"]
+    grand_total = primary_max + replica_count * per_replica_max
+    ceiling = pool_cfg["max_connections"]
+
+    if grand_total > ceiling:
+        raise PoolBudgetExceededError(
+            f"Pool budget exceeded: primary({pool_cfg['primary_pool_size']}+{pool_cfg['primary_max_overflow']})"
+            f" + {replica_count} replica(s)×({pool_cfg['replica_pool_size']}+{pool_cfg['replica_max_overflow']})"
+            f" = {grand_total} max connections, but DB_MAX_CONNECTIONS={ceiling}. "
+            "Reduce pool sizes or increase DB_MAX_CONNECTIONS."
+        )
 
 
 class QueryType(Enum):
@@ -79,11 +167,18 @@ class DatabaseReplica:
     async def initialize(self) -> None:
         """Initialize database connection."""
         try:
+            # Pool sizes come from environment-configurable settings (finding #202).
+            # The budget assertion in ReadReplicaManager.initialize() guarantees the
+            # grand total across all engines stays within DB_MAX_CONNECTIONS.
+            pool_cfg = _get_pool_config()
+            pool_size = pool_cfg["primary_pool_size"] if self.is_primary else pool_cfg["replica_pool_size"]
+            max_overflow = pool_cfg["primary_max_overflow"] if self.is_primary else pool_cfg["replica_max_overflow"]
+
             self._engine = create_async_engine(
                 self.url,
                 poolclass=QueuePool,
-                pool_size=20 if self.is_primary else 15,
-                max_overflow=40 if self.is_primary else 30,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
                 pool_timeout=30,
                 pool_recycle=1800,
                 pool_pre_ping=True,
@@ -213,7 +308,13 @@ class ReadReplicaManager:
             # Default configuration
             if not config:
                 config = self._get_default_config()
-            
+
+            # Validate pool budget BEFORE creating any engines (finding #202).
+            # Raises PoolBudgetExceededError immediately if the configured sizes
+            # would exceed the Postgres max_connections ceiling.
+            replica_count = len(config.get('replicas', []))
+            _assert_pool_budget(_get_pool_config(), replica_count)
+
             # Initialize primary
             primary_config = config['primary']
             self.primary = DatabaseReplica(
