@@ -320,15 +320,15 @@ class BacktestEngine:
             
             date_splits.append((train_period, test_period))
         
-        # Run backtests for each split
+        # Run backtests for each split — retrain model on each fold's training window
         results = []
-        
+
         for i, (train_period, test_period) in enumerate(date_splits):
             logger.info(f"Walk-forward split {i+1}/{len(date_splits)}: "
                        f"Train: {train_period[0].date()} to {train_period[1].date()}, "
                        f"Test: {test_period[0].date()} to {test_period[1].date()}")
-            
-            # Create config for this split
+
+            # Create config for this split's test window
             split_config = BacktestConfig(
                 start_date=test_period[0],
                 end_date=test_period[1],
@@ -338,19 +338,49 @@ class BacktestEngine:
                 risk_free_rate=config.risk_free_rate,
                 benchmark_symbol=config.benchmark_symbol
             )
-            
+
             try:
-                # Run backtest for this period
-                result = self.backtest_strategy(strategy_func, universe, split_config, model)
+                # Retrain model on this fold's training window if a model was
+                # provided.  Without per-fold retraining walk-forward analysis
+                # yields optimistic in-sample results for later folds.
+                fold_model = model
+                if model is not None:
+                    if hasattr(model, "fit"):
+                        train_data = self._get_market_data(
+                            universe, train_period[0], train_period[1]
+                        )
+                        # Concatenate all tickers into a single training frame
+                        all_frames = []
+                        for ticker_df in train_data.values():
+                            all_frames.append(ticker_df)
+                        if all_frames:
+                            combined_train = pd.concat(all_frames)
+                            fold_model = model.__class__()
+                            fold_model.fit(combined_train)
+                            logger.info(
+                                f"Walk-forward split {i+1}: model retrained on "
+                                f"{len(combined_train)} rows of training data."
+                            )
+                    else:
+                        raise NotImplementedError(
+                            f"Walk-forward analysis requires the model ({type(model).__name__}) "
+                            "to implement a .fit() method so it can be retrained on each fold's "
+                            "training window. Without per-fold retraining the backtest results "
+                            "are invalid. (Finding #200 — TODO: implement .fit() or provide a "
+                            "retraining callback)"
+                        )
+
+                # Run backtest on the test window with the fold-specific model
+                result = self.backtest_strategy(strategy_func, universe, split_config, fold_model)
                 results.append({
                     'split': i + 1,
                     'train_start': train_period[0],
-                    'train_end': train_period[1], 
+                    'train_end': train_period[1],
                     'test_start': test_period[0],
                     'test_end': test_period[1],
                     'result': result
                 })
-                
+
             except Exception as e:
                 logger.error(f"Error in walk-forward split {i+1}: {e}")
                 continue
@@ -494,46 +524,60 @@ class BacktestEngine:
         return comparison_results
     
     def _get_market_data(self, universe: List[str], start_date: datetime, end_date: datetime) -> Dict[str, pd.DataFrame]:
-        """Get market data for backtesting"""
-        # This would integrate with the actual data provider
-        # For now, return mock data structure
-        market_data = {}
-        
-        for ticker in universe:
-            # Mock data - in real implementation, fetch from data provider
-            dates = pd.date_range(start_date, end_date, freq='D')
-            dates = dates[dates.weekday < 5]  # Exclude weekends
-            
-            # Generate realistic price data
-            np.random.seed(hash(ticker) % 2**32)
-            returns = np.random.normal(0.0005, 0.02, len(dates))  # ~0.12% daily return, 2% volatility
-            prices = 100 * (1 + returns).cumprod()
-            
-            market_data[ticker] = pd.DataFrame({
-                'close': prices,
-                'open': prices * (1 + np.random.normal(0, 0.001, len(dates))),
-                'high': prices * (1 + np.abs(np.random.normal(0, 0.005, len(dates)))),
-                'low': prices * (1 - np.abs(np.random.normal(0, 0.005, len(dates)))),
-                'volume': np.random.lognormal(15, 0.5, len(dates)),
-                'returns': returns
-            }, index=dates)
-        
-        return market_data
-    
+        """
+        Fetch market data for backtesting from the configured data provider.
+
+        Raises:
+            RuntimeError: No real data provider is wired; raises rather than
+                returning synthetic prices to prevent fabricated backtest results.
+                (TODO #200-follow-up: wire a real historical-data provider here.)
+        """
+        if self.data_provider is not None:
+            try:
+                return self.data_provider.get_historical_prices(
+                    universe, start_date, end_date
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Data provider failed to supply market data for backtest "
+                    f"(tickers={universe}, {start_date}–{end_date}): {exc}"
+                ) from exc
+
+        raise RuntimeError(
+            "BacktestEngine has no data_provider configured. "
+            "Real historical price data is required to run a backtest. "
+            "Refusing to substitute synthetic random prices. "
+            "Pass a data_provider instance when constructing BacktestEngine. "
+            "(Finding #200 — TODO: wire real data provider)"
+        )
+
     def _get_benchmark_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        """Get benchmark data"""
-        # Mock benchmark data
-        dates = pd.date_range(start_date, end_date, freq='D')
-        dates = dates[dates.weekday < 5]
-        
-        np.random.seed(42)  # SPY-like returns
-        returns = np.random.normal(0.0004, 0.015, len(dates))  # Market-like returns
-        prices = 100 * (1 + returns).cumprod()
-        
-        return pd.DataFrame({
-            'close': prices,
-            'returns': returns
-        }, index=dates)
+        """
+        Fetch benchmark data from the configured data provider.
+
+        Raises:
+            RuntimeError: No real data provider is wired; raises rather than
+                returning synthetic benchmark returns.
+                (TODO #200-follow-up: wire a real historical-data provider here.)
+        """
+        if self.data_provider is not None:
+            try:
+                result = self.data_provider.get_historical_prices(
+                    [symbol], start_date, end_date
+                )
+                return result.get(symbol, pd.DataFrame())
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Data provider failed to supply benchmark data for '{symbol}' "
+                    f"({start_date}–{end_date}): {exc}"
+                ) from exc
+
+        raise RuntimeError(
+            f"BacktestEngine has no data_provider configured. "
+            f"Real historical price data is required for benchmark '{symbol}'. "
+            "Refusing to substitute synthetic random returns. "
+            "(Finding #200 — TODO: wire real data provider)"
+        )
     
     def _initialize_portfolio(self, initial_capital: float, universe: List[str]) -> Dict[str, Any]:
         """Initialize portfolio state"""
