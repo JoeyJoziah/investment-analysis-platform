@@ -5,7 +5,7 @@ Handles loading transformed data into PostgreSQL/TimescaleDB
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 import logging
 from sqlalchemy import create_engine, text, MetaData, Table
@@ -18,6 +18,21 @@ import os
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import json
+
+# ---------------------------------------------------------------------------
+# #197 – SQL-injection allowlist for cleanup_old_data()
+#
+# Maps a caller-supplied retention key to the fixed (table, date_column) pair
+# that should be used in the DELETE/UPDATE statement.  No caller-controlled
+# string ever reaches the SQL text; only the keys of this dict are valid.
+# ---------------------------------------------------------------------------
+_CLEANUP_ALLOWLIST: Dict[str, tuple] = {
+    'price_history':        ('price_history',        'date'),
+    'technical_indicators': ('technical_indicators',  'date'),
+    'news_sentiment':       ('news_sentiment',        'date'),
+    'ml_predictions':       ('ml_predictions',        'prediction_date'),
+    'recommendations':      ('recommendations',       'created_at'),
+}
 
 load_dotenv()
 
@@ -176,18 +191,46 @@ class DataLoader:
             logger.error(f"Error loading price data for {ticker}: {e}")
             return False
     
+    @staticmethod
+    def _resolve_indicator_date(latest: pd.Series) -> datetime:
+        """Extract and normalise the data-point date from a DataFrame row.
+
+        #202: The 'date' column in the row carries the historical date for
+        the indicator (e.g. 2020-06-15).  We must never fall back to the
+        wall-clock insert time.
+
+        Raises ValueError if the date is absent or NaN — the caller should
+        not swallow this; it indicates a data-pipeline programming error.
+        """
+        raw_date = latest.get('date')
+        if raw_date is None or (isinstance(raw_date, float) and pd.isna(raw_date)):
+            raise ValueError(
+                "load_technical_indicators: DataFrame row is missing the 'date' "
+                "column; cannot persist indicator without a historical date."
+            )
+        if isinstance(raw_date, pd.Timestamp):
+            return raw_date.to_pydatetime()
+        if isinstance(raw_date, datetime):
+            return raw_date
+        # Handles datetime.date and any object with .year/.month/.day
+        return datetime(raw_date.year, raw_date.month, raw_date.day)
+
     def load_technical_indicators(self, df: pd.DataFrame, ticker: str) -> bool:
         """Load technical indicators into database"""
+        if df.empty:
+            logger.warning(f"No technical indicators to load for {ticker}")
+            return False
+
+        # Get latest row with indicators
+        latest = df.iloc[-1]
+
+        # Resolve the historical data-point date before entering the try/except
+        # block so that a missing date raises immediately (not silently logged).
+        indicator_date = self._resolve_indicator_date(latest)
+
         try:
-            if df.empty:
-                logger.warning(f"No technical indicators to load for {ticker}")
-                return False
-            
             stock_id = self.ensure_stock_exists(ticker)
-            
-            # Get latest row with indicators
-            latest = df.iloc[-1]
-            
+
             with self.get_connection() as conn:
                 insert_query = text("""
                     INSERT INTO technical_indicators
@@ -196,7 +239,7 @@ class DataLoader:
                      bollinger_upper, bollinger_middle, bollinger_lower,
                      atr_14, adx, cci, mfi, obv, stoch_k, stoch_d,
                      williams_r, roc_10, momentum_10)
-                    VALUES 
+                    VALUES
                     (:stock_id, :date, :sma_20, :sma_50, :sma_200, :ema_12, :ema_26,
                      :rsi_14, :macd, :macd_signal, :macd_histogram,
                      :bollinger_upper, :bollinger_middle, :bollinger_lower,
@@ -227,10 +270,10 @@ class DataLoader:
                         momentum_10 = EXCLUDED.momentum_10,
                         updated_at = CURRENT_TIMESTAMP
                 """)
-                
+
                 params = {
                     'stock_id': stock_id,
-                    'date': datetime.now(),
+                    'date': indicator_date,
                     'sma_20': float(latest.get('sma_20', 0)) if pd.notna(latest.get('sma_20')) else None,
                     'sma_50': float(latest.get('sma_50', 0)) if pd.notna(latest.get('sma_50')) else None,
                     'sma_200': float(latest.get('sma_200', 0)) if pd.notna(latest.get('sma_200')) else None,
@@ -426,45 +469,77 @@ class DataLoader:
             return False
     
     def cleanup_old_data(self, retention_days: Dict = None) -> bool:
-        """Clean up old data based on retention policies"""
+        """Clean up old data based on retention policies.
+
+        Security (#197): table names and column names are resolved exclusively
+        from the module-level _CLEANUP_ALLOWLIST dict.  No caller-supplied
+        string is ever interpolated into SQL text.  The cutoff timestamp is
+        computed in Python and passed as a bound parameter so the database
+        driver handles quoting and type-casting.
+        """
+        # Validate all keys before opening any DB connection.  ValueError here
+        # is a caller programming error (not a transient DB failure) so it must
+        # propagate even though the broader exception handler below silences
+        # operational errors.
+        if retention_days is None:
+            retention_days = {
+                'price_history': 730,         # 2 years
+                'technical_indicators': 180,   # 6 months
+                'news_sentiment': 90,          # 3 months
+                'ml_predictions': 30,          # 1 month
+                'recommendations': 30          # 1 month
+            }
+        for key in retention_days:
+            if key not in _CLEANUP_ALLOWLIST:
+                raise ValueError(
+                    f"cleanup_old_data: '{key}' is not a recognised "
+                    f"retention target; allowed keys: "
+                    f"{sorted(_CLEANUP_ALLOWLIST)}"
+                )
+
         try:
-            if retention_days is None:
-                retention_days = {
-                    'price_history': 730,  # 2 years
-                    'technical_indicators': 180,  # 6 months
-                    'news_sentiment': 90,  # 3 months
-                    'ml_predictions': 30,  # 1 month
-                    'recommendations': 30  # 1 month
-                }
-            
             with self.get_connection() as conn:
-                for table, days in retention_days.items():
-                    if table == 'recommendations':
-                        # Archive old recommendations
-                        query = text(f"""
-                            UPDATE {table} 
-                            SET is_active = false 
-                            WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '{days} days'
-                            AND is_active = true
-                        """)
+                for key, days in retention_days.items():
+                    table, date_column = _CLEANUP_ALLOWLIST[key]
+
+                    # Compute cutoff in Python; bind it as a typed parameter so
+                    # no date/interval expression is ever constructed from
+                    # caller input.
+                    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=int(days))
+
+                    if key == 'recommendations':
+                        # Archive: mark old active rows inactive rather than
+                        # deleting, using the fixed table/column from the
+                        # allowlist and a bound cutoff value.
+                        query = text(
+                            "UPDATE recommendations "
+                            "SET is_active = false "
+                            "WHERE created_at < :cutoff "
+                            "AND is_active = true"
+                        ).bindparams(cutoff=cutoff)
                     else:
-                        # Delete old data
-                        date_column = 'date' if table != 'ml_predictions' else 'prediction_date'
-                        query = text(f"""
-                            DELETE FROM {table} 
-                            WHERE {date_column} < CURRENT_TIMESTAMP - INTERVAL '{days} days'
-                        """)
-                    
+                        # The table and column identifiers come only from the
+                        # allowlist dict above — they are never derived from
+                        # caller input — so it is safe to embed them in the
+                        # static SQL string here.
+                        query = text(
+                            f"DELETE FROM {table} "   # noqa: S608 – allowlist-only
+                            f"WHERE {date_column} < :cutoff"
+                        ).bindparams(cutoff=cutoff)
+
                     result = conn.execute(query)
                     conn.commit()
-                    
-                    logger.info(f"Cleaned up {result.rowcount} rows from {table}")
-                
-                # Vacuum analyze for performance
+
+                    logger.info(
+                        "Cleaned up %d rows from %s (cutoff %s)",
+                        result.rowcount, table, cutoff.date()
+                    )
+
+                # Vacuum analyze for performance (no user input involved)
                 conn.execute(text("VACUUM ANALYZE"))
-                
+
                 return True
-                
+
         except Exception as e:
             logger.error(f"Error cleaning up old data: {e}")
             return False
