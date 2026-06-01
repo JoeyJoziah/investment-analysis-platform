@@ -9,7 +9,7 @@ Part of: Issue #7 - Middleware Optimization
 """
 
 import logging
-from typing import List, Callable, Optional, Dict, Any
+from typing import List, Callable, Optional, Dict, Any, Union
 from enum import IntEnum
 from dataclasses import dataclass
 from fastapi import FastAPI
@@ -73,12 +73,28 @@ class MiddlewarePriority(IntEnum):
     LOWEST = 500
 
 
+def _priority_value(priority: Union["MiddlewarePriority", int]) -> int:
+    """Numeric priority, robust to raw ints.
+
+    Arithmetic on an IntEnum (e.g. ``MiddlewarePriority.CACHING - 100``) yields a
+    plain ``int``, not an enum member, so callers may legitimately pass either.
+    """
+    return int(priority)
+
+
+def _priority_label(priority: Union["MiddlewarePriority", int]) -> str:
+    """Human-readable priority label, robust to raw int priorities."""
+    if isinstance(priority, MiddlewarePriority):
+        return priority.name
+    return f"CUSTOM({int(priority)})"
+
+
 @dataclass
 class MiddlewareRegistration:
     """Represents a middleware to be registered"""
     name: str
     middleware_class: type
-    priority: MiddlewarePriority
+    priority: Union[MiddlewarePriority, int]
     config: Dict[str, Any]
     enabled: bool = True
     skip_in_testing: bool = False
@@ -114,7 +130,7 @@ class MiddlewareStack:
         self,
         name: str,
         middleware_class: type,
-        priority: MiddlewarePriority,
+        priority: Union[MiddlewarePriority, int],
         config: Optional[Dict[str, Any]] = None,
         enabled: bool = True,
         skip_in_testing: bool = False
@@ -150,7 +166,7 @@ class MiddlewareStack:
 
         self.middlewares.append(registration)
         logger.debug(
-            f"Registered middleware: {name} (priority={priority.name}:{priority.value})"
+            f"Registered middleware: {name} (priority={_priority_label(priority)}:{_priority_value(priority)})"
         )
 
         return self
@@ -170,7 +186,7 @@ class MiddlewareStack:
         # This ensures outermost middleware (highest priority) is added first
         sorted_middlewares = sorted(
             self.middlewares,
-            key=lambda m: m.priority.value,
+            key=lambda m: _priority_value(m.priority),
             reverse=True  # Highest priority first
         )
 
@@ -199,7 +215,7 @@ class MiddlewareStack:
                 )
                 logger.info(
                     f"  ✓ {middleware.name} "
-                    f"(priority={middleware.priority.name}:{middleware.priority.value})"
+                    f"(priority={_priority_label(middleware.priority)}:{_priority_value(middleware.priority)})"
                 )
                 applied_count += 1
 
@@ -227,7 +243,7 @@ class MiddlewareStack:
 
         sorted_middlewares = sorted(
             self.middlewares,
-            key=lambda m: m.priority.value,
+            key=lambda m: _priority_value(m.priority),
             reverse=True
         )
 
@@ -239,7 +255,7 @@ class MiddlewareStack:
             testing_flag = " [skip in testing]" if middleware.skip_in_testing else ""
             lines.append(
                 f"{i:2d}. {status} {middleware.name:20s} "
-                f"(priority={middleware.priority.value:5d}){testing_flag}"
+                f"(priority={_priority_value(middleware.priority):5d}){testing_flag}"
             )
 
         lines.append("=" * 60)
