@@ -15,13 +15,111 @@ from backend.utils.comprehensive_cache import get_cache_manager
 from backend.utils.intelligent_cache_policies import get_policy_manager, get_cache_warmer
 from backend.utils.database_query_cache import get_query_cache_manager
 from backend.utils.api_cache_decorators import get_invalidation_manager
-from backend.auth.oauth2 import get_current_user  # For admin authentication
+from backend.auth.oauth2 import get_current_admin_user
+from backend.models.unified_models import User
 from backend.models.api_response import ApiResponse, success_response
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# Allowlist of cache key namespace prefixes that may be targeted by an
+# invalidation pattern. These mirror the prefixes produced by the cache
+# manager (see ComprehensiveCacheManager.key_prefixes). Any invalidation
+# request must be anchored to exactly one of these namespaces so that user
+# input can never reach an unbounded Redis SCAN (e.g. "*" flushing the whole
+# keyspace). See findings #197 / #199.
+ALLOWED_NAMESPACE_PREFIXES = frozenset({
+    'api:resp',
+    'db:query',
+    'comp',
+    'market',
+    'user',
+    'analysis',
+    'quote',
+    'overview',
+    'technical',
+    'ml_pred',
+    'recommend',
+    'stocks',
+    'misc',
+})
+
+# Data-type aliases accepted on the invalidate endpoint, mapped to their
+# canonical namespace prefix. Keeps the public API stable while still
+# anchoring every invalidation to an allowlisted namespace.
+DATA_TYPE_TO_PREFIX = {
+    'api_response': 'api:resp',
+    'db_query': 'db:query',
+    'computation': 'comp',
+    'market_data': 'market',
+    'user_data': 'user',
+    'analysis': 'analysis',
+    'real_time_quote': 'quote',
+    'company_overview': 'overview',
+    'technical_indicators': 'technical',
+    'ml_predictions': 'ml_pred',
+    'recommendations': 'recommend',
+    'stock_list': 'stocks',
+}
+
+
+def _namespace_of(pattern: str) -> Optional[str]:
+    """
+    Return the allowlisted namespace prefix that fully contains ``pattern``.
+
+    A pattern is considered safe only when its leading, wildcard-free segment
+    matches a known namespace prefix exactly. This rejects unrestricted
+    wildcards ("*", "?*", "[a-z]*") and namespace-escaping inputs before they
+    reach Redis SCAN.
+    """
+    if not pattern:
+        return None
+
+    # Split off the wildcard-free leading portion. Any Redis glob metacharacter
+    # (*, ?, [, ]) terminates the anchor; the anchor must, on its own, equal an
+    # allowed prefix so the SCAN can never widen beyond that namespace.
+    anchor_chars: List[str] = []
+    for ch in pattern:
+        if ch in '*?[]':
+            break
+        anchor_chars.append(ch)
+    anchor = ''.join(anchor_chars)
+
+    if not anchor:
+        # Leading wildcard -> no namespace anchor at all -> unbounded scan.
+        return None
+
+    for prefix in ALLOWED_NAMESPACE_PREFIXES:
+        # The anchor must be exactly the prefix, or the prefix followed by a
+        # delimiter, so "marketing*" cannot masquerade as the "market" namespace
+        # while "market:*" and "market" are both accepted.
+        if anchor == prefix or anchor.startswith(f"{prefix}:"):
+            return prefix
+    return None
+
+
+def validate_invalidation_pattern(pattern: str) -> str:
+    """
+    Validate a user-supplied cache invalidation pattern.
+
+    Returns the pattern unchanged when it is anchored to an allowlisted
+    namespace prefix. Raises ``HTTPException`` (400) when the pattern contains
+    an unrestricted leading wildcard or escapes the known namespaces, ensuring
+    no user input reaches an unbounded Redis SCAN (#197).
+    """
+    if _namespace_of(pattern) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Invalid cache pattern: must be anchored to one of the allowed "
+                f"namespaces ({', '.join(sorted(ALLOWED_NAMESPACE_PREFIXES))}) "
+                "and may not begin with an unrestricted wildcard."
+            ),
+        )
+    return pattern
 
 
 # Response models
@@ -189,10 +287,10 @@ async def get_api_usage() -> ApiResponse[Dict[str, Any]]:
 
 @router.post("/invalidate")
 async def invalidate_cache(
-    pattern: Optional[str] = Query(None, description="Cache key pattern to invalidate"),
+    pattern: Optional[str] = Query(None, description="Cache key pattern to invalidate (must be anchored to an allowed namespace)"),
     symbol: Optional[str] = Query(None, description="Stock symbol to invalidate"),
     data_type: Optional[str] = Query(None, description="Data type to invalidate"),
-    # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
+    current_user: User = Depends(get_current_admin_user),
 ) -> ApiResponse[Dict[str, Any]]:
     """
     Invalidate cache entries based on pattern, symbol, or data type
@@ -205,19 +303,33 @@ async def invalidate_cache(
         invalidation_manager = get_invalidation_manager()
         
         invalidated_count = 0
-        
+
         if pattern:
-            await cache_manager.invalidate_pattern(pattern)
+            # Reject unbounded / namespace-escaping patterns before they reach
+            # the Redis SCAN (#197).
+            safe_pattern = validate_invalidation_pattern(pattern)
+            await cache_manager.invalidate_pattern(safe_pattern)
             invalidated_count += 1
-            logger.info(f"Invalidated cache pattern: {pattern}")
-        
+            logger.info(f"Invalidated cache pattern: {safe_pattern}")
+
         if symbol:
             await invalidation_manager.invalidate_by_symbol(symbol.upper())
             invalidated_count += 1
             logger.info(f"Invalidated cache for symbol: {symbol}")
-        
+
         if data_type:
-            await cache_manager.invalidate_pattern(f"*:{data_type}:*")
+            # Map the requested data type to its canonical namespace prefix so
+            # the resulting pattern is anchored (no leading wildcard) (#197).
+            prefix = DATA_TYPE_TO_PREFIX.get(data_type)
+            if prefix is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Invalid data_type: must be one of "
+                        f"{', '.join(sorted(DATA_TYPE_TO_PREFIX))}."
+                    ),
+                )
+            await cache_manager.invalidate_pattern(f"{prefix}:*")
             invalidated_count += 1
             logger.info(f"Invalidated cache for data type: {data_type}")
         
@@ -247,7 +359,7 @@ async def invalidate_cache(
 async def warm_cache(
     symbols: List[str] = Query(..., description="Stock symbols to warm in cache"),
     data_types: List[str] = Query(["real_time_quote", "company_overview"], description="Data types to warm"),
-    # current_user: dict = Depends(get_current_user)  # Uncomment for authentication
+    current_user: User = Depends(get_current_admin_user),
 ) -> ApiResponse[Dict[str, Any]]:
     """
     Manually warm cache with specified symbols and data types
