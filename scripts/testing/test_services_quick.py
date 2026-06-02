@@ -46,27 +46,11 @@ def test_redis():
         print(f"❌ Redis: Connection failed - {e}")
         return False
 
-def test_elasticsearch():
-    """Test Elasticsearch connection"""
-    try:
-        from elasticsearch import Elasticsearch
-        es = Elasticsearch(
-            [{'host': 'localhost', 'port': 9200, 'scheme': 'http'}],
-            http_auth=('elastic', '4Bx+UM1CdSiEbMlQueRVvda+A4fLzCRsyuHUHbv5wMw='),
-            verify_certs=False
-        )
-        health = es.cluster.health()
-        print("✅ Elasticsearch: Connection successful")
-        return True
-    except Exception as e:
-        print(f"❌ Elasticsearch: Connection failed - {e}")
-        return False
-
 def main():
     print("Testing service connections...")
     print("=" * 40)
     
-    tests = [test_postgresql, test_redis, test_elasticsearch]
+    tests = [test_postgresql, test_redis]
     results = []
     
     for test in tests:

@@ -44,9 +44,7 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
     REDIS_URL: str
-    # Elasticsearch removed - using PostgreSQL full-text search instead (saves $15-20/month)
-    ELASTICSEARCH_URL: Optional[str] = None
-    
+
     # API Rate Limits (Free Tier)
     ALPHA_VANTAGE_DAILY_LIMIT: int = 25
     ALPHA_VANTAGE_MINUTE_LIMIT: int = 5

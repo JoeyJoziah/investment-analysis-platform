@@ -69,13 +69,13 @@ if docker ps | grep -q "investment_prometheus\|investment_grafana"; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         print_status "Stopping existing monitoring services..."
-        docker-compose stop prometheus grafana alertmanager node-exporter cadvisor postgres-exporter redis-exporter elasticsearch-exporter nginx-exporter || true
+        docker-compose stop prometheus grafana alertmanager node-exporter cadvisor postgres-exporter redis-exporter nginx-exporter || true
     fi
 fi
 
 # Start monitoring stack
 print_status "Starting monitoring services..."
-docker-compose up -d prometheus grafana alertmanager node-exporter cadvisor postgres-exporter redis-exporter elasticsearch-exporter nginx-exporter
+docker-compose up -d prometheus grafana alertmanager node-exporter cadvisor postgres-exporter redis-exporter nginx-exporter
 
 # Wait for services to be ready
 print_status "Waiting for services to be ready..."
@@ -91,7 +91,6 @@ services=(
     "cadvisor:8080"
     "postgres-exporter:9187"
     "redis-exporter:9121"
-    "elasticsearch-exporter:9114"
 )
 
 failed_services=()

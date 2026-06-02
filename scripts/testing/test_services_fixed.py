@@ -53,24 +53,6 @@ def test_redis():
         print(f"❌ Redis: Connection failed - {e}")
         return False
 
-def test_elasticsearch():
-    """Test Elasticsearch connection (no auth required per docker-compose)"""
-    try:
-        from elasticsearch import Elasticsearch
-        # No authentication needed since xpack.security.enabled=false
-        es = Elasticsearch(
-            [{'host': 'localhost', 'port': 9200, 'scheme': 'http'}],
-            verify_certs=False,
-            timeout=10
-        )
-        health = es.cluster.health()
-        print("✅ Elasticsearch: Connection successful")
-        print(f"   Status: {health.get('status')}, Cluster: {health.get('cluster_name')}")
-        return True
-    except Exception as e:
-        print(f"❌ Elasticsearch: Connection failed - {e}")
-        return False
-
 def test_comprehensive_postgresql():
     """Test PostgreSQL with multiple operations"""
     try:
@@ -122,8 +104,7 @@ def main():
     tests = [
         ("PostgreSQL Basic", test_postgresql),
         ("PostgreSQL Comprehensive", test_comprehensive_postgresql),
-        ("Redis", test_redis),
-        ("Elasticsearch", test_elasticsearch)
+        ("Redis", test_redis)
     ]
     
     results = []
@@ -150,7 +131,6 @@ def main():
         print("\n✅ Your investment analysis app services are ready!")
         print("   • PostgreSQL: Ready with TimescaleDB")
         print("   • Redis: Ready for caching")
-        print("   • Elasticsearch: Ready for search")
     else:
         print("⚠️  Some services need attention")
         
@@ -164,11 +144,6 @@ def main():
             print("\n🔧 Redis Issues:")
             print("   - Verify REDIS_PASSWORD in .env matches docker-compose configuration")
             print("   - Check Redis container: docker logs investment_cache")
-            
-        if not results[3]:  # Elasticsearch  
-            print("\n🔧 Elasticsearch Issues:")
-            print("   - Wait longer for Elasticsearch to start (can take 1-2 minutes)")
-            print("   - Check Elasticsearch container: docker logs investment_search")
 
 if __name__ == "__main__":
     main()

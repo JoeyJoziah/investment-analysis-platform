@@ -2,7 +2,8 @@
 
 This document summarizes the integration validation for the Quick Wins and CRITICAL optimizations implemented by parallel swarms.
 
-**Last Updated:** 2026-01-26
+**Version: 1.0.0**
+**Last Updated: 2026-06-02**
 **Status:** 5/5 Quick Wins Complete + CRITICAL-3 (N+1 Query Fix) Complete
 
 ## Implemented Optimizations
@@ -39,22 +40,20 @@ This document summarizes the integration validation for the Quick Wins and CRITI
 - Uses `price_repository.get_price_history()` - METHOD EXISTS
 - Uses `stock_repository.get_by_symbol()` - METHOD EXISTS
 
-### 3. Elasticsearch Removal
-**Status: VERIFIED - Properly Optional**
+### 3. Elasticsearch / ELK Decommission
+**Status: COMPLETE (issue #210)**
 
-- `backend/config/settings.py`: `ELASTICSEARCH_URL: Optional[str] = None`
-- `backend/utils/enhanced_logging.py`: Gracefully handles missing Elasticsearch
-  - `ELASTICSEARCH_AVAILABLE` flag set based on import success
-  - `ElasticsearchHandler` only used when explicitly enabled
-  - `setup_application_logging()` defaults to `elasticsearch_hosts=None`
-- Docker compose files: No Elasticsearch service defined
-- Comment in settings.py: "Elasticsearch removed - using PostgreSQL full-text search instead (saves $15-20/month)"
+Elasticsearch has been fully removed. Log aggregation is handled by **Loki**
+(`infrastructure/monitoring/loki/`), not Elasticsearch.
 
-**Remaining Elasticsearch References (Non-blocking):**
-- `.env.example` still has ELASTICSEARCH config (optional documentation)
-- Test scripts have optional elasticsearch tests
-- Grafana dashboard has elasticsearch metric (will show "down" - acceptable)
-- These don't affect runtime - all code paths handle missing Elasticsearch
+- `backend/config/settings.py`: `ELASTICSEARCH_URL` field removed
+- `backend/utils/enhanced_logging.py`: deleted (was the optional ES logging path)
+- `backend/monitoring/log_analysis.py`: ES shipping path removed (#211)
+- Docker compose files: no Elasticsearch service defined
+- `.env.example` / `.env.production.example`: `ELASTICSEARCH_*` removed
+- `deploy.sh` / `generate_secrets.sh`: ES env vars removed (`ELASTIC_PASSWORD` no longer required)
+- Grafana datasource + dashboard ES references removed; logstash config deleted
+- Manual test scripts: Elasticsearch connection tests removed
 
 ### 4. Redis Memory Increase
 **Status: VERIFIED - Consistent Configuration**
@@ -157,7 +156,6 @@ async def get_latest_prices_bulk(
 | `analysis.py` | `settings.REDIS_URL` | OK - Used for cache |
 | `cache.py` | `settings.REDIS_URL` | OK - Settings has REDIS_URL |
 | `cache.py` | `cache_manager` | OK - Re-exports correctly |
-| `enhanced_logging.py` | Elasticsearch | OK - Optional, graceful degradation |
 | Docker services | Redis config | OK - Consistent across files |
 | Migration 008 | Previous migrations | OK - Depends on 007 |
 | `recommendations.py` | `stock_repository.get_top_stocks` | OK - Method added |
@@ -252,12 +250,12 @@ FINNHUB_API_KEY=...
 **Resolution:** Can optionally update to mark as deprecated/optional
 
 ### Issue 2: Grafana dashboard references Elasticsearch
-**Impact:** Dashboard will show Elasticsearch as "down"
-**Resolution:** Update dashboard to remove Elasticsearch panel or mark as optional
+**Impact:** Dashboard previously showed Elasticsearch as "down"
+**Resolution:** RESOLVED (#210) — Elasticsearch target removed from the dashboard.
 
 ### Issue 3: Test scripts try to connect to Elasticsearch
-**Impact:** Tests may fail if run with full integration
-**Resolution:** Tests handle missing Elasticsearch gracefully (ImportError caught)
+**Impact:** N/A
+**Resolution:** RESOLVED (#210) — Elasticsearch tests removed from the manual test scripts.
 
 ## Connected Components Diagram
 
