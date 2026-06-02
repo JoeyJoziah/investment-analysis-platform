@@ -30,9 +30,11 @@ class LoggingConfig:
     include_performance_metrics: bool = True
     
     # Log aggregation
+    # NOTE: log_aggregation_endpoint was removed with F-10-017 (PRD audit
+    # 2026-04) when the Elasticsearch setup path in log_analysis.py was deleted;
+    # nothing else consumed it.
     enable_log_aggregation: bool = True
-    log_aggregation_endpoint: str = os.getenv("LOG_AGGREGATION_ENDPOINT", "")
-    
+
     # Sensitive data masking
     mask_sensitive_data: bool = True
     sensitive_fields: List[str] = field(default_factory=lambda: [
