@@ -82,7 +82,6 @@ def _load_module_under_synthetic_pkg(
 
 def _write_synth_parquets(data_dir: Path, target_col: str = "future_return_5d") -> None:
     """Create train/val/test parquets with known signal + realistic NaN tails."""
-    rng = np.random.default_rng(11)
 
     def _make(n_tickers: int, n_days: int, seed_offset: int):
         rng_local = np.random.default_rng(11 + seed_offset)

@@ -249,7 +249,8 @@ def check_data_quality(**context):
 
 def check_drift(**context):
     """Check for data and concept drift"""
-    
+    import pandas as pd
+
     async def _check_drift():
         registry = ModelRegistry()
         monitor = ModelMonitor()
