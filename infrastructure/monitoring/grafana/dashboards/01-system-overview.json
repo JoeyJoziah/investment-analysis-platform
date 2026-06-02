@@ -309,15 +309,6 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=\"elasticsearch\"}",
-          "legendFormat": "Elasticsearch",
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
           "expr": "up{job=\"airflow\"}",
           "legendFormat": "Airflow",
           "refId": "D"
