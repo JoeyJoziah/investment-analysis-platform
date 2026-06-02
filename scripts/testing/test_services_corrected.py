@@ -69,47 +69,6 @@ def test_redis():
         print(f"❌ Redis: Connection failed - {e}")
         return False
 
-def test_elasticsearch():
-    """Test Elasticsearch connection (no auth required)"""
-    try:
-        from elasticsearch import Elasticsearch
-        es = Elasticsearch(
-            [{'host': 'localhost', 'port': 9200, 'scheme': 'http'}],
-            verify_certs=False,
-            timeout=10
-        )
-        
-        health = es.cluster.health()
-        
-        # Test basic indexing
-        test_doc = {
-            'timestamp': '2025-08-08T19:30:00',
-            'test': True,
-            'message': 'Connection test'
-        }
-        
-        # Index test document
-        response = es.index(index='test_index', body=test_doc)
-        
-        # Search for document
-        search_response = es.search(
-            index='test_index', 
-            body={'query': {'match': {'test': True}}}
-        )
-        
-        # Clean up
-        es.indices.delete(index='test_index', ignore=[400, 404])
-        
-        print("✅ Elasticsearch: Connection successful")
-        print(f"   Cluster status: {health.get('status', 'unknown')}")
-        print(f"   Cluster name: {health.get('cluster_name', 'unknown')}")
-        print(f"   Nodes: {health.get('number_of_nodes', 0)}")
-        print(f"   Test indexing: {'✅ Passed' if response.get('result') == 'created' else '❌ Failed'}")
-        return True
-    except Exception as e:
-        print(f"❌ Elasticsearch: Connection failed - {e}")
-        return False
-
 def test_comprehensive_database():
     """Test comprehensive database operations"""
     try:
@@ -191,10 +150,6 @@ def show_connection_info():
     print("  Host: localhost:6379")
     print("  Password: RsYque (Note: truncated from original due to shell interpretation)")
     print("  DB: 0")
-    print("")
-    print("Elasticsearch:")
-    print("  Host: localhost:9200")
-    print("  Authentication: None (security disabled)")
     print("=" * 50)
 
 def main():
@@ -204,7 +159,6 @@ def main():
     tests = [
         ("PostgreSQL", test_postgresql),
         ("Redis", test_redis),
-        ("Elasticsearch", test_elasticsearch),
         ("Database Comprehensive", test_comprehensive_database)
     ]
     
@@ -231,7 +185,7 @@ def main():
     passed = sum(results)
     total = len(results)
     
-    test_names = ["PostgreSQL", "Redis", "Elasticsearch", "Comprehensive DB"]
+    test_names = ["PostgreSQL", "Redis", "Comprehensive DB"]
     for i, (name, result) in enumerate(zip(test_names, results)):
         status = "✅ PASSED" if result else "❌ FAILED"
         print(f"{name}: {status}")
@@ -243,7 +197,6 @@ def main():
         print("\n✅ Your investment analysis app is ready for:")
         print("   • Data storage and time-series operations (PostgreSQL + TimescaleDB)")
         print("   • High-performance caching (Redis)")
-        print("   • Full-text search and analytics (Elasticsearch)")
         print("\n🚀 You can now start the full application stack!")
         
     else:
@@ -258,13 +211,7 @@ def main():
             print("\n🔧 Redis troubleshooting:")  
             print("   • Check container: docker logs investment_cache")
             print("   • Try restarting Redis: docker-compose restart redis")
-            
-        if not results[2]:  # Elasticsearch
-            print("\n🔧 Elasticsearch troubleshooting:")
-            print("   • Elasticsearch takes time to start (wait 2-3 minutes)")
-            print("   • Check logs: docker logs investment_search")
-            print("   • Increase memory if needed: docker stats")
-    
+
     # Show connection info for reference
     show_connection_info()
     
