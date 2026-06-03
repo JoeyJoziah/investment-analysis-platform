@@ -140,10 +140,6 @@ _orig_mime_text.MimeText = MagicMock  # Add the typo name
 import email.mime.multipart as _orig_mime_mp
 _orig_mime_mp.MimeMultipart = MagicMock  # Add the typo name
 
-# Stub elasticsearch (optional dep in log_analysis.py)
-sys.modules.setdefault("elasticsearch", MagicMock())
-sys.modules.setdefault("elasticsearch.helpers", MagicMock())
-
 # Stub backend.monitoring.alerting_system (used by log_analysis _create_alert_for_anomaly)
 _mock_alerting = MagicMock()
 _mock_alerting.alert_manager = MagicMock()
