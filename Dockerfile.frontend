@@ -1,7 +1,7 @@
 # Multi-stage build for React/Vite frontend
 
 # Build args
-ARG NODE_VERSION=18
+ARG NODE_VERSION=20  # vite 7.x requires Node >=20.19
 
 # Stage 1: Build
 FROM node:${NODE_VERSION}-alpine as builder
@@ -12,7 +12,7 @@ WORKDIR /build
 COPY frontend/web/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci  # build stage needs devDependencies (vite) — final image is nginx-only
 
 # Copy source code
 COPY frontend/web .
@@ -43,7 +43,7 @@ COPY --from=builder /build/dist /usr/share/nginx/html
 
 # Copy custom nginx configuration
 COPY infrastructure/docker/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY infrastructure/docker/nginx/security-headers.conf /etc/nginx/conf.d/security-headers.conf
+COPY infrastructure/docker/nginx/conf.d/security-headers.conf /etc/nginx/conf.d/security-headers.conf
 
 # Create nginx.conf for single-page app
 RUN echo 'server { \

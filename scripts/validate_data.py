@@ -22,7 +22,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from sqlalchemy import func, and_, or_
-from backend.models.database import Stock, PriceHistory, Exchange, Sector, APIUsage
+from backend.models.unified_models import Stock, PriceHistory, Exchange, Sector, APIUsage
 from scripts.load_historical_data import DatabaseManager
 
 # Setup logging

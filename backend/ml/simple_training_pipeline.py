@@ -18,12 +18,18 @@ import joblib
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+# F-03-007: anchor log path to project root (__file__-relative).
+_ML_LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "ml_logs"
+_ML_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(f'backend/ml_logs/simple_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'),
+        logging.FileHandler(
+            _ML_LOGS_DIR / f'simple_training_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
+        ),
         logging.StreamHandler()
     ]
 )

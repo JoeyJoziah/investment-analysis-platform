@@ -1,3 +1,18 @@
+# ============================================================================
+# Project metadata (PEP 621)
+# ============================================================================
+#
+# Added 2026-05-18 to declare the Python version the project supports.
+# The codebase has historically run on 3.9 (current dev env + Docker base)
+# while [tool.mypy] / [tool.black] declared 3.12 as target. This pin
+# resolves that ambiguity in favor of the actual runtime — bump to ">=3.12"
+# in a follow-up once the dev env and CI move to 3.12.
+[project]
+name = "investment-analysis-platform"
+version = "0.0.0"
+description = "Investment analysis platform — FastAPI backend, ML pipelines, Airflow DAGs"
+requires-python = ">=3.9"
+
 [tool.black]
 line-length = 88
 target-version = ['py312']
@@ -147,3 +162,69 @@ disable = [
     "R0913",  # too-many-arguments
     "W0622",  # redefined-builtin
 ]
+[tool.bandit]
+# Skip MD5/SHA1 weak-crypto checks: all uses are non-security (cache keys, dedup hashing, etc).
+# B303 = use of insecure MD2/MD4/MD5/SHA1 hash function.
+# B324 = use of weak hash function (md5, sha1) without usedforsecurity=False.
+skips = ["B303", "B324"]
+exclude_dirs = ["backend/tests", "backend/TradingAgents"]
+
+# ============================================================================
+# Ruff — modern Python linter + formatter (replaces black/isort/flake8/pylint).
+# ============================================================================
+#
+# Added 2026-05-18 alongside the existing legacy tooling so contributors can
+# adopt incrementally. Legacy configs (black/isort/flake8/pylint) are kept in
+# place; remove them in a follow-up once CI runs on ruff alone.
+#
+# Quick start (no install required):
+#   uv run --with ruff ruff check .
+#   uv run --with ruff ruff format .
+#
+# Or with a project venv: pip install ruff && ruff check .
+[tool.ruff]
+line-length = 88                  # matches existing black/pylint/isort
+target-version = "py39"           # matches actual runtime; tighten when env upgrades
+extend-exclude = [
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "migrations",
+    "backend/_archive_TradingAgents_fork_pre_2026-05-12",
+]
+
+[tool.ruff.format]
+# Match black's existing posture.
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+# Conservative starting set focused on REAL BUGS, not style.
+# Style-only families (UP, I, C4, SIM) are deferred — running them on
+# this codebase surfaces ~21k findings (mostly UP006 ``List`` →
+# ``list``) which is migration work, not lint regression. Add them
+# back family-by-family with ``ruff check --select <X> --fix`` runs.
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (undefined names, unused imports)
+    "B",      # flake8-bugbear (common bug patterns)
+]
+ignore = [
+    "E501",   # line-too-long — handled by formatter
+    "E402",   # module-level-import-not-at-top — pre-existing pattern
+    "E731",   # lambda-assignment — pre-existing pattern
+    "E741",   # ambiguous-variable-name — pre-existing
+    "B008",   # function-call-in-default-argument — FastAPI Depends() etc.
+    "B904",   # raise-without-from-inside-except — many pre-existing sites
+    "B027",   # empty-method-without-abstract-decorator
+    "B011",   # assert-false (defensive code)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files: relax pycodestyle + bugbear (fixtures often look weird).
+"backend/tests/**/*.py" = ["E", "B"]
+# Archived TradingAgents fork is intentionally read-only.
+"backend/_archive_TradingAgents_fork_pre_2026-05-12/**" = ["ALL"]

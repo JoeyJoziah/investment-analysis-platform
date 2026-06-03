@@ -14,8 +14,69 @@ from sqlalchemy.sql import func
 from datetime import datetime
 import enum
 
-# Import base from main tables module
-from ..models.tables import Base, ModelTypeEnum, ModelStageEnum, FeatureTypeEnum, ComputeModeEnum, FeatureStatusEnum, DriftTypeEnum, AlertSeverityEnum, ModelHealthEnum
+# Canonical Base lives in unified_models. ML-only enums (no other consumers)
+# are defined here directly so ml_tables.py is self-contained.
+from backend.models.unified_models import Base
+
+
+class ModelTypeEnum(enum.Enum):
+    SKLEARN = "sklearn"
+    PYTORCH = "pytorch"
+    XGBOOST = "xgboost"
+    LIGHTGBM = "lightgbm"
+    PROPHET = "prophet"
+    ENSEMBLE = "ensemble"
+
+
+class ModelStageEnum(enum.Enum):
+    DEVELOPMENT = "development"
+    STAGING = "staging"
+    PRODUCTION = "production"
+    RETIRED = "retired"
+    ARCHIVED = "archived"
+
+
+class FeatureTypeEnum(enum.Enum):
+    NUMERICAL = "numerical"
+    CATEGORICAL = "categorical"
+    BOOLEAN = "boolean"
+    DATETIME = "datetime"
+    TEXT = "text"
+
+
+class ComputeModeEnum(enum.Enum):
+    BATCH = "batch"
+    STREAMING = "streaming"
+    ON_DEMAND = "on_demand"
+
+
+class FeatureStatusEnum(enum.Enum):
+    DEVELOPMENT = "development"
+    TESTING = "testing"
+    PRODUCTION = "production"
+    DEPRECATED = "deprecated"
+    RETIRED = "retired"
+
+
+class DriftTypeEnum(enum.Enum):
+    DATA_DRIFT = "data_drift"
+    PREDICTION_DRIFT = "prediction_drift"
+    CONCEPT_DRIFT = "concept_drift"
+    PERFORMANCE_DRIFT = "performance_drift"
+
+
+class AlertSeverityEnum(enum.Enum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+    ERROR = "error"
+
+
+class ModelHealthEnum(enum.Enum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    FAILING = "failing"
+    UNKNOWN = "unknown"
 
 
 # ===== ML Operations Tables =====

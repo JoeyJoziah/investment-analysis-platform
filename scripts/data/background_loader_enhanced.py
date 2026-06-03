@@ -45,7 +45,7 @@ sys.path.append(str(Path(__file__).parent))
 
 # Import project models (adapt based on your actual structure)
 try:
-    from backend.models.database import (
+    from backend.models.unified_models import (
         Base, Stock, Exchange, Sector, Industry, PriceHistory, APIUsage
     )
     from backend.config.settings import settings

@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.analytics.recommendation_engine import RecommendationEngine, StockRecommendation
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
+from backend.config.settings import settings
+from backend.exceptions import ModelUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -763,7 +765,21 @@ class RecommendationService:
 
         Returns:
             Dictionary with complete backtest performance summary
+
+        Raises:
+            ModelUnavailableError: when ``settings.DEMO_MODE`` is False
+                (production default). Per PRD audit 2026-04 §3 D Step 2
+                (F-02-003, Q4 default), backtest results are sourced from
+                ``random.uniform`` and must not surface as real numbers in
+                production; the router layer already returns 503 but this
+                defense-in-depth gate covers internal/script callers.
         """
+        if not settings.DEMO_MODE:
+            raise ModelUnavailableError(
+                model="recommendation_backtest",
+                reason="not_implemented",
+            )
+
         total_return = random.uniform(-0.2, 0.5)
         days = (end_date - start_date).days or 1  # avoid division by zero
 
@@ -812,7 +828,21 @@ class RecommendationService:
 
         Returns:
             List of performance record dictionaries
+
+        Raises:
+            ModelUnavailableError: when ``settings.DEMO_MODE`` is False
+                (production default). Per PRD audit 2026-04 §3 D Step 2
+                (F-02-003, Q4 default), performance records are fabricated
+                via ``random.choice`` and ``random.uniform``; production
+                must surface a 503 rather than synthetic numbers tied to
+                non-existent recommendation IDs.
         """
+        if not settings.DEMO_MODE:
+            raise ModelUnavailableError(
+                model="recommendation_performance_history",
+                reason="not_implemented",
+            )
+
         performances = []
 
         for i in range(20):
@@ -888,7 +918,21 @@ class RecommendationService:
 
         Returns:
             List of alert dictionaries sorted by timestamp descending
+
+        Raises:
+            ModelUnavailableError: when ``settings.DEMO_MODE`` is False
+                (production default). Per PRD audit 2026-04 §3 D Step 2
+                (F-02-003, Q4 default), alert history entries are
+                fabricated via ``random.choice``; surfacing them on the
+                authenticated ``/alerts/history`` route would imply a real
+                signal pipeline that does not exist.
         """
+        if not settings.DEMO_MODE:
+            raise ModelUnavailableError(
+                model="recommendation_alert_history",
+                reason="not_implemented",
+            )
+
         alerts = []
         for i in range(10):
             alert_date = datetime.now(timezone.utc) - timedelta(days=random.randint(0, days_back))

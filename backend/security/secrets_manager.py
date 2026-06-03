@@ -203,6 +203,9 @@ class SecretsManager:
             self._manifest = {}
             return
 
+        # If MASTER_SECRET_KEY isn't set, the manifest was encrypted with a different key
+        # and cannot be decrypted in this session. Skip silently in dev to avoid noisy errors.
+        _has_master = bool(os.getenv("MASTER_SECRET_KEY"))
         try:
             with open(manifest_path, 'rb') as f:
                 encrypted_data = f.read()
@@ -217,7 +220,10 @@ class SecretsManager:
             logger.debug(f"Loaded manifest with {len(self._manifest)} entries")
 
         except Exception as e:
-            logger.error(f"Failed to load manifest: {e}")
+            if _has_master:
+                logger.error(f"Failed to load manifest: {e}")
+            else:
+                logger.debug(f"Skipping manifest load (no MASTER_SECRET_KEY): {e}")
             self._manifest = {}
 
     def _save_manifest(self) -> bool:

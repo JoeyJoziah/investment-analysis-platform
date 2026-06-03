@@ -70,7 +70,6 @@ export const login = createAsyncThunk(
     const payload = response.data?.data ?? response.data;
     const token = payload?.access_token;
     if (!token) {
-      console.warn('login response missing access_token', response.data);
       throw new Error('Login response did not include access_token');
     }
     localStorage.setItem('access_token', token);

@@ -17,7 +17,10 @@ import pandas as pd
 from unittest.mock import Mock, patch, AsyncMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import aiohttp
-import resource
+try:
+    import resource  # POSIX-only; not available on Windows
+except ImportError:
+    resource = None
 import gc
 import sys
 pytest.importorskip("memory_profiler", reason="memory_profiler not installed")

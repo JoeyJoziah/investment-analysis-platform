@@ -82,7 +82,7 @@ class PipelineConfig:
     evaluation_metrics: List[str] = field(default_factory=lambda: ["accuracy", "precision", "recall", "f1"])
     
     # Output configuration
-    output_path: str = "/app/ml_models"
+    output_path: str = ""  # populated by __post_init__ from env or auto-detect
     save_preprocessor: bool = True
     save_feature_importance: bool = True
     
@@ -90,7 +90,15 @@ class PipelineConfig:
     enable_monitoring: bool = True
     drift_detection: bool = True
     performance_threshold: float = 0.8
-    
+
+    def __post_init__(self):
+        # Auto-resolve output_path: env var > project_root/ml_models > Docker default
+        if not self.output_path:
+            import os as _os
+            from pathlib import Path as _Path
+            _candidate = _Path(__file__).resolve().parents[3] / "ml_models"
+            self.output_path = _os.getenv("ML_MODELS_PATH") or (str(_candidate) if _candidate.exists() else "/app/ml_models")
+
     def to_dict(self) -> Dict:
         """Convert config to dictionary"""
         return {

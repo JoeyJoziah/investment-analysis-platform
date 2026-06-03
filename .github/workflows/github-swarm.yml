@@ -214,9 +214,9 @@ jobs:
 
           # Count changes
           TOTAL_FILES=$(wc -l < changed_files.txt)
-          BACKEND_FILES=$(grep -c "^backend/" changed_files.txt || echo 0)
-          FRONTEND_FILES=$(grep -c "^frontend/" changed_files.txt || echo 0)
-          TEST_FILES=$(grep -c "test" changed_files.txt || echo 0)
+          BACKEND_FILES=$(grep -c "^backend/" changed_files.txt) || BACKEND_FILES=0
+          FRONTEND_FILES=$(grep -c "^frontend/" changed_files.txt) || FRONTEND_FILES=0
+          TEST_FILES=$(grep -c "test" changed_files.txt) || TEST_FILES=0
 
           echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
           echo "backend_files=$BACKEND_FILES" >> $GITHUB_OUTPUT

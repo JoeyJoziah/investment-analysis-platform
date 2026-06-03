@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.unified_models import Portfolio, Position, Stock, User
-from backend.models.thesis import InvestmentThesis
+from backend.models.unified_models import InvestmentThesis
 from backend.repositories.portfolio_repository import PortfolioRepository
 from backend.repositories.thesis_repository import InvestmentThesisRepository
 from backend.exceptions import StaleDataError, InsufficientBalanceError, InvalidPositionError

@@ -346,6 +346,14 @@ class FeatureStore:
             'rsi_14d': self._compute_rsi_14d,
             'sma_20d': self._compute_sma_20d,
             'ema_20d': self._compute_ema_20d,
+            # F-03-008: ML_PIPELINE_DOCUMENTATION.md advertised MACD and
+            # Bollinger Bands as builtin features but the computations
+            # were never implemented. Adds them so the documented
+            # surface and the runtime surface agree.
+            'macd': self._compute_macd,
+            'macd_signal': self._compute_macd_signal,
+            'bollinger_upper_20d': self._compute_bollinger_upper_20d,
+            'bollinger_lower_20d': self._compute_bollinger_lower_20d,
             'pe_ratio': self._compute_pe_ratio,
             'market_cap': self._compute_market_cap
         }
@@ -574,6 +582,101 @@ class FeatureStore:
         
         return pd.Series(ema_values, index=entity_ids)
     
+    # F-03-008: MACD and Bollinger Bands implementations follow.
+    # All four share a small helper that returns the per-entity close
+    # series, sorted by date.
+
+    def _entity_close_series(
+        self,
+        entity_id: str,
+        price_data: pd.DataFrame,
+    ) -> pd.Series:
+        rows = price_data[price_data['ticker'] == entity_id].sort_values('date')
+        return rows['close'].astype(float)
+
+    def _compute_macd(self, entity_ids: List[str], timestamp: datetime,
+                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """MACD = EMA(12) - EMA(26) on closing prices."""
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 26:
+                    ema_fast = closes.ewm(span=12, adjust=False).mean().iloc[-1]
+                    ema_slow = closes.ewm(span=26, adjust=False).mean().iloc[-1]
+                    values.append(float(ema_fast - ema_slow))
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing MACD for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
+    def _compute_macd_signal(self, entity_ids: List[str], timestamp: datetime,
+                            data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """MACD signal line = EMA(9) of the MACD series."""
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 26 + 9:
+                    macd_series = (
+                        closes.ewm(span=12, adjust=False).mean()
+                        - closes.ewm(span=26, adjust=False).mean()
+                    )
+                    signal = macd_series.ewm(span=9, adjust=False).mean().iloc[-1]
+                    values.append(float(signal))
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing MACD signal for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
+    def _compute_bollinger_upper_20d(self, entity_ids: List[str], timestamp: datetime,
+                                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """20-day Bollinger upper band = SMA(20) + 2 * std(20)."""
+        return self._compute_bollinger_band(entity_ids, data_sources, k=2.0)
+
+    def _compute_bollinger_lower_20d(self, entity_ids: List[str], timestamp: datetime,
+                                     data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
+        """20-day Bollinger lower band = SMA(20) - 2 * std(20)."""
+        return self._compute_bollinger_band(entity_ids, data_sources, k=-2.0)
+
+    def _compute_bollinger_band(
+        self,
+        entity_ids: List[str],
+        data_sources: Dict[str, pd.DataFrame],
+        k: float,
+    ) -> pd.Series:
+        if 'price_data' not in data_sources:
+            return pd.Series(np.nan, index=entity_ids)
+
+        price_data = data_sources['price_data']
+        values: List[float] = []
+        for entity_id in entity_ids:
+            try:
+                closes = self._entity_close_series(entity_id, price_data)
+                if len(closes) >= 20:
+                    window = closes.tail(20)
+                    mean = float(window.mean())
+                    std = float(window.std(ddof=0))
+                    values.append(mean + k * std)
+                else:
+                    values.append(np.nan)
+            except Exception as e:
+                logger.error(f"Error computing Bollinger band for {entity_id}: {e}")
+                values.append(np.nan)
+        return pd.Series(values, index=entity_ids)
+
     def _compute_pe_ratio(self, entity_ids: List[str], timestamp: datetime,
                         data_sources: Dict[str, pd.DataFrame], computed_features: pd.DataFrame) -> pd.Series:
         """Compute P/E ratio"""
@@ -650,40 +753,110 @@ class FeatureStore:
                             feature_name: str,
                             reference_period_days: int = 30,
                             current_period_days: int = 7) -> Optional[FeatureDriftMetrics]:
-        """Monitor feature drift over time"""
-        
+        """Monitor feature drift over time using real feature_values rows.
+
+        Per PRD audit 2026-04 F-03-005 / Q4 default: this method previously
+        fabricated reference + current windows from ``np.random.normal()``
+        which caused drift alerts to fire on noise. We now query the
+        ``feature_values`` table directly and raise ``InsufficientDataError``
+        when no real data is available — callers surface that as HTTP 503
+        ``model_unavailable``.
+        """
+        from backend.exceptions import InsufficientDataError
+
         if feature_name not in self.feature_registry:
             logger.error(f"Feature {feature_name} not registered")
             return None
-        
+
+        end_date = datetime.now(timezone.utc)
+        reference_start = end_date - timedelta(
+            days=reference_period_days + current_period_days
+        )
+        reference_end = end_date - timedelta(days=current_period_days)
+        current_start = reference_end
+
+        reference_values = self._load_feature_window(
+            feature_name, reference_start, reference_end,
+        )
+        current_values = self._load_feature_window(
+            feature_name, current_start, end_date,
+        )
+
+        if not reference_values or not current_values:
+            raise InsufficientDataError(
+                reason="insufficient_data",
+                details={
+                    "feature": feature_name,
+                    "reference_count": len(reference_values),
+                    "current_count": len(current_values),
+                    "minimum_required": 1,
+                },
+            )
+
+        reference_data = pd.Series(reference_values)
+        current_data = pd.Series(current_values)
+
         try:
-            # Get historical feature values
-            end_date = datetime.now(timezone.utc)
-            reference_start = end_date - timedelta(days=reference_period_days + current_period_days)
-            reference_end = end_date - timedelta(days=current_period_days)
-            current_start = reference_end
-            
-            # Mock data for demonstration - in real implementation, query feature store
-            reference_data = pd.Series(np.random.normal(0, 1, 1000))
-            current_data = pd.Series(np.random.normal(0.2, 1.2, 200))  # Simulated drift
-            
             drift_metrics = self.drift_detector.detect_drift(
                 feature_name, reference_data, current_data
             )
-            
-            # Store drift metrics
-            self._save_drift_metrics(drift_metrics)
-            
-            # Alert if significant drift detected
-            if drift_metrics.distribution_shift_detected:
-                logger.warning(f"Feature drift detected for {feature_name}: "
-                             f"drift_score={drift_metrics.drift_score:.3f}")
-            
-            return drift_metrics
-            
-        except Exception as e:
-            logger.error(f"Error monitoring drift for feature {feature_name}: {e}")
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.error(f"Error monitoring drift for feature {feature_name}: {exc}")
             return None
+
+        self._save_drift_metrics(drift_metrics)
+
+        if drift_metrics.distribution_shift_detected:
+            logger.warning(
+                f"Feature drift detected for {feature_name}: "
+                f"drift_score={drift_metrics.drift_score:.3f}"
+            )
+
+        return drift_metrics
+
+    def _load_feature_window(
+        self,
+        feature_name: str,
+        start: datetime,
+        end: datetime,
+    ) -> List[float]:
+        """Load feature_values rows for ``feature_name`` between ``start`` and ``end``.
+
+        Returns an empty list when ``self.db_engine`` is not configured or
+        when the query yields zero rows. Callers must treat empty as
+        ``InsufficientDataError`` rather than fabricate values (F-03-005).
+        """
+        if self.db_engine is None:
+            return []
+        try:
+            from sqlalchemy import text  # local import to keep top-level light
+
+            sql = text(
+                """
+                SELECT fv.value
+                  FROM feature_values fv
+                  JOIN feature_definitions fd ON fd.id = fv.feature_id
+                 WHERE fd.name = :name
+                   AND fv.computed_at >= :start
+                   AND fv.computed_at < :end
+                """
+            )
+            with self.db_engine.connect() as conn:
+                rows = conn.execute(
+                    sql, {"name": feature_name, "start": start, "end": end}
+                ).fetchall()
+            values: List[float] = []
+            for row in rows:
+                try:
+                    values.append(float(row[0]))
+                except (TypeError, ValueError):
+                    continue
+            return values
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                f"_load_feature_window query failed for {feature_name}: {exc}"
+            )
+            return []
     
     def get_feature_lineage(self, feature_name: str) -> Dict[str, Any]:
         """Get feature lineage and dependencies"""
@@ -729,36 +902,56 @@ class FeatureStore:
         
         return lineage
     
-    def get_feature_statistics(self, feature_names: List[str], 
+    def get_feature_statistics(self, feature_names: List[str],
                              days_back: int = 30) -> Dict[str, Dict[str, Any]]:
-        """Get comprehensive feature statistics"""
-        
-        stats = {}
-        
+        """Get comprehensive feature statistics from the feature store.
+
+        Per PRD audit 2026-04 F-03-005 / Q4 default: previously returned
+        ``{'count': np.random.randint(1000, 10000), 'mean': np.random.normal(...)}``
+        which broke alerting / capacity-planning telemetry. We now compute
+        real summary statistics from ``feature_values`` rows, or raise
+        ``InsufficientDataError`` when no real rows exist.
+        """
+        from backend.exceptions import InsufficientDataError
+
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days_back)
+
+        stats: Dict[str, Dict[str, Any]] = {}
+        missing: List[str] = []
+
         for feature_name in feature_names:
             if feature_name not in self.feature_registry:
                 continue
-            
-            try:
-                # Mock statistics - in real implementation, query feature store
-                feature_stats = {
-                    'count': np.random.randint(1000, 10000),
-                    'mean': np.random.normal(0, 1),
-                    'std': np.random.uniform(0.5, 2.0),
-                    'min': np.random.normal(-3, 0.5),
-                    'max': np.random.normal(3, 0.5),
-                    'null_percentage': np.random.uniform(0, 0.05),
-                    'unique_values': np.random.randint(100, 1000),
-                    'quality_score': np.random.uniform(0.8, 1.0),
-                    'last_updated': datetime.now(timezone.utc).isoformat(),
-                    'freshness_hours': np.random.uniform(0, 24)
-                }
-                
-                stats[feature_name] = feature_stats
-                
-            except Exception as e:
-                logger.error(f"Error getting statistics for feature {feature_name}: {e}")
-        
+
+            values = self._load_feature_window(feature_name, start, end)
+            if not values:
+                missing.append(feature_name)
+                continue
+
+            arr = np.asarray(values, dtype=float)
+            non_null = arr[~np.isnan(arr)]
+            stats[feature_name] = {
+                'count': int(arr.size),
+                'mean': float(non_null.mean()) if non_null.size else None,
+                'std': float(non_null.std(ddof=0)) if non_null.size else None,
+                'min': float(non_null.min()) if non_null.size else None,
+                'max': float(non_null.max()) if non_null.size else None,
+                'null_percentage': (
+                    float((arr.size - non_null.size) / arr.size)
+                    if arr.size else 0.0
+                ),
+                'unique_values': int(np.unique(non_null).size) if non_null.size else 0,
+                'last_updated': end.isoformat(),
+            }
+
+        if missing and not stats:
+            # Nothing real for any requested feature — surface as 503.
+            raise InsufficientDataError(
+                reason="insufficient_data",
+                details={"missing_features": missing, "days_back": days_back},
+            )
+
         return stats
     
     def _generate_cache_key(self, feature_names: List[str], entity_ids: List[str], timestamp: datetime) -> str:

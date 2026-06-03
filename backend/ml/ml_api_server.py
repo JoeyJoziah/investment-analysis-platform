@@ -5,6 +5,7 @@ Serves ML models via FastAPI on port 8001
 """
 
 import os
+import re
 import sys
 import logging
 import uvicorn
@@ -67,12 +68,48 @@ class ModelInfo(BaseModel):
     score: float
     loaded_at: str
 
+# F-03-006: model_name is operator-controlled via the
+# ``POST /models/{model_name}/load`` route and the prediction request
+# body. Without validation a caller could pass ``../../../etc/passwd``
+# and read arbitrary paths off the host filesystem. We enforce a
+# strict character class AND a resolved-path containment check.
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_MODELS_ROOT = Path("backend/ml_models").resolve()
+_MODELS_LOGS_ROOT = Path("backend/ml_logs").resolve()
+
+
+def _validate_model_name(model_name: str) -> str:
+    """Reject any model_name that doesn't match ``[A-Za-z0-9_-]+``.
+
+    Raises ``ValueError`` — callers map this to HTTP 400 (not 500) so
+    operators can distinguish "bad input" from "server error" in logs.
+    """
+    if not isinstance(model_name, str) or not _MODEL_NAME_RE.fullmatch(model_name):
+        raise ValueError(
+            f"invalid model_name: must match [A-Za-z0-9_-]+ (got {model_name!r})"
+        )
+    return model_name
+
+
+def _safe_model_path(root: Path, model_name: str, suffix: str) -> Path:
+    """Resolve ``{root}/{model_name}{suffix}`` and assert containment."""
+    candidate = (root / f"{model_name}{suffix}").resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as e:
+        raise ValueError(
+            f"resolved path {candidate!s} escapes models root {root!s}"
+        ) from e
+    return candidate
+
+
 def load_model(model_name: str):
     """Load a model from disk"""
     try:
-        model_path = Path(f"backend/ml_models/{model_name}.pkl")
-        metadata_path = Path(f"backend/ml_logs/{model_name}_metadata.json")
-        
+        _validate_model_name(model_name)
+        model_path = _safe_model_path(_MODELS_ROOT, model_name, ".pkl")
+        metadata_path = _safe_model_path(_MODELS_LOGS_ROOT, model_name, "_metadata.json")
+
         if not model_path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
         
@@ -196,8 +233,13 @@ async def load_model_endpoint(model_name: str):
             "message": f"Model {model_name} loaded successfully",
             "timestamp": datetime.now().isoformat()
         }
-    except Exception as e:
+    except ValueError as e:
+        # F-03-006: malformed/path-traversing model_name → 400, not 500.
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/models/{model_name}")
 async def unload_model(model_name: str):

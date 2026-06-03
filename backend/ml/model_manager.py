@@ -218,7 +218,10 @@ class ModelManager:
     def _load_pytorch_model(self, path: Path):
         """Load PyTorch model with error handling"""
         try:
-            model = torch.load(path, map_location='cpu')
+            # F-03-002: weights_only=True blocks pickle RCE. Full-model
+            # artifacts that fail with WeightsUnpickler must register their
+            # constructor classes via torch.serialization.add_safe_globals.
+            model = torch.load(path, map_location='cpu', weights_only=True)
             model.eval()
             return model
         except Exception as e:
@@ -297,7 +300,9 @@ class ModelManager:
                 num_layers=config['num_layers'],
                 dropout=config['dropout']
             )
-            model.load_state_dict(torch.load(path, map_location='cpu'))
+            # F-03-002: state_dict-only loads are tensor primitives —
+            # weights_only=True is always safe here.
+            model.load_state_dict(torch.load(path, map_location='cpu', weights_only=True))
             model.eval()
 
             # Return wrapper with config and scaler
@@ -433,7 +438,49 @@ class ModelManager:
         """Get a loaded model by name"""
         with self.lock:
             return self.models.get(model_name)
-    
+
+    def is_using_fallback(self, model_name: str) -> bool:
+        """Return True if ``model_name`` is currently a Dummy* fallback.
+
+        Per PRD audit 2026-04 §3 D / Q4 default: model_unavailable state is
+        a refuse-to-serve signal, not a degraded-success signal.
+        """
+        with self.lock:
+            meta = self.model_metadata.get(model_name)
+        if not meta:
+            return True  # absent → treat as unavailable
+        return meta.get("status") == "fallback"
+
+    def get_fallback_models(self) -> List[str]:
+        """List of model names currently in Dummy* fallback state.
+
+        Drives the ``GET /health`` ``fallback_models`` field and the readiness
+        probe. Empty list = healthy production.
+        """
+        with self.lock:
+            return [
+                name for name, meta in self.model_metadata.items()
+                if meta.get("status") == "fallback"
+            ]
+
+    def assert_real_model(self, model_name: str) -> None:
+        """Raise ``ModelUnavailableError`` if ``model_name`` is in fallback.
+
+        Call sites that produce SEC-implicated investment outputs MUST gate
+        with this before serving — fabricated values are a compliance
+        exposure (PRD audit 2026-04 Q4 default, recorded 2026-04-28).
+        """
+        from backend.exceptions import ModelUnavailableError  # local import to avoid cycle
+
+        with self.lock:
+            meta = self.model_metadata.get(model_name)
+        if meta is None:
+            raise ModelUnavailableError(model=model_name, reason="binary_missing")
+        status_ = meta.get("status")
+        if status_ == "fallback":
+            reason = "binary_missing" if meta.get("reason") == "file_not_found" else "fallback_active"
+            raise ModelUnavailableError(model=model_name, reason=reason)
+
     def predict(self, model_name: str, data: Any) -> Any:
         """Make prediction with error handling"""
         try:
@@ -680,7 +727,12 @@ def get_model_manager() -> ModelManager:
     """Get or create the global model manager instance"""
     global _model_manager
     if _model_manager is None:
-        models_path = os.getenv("ML_MODELS_PATH", "/app/ml_models")
+        # Resolve ML_MODELS_PATH; fall back to project_root/ml_models (container-friendly default kept as last resort)
+        models_path = os.getenv("ML_MODELS_PATH")
+        if not models_path:
+            from pathlib import Path as _Path
+            _candidate = _Path(__file__).resolve().parents[2] / "ml_models"
+            models_path = str(_candidate) if _candidate.exists() else "/app/ml_models"
         _model_manager = ModelManager(models_path)
     return _model_manager
 

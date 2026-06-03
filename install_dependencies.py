@@ -155,7 +155,7 @@ class PackageClassifier:
     
     DATABASE_PATTERNS = {
         r'.*psycopg2.*', r'.*asyncpg.*', r'.*sqlalchemy.*', r'.*alembic.*',
-        r'.*redis.*', r'.*pymongo.*', r'.*elasticsearch.*'
+        r'.*redis.*', r'.*pymongo.*'
     }
     
     SYSTEM_DEPENDENT_PATTERNS = {

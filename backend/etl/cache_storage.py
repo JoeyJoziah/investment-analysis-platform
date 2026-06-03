@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sqlite3
+from contextlib import closing
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -199,75 +200,71 @@ class DiskTierCache:
 
     def _init_index_db(self):
         """Initialize SQLite index database"""
-        conn = sqlite3.connect(self.index_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.index_db_path)) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cache_index (
-                key TEXT PRIMARY KEY,
-                file_path TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                access_count INTEGER DEFAULT 0,
-                last_accessed TEXT,
-                size_bytes INTEGER DEFAULT 0,
-                compression_method TEXT DEFAULT 'gzip',
-                compression_ratio REAL DEFAULT 1.0
-            )
-        """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS cache_index (
+                    key TEXT PRIMARY KEY,
+                    file_path TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    access_count INTEGER DEFAULT 0,
+                    last_accessed TEXT,
+                    size_bytes INTEGER DEFAULT 0,
+                    compression_method TEXT DEFAULT 'gzip',
+                    compression_ratio REAL DEFAULT 1.0
+                )
+            """)
 
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_expires_at ON cache_index(expires_at)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache_index(last_accessed)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_expires_at ON cache_index(expires_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_last_accessed ON cache_index(last_accessed)")
 
-        conn.commit()
-        conn.close()
+            conn.commit()
 
     def get(self, key: str) -> Optional[Any]:
         """Get item from disk cache"""
         with self.lock:
-            conn = sqlite3.connect(self.index_db_path)
-            cursor = conn.cursor()
-
-            try:
-                cursor.execute("""
-                    SELECT file_path, compression_method, expires_at
-                    FROM cache_index
-                    WHERE key = ? AND expires_at > ?
-                """, (key, datetime.now().isoformat()))
-
-                result = cursor.fetchone()
-                if not result:
-                    return None
-
-                file_path, compression_method, _ = result
+            with closing(sqlite3.connect(self.index_db_path)) as conn:
+                cursor = conn.cursor()
 
                 try:
-                    with open(file_path, 'rb') as f:
-                        compressed_data = f.read()
-
-                    data = self.compression_manager.decompress_data(compressed_data, compression_method)
-
                     cursor.execute("""
-                        UPDATE cache_index
-                        SET access_count = access_count + 1, last_accessed = ?
-                        WHERE key = ?
-                    """, (datetime.now().isoformat(), key))
+                        SELECT file_path, compression_method, expires_at
+                        FROM cache_index
+                        WHERE key = ? AND expires_at > ?
+                    """, (key, datetime.now().isoformat()))
 
-                    conn.commit()
-                    return data
+                    result = cursor.fetchone()
+                    if not result:
+                        return None
 
-                except (IOError, OSError) as e:
-                    logger.warning(f"Failed to read cache file {file_path}: {e}")
-                    cursor.execute("DELETE FROM cache_index WHERE key = ?", (key,))
-                    conn.commit()
+                    file_path, compression_method, _ = result
+
+                    try:
+                        with open(file_path, 'rb') as f:
+                            compressed_data = f.read()
+
+                        data = self.compression_manager.decompress_data(compressed_data, compression_method)
+
+                        cursor.execute("""
+                            UPDATE cache_index
+                            SET access_count = access_count + 1, last_accessed = ?
+                            WHERE key = ?
+                        """, (datetime.now().isoformat(), key))
+
+                        conn.commit()
+                        return data
+
+                    except (IOError, OSError) as e:
+                        logger.warning(f"Failed to read cache file {file_path}: {e}")
+                        cursor.execute("DELETE FROM cache_index WHERE key = ?", (key,))
+                        conn.commit()
+                        return None
+
+                except Exception as e:
+                    logger.error(f"Disk cache get error for {key}: {e}")
                     return None
-
-            except Exception as e:
-                logger.error(f"Disk cache get error for {key}: {e}")
-                return None
-
-            finally:
-                conn.close()
 
     def set(self, key: str, data: Any, ttl_hours: Optional[int] = None) -> bool:
         """Set item in disk cache"""
@@ -287,19 +284,18 @@ class DiskTierCache:
 
                 expires_at = datetime.now() + timedelta(hours=ttl_hours or self.ttl_hours)
 
-                conn = sqlite3.connect(self.index_db_path)
-                cursor = conn.cursor()
+                with closing(sqlite3.connect(self.index_db_path)) as conn:
+                    cursor = conn.cursor()
 
-                cursor.execute("""
-                    INSERT OR REPLACE INTO cache_index
-                    (key, file_path, created_at, expires_at, size_bytes,
-                     compression_method, compression_ratio, last_accessed)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (key, file_path, datetime.now().isoformat(), expires_at.isoformat(),
-                      len(compressed_data), 'gzip', compression_ratio, datetime.now().isoformat()))
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO cache_index
+                        (key, file_path, created_at, expires_at, size_bytes,
+                         compression_method, compression_ratio, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (key, file_path, datetime.now().isoformat(), expires_at.isoformat(),
+                          len(compressed_data), 'gzip', compression_ratio, datetime.now().isoformat()))
 
-                conn.commit()
-                conn.close()
+                    conn.commit()
 
                 return True
 
@@ -310,132 +306,120 @@ class DiskTierCache:
     def delete(self, key: str) -> bool:
         """Delete item from disk cache"""
         with self.lock:
-            conn = sqlite3.connect(self.index_db_path)
-            cursor = conn.cursor()
+            with closing(sqlite3.connect(self.index_db_path)) as conn:
+                cursor = conn.cursor()
 
-            try:
-                cursor.execute("SELECT file_path FROM cache_index WHERE key = ?", (key,))
-                result = cursor.fetchone()
+                try:
+                    cursor.execute("SELECT file_path FROM cache_index WHERE key = ?", (key,))
+                    result = cursor.fetchone()
 
-                if result:
-                    file_path = result[0]
+                    if result:
+                        file_path = result[0]
 
-                    try:
-                        if os.path.exists(file_path):
-                            os.unlink(file_path)
-                    except OSError as e:
-                        logger.warning(f"Failed to delete cache file {file_path}: {e}")
+                        try:
+                            if os.path.exists(file_path):
+                                os.unlink(file_path)
+                        except OSError as e:
+                            logger.warning(f"Failed to delete cache file {file_path}: {e}")
 
-                    cursor.execute("DELETE FROM cache_index WHERE key = ?", (key,))
-                    conn.commit()
+                        cursor.execute("DELETE FROM cache_index WHERE key = ?", (key,))
+                        conn.commit()
 
-                    return True
+                        return True
 
-                return False
+                    return False
 
-            except Exception as e:
-                logger.error(f"Disk cache delete error for {key}: {e}")
-                return False
-
-            finally:
-                conn.close()
+                except Exception as e:
+                    logger.error(f"Disk cache delete error for {key}: {e}")
+                    return False
 
     def _ensure_disk_space(self, needed_bytes: int) -> bool:
         """Ensure sufficient disk space by cleaning up if needed"""
-        conn = sqlite3.connect(self.index_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.index_db_path)) as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("SELECT SUM(size_bytes) FROM cache_index")
-            current_usage = cursor.fetchone()[0] or 0
+            try:
+                cursor.execute("SELECT SUM(size_bytes) FROM cache_index")
+                current_usage = cursor.fetchone()[0] or 0
 
-            if current_usage + needed_bytes <= self.max_size_bytes:
-                return True
+                if current_usage + needed_bytes <= self.max_size_bytes:
+                    return True
 
-            bytes_to_free = (current_usage + needed_bytes) - self.max_size_bytes
+                bytes_to_free = (current_usage + needed_bytes) - self.max_size_bytes
 
-            cursor.execute("""
-                SELECT key, size_bytes
-                FROM cache_index
-                ORDER BY last_accessed ASC
-            """)
+                cursor.execute("""
+                    SELECT key, size_bytes
+                    FROM cache_index
+                    ORDER BY last_accessed ASC
+                """)
 
-            freed_bytes = 0
-            for key, size_bytes in cursor.fetchall():
-                if freed_bytes >= bytes_to_free:
-                    break
+                freed_bytes = 0
+                for key, size_bytes in cursor.fetchall():
+                    if freed_bytes >= bytes_to_free:
+                        break
 
-                self.delete(key)
-                freed_bytes += size_bytes
+                    self.delete(key)
+                    freed_bytes += size_bytes
 
-            return freed_bytes >= bytes_to_free
+                return freed_bytes >= bytes_to_free
 
-        except Exception as e:
-            logger.error(f"Error ensuring disk space: {e}")
-            return False
-
-        finally:
-            conn.close()
+            except Exception as e:
+                logger.error(f"Error ensuring disk space: {e}")
+                return False
 
     def _cleanup_expired(self):
         """Remove expired cache entries"""
-        conn = sqlite3.connect(self.index_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.index_db_path)) as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("""
-                SELECT key, file_path
-                FROM cache_index
-                WHERE expires_at < ?
-            """, (datetime.now().isoformat(),))
+            try:
+                cursor.execute("""
+                    SELECT key, file_path
+                    FROM cache_index
+                    WHERE expires_at < ?
+                """, (datetime.now().isoformat(),))
 
-            expired_entries = cursor.fetchall()
+                expired_entries = cursor.fetchall()
 
-            for key, file_path in expired_entries:
-                try:
-                    if os.path.exists(file_path):
-                        os.unlink(file_path)
-                except OSError:
-                    pass
+                for key, file_path in expired_entries:
+                    try:
+                        if os.path.exists(file_path):
+                            os.unlink(file_path)
+                    except OSError:
+                        pass
 
-            cursor.execute("DELETE FROM cache_index WHERE expires_at < ?",
-                           (datetime.now().isoformat(),))
+                cursor.execute("DELETE FROM cache_index WHERE expires_at < ?",
+                               (datetime.now().isoformat(),))
 
-            conn.commit()
+                conn.commit()
 
-            if expired_entries:
-                logger.info(f"Cleaned up {len(expired_entries)} expired cache entries")
+                if expired_entries:
+                    logger.info(f"Cleaned up {len(expired_entries)} expired cache entries")
 
-        except Exception as e:
-            logger.error(f"Error during cache cleanup: {e}")
-
-        finally:
-            conn.close()
+            except Exception as e:
+                logger.error(f"Error during cache cleanup: {e}")
 
     def get_stats(self) -> Dict:
         """Get disk cache statistics"""
-        conn = sqlite3.connect(self.index_db_path)
-        cursor = conn.cursor()
+        with closing(sqlite3.connect(self.index_db_path)) as conn:
+            cursor = conn.cursor()
 
-        try:
-            cursor.execute("SELECT COUNT(*), SUM(size_bytes), AVG(compression_ratio) FROM cache_index")
-            count, total_size, avg_compression = cursor.fetchone()
+            try:
+                cursor.execute("SELECT COUNT(*), SUM(size_bytes), AVG(compression_ratio) FROM cache_index")
+                count, total_size, avg_compression = cursor.fetchone()
 
-            return {
-                'entries': count or 0,
-                'size_bytes': total_size or 0,
-                'size_mb': (total_size or 0) / (1024 * 1024),
-                'max_size_mb': self.max_size_bytes / (1024 * 1024),
-                'utilization': (total_size or 0) / self.max_size_bytes,
-                'avg_compression_ratio': avg_compression or 1.0,
-                'compression_saved_mb': (
-                    (total_size or 0) * (1 - (avg_compression or 1.0)) / (1024 * 1024)
-                )
-            }
+                return {
+                    'entries': count or 0,
+                    'size_bytes': total_size or 0,
+                    'size_mb': (total_size or 0) / (1024 * 1024),
+                    'max_size_mb': self.max_size_bytes / (1024 * 1024),
+                    'utilization': (total_size or 0) / self.max_size_bytes,
+                    'avg_compression_ratio': avg_compression or 1.0,
+                    'compression_saved_mb': (
+                        (total_size or 0) * (1 - (avg_compression or 1.0)) / (1024 * 1024)
+                    )
+                }
 
-        except Exception as e:
-            logger.error(f"Error getting disk cache stats: {e}")
-            return {}
-
-        finally:
-            conn.close()
+            except Exception as e:
+                logger.error(f"Error getting disk cache stats: {e}")
+                return {}

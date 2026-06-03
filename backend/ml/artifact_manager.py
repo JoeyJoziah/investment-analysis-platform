@@ -177,7 +177,14 @@ class ModelArtifactManager:
         if format == ModelFormat.PYTORCH:
             if torch is None:
                 raise RuntimeError("torch is not installed")
-            return torch.load(path, map_location='cpu')
+            # F-03-002: torch.load defaults to pickle deserialization which
+            # is RCE-equivalent on untrusted artifacts. ``weights_only=True``
+            # restricts deserialization to tensor primitives. Full-model
+            # artifacts that need non-tensor classes must be allowlisted via
+            # ``torch.serialization.add_safe_globals([Cls, ...])`` before
+            # the load — see workpaper §9 for the safe_globals escalation
+            # path.
+            return torch.load(path, map_location='cpu', weights_only=True)
 
         elif format == ModelFormat.SKLEARN_JOBLIB:
             if joblib is None:

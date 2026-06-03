@@ -114,18 +114,31 @@ class ModelVersionManager:
     """
 
     def __init__(self,
-                 registry_path: str = "/app/ml_models/registry",
-                 storage_path: str = "/app/ml_models/versions",
+                 registry_path: str = None,
+                 storage_path: str = None,
                  enable_git_tracking: bool = False,
                  enable_hf_hub: bool = None):
+        # Resolve paths: env vars > project_root/ml_models > Docker default
+        from pathlib import Path as _Path
+        _project_ml = _Path(__file__).resolve().parents[2] / "ml_models"
+        _ml_root = os.getenv("ML_MODELS_PATH") or (str(_project_ml) if _project_ml.exists() else "/app/ml_models")
+        if registry_path is None:
+            registry_path = os.getenv("ML_REGISTRY_PATH", f"{_ml_root}/registry")
+        if storage_path is None:
+            storage_path = os.getenv("ML_STORAGE_PATH", f"{_ml_root}/versions")
         self.registry_path = Path(registry_path)
         self.storage_path = Path(storage_path)
         self.enable_git_tracking = enable_git_tracking
         self.lock = threading.Lock()
 
-        # HuggingFace Hub integration
+        # HuggingFace Hub integration: opt-in only.
+        # Default OFF to avoid 404/409 noise when HF_TOKEN/HF_MODEL_REPO aren't configured.
+        # Set HF_HUB_ENABLED=true AND provide HF_TOKEN + HF_MODEL_REPO (e.g. 'org/repo') to enable.
         if enable_hf_hub is None:
-            enable_hf_hub = os.getenv("HF_HUB_ENABLED", "true").lower() == "true"
+            _flag = os.getenv("HF_HUB_ENABLED", "false").lower() == "true"
+            _has_token = bool(os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN"))
+            _has_repo = bool(os.getenv("HF_MODEL_REPO")) and "/" in os.getenv("HF_MODEL_REPO", "")
+            enable_hf_hub = _flag and _has_token and _has_repo
         self.enable_hf_hub = enable_hf_hub
         self._hf_client = None
 
@@ -591,7 +604,9 @@ class ModelVersionManager:
             
             # Load model based on type
             if model_version.model_type == ModelType.PYTORCH:
-                model = torch.load(model_path, map_location='cpu')
+                # F-03-002: see artifact_manager.py for the weights_only=True
+                # rationale and the safe_globals escalation path.
+                model = torch.load(model_path, map_location='cpu', weights_only=True)
             elif model_version.model_type in [ModelType.SKLEARN, ModelType.ENSEMBLE]:
                 model = joblib.load(model_path)
             else:

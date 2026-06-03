@@ -160,47 +160,37 @@ class QuickWinsIntegrationTester:
             return False
 
     async def test_elasticsearch_optional(self) -> bool:
-        """Test 3: Verify Elasticsearch is optional"""
-        print("\n=== Test 3: Elasticsearch Optional (Graceful Degradation) ===")
+        """Test 3: Verify Elasticsearch is fully decommissioned (issue #210)
+
+        The ELK stack was replaced by Loki for log aggregation. This test now
+        asserts the decommissioned end-state so the removal stays enforced:
+        the ELASTICSEARCH_URL setting is gone and the Elasticsearch logging
+        path (backend.utils.enhanced_logging) no longer exists.
+        """
+        print("\n=== Test 3: Elasticsearch Decommissioned (issue #210) ===")
 
         try:
-            # Test settings configuration
+            import importlib.util
             from backend.config.settings import settings
 
-            es_url = settings.ELASTICSEARCH_URL
-            if es_url is None or es_url == "":
-                self._add_result("ES settings", True, "ELASTICSEARCH_URL is None/empty (optional)")
+            # The ELASTICSEARCH_URL setting was removed; nothing should read it.
+            if getattr(settings, "ELASTICSEARCH_URL", None) is None:
+                self._add_result("ES setting removed", True, "settings.ELASTICSEARCH_URL no longer exists")
             else:
-                self._add_result("ES settings", True, f"ELASTICSEARCH_URL configured but optional")
+                self._add_result("ES setting removed", False, "settings.ELASTICSEARCH_URL is still defined")
+                return False
 
-            # Test logging module handles missing Elasticsearch
-            from backend.utils.enhanced_logging import ELASTICSEARCH_AVAILABLE, setup_application_logging
-
-            if ELASTICSEARCH_AVAILABLE:
-                self._add_result("ES library", True, "elasticsearch library installed (optional)")
+            # The Elasticsearch logging path was deleted (replaced by Loki).
+            if importlib.util.find_spec("backend.utils.enhanced_logging") is None:
+                self._add_result("ES logging path removed", True, "backend.utils.enhanced_logging is gone")
             else:
-                self._add_result("ES library", True, "elasticsearch library not installed (works without it)")
-
-            # Verify logging works without Elasticsearch
-            try:
-                # This should not raise an error even without Elasticsearch
-                from backend.utils.enhanced_logging import initialize_logging_system, LogLevel
-                logging_system = initialize_logging_system(
-                    log_level=LogLevel.INFO,
-                    elasticsearch_hosts=None,  # Explicitly disable
-                    log_directory="/tmp/test_logs",
-                    enable_file_rotation=False,
-                    enable_console_output=False
-                )
-                self._add_result("Logging without ES", True, "LoggingSystem initialized without Elasticsearch")
-            except Exception as e:
-                self._add_result("Logging without ES", False, f"Error: {e}")
+                self._add_result("ES logging path removed", False, "backend.utils.enhanced_logging still present")
                 return False
 
             return True
 
         except Exception as e:
-            self._add_result("Elasticsearch optional", False, f"Error: {e}")
+            self._add_result("Elasticsearch decommissioned", False, f"Error: {e}")
             return False
 
     async def test_database_indexes(self) -> bool:

@@ -41,11 +41,16 @@ jobs:
     steps:
     - name: Analyze workflow result
       id: analyze
+      env:
+        WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
+        WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+        WORKFLOW_RUN_ACTOR: ${{ github.event.workflow_run.actor.login }}
       run: |
-        WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
-        CONCLUSION="${{ github.event.workflow_run.conclusion }}"
-        RUN_ID="${{ github.event.workflow_run.id }}"
-        ACTOR="${{ github.event.workflow_run.actor.login }}"
+        WORKFLOW_NAME="$WORKFLOW_RUN_NAME"
+        CONCLUSION="$WORKFLOW_RUN_CONCLUSION"
+        RUN_ID="$WORKFLOW_RUN_ID"
+        ACTOR="$WORKFLOW_RUN_ACTOR"
 
         echo "Workflow: $WORKFLOW_NAME"
         echo "Conclusion: $CONCLUSION"
@@ -370,9 +375,12 @@ jobs:
 
     steps:
     - name: Track deployment
+      env:
+        WORKFLOW_RUN_NAME: ${{ github.event.workflow_run.name }}
+        WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
       run: |
-        WORKFLOW_NAME="${{ github.event.workflow_run.name }}"
-        CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+        WORKFLOW_NAME="$WORKFLOW_RUN_NAME"
+        CONCLUSION="$WORKFLOW_RUN_CONCLUSION"
 
         echo "Deployment: $WORKFLOW_NAME"
         echo "Status: $CONCLUSION"

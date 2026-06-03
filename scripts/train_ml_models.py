@@ -19,7 +19,7 @@ import logging
 current_dir = Path(__file__).parent.parent
 sys.path.append(str(current_dir))
 
-from backend.models.ml_models import LSTMModel, TransformerModel
+from backend.ml.runtime_models import LSTMModel, TransformerModel
 import xgboost as xgb
 import lightgbm as lgb
 from sklearn.ensemble import RandomForestRegressor

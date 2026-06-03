@@ -226,8 +226,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install link checker
-        run: npm install -g markdown-link-check@3.12.1
+      - name: Install link checker + fast-glob
+        run: |
+          npm install -g markdown-link-check@3.12.1
+          npm install --save-dev fast-glob@3.3.2
 
       - name: Create link check config
         run: |
@@ -433,6 +435,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install fast-glob
+        run: npm install --save-dev fast-glob@3.3.2
 
       - name: Verify DOCUMENTATION_INDEX.md is updated
         run: |

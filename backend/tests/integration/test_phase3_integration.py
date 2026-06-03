@@ -21,7 +21,7 @@ from decimal import Decimal
 
 from backend.api.main import app
 from backend.models.unified_models import Portfolio, Position, User, Stock, Exchange, Sector
-from backend.models.thesis import InvestmentThesis
+from backend.models.unified_models import InvestmentThesis
 from backend.repositories.portfolio_repository import PortfolioRepository
 from backend.repositories.thesis_repository import InvestmentThesisRepository
 from backend.exceptions import StaleDataError

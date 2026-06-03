@@ -311,7 +311,7 @@ class PipelineComponentTester:
     async def test_database_operations(self) -> bool:
         """Test database operations"""
         try:
-            from backend.models.database import get_db_session
+            from backend.utils.database import get_db as get_db_session
             from backend.models.unified_models import Stock, PriceHistory
             
             test_passed = True

@@ -4,10 +4,10 @@
 # ============================================================================
 # CORE FRAMEWORK
 # ============================================================================
-fastapi==0.115.0
+fastapi==0.118.0  # pulls starlette>=0.41 (CVE-2024-47874 fix)
 uvicorn[standard]==0.30.1
-pydantic==2.8.2
-pydantic-settings==2.4.0
+pydantic==2.9.2  # 2.8.2 fails forward-ref resolution on ApiResponse[T] in FastAPI handlers
+pydantic-settings==2.6.1  # paired with pydantic 2.9.2
 
 # ============================================================================
 # DATABASE
@@ -26,10 +26,10 @@ celery==5.4.0
 # ============================================================================
 # DATA PROCESSING
 # ============================================================================
-pandas==2.0.0
-numpy==1.24.0
-matplotlib==3.7.0
-seaborn==0.12.0
+pandas==2.2.3  # 2.0.0 has no Python 3.12 wheel; 2.2.x has broad 3.10-3.12 wheels
+numpy==1.26.4  # 1.24.0 predates Python 3.12; 1.26.x has 3.12 wheels
+matplotlib==3.8.4  # 3.7.0 build issues on Python 3.12
+seaborn==0.13.2  # depends on newer pandas/matplotlib
 
 # ============================================================================
 # MACHINE LEARNING
@@ -37,9 +37,9 @@ seaborn==0.12.0
 scikit-learn==1.5.1
 # PyTorch - GPU support via CUDA is auto-detected
 # For explicit CUDA install: pip install torch --index-url https://download.pytorch.org/whl/cu118
-torch==2.4.0
-transformers==4.43.3
-huggingface_hub==0.20.0
+torch==2.6.0  # CVE-2025-32434 fix
+transformers==4.48.0  # CVE-2024-11392, CVE-2024-11393 fixes
+huggingface_hub==0.24.6  # transformers==4.48.0  # CVE-2024-11392, CVE-2024-11393 fixes requires >=0.23.2
 datasets==2.16.0
 # XGBoost 2.0+ has built-in GPU support (device='cuda')
 # GPU acceleration: 3-4x faster training
@@ -47,7 +47,7 @@ xgboost==2.1.1
 # LightGBM - GPU support requires compilation with GPU flag
 # For GPU: pip install lightgbm --install-option=--gpu
 # Note: OpenCL required for LightGBM GPU
-lightgbm==4.0.0
+lightgbm==4.6.0  # CVE-2024-43598 fix
 prophet==1.1.5
 shap==0.46.0
 lime==0.2.0.1
@@ -59,30 +59,34 @@ plotly==5.15.0
 # ============================================================================
 alpha-vantage==2.3.1
 finnhub-python==2.4.20
-polygon-api-client==1.14.1
+polygon-api-client==1.14.6  # 1.14.1 pins old websockets that conflict with uvicorn[standard]
 yfinance==0.2.40
 ta-lib==0.4.32
 # pandas-ta  # Commented out due to dependency conflicts, using ta-lib instead
-statsmodels==0.14.2
+statsmodels==0.14.4  # Python 3.12 wheel availability
 
 # ============================================================================
 # WEB & API CLIENTS
 # ============================================================================
-aiohttp==3.10.2
+aiohttp==3.13.3  # CVE-2025-69223 fix
 httpx==0.27.0
 requests==2.32.3
 beautifulsoup4==4.12.3
-lxml==5.2.2
+lxml==6.1.0  # CVE-2026-41066 fix
 selenium==4.18.1
 webdriver-manager==4.0.1
 
 # ============================================================================
 # SECURITY & AUTHENTICATION
 # ============================================================================
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-PyJWT==2.9.0
-cryptography==43.0.0
+python-jose[cryptography]==3.5.0  # security updates
+passlib==1.7.4
+# Pin bcrypt<4.1: passlib 1.7.4 init crashes on bcrypt>=4.1 (ValueError "password
+# cannot be longer than 72 bytes") because detect_wrap_bug() calls bcrypt.hashpw
+# with a long secret. Backend POST /api/v1/auth/login returns 500 otherwise.
+bcrypt>=4.0.1,<4.1
+PyJWT==2.12.0  # CVE-2026-32597 fix
+cryptography==46.0.5  # CVE-2026-26007 fix
 
 # ============================================================================
 # DATA PIPELINE & ORCHESTRATION
@@ -101,9 +105,9 @@ aiokafka==0.11.0
 # ============================================================================
 # NLP & SENTIMENT ANALYSIS
 # ============================================================================
-nltk==3.9.1
+nltk==3.9.4  # CVE-2026-33231 fix
 textblob==0.18.0
-tokenizers==0.19.1
+tokenizers==0.21.0  # paired with transformers 4.48
 
 # ============================================================================
 # MONITORING & OBSERVABILITY
@@ -118,7 +122,7 @@ structlog==24.4.0
 # UTILITIES & HELPERS
 # ============================================================================
 python-dotenv==1.0.1
-python-multipart==0.0.9
+python-multipart==0.0.27  # CVE-2026-42561 fix (DoS via unbounded multipart headers)
 pytz==2024.1
 schedule==1.2.2
 tqdm==4.66.5
@@ -129,12 +133,12 @@ aiofiles==24.1.0
 psutil==6.0.0
 pyotp==2.9.0
 qrcode==7.4.0
-PyYAML==6.0
+PyYAML==6.0.2  # 6.0 fails Cython build on Python 3.12
 validators==0.22.0
 bleach==6.1.0
 rich==13.7.0
 typer==0.12.0
-scipy==1.11.0
+scipy==1.13.1  # 1.11.0 has no Python 3.12 wheel; needs OpenBLAS to build from source
 python-dateutil==2.8.2
 pybreaker==1.2.0
 geoip2==4.8.0
@@ -152,7 +156,7 @@ pytest-cov==5.0.0
 pytest-mock==3.14.0
 faker==28.4.1
 itsdangerous==2.2.0
-black==24.8.0
+black==26.3.1  # CVE-2026-32274 fix
 isort==5.13.2
 flake8==7.1.1
 mypy==1.11.1
@@ -168,15 +172,15 @@ aiosqlite==0.20.0
 # ============================================================================
 # TRADING AGENTS & LLM INTEGRATION
 # ============================================================================
-langchain-anthropic==0.1.23
-langchain-openai==0.1.23
-langgraph==0.2.16
+langchain-anthropic==0.3.4  # pulls langchain-core>=0.3.81 (CVE-2025-68664 fix)
+langchain-openai==0.3.7
+langgraph==0.4.0  # pulls langgraph-checkpoint>=3.0 (CVE-2025-64439 fix)
 
 # ============================================================================
 # DEPLOYMENT & PRODUCTION
 # ============================================================================
 gunicorn==22.0.0
 docker==7.1.0
-websockets==10.3
+websockets==12.0  # uvicorn[standard]==0.30.1 requires >=10.4
 python-socketio==5.11.3
 email-validator==2.0.0

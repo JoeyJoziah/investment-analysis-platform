@@ -6,9 +6,19 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
-# Add TradingAgents to Python path
-# TradingAgents is located at backend/TradingAgents/
-trading_agents_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../TradingAgents'))
+# Add TradingAgents to Python path.
+# Canonical source is the active workspace at
+# C:\Users\Devin McGrathj\01.project_files\stockanalysistool\TradingAgents.
+# Override via TRADINGAGENTS_PATH env var. Falls back to the legacy frozen
+# copy at backend/TradingAgents/ if the canonical path is unavailable.
+trading_agents_path = os.environ.get(
+    "TRADINGAGENTS_PATH",
+    r"C:\Users\Devin McGrathj\01.project_files\stockanalysistool\TradingAgents",
+)
+if not os.path.exists(trading_agents_path):
+    trading_agents_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../TradingAgents")
+    )
 if os.path.exists(trading_agents_path) and trading_agents_path not in sys.path:
     sys.path.insert(0, trading_agents_path)
 
@@ -184,6 +194,36 @@ class CacheAwareTradingAgents(TradingAgentsGraph):
             
             # Use original TradingAgents propagate method
             _, decision = self.propagate(ticker, date)
+
+            # Optional: persist the full state into IAP recommendations table.
+            # Controlled by env TRADINGAGENTS_PERSIST=1. Failures must not break
+            # the analyzer; they only block the audit trail.
+            try:
+                if os.environ.get("TRADINGAGENTS_PERSIST", "0") not in (
+                    "0",
+                    "false",
+                    "False",
+                    "",
+                ):
+                    from backend.tradingagents_bridge.persistence import (
+                        persist_tradingagents_decision,
+                    )
+                    from backend.utils.database import SessionLocal
+
+                    state = getattr(self, "curr_state", None) or {}
+                    state.setdefault("final_trade_decision", decision)
+                    with SessionLocal() as _session:
+                        persist_tradingagents_decision(
+                            state=state,
+                            ticker=ticker,
+                            trade_date=date,
+                            session=_session,
+                        )
+            except Exception as _persist_exc:
+                logger.warning(
+                    "TradingAgents persist hook failed (non-fatal): %s",
+                    _persist_exc,
+                )
             
             # Estimate costs (in production, you'd get actual token usage from the LLM)
             analysis_duration = (datetime.now(timezone.utc) - start_time).total_seconds()

@@ -88,7 +88,8 @@ class ModelEvaluator:
                 num_layers=config['num_layers'],
                 dropout=config['dropout']
             )
-            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+            # F-03-002: state_dict-only — weights_only=True is always safe.
+            model.load_state_dict(torch.load(model_path, map_location='cpu', weights_only=True))
             model.eval()
 
             # Load scaler
@@ -146,11 +147,21 @@ class ModelEvaluator:
             model = joblib.load(model_path)
             scaler = joblib.load(scaler_path)
 
-            # Prepare test data
-            X_test = self.prepare_features(self.test_data, config['feature_columns'])
+            # F-03-004: drop NaN-target rows in eval too so metrics
+            # aren't computed on synthetic zero labels.
+            target_col = config['target_column']
+            mask = self.test_data[target_col].notna()
+            test_df = self.test_data.loc[mask]
+            if len(test_df) < len(self.test_data):
+                logger.info(
+                    f"XGBoost eval: dropped "
+                    f"{len(self.test_data) - len(test_df)} "
+                    f"rows with NaN {target_col}"
+                )
+
+            X_test = self.prepare_features(test_df, config['feature_columns'])
             X_test_scaled = scaler.transform(X_test)
-            y_test = self.test_data[config['target_column']].values
-            y_test = np.nan_to_num(y_test, nan=0.0)
+            y_test = test_df[target_col].values
 
             # Predict
             predictions = model.predict(X_test_scaled)

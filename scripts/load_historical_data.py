@@ -39,7 +39,7 @@ import concurrent.futures
 from dataclasses import dataclass
 from enum import Enum
 
-from backend.models.database import (
+from backend.models.unified_models import (
     Base, Stock, Exchange, Sector, Industry, 
     PriceHistory, Fundamentals, APIUsage
 )

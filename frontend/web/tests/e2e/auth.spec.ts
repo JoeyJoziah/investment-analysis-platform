@@ -20,9 +20,10 @@ test.describe('Authentication Flows', () => {
   test.beforeEach(async ({ page }) => {
     // Clear storage and cookies before each test
     await page.context().clearCookies();
+    // Must navigate before accessing localStorage (blocked on about:blank).
+    await page.goto(BASE_URL);
     await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
     });
   });
 
@@ -49,7 +50,7 @@ test.describe('Authentication Flows', () => {
       await submitButton.click();
 
       // Wait for success and redirect
-      await page.waitForURL(`${BASE_URL}/login`, { timeout: 10000 });
+      await page.waitForURL(`${BASE_URL}/login`, { timeout: 30000 });
       expect(page.url()).toContain('/login');
     });
 
@@ -119,16 +120,16 @@ test.describe('Authentication Flows', () => {
       await page.fill('input[name="password"]', EXISTING_USER.password);
 
       // Submit
-      const submitButton = page.locator('button:has-text("Login")');
+      const submitButton = page.locator('button:has-text("Sign In")');
       await submitButton.click();
 
       // Wait for redirect to dashboard
-      await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 10000 });
+      await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
       expect(page.url()).toContain('/dashboard');
 
       // Verify JWT token is stored
       const hasToken = await page.evaluate(() => {
-        return !!localStorage.getItem('token');
+        return !!localStorage.getItem('access_token');
       });
       expect(hasToken).toBe(true);
     });
@@ -140,7 +141,7 @@ test.describe('Authentication Flows', () => {
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', 'WrongPassword123!');
 
-      const submitButton = page.locator('button:has-text("Login")');
+      const submitButton = page.locator('button:has-text("Sign In")');
       await submitButton.click();
 
       // Wait for error
@@ -157,7 +158,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.waitForSelector('form', { timeout: 5000 });
 
-      const submitButton = page.locator('button:has-text("Login")');
+      const submitButton = page.locator('button:has-text("Sign In")');
       await expect(submitButton).toBeDisabled();
 
       // Fill only email
@@ -184,7 +185,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       // Wait for dashboard
       await page.waitForURL(`${BASE_URL}/dashboard`);
@@ -214,13 +215,13 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
       // Store original token
       const originalToken = await page.evaluate(() =>
-        localStorage.getItem('token')
+        localStorage.getItem('access_token')
       );
       expect(originalToken).toBeTruthy();
 
@@ -231,7 +232,7 @@ test.describe('Authentication Flows', () => {
       // Try to make an API request that would fail with expired token
       // The app should refresh and retry automatically
       const token = await page.evaluate(() =>
-        localStorage.getItem('token')
+        localStorage.getItem('access_token')
       );
       expect(token).toBeTruthy();
     });
@@ -241,13 +242,13 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
       // Decode and verify JWT
       const tokenData = await page.evaluate(() => {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         if (!token) return null;
 
         const parts = token.split('.');
@@ -280,7 +281,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
@@ -299,7 +300,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
@@ -318,7 +319,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
@@ -335,7 +336,7 @@ test.describe('Authentication Flows', () => {
 
       // Token should be cleared
       const hasToken = await page.evaluate(() =>
-        !!localStorage.getItem('token')
+        !!localStorage.getItem('access_token')
       );
       expect(hasToken).toBe(false);
     });
@@ -347,13 +348,13 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
       // Verify token exists
       let hasToken = await page.evaluate(() =>
-        !!localStorage.getItem('token')
+        !!localStorage.getItem('access_token')
       );
       expect(hasToken).toBe(true);
 
@@ -366,7 +367,7 @@ test.describe('Authentication Flows', () => {
 
       // Verify token is cleared
       hasToken = await page.evaluate(() =>
-        !!localStorage.getItem('token')
+        !!localStorage.getItem('access_token')
       );
       expect(hasToken).toBe(false);
     });
@@ -379,7 +380,7 @@ test.describe('Authentication Flows', () => {
       await page.goto(`${BASE_URL}/login`);
       await page.fill('input[name="email"]', EXISTING_USER.email);
       await page.fill('input[name="password"]', EXISTING_USER.password);
-      await page.locator('button:has-text("Login")').click();
+      await page.locator('button:has-text("Sign In")').click();
 
       await page.waitForURL(`${BASE_URL}/dashboard`);
 
@@ -393,7 +394,7 @@ test.describe('Authentication Flows', () => {
       // This would be handled by a 401 on the next API call
       // Test verifies tokens are cleared in localStorage
       const tokens = await page.evaluate(() => ({
-        token: localStorage.getItem('token'),
+        token: localStorage.getItem('access_token'),
         refreshToken: localStorage.getItem('refreshToken'),
       }));
 

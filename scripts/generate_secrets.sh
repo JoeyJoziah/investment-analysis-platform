@@ -40,11 +40,6 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 24 | tr -d '=+/')"
 echo 'REDIS_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0'
 
 echo ""
-echo "# Elasticsearch"
-echo "ELASTICSEARCH_URL=http://localhost:9200"
-echo "ELASTIC_PASSWORD=$(openssl rand -base64 24 | tr -d '=+/')"
-
-echo ""
 echo "# ====================
 # API Keys (Replace with actual keys)
 # ====================

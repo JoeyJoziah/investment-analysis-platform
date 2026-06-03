@@ -1,0 +1,17 @@
+# Trivy ignore baseline
+#
+# Purpose: Document accepted-risk CVEs so security scans can be re-enabled as
+# GATING (not advisory) in CI without re-breaking PR #157 builds.
+#
+# Process to re-enable hard-fail security gating:
+#   1. Run `trivy fs --severity HIGH,CRITICAL .` locally and capture findings.
+#   2. For each finding, EITHER fix the dependency OR add the CVE ID below
+#      with: severity, package, justification, and review-by date (ISO).
+#   3. In .github/workflows/security-scan.yml, remove `continue-on-error: true`
+#      from the Trivy step and drop `--exit-code 0` if present.
+#   4. Same flip for pip-audit / CodeQL in their respective workflow steps.
+#
+# Format: one CVE-ID per line; comments allowed.
+#
+# ---- Accepted-risk CVEs (populate as findings are triaged) ----
+# CVE-XXXX-XXXXX  # package: foo  severity: HIGH  reason: no upstream fix; not exploitable in our deployment  review-by: 2026-08-01

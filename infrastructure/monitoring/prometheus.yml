@@ -23,11 +23,13 @@ scrape_configs:
     metrics_path: /metrics
 
   # Investment Analysis Platform API
+  # Audit fix 2026-04 / F-10-014: was /api/metrics; actual route is /metrics
+  # (backend/monitoring/metrics_collector.py:setup_metrics_endpoint).
   - job_name: 'investment-api'
     static_configs:
       - targets: ['backend:8000']
     scrape_interval: 10s
-    metrics_path: /api/metrics
+    metrics_path: /metrics
     scrape_timeout: 5s
 
   # PostgreSQL Exporter

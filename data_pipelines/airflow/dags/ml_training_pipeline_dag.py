@@ -21,9 +21,9 @@ Expected speedup with GPU: 3-4x faster training per model
 
 from datetime import datetime, timedelta, timezone
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
-from airflow.operators.bash_operator import BashOperator
-from airflow.sensors.external_task_sensor import ExternalTaskSensor
+from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 import sys
@@ -31,6 +31,8 @@ import os
 import asyncio
 import json
 import logging
+
+import numpy as np
 
 # Add backend to path
 sys.path.append('/app')
@@ -110,7 +112,14 @@ default_args = {
     'owner': 'ml-team',
     'depends_on_past': False,
     'start_date': days_ago(1),
-    'email': ['ml-alerts@company.com'],
+    # F-06-009: alert recipients now come from the ``ml_alert_emails``
+    # Airflow Variable (comma-separated). Falls back to empty list when
+    # unset so DAG load does not fail in fresh environments.
+    'email': [
+        e.strip()
+        for e in Variable.get("ml_alert_emails", default_var="").split(",")
+        if e.strip()
+    ],
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 2,
@@ -122,7 +131,7 @@ dag = DAG(
     'ml_training_pipeline',
     default_args=default_args,
     description='Automated ML Model Training and Retraining Pipeline',
-    schedule_interval='0 2 * * *',  # Daily at 2 AM
+    schedule='0 2 * * *',  # Daily at 2 AM
     catchup=False,
     max_active_runs=1,
     tags=['ml', 'training', 'production'],
@@ -165,29 +174,76 @@ def initialize_orchestrator(**context):
 
 
 def check_data_quality(**context):
-    """Check data quality and determine if training should proceed"""
+    """Check data quality and determine if training should proceed.
+
+    F-06-003: ``DataQualityChecker.check_recent_data_quality`` does not
+    exist on the real class. Uses the real public surface:
+    ``validate_price_data`` per recent batch, aggregated through
+    ``generate_quality_report``. Derives the DAG-level thresholds
+    (``missing_data_rate``, ``anomaly_rate``) from the resulting issues.
+    """
+    import pandas as pd
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+
     from backend.utils.data_quality import DataQualityChecker
-    
+
     checker = DataQualityChecker()
-    
-    # Get recent data statistics
-    quality_report = checker.check_recent_data_quality(
-        table="price_history",
-        days_back=7
+    pg = PostgresHook(postgres_conn_id="postgres_default")
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    df = pg.get_pandas_df(
+        f"""
+        SELECT date, symbol, open, high, low, close, volume
+        FROM price_history
+        WHERE date >= '{cutoff}'
+        """
     )
-    
-    # Check quality thresholds
-    if quality_report['missing_data_rate'] > 0.1:
-        logger.warning(f"High missing data rate: {quality_report['missing_data_rate']}")
+
+    if df is None or df.empty:
+        logger.warning("No price_history rows in last 7 days; skipping training")
         return "skip_training"
-    
-    if quality_report['anomaly_rate'] > 0.05:
-        logger.warning(f"High anomaly rate: {quality_report['anomaly_rate']}")
+
+    validation_results = [
+        checker.validate_price_data(group, symbol=str(symbol))
+        for symbol, group in df.groupby("symbol")
+    ]
+
+    quality_report = checker.generate_quality_report(validation_results)
+
+    # Map the aggregated report to the thresholds this DAG cares about.
+    total_issues = sum(
+        len(r.get("issues", [])) for r in validation_results
+    )
+    missing_issues = sum(
+        1
+        for r in validation_results
+        for issue in r.get("issues", [])
+        if issue.get("type") == "missing_values"
+    )
+    anomaly_issues = sum(
+        1
+        for r in validation_results
+        for issue in r.get("issues", [])
+        if issue.get("type") in {"price_outlier", "volume_anomaly"}
+    )
+    denom = max(len(validation_results), 1)
+    missing_data_rate = missing_issues / denom
+    anomaly_rate = anomaly_issues / denom
+    quality_report["missing_data_rate"] = missing_data_rate
+    quality_report["anomaly_rate"] = anomaly_rate
+    quality_report["total_issues"] = total_issues
+
+    if missing_data_rate > 0.1:
+        logger.warning(f"High missing data rate: {missing_data_rate}")
+        return "skip_training"
+
+    if anomaly_rate > 0.05:
+        logger.warning(f"High anomaly rate: {anomaly_rate}")
         return "needs_review"
-    
-    # Store quality report
-    context['task_instance'].xcom_push(key='data_quality_report', value=quality_report)
-    
+
+    context["task_instance"].xcom_push(
+        key="data_quality_report", value=quality_report
+    )
     return "proceed_training"
 
 
@@ -487,45 +543,60 @@ def train_models(**context):
 
 
 def evaluate_models(**context):
-    """Evaluate and compare trained models"""
-    
-    async def _evaluate_models():
-        registry = ModelRegistry()
-        monitor = ModelMonitor()
-        
-        training_results = context['task_instance'].xcom_pull(key='training_results')
-        
-        evaluation_results = []
-        
-        for result in training_results:
-            if result['status'] == 'completed':
-                model_name = result['model_name']
-                
-                # Get model from registry
-                model_version = await registry.get_model(model_name)
-                
-                if model_version:
-                    # Calculate additional metrics
-                    metrics = monitor.calculate_metrics(
-                        y_true=np.random.randn(100),  # Would use actual test data
-                        y_pred=np.random.randn(100),  # Would use actual predictions
-                        model_type='regression'
-                    )
-                    
-                    evaluation_results.append({
-                        'model_name': model_name,
-                        'version': model_version.version,
-                        'training_metrics': result['metrics'],
-                        'test_metrics': metrics.to_dict(),
-                        'ranking_score': metrics.r2  # Or custom ranking metric
-                    })
-        
-        # Rank models
-        evaluation_results.sort(key=lambda x: x.get('ranking_score', 0), reverse=True)
-        
-        return evaluation_results
-    
-    evaluation_results = asyncio.run(_evaluate_models())
+    """Evaluate and compare trained models on the persisted held-out test set.
+
+    F-06-008: previously called ``monitor.calculate_metrics`` with
+    ``y_true=np.random.randn(100)`` and ``y_pred=np.random.randn(100)``
+    — every "evaluation" report was uncorrelated noise. Now delegates
+    to ``backend.ml.training.evaluate_models.ModelEvaluator.run_evaluation``,
+    which loads the persisted ``test_data.parquet`` (the held-out test
+    set written by the upstream prepare-data step), loads each saved
+    model + scaler + config, and produces real MSE/MAE/R²/direction
+    metrics over the held-out data.
+
+    The DAG fails loud (AirflowException) if the held-out parquet is
+    missing — silent fallback to random noise (the previous behavior)
+    masked a broken upstream split-and-persist step for months.
+    """
+    from pathlib import Path
+    from airflow.exceptions import AirflowException
+
+    from backend.ml.training.evaluate_models import ModelEvaluator
+
+    data_dir = Variable.get("ml_data_dir", default_var="data/ml_training/processed")
+    model_dir = Variable.get("ml_model_dir", default_var="ml_models")
+
+    test_path = Path(data_dir) / "test_data.parquet"
+    if not test_path.exists():
+        raise AirflowException(
+            f"F-06-008: held-out test set not found at {test_path}. "
+            f"Upstream prepare-data step must persist ``test_data.parquet`` "
+            f"before evaluate_models can run. Refusing to fall back to "
+            f"random-data metrics (the legacy behavior)."
+        )
+
+    evaluator = ModelEvaluator(data_dir=str(data_dir), model_dir=str(model_dir))
+    report = evaluator.run_evaluation()
+
+    evaluation_results: List[Dict[str, Any]] = []
+    training_results = context['task_instance'].xcom_pull(key='training_results') or []
+    training_by_name = {
+        r['model_name']: r for r in training_results if r.get('status') == 'completed'
+    }
+
+    for model_result in report.get('model_results', []):
+        model_name = model_result['model']
+        training_entry = training_by_name.get(model_name, {})
+        evaluation_results.append({
+            'model_name': model_name,
+            'training_metrics': training_entry.get('metrics'),
+            'test_metrics': model_result,
+            # Use R² as the ranking score (higher = better fit).
+            'ranking_score': float(model_result.get('r2', 0.0)),
+        })
+
+    # Rank models
+    evaluation_results.sort(key=lambda x: x.get('ranking_score', 0.0), reverse=True)
     
     # Store results
     context['task_instance'].xcom_push(key='evaluation_results', value=evaluation_results)

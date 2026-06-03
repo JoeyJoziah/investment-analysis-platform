@@ -8,6 +8,7 @@ import aiohttp
 from typing import Dict, Optional, List, Any
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 import re
@@ -25,10 +26,23 @@ class SECEdgarClient(BaseAPIClient):
     """
     
     def __init__(self):
-        # SEC requires user agent with contact info
+        # SEC requires a User-Agent with real contact info; placeholder
+        # addresses (``contact@example.com``) get the platform throttled
+        # or banned from sec.gov. Operators must set
+        # ``SEC_EDGAR_CONTACT_EMAIL`` to a real, monitored mailbox
+        # (F-05-006).
+        contact_email = os.getenv("SEC_EDGAR_CONTACT_EMAIL", "").strip()
+        if not contact_email or "example.com" in contact_email.lower():
+            raise RuntimeError(
+                "SEC_EDGAR_CONTACT_EMAIL must be set to a real contact email "
+                "address (not example.com). SEC EDGAR requires identifying "
+                "contact info in the User-Agent header and will rate-limit "
+                "or ban clients that omit it."
+            )
+
         super().__init__("sec_edgar", api_key=None)
         self.headers = {
-            'User-Agent': 'InvestmentAnalysisPlatform/1.0 (contact@example.com)'
+            'User-Agent': f'InvestmentAnalysisPlatform/1.0 ({contact_email})'
         }
         self.cik_map = {}  # Cache CIK mappings
     

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from backend.repositories.base import AsyncCRUDRepository
-from backend.models.thesis import InvestmentThesis
+from backend.models.unified_models import InvestmentThesis
 from backend.models.unified_models import Stock
 from backend.config.database import get_db_session
 from backend.exceptions import StaleDataError

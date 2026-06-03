@@ -66,7 +66,7 @@ class UserRepository(AsyncCRUDRepository[User]):
             
             if user and user.hashed_password == password_hash and user.is_active:
                 # Update last login
-                user.last_login = datetime.now(timezone.utc)
+                user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
                 user.failed_login_attempts = 0
                 user.locked_until = None
                 return user

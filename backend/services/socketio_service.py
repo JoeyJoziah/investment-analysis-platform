@@ -256,8 +256,44 @@ async def emit_alert_notification(user_id: str, alert_data: Dict[str, Any]) -> N
 # ---------------------------------------------------------------------------
 
 async def _stream_price_updates(symbol: str, room: str) -> None:
-    """Continuously emit simulated price updates to *room* until cancelled."""
+    """Stream price updates to ``room`` until cancelled.
+
+    Per PRD audit 2026-04 F-02-003 / Q4 default (recorded 2026-04-28): this
+    coroutine previously fabricated price/change/volume/bid/ask values via
+    ``random.uniform`` and broadcast them to subscribed clients. For an
+    SEC-regulated investment platform, broadcasting fake live prices is a
+    serious correctness + compliance failure.
+
+    Production behaviour (``settings.DEMO_MODE`` False, default):
+        Emit a single ``price_unavailable`` payload telling subscribers
+        that the live feed is not wired up and the stream is intentionally
+        stopped — avoids leaving sockets open spinning out fake ticks.
+
+    Demo behaviour (``settings.DEMO_MODE`` True): keep the legacy synthetic
+    stream, but every payload is tagged ``data_source: 'simulated'`` so
+    consumers can render an explicit "demo data" badge.
+    """
+    from backend.config.settings import settings
+
     logger.info("Starting price stream for symbol: %s", symbol)
+
+    if not settings.DEMO_MODE:
+        await sio.emit(
+            "price_unavailable",
+            {
+                "symbol": symbol,
+                "error": "model_unavailable",
+                "reason": "live_feed_not_configured",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            room=room,
+        )
+        logger.warning(
+            "_stream_price_updates: refusing to fabricate ticks for %s "
+            "(DEMO_MODE=false); emitting price_unavailable", symbol,
+        )
+        return
+
     try:
         while True:
             payload = {
@@ -271,6 +307,7 @@ async def _stream_price_updates(symbol: str, room: str) -> None:
                 "bid_size": random.randint(100, 1000),
                 "ask_size": random.randint(100, 1000),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data_source": "simulated",  # F-02-003: explicit demo tag
             }
             await sio.emit("price_update", payload, room=room)
             await asyncio.sleep(

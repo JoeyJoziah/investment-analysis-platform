@@ -2,6 +2,8 @@
 Custom Exceptions for Investment Analysis Platform
 Provides specialized exceptions for error handling across the application.
 """
+from typing import Optional
+
 
 class AppException(Exception):
     """Base application exception"""
@@ -92,3 +94,47 @@ class InsufficientBalanceError(ConflictError):
 class InvalidPositionError(ConflictError):
     """Raised when attempting to sell more shares than owned"""
     pass
+
+
+class InsufficientDataError(AppException):
+    """
+    Raised when insufficient data is available to compute a result.
+
+    Used in analysis pipelines (risk metrics, drift detection, feature stats)
+    when the upstream data is missing, too short, or otherwise inadequate to
+    produce a faithful answer. Callers should surface this as HTTP 503
+    `model_unavailable` rather than fabricating placeholder values.
+
+    Per PRD audit 2026-04 Q4 default: returning fake values for SEC-regulated
+    investment outputs is a compliance exposure; refuse instead.
+    """
+    def __init__(self, reason: str = "insufficient_data", details: Optional[dict] = None):
+        self.reason = reason
+        self.details = details or {}
+        super().__init__(f"Insufficient data: {reason}")
+
+
+class ModelUnavailableError(AppException):
+    """
+    Raised when an ML model required to serve a request is not available.
+
+    Triggered when `model_manager` is in `Dummy*` fallback (model binaries
+    missing) or when a feature pipeline cannot supply real inputs. API
+    handlers convert this to HTTP 503 with a structured
+    `{"error": "model_unavailable", "model": ..., "reason": ...}` payload.
+
+    Per PRD audit 2026-04 §3 D and Q4 default (recorded 2026-04-28).
+    """
+    def __init__(
+        self,
+        model: str = "unknown",
+        reason: str = "fallback_active",
+        request_id: Optional[str] = None,
+    ):
+        self.model = model
+        self.reason = reason
+        self.request_id = request_id
+        super().__init__(
+            f"Model '{model}' unavailable ({reason}); "
+            "platform refuses to fabricate values."
+        )

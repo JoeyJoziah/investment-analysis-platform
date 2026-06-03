@@ -91,6 +91,8 @@ def _load_module(name: str, filename: str):
 # Load in dependency order
 _fa_mod = _load_module("fundamental_analysis_mod", "fundamental_analysis.py")
 _finbert_mod = _load_module("finbert_analyzer_mod", "finbert_analyzer.py")
+# Force stub mode even when real torch/transformers are installed (sys.modules.setdefault doesn't override existing imports)
+_finbert_mod.HAS_TRANSFORMERS = False
 
 # sentiment_analysis.py does a conditional `from backend.analytics.finbert_analyzer import …`
 # Patch that cross-import with our freshly-loaded finbert module so the try-block succeeds
