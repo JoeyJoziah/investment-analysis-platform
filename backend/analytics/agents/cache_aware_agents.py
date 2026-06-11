@@ -6,20 +6,12 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
 
-# Add TradingAgents to Python path.
-# Canonical source is the active workspace at
-# C:\Users\Devin McGrathj\01.project_files\stockanalysistool\TradingAgents.
-# Override via TRADINGAGENTS_PATH env var. Falls back to the legacy frozen
-# copy at backend/TradingAgents/ if the canonical path is unavailable.
-trading_agents_path = os.environ.get(
-    "TRADINGAGENTS_PATH",
-    r"C:\Users\Devin McGrathj\01.project_files\stockanalysistool\TradingAgents",
-)
-if not os.path.exists(trading_agents_path):
-    trading_agents_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../TradingAgents")
-    )
-if os.path.exists(trading_agents_path) and trading_agents_path not in sys.path:
+# Add TradingAgents to Python path (resolution order documented in
+# tradingagents_path.py; override via TRADINGAGENTS_PATH env var).
+from backend.analytics.agents.tradingagents_path import resolve_tradingagents_path
+
+trading_agents_path = resolve_tradingagents_path()
+if trading_agents_path is not None and trading_agents_path not in sys.path:
     sys.path.insert(0, trading_agents_path)
 
 # Optional TradingAgents imports - fallback to stubs if not available
