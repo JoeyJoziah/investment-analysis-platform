@@ -34,6 +34,15 @@ _CLEANUP_ALLOWLIST: Dict[str, tuple] = {
     'recommendations':      ('recommendations',       'created_at'),
 }
 
+# Tables whose row counts get_loading_stats() reports.  These names are static
+# (never caller-supplied); making the allowlist the single source of truth keeps
+# that contract explicit and defends get_loading_stats() against a future edit
+# that might let a caller-influenced table name reach the SQL text.
+_STATS_TABLE_ALLOWLIST: frozenset = frozenset({
+    'stocks', 'price_history', 'technical_indicators',
+    'news_sentiment', 'ml_predictions', 'recommendations',
+})
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -522,6 +531,7 @@ class DataLoader:
                         # allowlist dict above — they are never derived from
                         # caller input — so it is safe to embed them in the
                         # static SQL string here.
+                        # nosemgrep  # avoid-sqlalchemy-text: identifier is allowlist-only, never caller input
                         query = text(
                             f"DELETE FROM {table} "   # noqa: S608 – allowlist-only
                             f"WHERE {date_column} < :cutoff"
@@ -550,14 +560,15 @@ class DataLoader:
             with self.get_connection() as conn:
                 stats = {}
                 
-                # Get counts for each table
-                tables = [
-                    'stocks', 'price_history', 'technical_indicators',
-                    'news_sentiment', 'ml_predictions', 'recommendations'
-                ]
-                
-                for table in tables:
-                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).fetchone()
+                # Get counts for each table.  Iterate over the module-level
+                # allowlist (the single source of truth) so the table name
+                # embedded in the SQL text can only ever be one of these static,
+                # never-caller-supplied identifiers.
+                for table in sorted(_STATS_TABLE_ALLOWLIST):
+                    result = conn.execute(
+                        # nosemgrep  # avoid-sqlalchemy-text: identifier is allowlist-only, never caller input
+                        text(f"SELECT COUNT(*) FROM {table}")  # noqa: S608 – allowlist-only
+                    ).fetchone()
                     stats[f'{table}_count'] = result[0]
                 
                 # Get date ranges
