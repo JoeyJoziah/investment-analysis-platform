@@ -310,8 +310,10 @@ jobs:
           sleep 2
         done
         
-        # Run database migrations
-        alembic upgrade head || echo "No migrations to run"
+        # Run database migrations. Do NOT swallow failures here: a broken
+        # migration (e.g. CREATE INDEX CONCURRENTLY inside a transaction) must
+        # fail the job loudly instead of being masked as "No migrations to run".
+        alembic upgrade head
 
     - name: Run backend tests with coverage
       run: |
