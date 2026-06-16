@@ -28,6 +28,21 @@ logger = logging.getLogger(__name__)
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(env_path)
 
+def _require_secret(env_var: str, non_prod_fallback: str) -> str:
+    """Require a secret in production; allow a marked non-prod fallback otherwise.
+
+    Mirrors backend.security.secrets_manager's production-vs-non-prod handling.
+    """
+    value = os.getenv(env_var)
+    if value:
+        return value
+    if os.getenv('ENVIRONMENT', 'development').lower() == 'production':
+        raise RuntimeError(
+            f"{env_var} must be set in production (no hardcoded fallback allowed)."
+        )
+    return non_prod_fallback
+
+
 class MockDataGenerator:
     def __init__(self):
         self.db_config = {
@@ -35,7 +50,8 @@ class MockDataGenerator:
             'port': int(os.getenv('POSTGRES_PORT', 5432)),
             'database': os.getenv('POSTGRES_DB', 'investment_db'),
             'user': os.getenv('POSTGRES_USER', 'postgres'),
-            'password': os.getenv('POSTGRES_PASSWORD', '9v1g^OV9XUwzUP6cEgCYgNOE')
+            # NON-PROD FALLBACK ONLY — production must set POSTGRES_PASSWORD.
+            'password': _require_secret('POSTGRES_PASSWORD', 'CHANGE_ME_LOCAL_DEV')
         }
         
         # Sample stock symbols (S&P 100 subset)
