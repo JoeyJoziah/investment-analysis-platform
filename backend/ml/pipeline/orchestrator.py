@@ -231,6 +231,10 @@ class MLOrchestrator:
         # Pipeline management
         self.active_pipelines: Dict[str, ModelPipeline] = {}
         self.pipeline_history: List[PipelineResult] = []
+        # Map orchestrator pipeline_id -> the pipeline object that ran it, so
+        # real held-out validation metrics can be retrieved post-completion
+        # (#208 item 1 / Finding #200).
+        self.pipelines_by_id: Dict[str, ModelPipeline] = {}
         self.scheduled_jobs: Dict[str, schedule.Job] = {}
         
         # Execution management
@@ -306,7 +310,11 @@ class MLOrchestrator:
     ) -> str:
         """Submit a pipeline for execution"""
         pipeline_id = str(uuid.uuid4())
-        
+
+        # Track the pipeline object by id so its real validation metrics can be
+        # retrieved after completion via get_pipeline_metrics().
+        self.pipelines_by_id[pipeline_id] = pipeline
+
         # Check resource limits
         if len(self.active_pipelines) >= self.config.max_concurrent_pipelines:
             logger.warning(f"Maximum concurrent pipelines reached ({self.config.max_concurrent_pipelines})")
@@ -326,7 +334,25 @@ class MLOrchestrator:
         
         logger.info(f"Pipeline {pipeline_id} submitted (trigger: {trigger_type.value})")
         return pipeline_id
-    
+
+    def get_pipeline_metrics(self, pipeline_id: str) -> Optional[Dict[str, Any]]:
+        """Return the real held-out validation metrics for a submitted pipeline.
+
+        Looks up the pipeline object by its orchestrator id and delegates to its
+        ``get_metrics()``, which surfaces the ``model_evaluation`` step's
+        held-out RMSE/MAE/R2/directional-accuracy.  Returns ``None`` if the id is
+        unknown or the run produced no real metrics — callers gate production
+        promotion on a truthy result, so absence fails loud (#208 item 1 / #200)
+        rather than promoting on fabricated numbers.
+        """
+        pipeline = self.pipelines_by_id.get(pipeline_id)
+        if pipeline is None:
+            return None
+        getter = getattr(pipeline, "get_metrics", None)
+        if not callable(getter):
+            return None
+        return getter()
+
     async def _execute_pipeline(
         self,
         pipeline_id: str,
