@@ -133,10 +133,17 @@ async def register(
             detail="Email already registered"
         )
 
-    # Create new user
+    # Create new user.
+    #
+    # #208 item 3: `username` MUST be populated. Under the #201 token contract
+    # `create_tokens` sets `sub = user.username` and `get_current_user` looks the
+    # user up by `username`. `UserCreate` has no username field, so we derive it
+    # from the (unique, non-null) email -- otherwise registered users get a token
+    # whose `sub` is null and every authenticated request from them 401s.
     hashed_password = get_password_hash(user.password)
     db_user = User(
         email=user.email,
+        username=user.email,
         full_name=user.full_name,
         hashed_password=hashed_password,
         is_active=True,
