@@ -25,6 +25,7 @@ from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager, ModelManager
 from backend.models.api_response import ApiResponse, success_response
 from backend.models.unified_models import User
+from backend.services.realtime_price_service import get_realtime_price_service
 from backend.utils.cache import get_redis, CacheManager
 from backend.utils.numpy_serializer import sanitize_numpy
 
@@ -442,6 +443,34 @@ async def _run_ensemble_prediction(
 
 
 # ---------------------------------------------------------------------------
+# Real market data
+# ---------------------------------------------------------------------------
+
+async def _fetch_base_price(ticker: str, db: AsyncSession) -> Optional[float]:
+    """Fetch the latest *real* market price for ``ticker``.
+
+    Routes through the realtime price service, which resolves in priority order:
+    in-memory cache -> Redis -> database fallback.  Returns ``None`` when no real
+    price is available so callers keep failing loud (#200) instead of scaling
+    confidence intervals off a fabricated constant.
+
+    This resolves the ``base_price`` half of the #200 follow-up (#208 item 1).
+    Wiring real ``feature_data`` tensors remains a deeper follow-up.
+    """
+    try:
+        service = await get_realtime_price_service()
+        update = await service.get_latest_price(ticker, db)
+    except Exception as exc:  # a quote lookup must never break prediction flow
+        logger.warning(f"base_price lookup failed for {ticker} (non-fatal): {exc}")
+        return None
+
+    price = getattr(update, "price", None) if update is not None else None
+    if not price:
+        return None
+    return float(price)
+
+
+# ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
 
@@ -459,6 +488,7 @@ async def _run_ensemble_prediction(
 async def create_prediction(
     request_body: MLPredictionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[MLPredictionResponse]:
     """
     POST /predictions -- Generate ML price predictions.
@@ -507,7 +537,9 @@ async def create_prediction(
     # base_price must come from real market data.  It is used only to scale
     # confidence intervals, so a None is safe when the model returns absolute
     # prices.  If not available we refuse to substitute a hardcoded constant.
-    base_price: Optional[float] = None  # TODO(#200-follow-up): fetch live quote
+    # (#208 item 1) Wired to the realtime price service; stays None — and
+    # therefore fail-loud downstream — when no real quote is available.
+    base_price: Optional[float] = await _fetch_base_price(ticker, db)
 
     try:
         if model_type == MLModelType.ENSEMBLE:
