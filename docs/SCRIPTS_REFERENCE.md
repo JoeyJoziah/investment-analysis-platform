@@ -155,9 +155,6 @@ Located in `scripts/testing/`
 | `test_docker_connections_fixed.py` | Fixed Docker connection tests |
 | `test_fixes.py` | Test fix implementations |
 | `test_pipeline_components.py` | Test pipeline components |
-| `test_services_corrected.py` | Corrected service tests |
-| `test_services_fixed.py` | Fixed service tests |
-| `test_services_quick.py` | Quick service validation |
 
 ### Validation Scripts
 
