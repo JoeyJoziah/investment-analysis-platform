@@ -5,6 +5,7 @@ This module provides realistic mock data for all external services and
 financial scenarios, enabling complete offline testing.
 """
 
+import asyncio
 import pytest
 import numpy as np
 import pandas as pd
