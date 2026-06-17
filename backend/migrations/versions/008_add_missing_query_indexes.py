@@ -98,10 +98,12 @@ def upgrade():
         """))
 
         # Index for recent data queries (last 60-90 days are most accessed)
+        # NOTE: This is a plain (non-partial) index. A WHERE predicate using
+        # CURRENT_DATE was removed because Postgres rejects non-IMMUTABLE
+        # functions in index predicates (InvalidObjectDefinition).
         op.execute(text("""
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_price_history_recent
-            ON price_history (stock_id, date DESC)
-            WHERE date >= CURRENT_DATE - INTERVAL '90 days';
+            ON price_history (stock_id, date DESC);
         """))
 
         # ==========================================================================
