@@ -1,6 +1,6 @@
 # Scripts Reference
 
-> Auto-generated from project scripts. Last updated: 2026-01-27
+> Auto-generated from project scripts. **Version: 1.0.0** · **Last Updated: 2026-06-17**
 
 This document provides a comprehensive reference for all shell and Python scripts in the investment-analysis-platform.
 
