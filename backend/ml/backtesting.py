@@ -494,9 +494,21 @@ class BacktestEngine:
         return comparison_results
     
     def _get_market_data(self, universe: List[str], start_date: datetime, end_date: datetime) -> Dict[str, pd.DataFrame]:
-        """Get market data for backtesting"""
-        # This would integrate with the actual data provider
-        # For now, return mock data structure
+        """Get market data for backtesting.
+
+        When a ``data_provider`` is wired (the default via
+        :func:`get_backtest_engine`), real OHLCV history is fetched from the
+        price repository. The provider is fail-loud: a missing symbol raises
+        rather than fabricating prices. Only when *no* provider is configured
+        do we fall back to the legacy synthetic data path (kept for backward
+        compatibility with ``BacktestEngine()`` constructed without a provider).
+        """
+        if self.data_provider is not None:
+            return self.data_provider.get_bulk_historical_prices(
+                universe, start_date, end_date
+            )
+
+        # Legacy synthetic fallback (no provider wired).
         market_data = {}
         
         for ticker in universe:
@@ -521,7 +533,18 @@ class BacktestEngine:
         return market_data
     
     def _get_benchmark_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        """Get benchmark data"""
+        """Get benchmark data.
+
+        Uses the wired ``data_provider`` (real repository-backed OHLCV) when
+        available, deriving a ``returns`` column from close prices. Falls back
+        to the legacy synthetic benchmark only when no provider is configured.
+        """
+        if self.data_provider is not None:
+            frame = self.data_provider.get_historical_prices(symbol, start_date, end_date)
+            benchmark = frame[['close']].copy()
+            benchmark['returns'] = benchmark['close'].pct_change().fillna(0)
+            return benchmark
+
         # Mock benchmark data
         dates = pd.date_range(start_date, end_date, freq='D')
         dates = dates[dates.weekday < 5]
@@ -946,8 +969,16 @@ class BacktestEngine:
 _backtest_engine: Optional[BacktestEngine] = None
 
 def get_backtest_engine() -> BacktestEngine:
-    """Get global backtest engine instance"""
+    """Get global backtest engine instance.
+
+    The default engine is wired with :class:`PriceHistoryDataProvider`, which
+    sources real OHLCV history from the price repository (fail-loud on missing
+    data). This replaces the previous synthetic-data behaviour for the
+    production backtest path (#208 item 1).
+    """
     global _backtest_engine
     if _backtest_engine is None:
-        _backtest_engine = BacktestEngine()
+        from backend.ml.data_providers import PriceHistoryDataProvider
+
+        _backtest_engine = BacktestEngine(data_provider=PriceHistoryDataProvider())
     return _backtest_engine

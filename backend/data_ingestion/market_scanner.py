@@ -23,7 +23,7 @@ Fallback Chain Strategy:
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Tuple, Any, Callable
+from typing import AsyncIterator, Dict, List, Optional, Tuple, Any, Callable
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 import pandas as pd
@@ -752,6 +752,53 @@ class MarketScanner:
 
         logger.info(f"Market scan returned {len(filtered_stocks)} stocks")
         return filtered_stocks
+
+    async def scan_market_streaming(
+        self,
+        sectors: Optional[List[str]] = None,
+        market_cap_range: Optional[Tuple[float, float]] = None,
+        chunk_size: int = 100,
+        max_stocks: int = 500,
+        min_volume: Optional[float] = None,
+        min_price: float = 5.0,
+        exchanges: Optional[List[str]] = None,
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Stream market scan results as fixed-size chunks.
+
+        Interim wrapper around :meth:`scan_market` that yields the filtered
+        stock list in ``chunk_size`` batches so callers can consume it as an
+        async generator without buffering the entire result themselves. This
+        is intentionally minimal: it adds no backpressure or cancellation
+        logic (the full streaming engine remains a deferred feature) and
+        preserves the fail-loud behaviour of ``scan_market`` (errors raised by
+        the underlying scan propagate to the caller).
+
+        Args:
+            sectors: List of sectors to include.
+            market_cap_range: Tuple of (min_market_cap, max_market_cap).
+            chunk_size: Number of stocks to yield per chunk (must be > 0).
+            max_stocks: Maximum number of stocks to scan.
+            min_volume: Minimum average daily volume.
+            min_price: Minimum stock price.
+            exchanges: List of exchanges to include.
+
+        Yields:
+            Lists of stock dictionaries, each of length <= ``chunk_size``.
+        """
+        if chunk_size <= 0:
+            raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+
+        stocks = await self.scan_market(
+            sectors=sectors,
+            market_cap_range=market_cap_range,
+            max_stocks=max_stocks,
+            min_volume=min_volume,
+            min_price=min_price,
+            exchanges=exchanges,
+        )
+
+        for start in range(0, len(stocks), chunk_size):
+            yield stocks[start:start + chunk_size]
 
     async def _build_stock_universe(self) -> List[Dict[str, Any]]:
         """Build comprehensive stock universe from available sources."""
