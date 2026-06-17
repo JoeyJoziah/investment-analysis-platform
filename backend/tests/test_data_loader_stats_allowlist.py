@@ -1,10 +1,16 @@
 """
 Regression guard for #208 item 2 / #197 follow-up.
 
-`DataLoader.get_loading_stats()` builds ``SELECT COUNT(*) FROM {table}`` with an
-f-string.  The table identifiers must only ever come from the module-level
-``_STATS_TABLE_ALLOWLIST`` — never from caller input — so the f-string can never
-become a SQL-injection vector.
+`DataLoader.get_loading_stats()` builds a per-table ``COUNT(*)`` query using
+SQLAlchemy Core constructs (``select(func.count()).select_from(sa_table(name))``).
+The table identifiers must only ever come from the module-level
+``_STATS_TABLE_ALLOWLIST`` — never from caller input — so a count can never be
+issued against an arbitrary, caller-influenced table.
+
+The compiled Core SQL reads ``SELECT count(*) AS count_1 FROM <table>`` (note the
+lowercase ``count`` and the ``AS count_1`` alias), so this test parses the
+``FROM`` target out of the compiled statement case-insensitively rather than
+grepping for ``COUNT(*) FROM <table>`` verbatim.
 
 This is a source-level test (import the package module directly) and mocks the
 DB connection, so it runs without a live Postgres.  Run with::
@@ -53,7 +59,20 @@ def test_get_loading_stats_only_queries_allowlisted_tables(monkeypatch):
 
     loader.get_loading_stats()
 
-    counted = set(re.findall(r"COUNT\(\*\)\s+FROM\s+(\w+)", " ".join(sink)))
+    # The compiled COUNT statements look like
+    #   SELECT count(*) AS count_1 \n FROM <table>
+    # Examine each recorded statement independently (so a count(*) query can
+    # never be matched against a *different* statement's FROM clause) and
+    # capture the FROM target of every count(*) query, case-insensitively.
+    counted = set()
+    for sql in sink:
+        if not re.search(r"count\(\*\)", sql, flags=re.IGNORECASE):
+            continue
+        m = re.search(
+            r"\bFROM\s+\"?(\w+)\"?", sql, flags=re.IGNORECASE | re.DOTALL
+        )
+        if m:
+            counted.add(m.group(1))
     assert counted, "expected at least one COUNT(*) query"
 
     # Regression: nothing outside the allowlist may ever be COUNT-queried.

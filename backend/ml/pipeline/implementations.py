@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from .base import ModelPipeline, PipelineConfig, PipelineStep, ModelType, ModelArtifact
+from .base import ModelPipeline, PipelineConfig, PipelineStep, ModelType, ModelArtifact, PipelineStatus
 
 # GPU utilities for device detection
 try:

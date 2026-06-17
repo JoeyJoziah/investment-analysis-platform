@@ -27,10 +27,11 @@ echo ""
 # Run the appropriate test script
 if [ "$ENVIRONMENT" = "docker" ]; then
     echo "🔧 Running Docker container tests..."
-    python3 test_docker_connections.py
+    python3 scripts/testing/test_docker_connections.py
 else
     echo "🔧 Running host system tests..."
-    python3 test_services_quick.py
+    echo "ℹ️  Host probe script removed (it hardcoded credentials)."
+    echo "    Falling back to the credential-free port checks below."
 fi
 
 echo ""

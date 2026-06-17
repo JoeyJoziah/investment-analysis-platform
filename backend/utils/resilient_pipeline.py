@@ -7,6 +7,7 @@ import asyncio
 import time
 import json
 import hashlib
+import uuid
 # SECURITY: Removed pickle import - using JSON for state serialization
 from typing import Any, Dict, List, Optional, Callable, Union, TypeVar, Generic
 from dataclasses import dataclass, asdict
