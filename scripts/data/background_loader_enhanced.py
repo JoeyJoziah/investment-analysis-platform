@@ -51,9 +51,19 @@ try:
     from backend.config.settings import settings
 except ImportError as e:
     logging.warning(f"Could not import backend models: {e}. Using fallback configuration.")
-    # Fallback configuration
+    # Fallback configuration. Require DATABASE_URL in production; allow a
+    # clearly-marked non-prod fallback only outside production.
+    _fallback_db_url = os.getenv("DATABASE_URL")
+    if not _fallback_db_url:
+        if os.getenv("ENVIRONMENT", "development").lower() == "production":
+            raise RuntimeError(
+                "DATABASE_URL must be set in production (no hardcoded fallback allowed)."
+            )
+        # NON-PROD FALLBACK ONLY.
+        _fallback_db_url = "postgresql://postgres:CHANGE_ME_LOCAL_DEV@localhost:5432/investment_db"
+
     class MockSettings:
-        DATABASE_URL = "postgresql://postgres:9v1g^OV9XUwzUP6cEgCYgNOE@localhost:5432/investment_db"
+        DATABASE_URL = _fallback_db_url
         DEBUG = False
     settings = MockSettings()
 

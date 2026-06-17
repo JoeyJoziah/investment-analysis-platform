@@ -98,7 +98,7 @@ def upgrade():
         op.create_index(
             'idx_recommendations_active_confidence',
             'recommendations',
-            ['is_active', sa.text('confidence_score DESC'), sa.text('created_at DESC')],
+            ['is_active', sa.text('confidence DESC'), sa.text('created_at DESC')],
             postgresql_where=sa.text('is_active = true'),
             postgresql_concurrently=True
         )
@@ -132,7 +132,7 @@ def upgrade():
         op.create_index(
             'idx_recommendations_priority',
             'recommendations',
-            [sa.text('priority ASC'), sa.text('confidence_score DESC')],
+            [sa.text('priority ASC'), sa.text('confidence DESC')],
             postgresql_where=sa.text('is_active = true AND priority <= 3'),
             postgresql_concurrently=True
         )

@@ -3,6 +3,7 @@ Database performance testing and validation utilities
 """
 
 import time
+import json
 import random
 import statistics
 from typing import List, Dict, Any, Callable, Optional
