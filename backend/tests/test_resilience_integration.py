@@ -6,6 +6,7 @@ Tests circuit breakers, fallback mechanisms, retry logic, and system recovery.
 import pytest
 import asyncio
 import json
+import random
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from unittest.mock import AsyncMock, patch, MagicMock

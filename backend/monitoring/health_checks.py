@@ -167,7 +167,8 @@ class HealthChecker:
     async def execute(self) -> HealthCheckResult:
         """Execute health check with retries and timeout."""
         start_time = time.time()
-        
+        last_error: Optional[Exception] = None
+
         for attempt in range(self.retries + 1):
             try:
                 # Execute with timeout
@@ -237,6 +238,7 @@ class HealthChecker:
                 if attempt < self.retries:
                     continue
                 error_msg = f"Health check error: {str(e)}"
+                last_error = e
                 logger.error(f"Health check error: {self.service}.{self.name}: {e}")
         
         # All retries failed
@@ -248,7 +250,7 @@ class HealthChecker:
             message=error_msg,
             duration=duration,
             timestamp=datetime.now(),
-            error_details=str(e) if 'e' in locals() else None
+            error_details=str(last_error) if last_error else None
         )
         
         # Record failure metrics
