@@ -8,7 +8,10 @@ import numpy as np
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 import logging
-from sqlalchemy import create_engine, text, MetaData, Table
+from sqlalchemy import (
+    create_engine, text, MetaData, Table,
+    select, delete, func, table as sa_table, column as sa_column,
+)
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.pool import QueuePool
@@ -529,13 +532,16 @@ class DataLoader:
                     else:
                         # The table and column identifiers come only from the
                         # allowlist dict above — they are never derived from
-                        # caller input — so it is safe to embed them in the
-                        # static SQL string here.
-                        # nosemgrep  # avoid-sqlalchemy-text: identifier is allowlist-only, never caller input
-                        query = text(
-                            f"DELETE FROM {table} "   # noqa: S608 – allowlist-only
-                            f"WHERE {date_column} < :cutoff"
-                        ).bindparams(cutoff=cutoff)
+                        # caller input.  Build the DELETE with SQLAlchemy Core
+                        # constructs (no f-string ever reaches text()):
+                        # ``sa_table``/``sa_column`` safely quote the
+                        # identifiers, and the cutoff is bound as a parameter
+                        # by ``.where(col < cutoff)`` rather than interpolated.
+                        col = sa_column(date_column)
+                        query = (
+                            delete(sa_table(table, col))
+                            .where(col < cutoff)
+                        )
 
                     result = conn.execute(query)
                     conn.commit()
@@ -565,9 +571,12 @@ class DataLoader:
                 # embedded in the SQL text can only ever be one of these static,
                 # never-caller-supplied identifiers.
                 for table in sorted(_STATS_TABLE_ALLOWLIST):
+                    # Build the COUNT with SQLAlchemy Core constructs so no
+                    # f-string ever reaches text(): ``sa_table`` safely quotes
+                    # the identifier, which only ever comes from the static
+                    # allowlist above (never caller input).
                     result = conn.execute(
-                        # nosemgrep  # avoid-sqlalchemy-text: identifier is allowlist-only, never caller input
-                        text(f"SELECT COUNT(*) FROM {table}")  # noqa: S608 – allowlist-only
+                        select(func.count()).select_from(sa_table(table))
                     ).fetchone()
                     stats[f'{table}_count'] = result[0]
                 
