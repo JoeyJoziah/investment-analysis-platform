@@ -211,18 +211,30 @@ class MLTrainingPipeline:
                 
                 # Wait for completion (with timeout)
                 await asyncio.sleep(2)  # Simulate training time
-                
-                # Store results
+
+                # Retrieve real validation metrics from the completed pipeline.
+                # We do NOT substitute random numbers here — fabricated metrics
+                # would gate production promotion on noise (Finding #200).
+                pipeline_metrics = None
+                if hasattr(pipeline, "get_metrics"):
+                    pipeline_metrics = pipeline.get_metrics()
+                elif hasattr(self.orchestrator, "get_pipeline_metrics"):
+                    pipeline_metrics = self.orchestrator.get_pipeline_metrics(pipeline_id)
+
+                if not pipeline_metrics:
+                    raise RuntimeError(
+                        f"Training pipeline '{config['name']}' completed but returned no "
+                        "validation metrics.  Cannot gate production promotion without real "
+                        "metrics — refusing to substitute random values. "
+                        "(Finding #200 — TODO: implement get_metrics() on pipeline/orchestrator)"
+                    )
+
                 results[config['name']] = {
                     'pipeline_id': pipeline_id,
                     'status': 'completed',
-                    'metrics': {
-                        'accuracy': np.random.uniform(0.7, 0.9),
-                        'f1_score': np.random.uniform(0.65, 0.85),
-                        'auc_roc': np.random.uniform(0.75, 0.95)
-                    }
+                    'metrics': pipeline_metrics,
                 }
-                
+
                 logger.info(f"Model {config['name']} trained successfully")
                 
             except Exception as e:

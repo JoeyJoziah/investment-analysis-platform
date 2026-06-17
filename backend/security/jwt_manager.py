@@ -349,7 +349,7 @@ class JWTManager:
             # Calculate TTL based on token expiration
             exp = unverified_payload.get("exp")
             if exp:
-                exp_time = datetime.fromtimestamp(exp)
+                exp_time = datetime.fromtimestamp(exp, tz=timezone.utc)
                 ttl = int((exp_time - datetime.now(timezone.utc)).total_seconds())
                 if ttl <= 0:
                     # Token already expired, no need to blacklist

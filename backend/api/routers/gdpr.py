@@ -9,6 +9,7 @@ Implements data subject rights under GDPR:
 - Data Retention Reports
 """
 
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Literal, Dict, Any
 
@@ -19,14 +20,30 @@ import logging
 
 from backend.config.database import get_async_db_session
 from backend.models.unified_models import User
-from backend.auth.oauth2 import get_current_user
+from backend.auth.oauth2 import get_current_user, get_current_admin_user
 from backend.compliance.gdpr import retention_manager
 from backend.models.api_response import ApiResponse, success_response
 from backend.security.rate_limiter import rate_limit, RateLimitCategory, RateLimitRule
 import backend.services.gdpr_service as gdpr_service
 
-router = APIRouter()
+# Finding #198: defense-in-depth. Every GDPR route handles PII or is destructive,
+# so authentication is enforced at the router level. Individual endpoints add
+# stronger, route-specific guards (admin-only or ownership) on top of this.
+router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
+
+
+def _owns_deletion_audit(audit: Dict[str, Any], user: User) -> bool:
+    """Return True if ``user`` is the subject of the given deletion audit record.
+
+    The audit trail intentionally stores only a hashed, anonymized user
+    reference (sha256(user_id)[:16]) so no raw PII is retained. To enforce
+    ownership we recompute the same reference from the caller's id and compare.
+    """
+    expected_reference = hashlib.sha256(
+        str(user.id).encode()
+    ).hexdigest()[:16]
+    return audit.get("anonymized_user_reference") == expected_reference
 
 # Task 3: Rate limit rule for GDPR data exports
 # 3 requests per hour, 10 requests per day
@@ -229,9 +246,15 @@ async def request_deletion(
 async def process_deletion_request(
     request_id: str,
     request: Request,
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeleteRequestResponse]:
-    """Process a pending deletion request."""
+    """Process a pending deletion request (admin only).
+
+    Finding #198: irreversible erasure/anonymization. Restricted to admins so
+    an anonymous caller cannot trigger destructive processing by guessing a
+    ``request_id``.
+    """
     try:
         result = await gdpr_service.process_deletion(
             request_id=request_id,
@@ -261,12 +284,26 @@ async def process_deletion_request(
 async def get_deletion_audit(
     request_id: str,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[DeletionAuditResponse]:
-    """Get audit trail for a deletion request"""
+    """Get audit trail for a deletion request.
+
+    Finding #198: prevents anonymous enumerable IDOR. The caller must be
+    authenticated and may only read the audit for their own deletion request;
+    admins may read any. Non-owners receive 404 so request ids are not
+    enumerable.
+    """
     audit = gdpr_service.get_deletion_audit(request_id)
 
     if not audit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Deletion request {request_id} not found"
+        )
+
+    if not current_user.is_admin and not _owns_deletion_audit(audit, current_user):
+        # Return 404 (not 403) so a non-owner cannot confirm a request id exists.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Deletion request {request_id} not found"
@@ -514,9 +551,14 @@ async def get_retention_report(
 async def enforce_retention_policies(
     request: Request,
     background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_async_db_session)
 ) -> ApiResponse[Dict[str, Any]]:
-    """Enforce data retention policies (admin only)."""
+    """Enforce data retention policies (admin only).
+
+    Finding #198: schedules destructive retention jobs. Restricted to admins so
+    a non-admin caller cannot schedule data destruction.
+    """
     try:
         background_tasks.add_task(
             retention_manager.enforce_retention_policies,

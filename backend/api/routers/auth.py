@@ -1,32 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, EmailStr
-from datetime import datetime, timedelta, timezone
-from jose import JWTError, jwt
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-import os
 import logging
 from backend.config.database import get_async_db_session
 from backend.models.unified_models import User
-from backend.config.settings import settings
 from backend.security.rate_limiter import get_rate_limiter, RateLimitCategory, rate_limit
-from backend.security.jwt_manager import get_jwt_manager, TokenClaims
-from backend.security.secrets_manager import get_secrets_manager
-from backend.security.security_config import SecurityConfig
 from backend.models.api_response import ApiResponse, success_response
-from backend.auth.oauth2 import verify_password, get_password_hash
+# Canonical authentication primitives.
+# Finding #201: All JWT issuance/verification MUST flow through
+# backend.security.jwt_manager (RS256 + RSA keys + blacklist + session +
+# issuer/audience checks). The canonical dependencies and token helpers live in
+# backend.auth.oauth2, which delegates to the JWT manager. We re-export them here
+# (see shim below) so existing imports of `get_current_user`/`get_current_admin_user`
+# from this router continue to resolve to the single verification entry point.
+from backend.auth.oauth2 import (
+    verify_password,
+    get_password_hash,
+    create_tokens,
+    get_current_user,
+    get_current_admin_user,
+)
 
 router = APIRouter(tags=["authentication"])
-
-# Security configurations
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
-
-# JWT settings - use centralized SecurityConfig as single source of truth
-SECRET_KEY = SecurityConfig.JWT_SECRET_KEY
-ALGORITHM = SecurityConfig.JWT_ALGORITHM  # RS256 - matches jwt_manager
-ACCESS_TOKEN_EXPIRE_MINUTES = SecurityConfig.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 
 logger = logging.getLogger(__name__)
 
@@ -47,16 +46,6 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
 async def authenticate_user(db: AsyncSession, email: str, password: str):
     """Authenticate user against database"""
     result = await db.execute(select(User).filter(User.email == email))
@@ -67,25 +56,13 @@ async def authenticate_user(db: AsyncSession, email: str, password: str):
         return False
     return user
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_async_db_session)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    result = await db.execute(select(User).filter(User.email == email))
-    user = result.scalars().first()
-    if user is None:
-        raise credentials_exception
-    return user
+# Finding #201: The previously-defined local `get_current_user` performed a
+# direct `jwt.decode` against a STRING secret while declaring RS256, bypassing
+# jwt_manager's RS256 verification, blacklist, session, issuer, and audience
+# checks. It has been removed. `get_current_user` and `get_current_admin_user`
+# are now re-exported (imported above) from backend.auth.oauth2, which is the
+# single verification entry point delegating to jwt_manager. The names remain
+# importable from this module as a thin re-export shim so dependents do not break.
 
 # Authentication rate limiting dependency
 async def auth_rate_limit(request: Request):
@@ -128,6 +105,17 @@ async def registration_rate_limit(request: Request):
     return rate_status
 
 # Endpoints
+def _issue_access_token(user: User, request: Optional[Request] = None) -> str:
+    """Mint an access token for a DB user via the canonical jwt_manager path.
+
+    Routes through backend.auth.oauth2.create_tokens, which uses RS256 RSA
+    signing, session tracking, and issuer/audience claims. Role and admin claims
+    are derived from the persisted DB user, never hardcoded (Finding #201).
+    """
+    tokens = create_tokens(user, request)
+    return tokens["access_token"]
+
+
 @router.post("/register")
 async def register(
     user: UserCreate,
@@ -145,10 +133,17 @@ async def register(
             detail="Email already registered"
         )
 
-    # Create new user
+    # Create new user.
+    #
+    # #208 item 3: `username` MUST be populated. Under the #201 token contract
+    # `create_tokens` sets `sub = user.username` and `get_current_user` looks the
+    # user up by `username`. `UserCreate` has no username field, so we derive it
+    # from the (unique, non-null) email -- otherwise registered users get a token
+    # whose `sub` is null and every authenticated request from them 401s.
     hashed_password = get_password_hash(user.password)
     db_user = User(
         email=user.email,
+        username=user.email,
         full_name=user.full_name,
         hashed_password=hashed_password,
         is_active=True,
@@ -160,8 +155,8 @@ async def register(
         await db.commit()
         await db.refresh(db_user)
 
-        # Create access token
-        access_token = create_access_token(data={"sub": user.email})
+        # Create access token via canonical jwt_manager path
+        access_token = _issue_access_token(db_user, request)
 
         logger.info(f"New user registered: {user.email}")
         return success_response(data=Token(
@@ -197,13 +192,8 @@ async def login(
     user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
-    # Create token - use email as sub (consistent with get_current_user lookup)
-    access_token = create_access_token(data={
-        "sub": user.email,
-        "user_id": user.id,
-        "email": user.email,
-        "role": "user"
-    })
+    # Create token via canonical jwt_manager path (RS256 + session + iss/aud)
+    access_token = _issue_access_token(user, request)
     return success_response(data=Token(
         access_token=access_token,
         token_type="bearer"
@@ -228,13 +218,8 @@ async def login_alt(
     db_user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
-    # Create token - use email as sub (consistent with get_current_user lookup)
-    access_token = create_access_token(data={
-        "sub": db_user.email,
-        "user_id": db_user.id,
-        "email": db_user.email,
-        "role": "user"
-    })
+    # Create token via canonical jwt_manager path (RS256 + session + iss/aud)
+    access_token = _issue_access_token(db_user, request)
     return success_response(data=Token(
         access_token=access_token,
         token_type="bearer"
@@ -265,7 +250,7 @@ async def refresh_token(
     _auth_limit = Depends(auth_rate_limit)
 ) -> ApiResponse[Token]:
     """Refresh access token"""
-    access_token = create_access_token(data={"sub": current_user.email})
+    access_token = _issue_access_token(current_user, request)
     return success_response(data=Token(
         access_token=access_token,
         token_type="bearer"

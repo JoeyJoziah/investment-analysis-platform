@@ -320,15 +320,15 @@ class BacktestEngine:
             
             date_splits.append((train_period, test_period))
         
-        # Run backtests for each split
+        # Run backtests for each split — retrain model on each fold's training window
         results = []
-        
+
         for i, (train_period, test_period) in enumerate(date_splits):
             logger.info(f"Walk-forward split {i+1}/{len(date_splits)}: "
                        f"Train: {train_period[0].date()} to {train_period[1].date()}, "
                        f"Test: {test_period[0].date()} to {test_period[1].date()}")
-            
-            # Create config for this split
+
+            # Create config for this split's test window
             split_config = BacktestConfig(
                 start_date=test_period[0],
                 end_date=test_period[1],
@@ -338,19 +338,49 @@ class BacktestEngine:
                 risk_free_rate=config.risk_free_rate,
                 benchmark_symbol=config.benchmark_symbol
             )
-            
+
             try:
-                # Run backtest for this period
-                result = self.backtest_strategy(strategy_func, universe, split_config, model)
+                # Retrain model on this fold's training window if a model was
+                # provided.  Without per-fold retraining walk-forward analysis
+                # yields optimistic in-sample results for later folds.
+                fold_model = model
+                if model is not None:
+                    if hasattr(model, "fit"):
+                        train_data = self._get_market_data(
+                            universe, train_period[0], train_period[1]
+                        )
+                        # Concatenate all tickers into a single training frame
+                        all_frames = []
+                        for ticker_df in train_data.values():
+                            all_frames.append(ticker_df)
+                        if all_frames:
+                            combined_train = pd.concat(all_frames)
+                            fold_model = model.__class__()
+                            fold_model.fit(combined_train)
+                            logger.info(
+                                f"Walk-forward split {i+1}: model retrained on "
+                                f"{len(combined_train)} rows of training data."
+                            )
+                    else:
+                        raise NotImplementedError(
+                            f"Walk-forward analysis requires the model ({type(model).__name__}) "
+                            "to implement a .fit() method so it can be retrained on each fold's "
+                            "training window. Without per-fold retraining the backtest results "
+                            "are invalid. (Finding #200 — TODO: implement .fit() or provide a "
+                            "retraining callback)"
+                        )
+
+                # Run backtest on the test window with the fold-specific model
+                result = self.backtest_strategy(strategy_func, universe, split_config, fold_model)
                 results.append({
                     'split': i + 1,
                     'train_start': train_period[0],
-                    'train_end': train_period[1], 
+                    'train_end': train_period[1],
                     'test_start': test_period[0],
                     'test_end': test_period[1],
                     'result': result
                 })
-                
+
             except Exception as e:
                 logger.error(f"Error in walk-forward split {i+1}: {e}")
                 continue

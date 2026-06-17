@@ -20,6 +20,7 @@ from backend.security.websocket_security import (
     validate_subscription_permissions
 )
 from backend.security.audit_logging import get_audit_logger, AuditEventType, AuditSeverity
+from backend.auth.oauth2 import verify_token as _verify_bearer_token
 
 # Service layer -- all business logic lives here
 from backend.services.websocket_service import (
@@ -167,9 +168,36 @@ async def websocket_endpoint(
         await cleanup_client_streams(client_id)
 
 
+def _reject_unauthenticated(token: Optional[str]) -> Optional[dict]:
+    """
+    Validate a bearer token passed on a WebSocket handshake.
+
+    Returns the decoded payload dict on success, or ``None`` when the token
+    is absent or invalid.  Callers must close the connection with an
+    appropriate policy-violation code when ``None`` is returned.
+    """
+    if not token:
+        return None
+    return _verify_bearer_token(token)
+
+
 @router.websocket("/market")
-async def market_data_stream_endpoint(websocket: WebSocket):
-    """Dedicated WebSocket for market-wide data streaming."""
+async def market_data_stream_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+):
+    """Dedicated WebSocket for market-wide data streaming.
+
+    Requires a valid bearer token supplied as the ``token`` query parameter.
+    The handshake is rejected with close-code 4401 when the token is absent
+    or invalid — no financial data is ever sent to unauthenticated callers.
+    """
+    payload = _reject_unauthenticated(token)
+    if payload is None:
+        await websocket.close(code=4401)
+        logger.warning("Market data WS: rejected unauthenticated connection")
+        return
+
     await websocket.accept()
 
     try:
@@ -183,8 +211,68 @@ async def market_data_stream_endpoint(websocket: WebSocket):
 
 
 @router.websocket("/portfolio/{portfolio_id}")
-async def portfolio_stream(websocket: WebSocket, portfolio_id: str):
-    """WebSocket for portfolio-specific updates."""
+async def portfolio_stream(
+    websocket: WebSocket,
+    portfolio_id: str,
+    token: Optional[str] = Query(None),
+):
+    """WebSocket for portfolio-specific updates.
+
+    Requires a valid bearer token supplied as the ``token`` query parameter.
+    The connection is rejected with close-code 4401 when no token is
+    provided, and with close-code 4403 when the authenticated user does not
+    own the requested portfolio.
+    """
+    from backend.services.portfolio_service import portfolio_service as _ps
+    from backend.config.database import get_async_db_session
+
+    payload = _reject_unauthenticated(token)
+    if payload is None:
+        await websocket.close(code=4401)
+        logger.warning(
+            "Portfolio WS %s: rejected unauthenticated connection", portfolio_id
+        )
+        return
+
+    # Resolve user_id from token payload.  The canonical oauth2 token stores
+    # the numeric user id under the "user_id" claim (see oauth2.py:188).
+    token_user_id = payload.get("user_id")
+    if token_user_id is None:
+        await websocket.close(code=4401)
+        logger.warning(
+            "Portfolio WS %s: token missing user_id claim", portfolio_id
+        )
+        return
+
+    # Verify portfolio ownership before accepting the connection.
+    try:
+        db_gen = get_async_db_session()
+        db = await db_gen.__anext__()
+        try:
+            ownership = await _ps.compute_portfolio_detail(
+                portfolio_id=portfolio_id,
+                user_id=int(token_user_id),
+                db=db,
+            )
+        finally:
+            try:
+                await db_gen.aclose()
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.error(
+            "Portfolio WS %s: ownership check error: %s", portfolio_id, exc
+        )
+        await websocket.close(code=4401)
+        return
+
+    if ownership is None:
+        await websocket.close(code=4403)
+        logger.warning(
+            "Portfolio WS %s: access denied for user %s", portfolio_id, token_user_id
+        )
+        return
+
     await websocket.accept()
 
     try:

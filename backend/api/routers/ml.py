@@ -25,6 +25,7 @@ from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager, ModelManager
 from backend.models.api_response import ApiResponse, success_response
 from backend.models.unified_models import User
+from backend.services.realtime_price_service import get_realtime_price_service
 from backend.utils.cache import get_redis, CacheManager
 from backend.utils.numpy_serializer import sanitize_numpy
 
@@ -278,25 +279,76 @@ async def _run_single_model_prediction(
     ticker: str,
     horizon_days: int,
     base_price: float,
+    feature_data: Optional[Any] = None,
 ) -> tuple[Any, str]:
     """
     Run prediction for a single model type.
-    Returns (raw_predictions, internal_model_key).
+
+    Args:
+        feature_data: Real market/feature data for the model. For LSTM, a
+            pre-shaped numpy array of shape (1, sequence_length, n_features).
+            For XGBoost, a 2D array of shape (horizon_days, n_features).
+            If None (and BOOTSTRAP_MODELS env flag is NOT set), a 503 is raised.
+
+    Returns:
+        (raw_predictions, internal_model_key)
+
+    Raises:
+        ValueError: Model is unavailable.
+        HTTPException 503: Required feature data was not supplied and
+            BOOTSTRAP_MODELS is not enabled.
     """
+    import os as _os
+
     model_key = _MODEL_NAME_MAP[model_type]
     model = model_manager.get_model(model_key)
 
     if model is None:
         raise ValueError(f"Model '{model_type.value}' is not available")
 
+    bootstrap_mode = _os.environ.get("BOOTSTRAP_MODELS", "").lower() in ("1", "true", "yes")
+
     # Prepare input data appropriate for each model type
     if model_type == MLModelType.LSTM:
         # LSTM expects a 3D tensor: (batch, sequence_length, features)
-        input_data = np.random.randn(1, 30, 5)  # Placeholder; real impl fetches market data
+        if feature_data is not None:
+            input_data = feature_data
+        elif bootstrap_mode:
+            # Bootstrap/test-only synthetic data — NEVER reached in production
+            logger.warning(
+                "BOOTSTRAP_MODELS is set: using synthetic LSTM input for %s — "
+                "DO NOT run in production.",
+                ticker,
+            )
+            input_data = np.zeros((1, 30, 5), dtype=np.float32)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"LSTM prediction for '{ticker}' requires real market feature data "
+                    "which is not yet available. Refusing to substitute synthetic data."
+                ),
+            )
         raw = model_manager.predict(model_key, input_data)
 
     elif model_type == MLModelType.XGBOOST:
-        input_data = np.random.randn(horizon_days, 20)
+        if feature_data is not None:
+            input_data = feature_data
+        elif bootstrap_mode:
+            logger.warning(
+                "BOOTSTRAP_MODELS is set: using zero XGBoost input for %s — "
+                "DO NOT run in production.",
+                ticker,
+            )
+            input_data = np.zeros((horizon_days, 20), dtype=np.float32)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"XGBoost prediction for '{ticker}' requires real market feature data "
+                    "which is not yet available. Refusing to substitute synthetic data."
+                ),
+            )
         raw = model_manager.predict(model_key, input_data)
         if isinstance(raw, dict) and "predictions" in raw:
             raw = raw["predictions"]
@@ -335,7 +387,8 @@ async def _run_ensemble_prediction(
     for mtype in [MLModelType.LSTM, MLModelType.XGBOOST, MLModelType.PROPHET]:
         try:
             raw, model_key = await _run_single_model_prediction(
-                model_manager, mtype, ticker, horizon_days, base_price
+                model_manager, mtype, ticker, horizon_days, base_price,
+                feature_data=None,  # TODO(#200-follow-up): wire real feature fetch
             )
             points = _generate_prediction_points(base_price, raw, horizon_days, mtype)
             for i, pt in enumerate(points):
@@ -390,6 +443,34 @@ async def _run_ensemble_prediction(
 
 
 # ---------------------------------------------------------------------------
+# Real market data
+# ---------------------------------------------------------------------------
+
+async def _fetch_base_price(ticker: str, db: AsyncSession) -> Optional[float]:
+    """Fetch the latest *real* market price for ``ticker``.
+
+    Routes through the realtime price service, which resolves in priority order:
+    in-memory cache -> Redis -> database fallback.  Returns ``None`` when no real
+    price is available so callers keep failing loud (#200) instead of scaling
+    confidence intervals off a fabricated constant.
+
+    This resolves the ``base_price`` half of the #200 follow-up (#208 item 1).
+    Wiring real ``feature_data`` tensors remains a deeper follow-up.
+    """
+    try:
+        service = await get_realtime_price_service()
+        update = await service.get_latest_price(ticker, db)
+    except Exception as exc:  # a quote lookup must never break prediction flow
+        logger.warning(f"base_price lookup failed for {ticker} (non-fatal): {exc}")
+        return None
+
+    price = getattr(update, "price", None) if update is not None else None
+    if not price:
+        return None
+    return float(price)
+
+
+# ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
 
@@ -407,6 +488,7 @@ async def _run_ensemble_prediction(
 async def create_prediction(
     request_body: MLPredictionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[MLPredictionResponse]:
     """
     POST /predictions -- Generate ML price predictions.
@@ -452,8 +534,12 @@ async def create_prediction(
     prediction_id = f"pred-{uuid.uuid4().hex[:12]}"
     generated_at = datetime.now(timezone.utc)
 
-    # Use a base price as reference (in production, fetch current market price)
-    base_price = 100.0
+    # base_price must come from real market data.  It is used only to scale
+    # confidence intervals, so a None is safe when the model returns absolute
+    # prices.  If not available we refuse to substitute a hardcoded constant.
+    # (#208 item 1) Wired to the realtime price service; stays None — and
+    # therefore fail-loud downstream — when no real quote is available.
+    base_price: Optional[float] = await _fetch_base_price(ticker, db)
 
     try:
         if model_type == MLModelType.ENSEMBLE:
@@ -462,10 +548,14 @@ async def create_prediction(
             )
             model_used = "ensemble"
         else:
+            # feature_data=None causes _run_single_model_prediction to raise 503
+            # unless BOOTSTRAP_MODELS env flag is set.  Callers that have already
+            # fetched real feature arrays should pass them here.
             raw, model_key = await _run_single_model_prediction(
-                model_manager, model_type, ticker, horizon_days, base_price
+                model_manager, model_type, ticker, horizon_days, base_price,
+                feature_data=None,  # TODO(#200-follow-up): wire real feature fetch
             )
-            points = _generate_prediction_points(base_price, raw, horizon_days, model_type)
+            points = _generate_prediction_points(base_price or 0.0, raw, horizon_days, model_type)
             accuracy = _build_accuracy_metrics(model_manager, model_key)
             model_used = model_type.value
     except HTTPException:
