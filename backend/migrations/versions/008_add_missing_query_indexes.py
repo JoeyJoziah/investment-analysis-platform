@@ -134,10 +134,10 @@ def upgrade():
             ON recommendations (recommendation_id);
         """))
 
-        # Index for confidence_score filtering and ordering
+        # Index for confidence filtering and ordering
         op.execute(text("""
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recommendations_confidence_desc
-            ON recommendations (confidence_score DESC)
+            ON recommendations (confidence DESC)
             WHERE is_active = true AND valid_until > CURRENT_TIMESTAMP;
         """))
 
