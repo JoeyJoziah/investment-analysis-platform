@@ -90,11 +90,18 @@ class DatabaseManager:
     def _connect(self):
         """Establish database connection"""
         try:
-            # Default connection string for PostgreSQL
-            db_url = os.getenv(
-                'DATABASE_URL', 
-                'postgresql://postgres:9v1g^OV9XUwzUP6cEgCYgNOE@localhost:5432/investment_db'
-            )
+            # Connection string for PostgreSQL.
+            # Require DATABASE_URL in production; allow a clearly-marked non-prod
+            # fallback only outside production (mirrors security_config pattern).
+            db_url = os.getenv('DATABASE_URL')
+            if not db_url:
+                if os.getenv('ENVIRONMENT', 'development').lower() == 'production':
+                    raise RuntimeError(
+                        "DATABASE_URL must be set in production "
+                        "(no hardcoded fallback allowed)."
+                    )
+                # NON-PROD FALLBACK ONLY.
+                db_url = 'postgresql://postgres:CHANGE_ME_LOCAL_DEV@localhost:5432/investment_db'
             
             self.engine = create_engine(
                 db_url,

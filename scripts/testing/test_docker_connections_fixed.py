@@ -7,16 +7,33 @@ Tests connections using corrected Docker service names and passwords
 import os
 import sys
 
+
+def _require_secret(env_var: str, non_prod_fallback: str) -> str:
+    """Require a secret in production; allow a marked non-prod fallback otherwise.
+
+    Mirrors backend.security.secrets_manager's production-vs-non-prod handling.
+    """
+    value = os.getenv(env_var)
+    if value:
+        return value
+    if os.getenv('ENVIRONMENT', 'development').lower() == 'production':
+        raise RuntimeError(
+            f"{env_var} must be set in production (no hardcoded fallback allowed)."
+        )
+    return non_prod_fallback
+
+
 def test_postgresql_docker():
     """Test PostgreSQL connection using Docker service name"""
     try:
         import psycopg2
         conn = psycopg2.connect(
-            host='postgres',  # Docker service name
-            port=5432,
-            database='investment_db',
-            user='investment_user',
-            password='9v1g^OV9XUwzUP6cEgCYgNOE'
+            host=os.getenv('POSTGRES_HOST', 'postgres'),  # Docker service name
+            port=int(os.getenv('POSTGRES_PORT', 5432)),
+            database=os.getenv('POSTGRES_DB', 'investment_db'),
+            user=os.getenv('POSTGRES_USER', 'investment_user'),
+            # NON-PROD FALLBACK ONLY — production must set POSTGRES_PASSWORD.
+            password=_require_secret('POSTGRES_PASSWORD', 'CHANGE_ME_LOCAL_DEV')
         )
         cursor = conn.cursor()
         cursor.execute("SELECT version();")
@@ -35,9 +52,10 @@ def test_redis_docker():
     try:
         import redis
         r = redis.Redis(
-            host='redis',  # Docker service name
-            port=6379,
-            password='RsYque',  # Actual working password (truncated)
+            host=os.getenv('REDIS_HOST', 'redis'),  # Docker service name
+            port=int(os.getenv('REDIS_PORT', 6379)),
+            # NON-PROD FALLBACK ONLY — production must set REDIS_PASSWORD.
+            password=_require_secret('REDIS_PASSWORD', 'CHANGE_ME_LOCAL_DEV'),
             db=0,
             decode_responses=True
         )
