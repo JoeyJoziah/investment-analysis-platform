@@ -50,22 +50,26 @@ def upgrade():
         UPDATE stocks SET symbol_hash = hashtext(symbol) WHERE symbol_hash IS NULL;
     """)
     
-    # Create optimized indexes for stock lookups
-    op.create_index(
-        'idx_stocks_symbol_hash',
-        'stocks',
-        ['symbol_hash'],
-        unique=True,
-        postgresql_concurrently=True
-    )
-    
-    op.create_index(
-        'idx_stocks_active_volume',
-        'stocks',
-        ['is_active', 'avg_daily_volume'],
-        postgresql_where=text('is_active = true AND avg_daily_volume > 1000000'),
-        postgresql_concurrently=True
-    )
+    # Create optimized indexes for stock lookups.
+    # CREATE INDEX CONCURRENTLY cannot run inside a transaction; alembic wraps
+    # every migration in a tx by default, so open an autocommit block for the
+    # concurrent index builds only.
+    with op.get_context().autocommit_block():
+        op.create_index(
+            'idx_stocks_symbol_hash',
+            'stocks',
+            ['symbol_hash'],
+            unique=True,
+            postgresql_concurrently=True
+        )
+
+        op.create_index(
+            'idx_stocks_active_volume',
+            'stocks',
+            ['is_active', 'avg_daily_volume'],
+            postgresql_where=text('is_active = true AND avg_daily_volume > 1000000'),
+            postgresql_concurrently=True
+        )
     
     # ============================================================================
     # STEP 3: Create Optimized Price History Tables
@@ -252,48 +256,52 @@ def upgrade():
     # STEP 8: Create Optimized Indexes
     # ============================================================================
     
-    # Price history indexes
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_price_opt_stock_date 
-        ON price_history_optimized USING BRIN (stock_id, date);
-    """)
-    
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_price_opt_volume 
-        ON price_history_optimized (volume) 
-        WHERE volume > 1000000;
-    """)
-    
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_price_opt_change 
-        ON price_history_optimized (price_change_pct) 
-        WHERE abs(price_change_pct) > 5.0;
-    """)
-    
-    # Technical indicators indexes
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_tech_opt_rsi 
-        ON technical_indicators_optimized (rsi_14) 
-        WHERE rsi_14 < 30 OR rsi_14 > 70;
-    """)
-    
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_tech_opt_sma_cross 
-        ON technical_indicators_optimized (stock_id, sma_20, sma_50) 
-        WHERE sma_20 IS NOT NULL AND sma_50 IS NOT NULL;
-    """)
-    
-    # News sentiment indexes
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_news_bulk_sentiment 
-        ON news_sentiment_bulk (sentiment_score, impact_score) 
-        WHERE abs(sentiment_score) > 500;
-    """)
-    
-    op.execute("""
-        CREATE INDEX CONCURRENTLY idx_news_bulk_headlines 
-        ON news_sentiment_bulk USING GIN (headline_vector);
-    """)
+    # These raw CREATE INDEX CONCURRENTLY statements cannot run inside a
+    # transaction; alembic wraps every migration in a tx by default, so open an
+    # autocommit block for the concurrent index builds only.
+    with op.get_context().autocommit_block():
+        # Price history indexes
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_price_opt_stock_date
+            ON price_history_optimized USING BRIN (stock_id, date);
+        """)
+
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_price_opt_volume
+            ON price_history_optimized (volume)
+            WHERE volume > 1000000;
+        """)
+
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_price_opt_change
+            ON price_history_optimized (price_change_pct)
+            WHERE abs(price_change_pct) > 5.0;
+        """)
+
+        # Technical indicators indexes
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_tech_opt_rsi
+            ON technical_indicators_optimized (rsi_14)
+            WHERE rsi_14 < 30 OR rsi_14 > 70;
+        """)
+
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_tech_opt_sma_cross
+            ON technical_indicators_optimized (stock_id, sma_20, sma_50)
+            WHERE sma_20 IS NOT NULL AND sma_50 IS NOT NULL;
+        """)
+
+        # News sentiment indexes
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_news_bulk_sentiment
+            ON news_sentiment_bulk (sentiment_score, impact_score)
+            WHERE abs(sentiment_score) > 500;
+        """)
+
+        op.execute("""
+            CREATE INDEX CONCURRENTLY idx_news_bulk_headlines
+            ON news_sentiment_bulk USING GIN (headline_vector);
+        """)
     
     # ============================================================================
     # STEP 9: Create Materialized Views for Common Queries
