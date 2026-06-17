@@ -1,6 +1,6 @@
 # Scripts Reference
 
-> Auto-generated from project scripts. Last updated: 2026-01-27
+> Auto-generated from project scripts. **Version: 1.0.0** · **Last Updated: 2026-06-17**
 
 This document provides a comprehensive reference for all shell and Python scripts in the investment-analysis-platform.
 
@@ -155,9 +155,6 @@ Located in `scripts/testing/`
 | `test_docker_connections_fixed.py` | Fixed Docker connection tests |
 | `test_fixes.py` | Test fix implementations |
 | `test_pipeline_components.py` | Test pipeline components |
-| `test_services_corrected.py` | Corrected service tests |
-| `test_services_fixed.py` | Fixed service tests |
-| `test_services_quick.py` | Quick service validation |
 
 ### Validation Scripts
 

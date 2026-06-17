@@ -155,7 +155,7 @@ def main():
     else:
         print(f"\n⚠️  {total - passed} Docker service(s) failed")
         print("💡 This is expected if running outside Docker containers")
-        print("   Use test_services_corrected.py for host-based testing")
+        print("   Use scripts/setup/run_connection_tests.sh for host-based testing")
     
     show_docker_configuration()
     
