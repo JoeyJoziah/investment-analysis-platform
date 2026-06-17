@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from faker import Faker
 
 from backend.config import settings
+from backend.utils import monitoring as metrics
 from backend.utils.monitoring import data_anonymization_operations
 
 # Initialize Faker for generating fake data
