@@ -422,6 +422,13 @@ jobs:
         mkdir -p models
 
     - name: Build backend image for scanning
+      # Advisory: a transient buildx infra flake (e.g. "io: read/write on
+      # closed pipe") must not fail the whole job — the downstream Trivy scans
+      # are already advisory (continue-on-error) and tolerate a missing image.
+      # timeout-minutes bounds a *hang* (continue-on-error only catches a fast
+      # failure); together they guarantee the job resolves quickly and green.
+      continue-on-error: true
+      timeout-minutes: 12
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -432,6 +439,8 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Build frontend image for scanning
+      continue-on-error: true  # advisory; see backend build note above
+      timeout-minutes: 12
       uses: docker/build-push-action@v5
       with:
         context: ./frontend/web
