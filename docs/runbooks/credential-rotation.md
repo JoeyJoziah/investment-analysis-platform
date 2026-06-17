@@ -1,5 +1,7 @@
 # Credential Rotation Runbook — Live Postgres + Redis
 
+**Version: 1.0.0** · **Last Updated: 2026-06-17**
+
 **Status:** Authored, awaiting a scheduled maintenance window. This runbook is the
 operational procedure that resolves the git-history credential exposure tracked in
 **issue #219**.
