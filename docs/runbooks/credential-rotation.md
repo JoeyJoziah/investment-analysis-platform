@@ -9,10 +9,10 @@ operational procedure that resolves the git-history credential exposure tracked 
 **Scope of this runbook:** rotation of the two live data-store credentials that are
 present in git history:
 
-| # | Credential                  | Leaked value (in history) |
-|---|-----------------------------|---------------------------|
-| 1 | Postgres `POSTGRES_PASSWORD`| `9v1g^OV9XUwzUP6cEgCYgNOE` |
-| 2 | Redis `REDIS_PASSWORD`      | `RsYque&Xh%TUD*Nv^7k7B8X3` |
+| # | Credential                  | Value |
+|---|-----------------------------|-------|
+| 1 | Postgres `POSTGRES_PASSWORD`| redacted — retrieve from the secret store (do NOT paste the live value into this doc) |
+| 2 | Redis `REDIS_PASSWORD`      | redacted — retrieve from the secret store (do NOT paste the live value into this doc) |
 
 **Prior art / cross-references:**
 - A1 runbook Step 1: `docs/audits/2026-04/_synthesis/_meta/artifacts/A1-rotation-runbook.md`
@@ -164,7 +164,7 @@ After repointing a store's deploy env to the new credential:
 1. **Health checks GREEN.** Run application health checks and confirm the relevant
    component is healthy on the new credential:
    ```bash
-   curl https://<api>/health   # 200, all components green, no DB/Redis auth errors
+   curl https://localhost/health   # 200, all components green, no DB/Redis auth errors
    ```
 2. **SOAK / observation window.** Hold and observe with **ZERO auth-failure errors**
    before proceeding. The soak window MUST be at least:
@@ -270,15 +270,15 @@ CONFIG REWRITE
 
 ```bash
 # Old PG password must fail
-PGPASSWORD='9v1g^OV9XUwzUP6cEgCYgNOE' psql -h <prod> -U postgres -d investment_db -c '\q'
+PGPASSWORD='$OLD_PG_PASSWORD' psql -h <prod> -U postgres -d investment_db -c '\q'
 #   MUST FAIL with auth error
 
 # Old Redis password must fail
-redis-cli -h <prod> -a 'RsYque&Xh%TUD*Nv^7k7B8X3' ping
+redis-cli -h <prod> -a '$OLD_REDIS_PASSWORD' ping
 #   MUST FAIL (NOAUTH / WRONGPASS)
 
 # New credential still healthy
-curl https://<api>/health   # 200, all green
+curl https://localhost/health   # 200, all green
 ```
 
 When BOTH stores have completed §7 and the old credentials are confirmed dead, the
