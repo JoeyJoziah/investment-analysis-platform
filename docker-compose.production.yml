@@ -18,29 +18,37 @@ x-healthcheck-defaults: &healthcheck-defaults
   retries: 3
   start_period: 40s
 
+# NOTE: these anchors are merged directly under each service's `deploy:` key,
+# so they must mirror the compose `deploy.resources` shape (limits/reservations
+# nested under `resources:`). Without the `resources:` wrapper, `docker compose
+# config` rejects the file: "deploy additional properties 'limits',
+# 'reservations' not allowed".
 x-resource-limits: &resource-limits-small
-  limits:
-    cpus: '0.5'
-    memory: 512M
-  reservations:
-    cpus: '0.1'
-    memory: 128M
+  resources:
+    limits:
+      cpus: '0.5'
+      memory: 512M
+    reservations:
+      cpus: '0.1'
+      memory: 128M
 
 x-resource-limits-medium: &resource-limits-medium
-  limits:
-    cpus: '1'
-    memory: 1G
-  reservations:
-    cpus: '0.25'
-    memory: 256M
+  resources:
+    limits:
+      cpus: '1'
+      memory: 1G
+    reservations:
+      cpus: '0.25'
+      memory: 256M
 
 x-resource-limits-large: &resource-limits-large
-  limits:
-    cpus: '2'
-    memory: 2G
-  reservations:
-    cpus: '0.5'
-    memory: 512M
+  resources:
+    limits:
+      cpus: '2'
+      memory: 2G
+    reservations:
+      cpus: '0.5'
+      memory: 512M
 
 x-restart-policy: &restart-policy
   restart: unless-stopped
