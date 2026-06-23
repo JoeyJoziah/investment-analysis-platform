@@ -397,7 +397,7 @@ services:
     depends_on:
       - postgres
       - redis
-    command: python -m backend.monitoring.cost_monitor
+    command: python -m backend.utils.cost_monitor   # T0.3 (PRD 2026-06): real module path (was nonexistent backend.monitoring.cost_monitor)
     deploy:
       <<: *resource-limits-small
     networks:
