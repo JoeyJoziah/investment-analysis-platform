@@ -482,7 +482,14 @@ class ModelManager:
             raise ModelUnavailableError(model=model_name, reason=reason)
 
     def predict(self, model_name: str, data: Any) -> Any:
-        """Make prediction with error handling"""
+        """Make prediction with error handling.
+
+        NOTE: SEC-implicated HTTP call sites MUST gate with ``assert_real_model``
+        before calling this (see recommendations.py/analysis.py/ml.py) so a
+        fallback (Dummy*) model never serves np.random to users. ``predict`` is
+        deliberately not self-guarding to preserve the in-process fallback used
+        by health checks and the ML test pipeline.
+        """
         try:
             model = self.get_model(model_name)
             if model is None:

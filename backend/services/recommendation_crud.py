@@ -15,6 +15,9 @@ import random
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from backend.config.settings import settings
+from backend.exceptions import ModelUnavailableError
+
 logger = logging.getLogger(__name__)
 
 # SEC compliance constants (duplicated here so this module is self-contained;
@@ -125,7 +128,21 @@ class RecommendationCrudMixin:
 
         Returns:
             Dictionary representing a RecommendationDetail-compatible structure
+
+        Raises:
+            ModelUnavailableError: when ``settings.DEMO_MODE`` is False
+                (production default). T1.3 (D1): this is the legacy mixin copy of
+                the random.* fabricator (shadowed by RecommendationService's
+                override). Gated identically so no live path that resolves to the
+                mixin version can ship fabricated numbers — returns HTTP 503
+                instead. ``DEMO_MODE=true`` preserves the synthetic path.
         """
+        if not settings.DEMO_MODE:
+            raise ModelUnavailableError(
+                model="recommendation_engine",
+                reason="fallback_active",
+            )
+
         if not symbol:
             symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
             symbol = random.choice(symbols)
