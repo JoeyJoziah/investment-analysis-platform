@@ -285,7 +285,17 @@ class LightGBMModel:
 
 class ModelManager:
     """
-    Manages all ML models and ensemble predictions
+    Ensemble trainer/predictor (LSTM + Transformer + tree + Prophet).
+
+    T1.4 NOTE: this is a DISTINCT abstraction from
+    ``backend.ml.model_manager.ModelManager`` — that one is the per-model
+    *registry* (load/fallback-detection/``assert_real_model``) used by the API
+    routers; this one trains and ensembles models for the analytics
+    recommendation engine. They share a class name but not a responsibility, and
+    no module imports both. The PRD T1.4 "collapse to one canonical" assumed they
+    were duplicates; they are not, so a full merge is deferred as a design
+    decision (see .loki/queue/dead-letter.json id T1.4-merge). This class is
+    fail-loud as of T1.1 (predict() refuses without real weights).
     """
     
     def __init__(self):
