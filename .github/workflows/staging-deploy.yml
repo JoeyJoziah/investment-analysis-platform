@@ -95,8 +95,8 @@ jobs:
       id: frontend-build
       uses: docker/build-push-action@v5
       with:
-        context: ./frontend/web
-        file: ./frontend/web/Dockerfile
+        context: .
+        file: ./Dockerfile.frontend
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.frontend-meta.outputs.tags }}
