@@ -45,43 +45,67 @@ class ServiceType(Enum):
 
 
 # Health Check Metrics
-health_check_status = Gauge(
+#
+# T2.7: idempotent registration. Importing this module a second time under a
+# different module identity (e.g. a test spec-loading it) must NOT raise
+# "Duplicated timeseries" in the global default REGISTRY — that broke
+# `pytest --collect-only`. Reuse the existing collector if one is already
+# registered under the same metric name.
+def _get_or_create_metric(metric_cls, name, documentation, labelnames):
+    from prometheus_client import REGISTRY
+    try:
+        return metric_cls(name, documentation, labelnames)
+    except ValueError:
+        existing = REGISTRY._names_to_collectors.get(name)
+        if existing is not None:
+            return existing
+        raise
+
+
+health_check_status = _get_or_create_metric(
+    Gauge,
     'health_check_status',
     'Health check status (1=healthy, 0.5=degraded, 0=unhealthy)',
     ['service', 'check_type']
 )
 
-health_check_duration = Histogram(
+health_check_duration = _get_or_create_metric(
+    Histogram,
     'health_check_duration_seconds',
     'Health check execution time',
     ['service', 'check_type']
 )
 
-health_check_failures = Counter(
+health_check_failures = _get_or_create_metric(
+    Counter,
     'health_check_failures_total',
     'Health check failure count',
     ['service', 'failure_type']
 )
 
-sla_compliance = Gauge(
+sla_compliance = _get_or_create_metric(
+    Gauge,
     'sla_compliance_percent',
     'SLA compliance percentage',
     ['service', 'sla_type', 'time_window']
 )
 
-service_availability = Gauge(
+service_availability = _get_or_create_metric(
+    Gauge,
     'service_availability_percent',
     'Service availability percentage',
     ['service', 'time_window']
 )
 
-response_time_sla = Gauge(
+response_time_sla = _get_or_create_metric(
+    Gauge,
     'response_time_sla_compliance_percent',
     'Response time SLA compliance',
     ['service', 'percentile', 'time_window']
 )
 
-service_dependency_health = Gauge(
+service_dependency_health = _get_or_create_metric(
+    Gauge,
     'service_dependency_health',
     'Service dependency health score',
     ['service', 'dependency']

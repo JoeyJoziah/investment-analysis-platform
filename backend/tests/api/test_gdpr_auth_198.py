@@ -17,6 +17,20 @@ correct auth dependency, plus a unit test of the ownership helper. This avoids
 wiring the full app/TestClient while still proving the security contract.
 """
 
+# T2.7: required env must exist before importing backend modules — settings
+# instantiates at import and security_config fails fast in production. Setting a
+# non-production ENVIRONMENT keeps this module collectable under `--noconftest`.
+import os
+
+os.environ.setdefault("TESTING", "True")
+os.environ.setdefault("ENVIRONMENT", "testing")
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-testing-only")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-for-testing-only")
+os.environ.setdefault("MASTER_SECRET_KEY", "m" * 130)
+
 import hashlib
 from types import SimpleNamespace
 

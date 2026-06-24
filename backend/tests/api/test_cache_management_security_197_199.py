@@ -20,10 +20,17 @@ router introspection, avoiding heavy full-app wiring.
 import os
 
 os.environ.setdefault("TESTING", "True")
+# T2.7: ENVIRONMENT must be non-production so security_config does not raise
+# InsecureSecretError at import time (it fails fast in production only). Keeps
+# the module collectable under `--noconftest` without weakening the #201
+# import-time guard (which has its own dedicated test).
+os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-testing-only")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-for-testing-only")
+os.environ.setdefault("MASTER_SECRET_KEY", "m" * 130)
 
 import inspect
 
