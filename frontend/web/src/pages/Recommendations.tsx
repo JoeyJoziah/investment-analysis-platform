@@ -22,6 +22,7 @@ import RecommendationsList from '../components/recommendations/RecommendationsLi
 import type { Recommendation } from '../components/recommendations/RecommendationsList';
 import RecommendationsFilter from '../components/recommendations/RecommendationsFilter';
 import type { RecommendationFilters } from '../components/recommendations/RecommendationsFilter';
+import InvestmentDisclaimer from '../components/disclaimers/InvestmentDisclaimer';
 
 const DEFAULT_FILTERS: RecommendationFilters = {
   recommendation: 'all',
@@ -142,6 +143,7 @@ const Recommendations: React.FC = () => {
 
   return (
     <Container maxWidth="xl">
+      <InvestmentDisclaimer context="recommendations" />
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h4" fontWeight="bold">
