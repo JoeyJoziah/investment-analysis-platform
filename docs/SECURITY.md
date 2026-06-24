@@ -3,7 +3,7 @@
 **Last Updated**: 2026-01-29
 **Version**: 2.0.0 (Phase 3 Complete)
 **Classification**: Internal Use Only
-**Status**: Production Ready - All Phase 3 Security Features Implemented
+**Status**: Reference guide — Phase 3 features described here are implemented, but live secrets remain committed; see [docs/STATUS.md](STATUS.md) for current security posture
 
 ---
 
