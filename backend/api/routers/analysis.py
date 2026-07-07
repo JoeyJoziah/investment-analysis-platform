@@ -368,19 +368,15 @@ async def analyze_stock(
                     volatility=tech_analysis.get('volatility', 0.0)
                 )
             else:
-                logger.warning(f"No price history found for {symbol}, using mock data")
-                technical = TechnicalIndicators(
-                    rsi=calculate_rsi([]),
-                    rsi_signal=SignalStrength.NEUTRAL,
-                    macd=calculate_macd([]),
-                    macd_signal=SignalStrength.NEUTRAL,
-                    moving_averages={"sma_20": 150.5, "sma_50": 148.2, "sma_200": 145.0},
-                    bollinger_bands={"upper": 155.0, "middle": 150.0, "lower": 145.0},
-                    volume_analysis={"current_volume": 50000000, "avg_volume": 45000000},
-                    support_levels=[145.0, 142.0, 140.0],
-                    resistance_levels=[155.0, 158.0, 160.0],
-                    trend="neutral",
-                    volatility=0.20
+                # No price history — cannot compute technical indicators.
+                # Raise 503 rather than returning hardcoded placeholder values
+                # that would be indistinguishable from real data (Finding #200).
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        f"No price history available for '{symbol}'. "
+                        "Technical indicators cannot be computed without real market data."
+                    ),
                 )
 
         # Fundamental Analysis processing
@@ -420,23 +416,18 @@ async def analyze_stock(
                     valuation_score=None
                 )
 
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"Error processing fundamental data for {symbol}: {e}")
-                fundamental = FundamentalMetrics(
-                    pe_ratio=25.5,
-                    peg_ratio=1.8,
-                    eps=6.5,
-                    revenue_growth=0.15,
-                    profit_margin=0.22,
-                    debt_to_equity=0.45,
-                    roe=0.28,
-                    current_ratio=1.8,
-                    dividend_yield=0.015,
-                    market_cap=stock.market_cap or 2500000000000,
-                    enterprise_value=None,
-                    book_value=45.0,
-                    intrinsic_value=165.0,
-                    valuation_score=72.5
+                # Raise 503 rather than returning hardcoded fundamental values
+                # that would be indistinguishable from real provider data (Finding #200).
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        f"Fundamental data provider failed for '{symbol}': {e}. "
+                        "Refusing to substitute hardcoded placeholder values."
+                    ),
                 )
 
         # Sentiment Analysis processing
@@ -473,18 +464,18 @@ async def analyze_stock(
                         sentiment_sources={"news": 0, "social": 0}
                     )
 
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"Error in sentiment analysis for {symbol}: {e}")
-                sentiment = SentimentAnalysis(
-                    overall_sentiment=0.35,
-                    sentiment_label="Positive",
-                    news_sentiment=0.45,
-                    social_sentiment=0.25,
-                    analyst_sentiment=0.40,
-                    insider_sentiment=0.30,
-                    sentiment_momentum="improving",
-                    key_topics=["earnings beat", "product launch", "market expansion"],
-                    sentiment_sources={"news": 150, "social": 5000, "analysts": 25}
+                # Raise 503 rather than returning fabricated positive sentiment
+                # that would be indistinguishable from real data (Finding #200).
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        f"Sentiment analysis provider failed for '{symbol}': {e}. "
+                        "Refusing to substitute hardcoded placeholder values."
+                    ),
                 )
 
         # ML Predictions with real models
@@ -533,19 +524,15 @@ async def analyze_stock(
                     logger.warning(f"Insufficient price data for ML predictions for {symbol}")
                     ml_predictions = None
 
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"Error generating ML predictions for {symbol}: {e}")
-                ml_predictions = MLPredictions(
-                    price_prediction_1d=152.5,
-                    price_prediction_7d=155.0,
-                    price_prediction_30d=160.0,
-                    confidence_score=0.65,
-                    predicted_volatility=0.22,
-                    risk_score=35.0,
-                    pattern_recognition=["consolidation"],
-                    anomaly_detection=False,
-                    trend_prediction="neutral"
-                )
+                # Set ml_predictions to None rather than returning hardcoded price
+                # forecasts that would be indistinguishable from real model output
+                # (Finding #200).  The outer response still succeeds but omits the
+                # ml_predictions field, which is Optional in the schema.
+                ml_predictions = None
 
         # Risk Metrics calculation (delegated to service)
         # Per F-02-018 / PRD audit 2026-04 §3 D: insufficient price history
@@ -712,28 +699,36 @@ async def get_technical_indicators(
                 "trend": "unavailable"
             }
         elif indicator == Indicator.BOLLINGER_BANDS:
+            # Cannot compute Bollinger Bands without real price history.
+            # Return null values rather than hardcoded 155/150/145 placeholders
+            # (Finding #200).
             result["bollinger_bands"] = {
-                "upper": 155.0,
-                "middle": 150.0,
-                "lower": 145.0,
-                "bandwidth": 10.0,
-                "percent_b": 0.6
+                "upper": None,
+                "middle": None,
+                "lower": None,
+                "bandwidth": None,
+                "percent_b": None,
+                "status": "unavailable — no price data wired to this endpoint",
             }
         elif indicator == Indicator.MOVING_AVERAGE:
+            # Cannot compute moving averages without real price history.
+            # Return null values rather than hardcoded 150.5/148.2/145.0
+            # placeholders (Finding #200).
             result["moving_averages"] = {
-                "sma_20": 150.5,
-                "sma_50": 148.2,
-                "sma_200": 145.0,
-                "ema_12": 151.0,
-                "ema_26": 149.5,
-                "golden_cross": False,
-                "death_cross": False
+                "sma_20": None,
+                "sma_50": None,
+                "sma_200": None,
+                "ema_12": None,
+                "ema_26": None,
+                "golden_cross": None,
+                "death_cross": None,
+                "status": "unavailable — no price data wired to this endpoint",
             }
 
     return success_response(data={
         "symbol": symbol.upper(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "indicators": result
+        "indicators": result,
     })
 
 @router.get("/sentiment/{symbol}")

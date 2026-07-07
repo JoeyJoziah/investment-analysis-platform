@@ -24,13 +24,16 @@ def upgrade():
     op.add_column('price_history', 
                   sa.Column('adjusted_close', DECIMAL(10, 4), nullable=True))
     
-    # Create index for adjusted_close queries
-    op.create_index(
-        'idx_price_history_adjusted_close',
-        'price_history',
-        ['stock_id', 'date', 'adjusted_close'],
-        postgresql_concurrently=True
-    )
+    # Create index for adjusted_close queries.
+    # CREATE INDEX CONCURRENTLY cannot run inside a transaction; alembic wraps
+    # every migration in a tx by default, so open an autocommit block for it.
+    with op.get_context().autocommit_block():
+        op.create_index(
+            'idx_price_history_adjusted_close',
+            'price_history',
+            ['stock_id', 'date', 'adjusted_close'],
+            postgresql_concurrently=True
+        )
     
     # Add additional useful price-related columns while we're at it
     op.add_column('price_history', 

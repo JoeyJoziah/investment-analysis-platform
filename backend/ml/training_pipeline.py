@@ -211,18 +211,30 @@ class MLTrainingPipeline:
                 
                 # Wait for completion (with timeout)
                 await asyncio.sleep(2)  # Simulate training time
-                
-                # Store results
+
+                # Retrieve real validation metrics from the completed pipeline.
+                # We do NOT substitute random numbers here — fabricated metrics
+                # would gate production promotion on noise (Finding #200).
+                pipeline_metrics = None
+                if hasattr(pipeline, "get_metrics"):
+                    pipeline_metrics = pipeline.get_metrics()
+                elif hasattr(self.orchestrator, "get_pipeline_metrics"):
+                    pipeline_metrics = self.orchestrator.get_pipeline_metrics(pipeline_id)
+
+                if not pipeline_metrics:
+                    raise RuntimeError(
+                        f"Training pipeline '{config['name']}' completed but returned no "
+                        "validation metrics.  Cannot gate production promotion without real "
+                        "metrics — refusing to substitute random values. "
+                        "(Finding #200 — TODO: implement get_metrics() on pipeline/orchestrator)"
+                    )
+
                 results[config['name']] = {
                     'pipeline_id': pipeline_id,
                     'status': 'completed',
-                    'metrics': {
-                        'accuracy': np.random.uniform(0.7, 0.9),
-                        'f1_score': np.random.uniform(0.65, 0.85),
-                        'auc_roc': np.random.uniform(0.75, 0.95)
-                    }
+                    'metrics': pipeline_metrics,
                 }
-                
+
                 logger.info(f"Model {config['name']} trained successfully")
                 
             except Exception as e:
@@ -234,36 +246,82 @@ class MLTrainingPipeline:
         
         return results
     
-    async def evaluate_models(self, results: Dict[str, Any]) -> str:
-        """Evaluate and select best model"""
+    @staticmethod
+    def _promotion_score(metrics: Dict[str, Any]) -> float:
+        """Derive a single 0-1 promotion score from real held-out metrics.
+
+        Uses directional accuracy (the share of correct up/down calls on the
+        held-out validation set) — a bounded, regression-appropriate quality
+        signal that maps cleanly onto ``performance_threshold``.  Returns 0.0
+        when no real directional accuracy is present so a model with absent
+        metrics can never clear the gate (#208 item 1 / Finding #200).
+        """
+        if not isinstance(metrics, dict):
+            return 0.0
+        da = metrics.get('directional_accuracy')
+        try:
+            return float(da) if da is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    async def evaluate_models(self, results: Dict[str, Any]) -> Optional[str]:
+        """Evaluate models using *real* held-out metrics and select the best.
+
+        The score is derived from the real validation metrics returned by the
+        pipeline's ``get_metrics()`` (directional accuracy), not from fabricated
+        or constant values.  Returns the best model name, or ``None`` when no
+        completed model produced real metrics.
+        """
         logger.info("Evaluating models...")
-        
+
         best_model = None
-        best_score = 0
-        
+        best_score = 0.0
+
         for model_name, result in results.items():
             if result.get('status') == 'completed':
-                # Calculate composite score
+                # Score from REAL held-out validation metrics.
                 metrics = result.get('metrics', {})
-                score = (
-                    metrics.get('accuracy', 0) * 0.4 +
-                    metrics.get('f1_score', 0) * 0.3 +
-                    metrics.get('auc_roc', 0) * 0.3
-                )
-                
+                score = self._promotion_score(metrics)
+
                 if score > best_score:
                     best_score = score
                     best_model = model_name
-                
+
                 logger.info(f"Model {model_name} - Score: {score:.3f}")
-        
+
         logger.info(f"Best model: {best_model} with score {best_score:.3f}")
         return best_model
-    
-    async def deploy_model(self, model_name: str) -> Dict[str, Any]:
-        """Deploy the best model to production"""
+
+    async def deploy_model(
+        self, model_name: str, metrics: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Deploy the best model to production, gated on real validation metrics.
+
+        Promotion is blocked (no deployment) when the model's real held-out
+        score does not clear ``performance_threshold``.  This ensures production
+        promotion is gated on genuine validation performance rather than always
+        shipping whatever trained (#208 item 1 / Finding #200).
+        """
         logger.info(f"Deploying model {model_name}...")
-        
+
+        # Promotion gate: refuse to promote without real metrics that clear the
+        # configured threshold.
+        threshold = self.config['performance_threshold']
+        score = self._promotion_score(metrics or {})
+        if score < threshold:
+            logger.warning(
+                "Promotion BLOCKED for %s: real validation score %.3f < "
+                "performance_threshold %.3f",
+                model_name, score, threshold,
+            )
+            return {
+                'status': 'blocked',
+                'reason': 'performance_threshold_not_met',
+                'model_name': model_name,
+                'validation_score': score,
+                'performance_threshold': threshold,
+            }
+
         try:
             # Create deployment configuration
             deployment_config = DeploymentConfig(
@@ -317,8 +375,9 @@ class MLTrainingPipeline:
             best_model = await self.evaluate_models(training_results)
             
             if best_model:
-                # Step 5: Deploy best model
-                deployment_result = await self.deploy_model(best_model)
+                # Step 5: Deploy best model — gated on its real validation metrics.
+                best_metrics = training_results.get(best_model, {}).get('metrics', {})
+                deployment_result = await self.deploy_model(best_model, best_metrics)
                 
                 # Step 6: Save results
                 results_file = Path(self.config['logs_path']) / f'training_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'

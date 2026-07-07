@@ -385,3 +385,54 @@ class ModelPipeline(ABC):
             if step.name == step_name:
                 return step
         return None
+
+    def get_metrics(self) -> Optional[Dict[str, Any]]:
+        """Return the *real* held-out validation metrics for this pipeline run.
+
+        Surfaces the metrics produced by the ``model_evaluation`` step on the
+        held-out test split: RMSE, MAE, R2 and directional accuracy for the best
+        model (chosen by lowest RMSE).  These are the metrics the training
+        pipeline gates production promotion on (#208 item 1 / Finding #200) — so
+        this method returns ``None`` when the pipeline has not produced real
+        evaluation metrics, ensuring callers fail loud rather than promote on
+        fabricated or absent numbers.
+
+        Returns:
+            A dict with ``rmse``, ``mae``, ``r2``, ``directional_accuracy``,
+            ``best_model`` and the full ``per_model`` breakdown, or ``None`` if
+            no real evaluation metrics are available.
+        """
+        if self.result is None or self.result.status != PipelineStatus.COMPLETED:
+            return None
+
+        per_model = self.result.intermediate_results.get("model_evaluation")
+        if not per_model or not isinstance(per_model, dict):
+            return None
+
+        # Pick the best model by lowest held-out RMSE.
+        best_name = None
+        best_rmse = float("inf")
+        for name, metrics in per_model.items():
+            if not isinstance(metrics, dict):
+                continue
+            rmse = metrics.get("rmse")
+            if rmse is not None and rmse < best_rmse:
+                best_rmse = rmse
+                best_name = name
+
+        if best_name is None:
+            return None
+
+        best = per_model[best_name]
+        return {
+            "rmse": float(best.get("rmse")) if best.get("rmse") is not None else None,
+            "mae": float(best.get("mae")) if best.get("mae") is not None else None,
+            "r2": float(best.get("r2")) if best.get("r2") is not None else None,
+            "directional_accuracy": (
+                float(best["directional_accuracy"])
+                if best.get("directional_accuracy") is not None
+                else None
+            ),
+            "best_model": best_name,
+            "per_model": per_model,
+        }

@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from .base import ModelPipeline, PipelineConfig, PipelineStep, ModelType, ModelArtifact
+from .base import ModelPipeline, PipelineConfig, PipelineStep, ModelType, ModelArtifact, PipelineStatus
 
 # GPU utilities for device detection
 try:
@@ -517,17 +517,34 @@ class ModelEvaluationStep(PipelineStep):
                 else:
                     y_pred = model.predict(X_test)
                 
-                # Calculate metrics
+                # Calculate metrics on the held-out test set (real, not fabricated)
                 mse = mean_squared_error(y_test, y_pred)
                 mae = mean_absolute_error(y_test, y_pred)
                 r2 = r2_score(y_test, y_pred)
                 rmse = np.sqrt(mse)
-                
+
+                # Directional accuracy: fraction of test samples where the model
+                # predicted the correct sign of the target (up vs down).  This is
+                # the metric the prediction API surfaces as ``directional_accuracy``
+                # and the promotion gate uses, so it is computed from real
+                # held-out predictions here.
+                y_test_arr = np.asarray(
+                    y_test.values if hasattr(y_test, "values") else y_test
+                ).ravel()
+                y_pred_arr = np.asarray(y_pred).ravel()
+                if y_test_arr.size and y_test_arr.size == y_pred_arr.size:
+                    directional_accuracy = float(
+                        np.mean(np.sign(y_pred_arr) == np.sign(y_test_arr))
+                    )
+                else:
+                    directional_accuracy = 0.0
+
                 evaluation_results[model_type] = {
                     "mse": float(mse),
                     "mae": float(mae),
                     "rmse": float(rmse),
-                    "r2": float(r2)
+                    "r2": float(r2),
+                    "directional_accuracy": directional_accuracy,
                 }
                 
                 # Feature importance (if available)

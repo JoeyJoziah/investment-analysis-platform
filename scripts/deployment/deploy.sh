@@ -77,7 +77,6 @@ validate_environment() {
     required_vars=(
         "DB_PASSWORD"
         "REDIS_PASSWORD"
-        "ELASTIC_PASSWORD"
         "RABBITMQ_PASSWORD"
         "JWT_SECRET_KEY"
         "SECRET_KEY"
@@ -163,14 +162,13 @@ start_infrastructure() {
     docker compose -f ${COMPOSE_FILE} up -d \
         postgres \
         redis \
-        elasticsearch \
         rabbitmq
     
     # Wait for services to be healthy
     log_info "Waiting for infrastructure services to be healthy..."
     sleep 10
     
-    for service in postgres redis elasticsearch rabbitmq; do
+    for service in postgres redis rabbitmq; do
         for i in {1..30}; do
             if docker compose -f ${COMPOSE_FILE} ps ${service} | grep -q "healthy"; then
                 log_success "${service} is healthy"

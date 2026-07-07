@@ -20,15 +20,6 @@ from prometheus_client import Counter as PrometheusCounter, Gauge, Histogram
 import aiofiles
 import aiofiles.os
 
-# Elasticsearch is optional - removed to save $15-20/month
-# Using file-based logging and PostgreSQL full-text search instead
-try:
-    from elasticsearch import AsyncElasticsearch
-    ELASTICSEARCH_AVAILABLE = True
-except ImportError:
-    ELASTICSEARCH_AVAILABLE = False
-    AsyncElasticsearch = None
-
 from backend.config.monitoring_config import monitoring_config
 from backend.utils.structured_logging import get_structured_logger
 
@@ -582,19 +573,13 @@ class LogAggregator:
     """Aggregates logs from multiple sources."""
 
     def __init__(self):
-        # F-10-017 (PRD audit 2026-04 §3 G4 Phase 3 follow-up): Elasticsearch
-        # was removed to save $15-20/month per PERFORMANCE_OPTIMIZATION.md;
-        # the env var ELASTICSEARCH_URL is never set in production and the
-        # previous `_setup_elasticsearch` ran 20+ lines of dead probing on
-        # every instantiation. The bulk-write paths in
-        # `_bulk_index_to_elasticsearch` already early-return when this
-        # client is None, so setup is now opt-in: callers that genuinely
-        # want Elasticsearch construct an `AsyncElasticsearch` and assign
-        # it explicitly.
-        self.elasticsearch_client: Optional[object] = None  # AsyncElasticsearch when available
+        # Logs are aggregated from files into in-memory buffers and analysed
+        # in-process (pattern + anomaly detection). The optional Elasticsearch
+        # shipping path was removed (F-10-017 / issue #210) — it was never wired
+        # in production and shipped no logs. See issue #210 for the wider ELK
+        # decommission (settings.ELASTICSEARCH_URL, deploy scripts, infra).
         self.log_buffers: Dict[str, deque] = defaultdict(lambda: deque(maxlen=10000))
         self.processed_files: Set[str] = set()
-
 
     async def aggregate_log_files(self, log_directory: str) -> List[LogEntry]:
         """Aggregate log entries from files."""
@@ -656,41 +641,6 @@ class LogAggregator:
             logger.error(f"Error processing log file {file_path}: {e}")
         
         return entries
-    
-    async def send_to_elasticsearch(self, log_entries: List[LogEntry]):
-        """Send log entries to Elasticsearch (optional - disabled by default to save costs)."""
-        if not ELASTICSEARCH_AVAILABLE or not self.elasticsearch_client or not log_entries:
-            return
-
-        try:
-            actions = []
-            for entry in log_entries:
-                action = {
-                    "_index": f"investment-analysis-logs-{entry.timestamp.strftime('%Y.%m')}",
-                    "_source": {
-                        "timestamp": entry.timestamp.isoformat(),
-                        "level": entry.level.value,
-                        "service": entry.service,
-                        "message": entry.message,
-                        "correlation_id": entry.correlation_id,
-                        "request_id": entry.request_id,
-                        "user_id": entry.user_id,
-                        "metadata": entry.metadata,
-                        "source_file": entry.source_file,
-                        "line_number": entry.line_number,
-                        "exception_info": entry.exception_info
-                    }
-                }
-                actions.append(action)
-
-            # Bulk index
-            from elasticsearch.helpers import async_bulk
-            await async_bulk(self.elasticsearch_client, actions)
-
-            logger.info(f"Sent {len(actions)} log entries to Elasticsearch")
-
-        except Exception as e:
-            logger.debug(f"Elasticsearch not available (optional): {e}")
 
 
 class LogAnalysisSystem:
@@ -711,6 +661,12 @@ class LogAnalysisSystem:
     
     async def start_analysis(self):
         """Start log analysis system."""
+        if not monitoring_config.logging.enable_log_aggregation:
+            logger.info(
+                "Log aggregation disabled (enable_log_aggregation=False); "
+                "skipping log analysis loop"
+            )
+            return
         if not self._analysis_task:
             self._analysis_task = asyncio.create_task(self._analysis_loop())
             logger.info("Started log analysis system")
@@ -741,10 +697,7 @@ class LogAnalysisSystem:
                     
                     # Process logs
                     await self._process_log_entries(log_entries)
-                    
-                    # Send to Elasticsearch if configured
-                    await self.log_aggregator.send_to_elasticsearch(log_entries)
-                
+
                 # Record processing metrics
                 processing_time = asyncio.get_event_loop().time() - start_time
                 log_processing_latency.labels(
