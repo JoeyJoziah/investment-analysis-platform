@@ -62,6 +62,57 @@ def _write_hub(tmp_path, monkeypatch, positions):
     monkeypatch.setenv("FINANCE_DATA_DIR", str(tmp_path))
 
 
+# --------------------------------------------------- basis rounding regression
+
+
+class TestBridgeBasisIsExact:
+    """The bridge side of the report must not reconstruct basis from avg_cost.
+
+    300 shares with a $10,000.00 total basis have an average cost of
+    $33.3333... which quantizes to $33.33. Reconstructing the total as
+    ``qty * avg_cost`` yields $9,999.00 -- a phantom $1.00 divergence, 100x
+    the $0.01 threshold. Regression guard for that arithmetic.
+    """
+
+    def _bridge(self):
+        # cost_basis_total is stated exactly by the broker; the per-share
+        # average ($33.3333...) is what does not survive cent quantization.
+        position = {
+            "account_id": "webull:aaaa1111",
+            "symbol": "ACME",
+            "instrument_type": "equity",
+            "quantity": "300",
+            "cost_basis_total": "10000",
+        }
+        return sync_pfb.aggregate_desired_positions(
+            [position],
+            usable_sources=frozenset({"webull"}),
+            account_source={"webull:aaaa1111": "webull"},
+        )
+
+    def test_aggregate_carries_exact_unrounded_basis(self):
+        bridge = self._bridge()
+        assert bridge["ACME"]["avg_cost"] == Decimal("33.33")
+        assert bridge["ACME"]["basis"] == Decimal("10000")
+
+    def test_matching_ledgers_are_not_flagged_divergent(self):
+        bridge = self._bridge()
+        neon = {"ACME": {"qty": Decimal("300"), "basis": Decimal("10000")}}
+
+        (row,) = compare.build_report(neon=neon, bridge=bridge)
+
+        assert row["bridge_basis"] == Decimal("10000")
+        assert row["basis_delta"] == Decimal("0")
+        assert row["flagged"] is False
+
+    def test_reconstructing_from_avg_cost_would_have_lied(self):
+        """Pin the magnitude of the bug this guards against."""
+        bridge = self._bridge()
+        naive = bridge["ACME"]["qty"] * bridge["ACME"]["avg_cost"]
+        assert naive == Decimal("9999.00")
+        assert abs(naive - Decimal("10000")) > compare.BASIS_TOLERANCE
+
+
 # ------------------------------------------------------------ DSN resolution
 
 

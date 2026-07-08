@@ -192,7 +192,15 @@ def aggregate_desired_positions(
     Only ``equity``/``etf`` rows from sources whose status is ``ok`` are
     included. Quantities and basis stay in ``Decimal`` throughout; the
     resulting ``avg_cost`` is quantized to cents, matching the shape
-    :func:`compute_sync_actions` expects.
+    :func:`compute_sync_actions` expects (it reads only ``qty`` and
+    ``avg_cost``).
+
+    ``basis`` carries the EXACT unrounded total cost basis alongside the
+    quantized ``avg_cost``. Consumers that compare basis against another
+    ledger MUST use ``basis``: reconstructing it as ``qty * avg_cost``
+    reintroduces up to half a cent of rounding error per share, which for
+    any meaningful share count exceeds the $0.01 divergence threshold in
+    ``compare_bridge_vs_neon.py`` and manufactures phantom divergences.
     """
     staged: Dict[str, Dict[str, Decimal]] = {}
     for position in positions:
@@ -218,7 +226,11 @@ def aggregate_desired_positions(
         avg_cost = (entry["basis"] / entry["qty"]).quantize(
             _CENT, rounding=ROUND_HALF_UP
         )
-        desired[symbol] = {"qty": entry["qty"], "avg_cost": avg_cost}
+        desired[symbol] = {
+            "qty": entry["qty"],
+            "avg_cost": avg_cost,
+            "basis": entry["basis"],  # exact, unrounded -- see docstring
+        }
     return desired
 
 

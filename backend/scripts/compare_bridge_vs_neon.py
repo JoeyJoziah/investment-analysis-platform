@@ -129,6 +129,18 @@ def derive_neon_fifo(rows: List[Tuple[str, str, Any]]) -> Dict[str, Dict[str, De
 
 
 def _bridge_basis(position: Dict[str, Any]) -> Decimal:
+    """Exact total cost basis for a bridge symbol.
+
+    Uses the unrounded ``basis`` that :func:`aggregate_desired_positions`
+    carries. Deliberately NOT ``qty * avg_cost``: ``avg_cost`` is quantized to
+    cents, so that product carries up to half a cent of error per share --
+    e.g. 100 shares can drift $0.50, fifty times the $0.01 threshold this
+    report flags on. That would manufacture the very divergence the report
+    exists to detect. Falls back only for callers passing a legacy dict.
+    """
+    basis = position.get("basis")
+    if basis is not None:
+        return Decimal(basis)
     return Decimal(position["qty"]) * Decimal(position["avg_cost"])
 
 
