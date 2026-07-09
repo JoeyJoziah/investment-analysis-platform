@@ -50,8 +50,8 @@ services:
         while ! nc -z redis 6379; do sleep 1; done;
         # Run migrations
         alembic upgrade head;
-        # Run tests
-        pytest tests/ -v --cov=backend --cov-report=html --cov-report=term-missing --junit-xml=test-results.xml
+        # Real suite lives under backend/tests (pyproject testpaths)
+        pytest backend/tests -v --cov=backend --cov-report=html --cov-report=term-missing --junit-xml=test-results.xml
       "
 
   # Frontend testing

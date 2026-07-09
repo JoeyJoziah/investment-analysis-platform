@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timedelta, timezone
 from enum import Enum
 import random
+import time
 import uuid
 import os
 import logging
@@ -587,10 +588,17 @@ async def execute_system_command(
 ) -> ApiResponse[Dict[str, Any]]:
     """Execute a system command with validation and logging"""
 
-    execution_time_ms = random.randint(100, 5000)
-
+    started = time.perf_counter()
     try:
-        # Task 2 & 5: Log system command execution with validated parameters
+        result = admin_service.execute_system_command(
+            command=command.command,
+            execution_time_ms=0,
+        )
+        execution_time_ms = int((time.perf_counter() - started) * 1000)
+        if isinstance(result, dict):
+            result = {**result, "execution_time_ms": execution_time_ms}
+
+        # Task 2 & 5: Log system command execution with measured duration
         security_logger.log_system_command(
             user_id=current_user.id,
             command=command.command,
@@ -600,18 +608,15 @@ async def execute_system_command(
             ip_address=get_client_ip(request)
         )
 
-        return success_response(
-            data=admin_service.execute_system_command(
-                command=command.command,
-                execution_time_ms=execution_time_ms,
-            )
-        )
+        return success_response(data=result)
     except Exception as e:
+        execution_time_ms = int((time.perf_counter() - started) * 1000)
         security_logger.log_system_command(
             user_id=current_user.id,
             command=command.command,
             parameters=command.parameters,
             success=False,
+            execution_time_ms=execution_time_ms,
             ip_address=get_client_ip(request)
         )
         raise

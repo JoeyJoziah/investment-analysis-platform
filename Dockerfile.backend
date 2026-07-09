@@ -126,3 +126,20 @@ CMD ["gunicorn", "backend.api.main:app", \
      "--keep-alive", "5", \
      "--max-requests", "1000", \
      "--max-requests-jitter", "50"]
+
+# Stage 3: Test — used by docker-compose.test.yml `target: test`
+FROM runtime AS test
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chown=appuser:appuser backend/tests /app/backend/tests
+COPY --chown=appuser:appuser tests /app/tests
+COPY --chown=appuser:appuser pytest.ini pyproject.toml /app/
+# Dev/test deps when present (optional layer for local image builds)
+COPY --chown=appuser:appuser requirements-dev.txt /app/requirements-dev.txt
+RUN pip install --no-cache-dir --user -r /app/requirements-dev.txt || true
+USER appuser
+WORKDIR /app
+ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages
+CMD ["pytest", "backend/tests", "-q", "--tb=short"]

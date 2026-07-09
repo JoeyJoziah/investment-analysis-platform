@@ -804,7 +804,7 @@ class BacktestEngine:
         if len(returns) == 0:
             return pd.DataFrame()
         
-        monthly = returns.resample('M').apply(lambda x: (1 + x).prod() - 1)
+        monthly = returns.resample('ME').apply(lambda x: (1 + x).prod() - 1)
         
         # Create matrix with years as rows and months as columns
         monthly_matrix = monthly.to_frame('returns')
@@ -818,11 +818,18 @@ class BacktestEngine:
             aggfunc='first'
         )
         
-        # Add month names as column headers
+        # Rename only months present (single-month windows used to crash when
+        # a 12-name list was assigned to a 1-column pivot).
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        pivot_table.columns = [month_names[i-1] if i in pivot_table.columns else None 
-                              for i in range(1, 13)]
+        rename = {
+            col: month_names[int(col) - 1]
+            for col in pivot_table.columns
+            if 1 <= int(col) <= 12
+        }
+        pivot_table = pivot_table.rename(columns=rename)
+        # Full calendar matrix (NaN for missing months) for stable consumers
+        pivot_table = pivot_table.reindex(columns=month_names)
         
         return pivot_table
     

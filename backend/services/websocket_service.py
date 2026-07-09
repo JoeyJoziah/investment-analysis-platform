@@ -383,7 +383,33 @@ async def stream_price_updates(
     symbol: str,
     connection_manager: EnhancedConnectionManager,
 ):
-    """Stream real-time price updates for a symbol."""
+    """Stream real-time price updates for a symbol.
+
+    Production (``settings.DEMO_MODE`` False, default): refuse to fabricate
+    ticks — emit a single ``price_unavailable`` payload and stop (parity with
+    ``socketio_service._stream_price_updates``). Demo mode keeps synthetic
+    ticks tagged ``data_source: simulated``.
+    """
+    from backend.config.settings import settings
+
+    if not settings.DEMO_MODE:
+        unavailable = {
+            "type": MessageType.ERROR,
+            "error": "model_unavailable",
+            "reason": "live_feed_not_configured",
+            "symbol": symbol,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        await connection_manager.send_to_subscribers(
+            symbol, json.dumps(unavailable)
+        )
+        logger.warning(
+            "stream_price_updates: refusing to fabricate ticks for %s "
+            "(DEMO_MODE=false)",
+            symbol,
+        )
+        return
+
     while True:
         try:
             price_update = {
@@ -397,7 +423,8 @@ async def stream_price_updates(
                 "ask": random.uniform(51, 501),
                 "bid_size": random.randint(100, 1000),
                 "ask_size": random.randint(100, 1000),
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "data_source": "simulated",
             }
 
             await connection_manager.send_to_subscribers(
@@ -493,10 +520,26 @@ async def broadcast_news(
 
 
 def generate_market_overview_data() -> Dict[str, Any]:
-    """Generate a market overview data snapshot."""
+    """Generate a market overview data snapshot.
+
+    Production refuses synthetic indices; demo mode returns simulated data.
+    """
+    from backend.config.settings import settings
+
+    if not settings.DEMO_MODE:
+        return {
+            "type": "market_overview",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": "model_unavailable",
+            "reason": "live_feed_not_configured",
+            "indices": {},
+            "data_source": "unavailable",
+        }
+
     return {
         "type": "market_overview",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data_source": "simulated",
         "indices": {
             "SPY": {
                 "price": random.uniform(400, 450),
@@ -530,11 +573,29 @@ def generate_market_overview_data() -> Dict[str, Any]:
 
 
 def generate_portfolio_update_data(portfolio_id: str) -> Dict[str, Any]:
-    """Generate a portfolio update data snapshot."""
+    """Generate a portfolio update data snapshot.
+
+    Production refuses synthetic portfolio ticks; demo mode returns simulated data.
+    """
+    from backend.config.settings import settings
+
+    if not settings.DEMO_MODE:
+        return {
+            "type": "portfolio_update",
+            "portfolio_id": portfolio_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": "model_unavailable",
+            "reason": "live_feed_not_configured",
+            "positions": [],
+            "alerts": [],
+            "data_source": "unavailable",
+        }
+
     return {
         "type": "portfolio_update",
         "portfolio_id": portfolio_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data_source": "simulated",
         "total_value": random.uniform(90000, 110000),
         "day_change": random.uniform(-2000, 2000),
         "day_change_percent": random.uniform(-2, 2),
