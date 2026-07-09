@@ -1,81 +1,16 @@
-name: Type Checking (mypy)
+# DEPRECATED (Wave 11 / #104): consolidated into type-check.yml
+# This workflow is retained as a no-op shell so historical links remain valid.
+name: Type Checking (mypy) [DEPRECATED]
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - 'backend/**/*.py'
-      - '.mypy.ini'
-      - 'requirements.txt'
-      - '.github/workflows/mypy.yml'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'backend/**/*.py'
-      - '.mypy.ini'
-      - 'requirements.txt'
+  workflow_dispatch:  # manual only — push/PR type checks live in type-check.yml
 
 jobs:
   mypy:
-    name: Type Check with mypy
+    name: Deprecated — use type-check.yml
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install system dependencies (libta-lib)
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libpq-dev libxml2-dev libxslt1-dev libffi-dev
-
-    - name: Build TA-Lib C library
-      run: |
-        TA_LIB_VERSION="0.4.0"
-        TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651"
-        curl -fsSL --proto '=https' --tlsv1.2 \
-          "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/ta-lib-${TA_LIB_VERSION}-src.tar.gz" \
-          -o ta-lib-0.4.0-src.tar.gz
-        echo "${TA_LIB_SHA256}  ta-lib-0.4.0-src.tar.gz" | sha256sum -c -
-        tar -xzf ta-lib-0.4.0-src.tar.gz
-        cd ta-lib/
-        ./configure --prefix=/usr
-        make
-        sudo make install
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install mypy types-python-dateutil types-requests
-        # Install project dependencies for type stubs
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-    - name: Run mypy on backend
-      run: |
-        mypy backend/ --config-file .mypy.ini || true  # advisory
-
-    - name: Generate type coverage report
-      if: always()
-      run: |
-        mypy backend/ --config-file .mypy.ini --html-report ./mypy-report --any-exprs-report ./mypy-report || true
-
-    - name: Upload type coverage report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: mypy-coverage-report
-        path: mypy-report/
-        retention-days: 30
-
-    - name: Check type coverage threshold
-      run: |
-        # Extract type coverage percentage (advisory only — pre-existing baseline-tolerated)
-        COVERAGE=$(mypy backend/ --config-file .mypy.ini 2>&1 | grep -oP '\d+(?=% typed)' || echo "0")
-        echo "Type coverage: ${COVERAGE}%"
-        echo "::notice::Type coverage ${COVERAGE}% (95% target; advisory)"
+      - name: Point to consolidated workflow
+        run: |
+          echo "This workflow was consolidated into .github/workflows/type-check.yml (issue #104)."
+          echo "No mypy job runs here anymore."

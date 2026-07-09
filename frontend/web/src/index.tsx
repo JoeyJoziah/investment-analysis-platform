@@ -4,6 +4,10 @@ import './index.css';
 import App from './App';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 import reportWebVitals from './reportWebVitals';
+import { initFrontendSentry } from './monitoring/sentry';
+
+// Optional Sentry (#102) — no-op unless VITE_SENTRY_DSN is set and SDK installed
+void initFrontendSentry();
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

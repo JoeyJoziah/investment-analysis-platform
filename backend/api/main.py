@@ -53,7 +53,15 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting Investment Analysis Platform...")
-    
+
+    # Optional Sentry error monitoring (#102) — no-op without SENTRY_DSN
+    try:
+        from backend.monitoring.sentry_setup import init_sentry
+
+        init_sentry()
+    except Exception as sentry_exc:  # pragma: no cover - never block startup
+        logger.warning("Sentry bootstrap skipped: %s", sentry_exc)
+
     # Initialize database (async engine + table creation + data seeding)
     # Note: init_db() calls initialize_database() internally, so a separate
     # initialize_database() call is not needed. The legacy sync engine
