@@ -443,8 +443,8 @@ jobs:
       timeout-minutes: 12
       uses: docker/build-push-action@v5
       with:
-        context: ./frontend/web
-        file: ./frontend/web/Dockerfile
+        context: .
+        file: ./Dockerfile.frontend
         tags: security-scan-frontend:latest
         load: true
         cache-from: type=gha
@@ -506,7 +506,7 @@ jobs:
     - name: Scan frontend Dockerfile with Hadolint
       uses: hadolint/hadolint-action@v3.1.0
       with:
-        dockerfile: frontend/web/Dockerfile
+        dockerfile: Dockerfile.frontend
         format: json
         output-file: frontend-dockerfile-scan.json
         no-fail: true
