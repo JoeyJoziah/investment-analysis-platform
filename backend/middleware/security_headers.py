@@ -20,7 +20,7 @@ from typing import Optional, Dict, List, Set
 from dataclasses import dataclass, field
 from enum import Enum
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 

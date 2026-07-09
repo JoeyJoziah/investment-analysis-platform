@@ -5,7 +5,6 @@ import inspect
 import os
 from pathlib import Path
 
-import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
