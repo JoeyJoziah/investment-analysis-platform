@@ -11,7 +11,7 @@ exceptions-ids:
   - staging-sbom-residual
   - wave-complete-definition
 rag-ingestable: false
-document-sha256: 7e2d2939a3f3280f2a2f3ff9906b40f197b9b34ad7c3df13435131c2a26aea2d
+document-sha256: 7ecaa49f163a0f890acb5295373b7a5ce439a75588c84f45a94946e297e979bd
 hitl-claims:
   - id: claim-staging-61da57a-failed
     text: "Staging Deployment on commit 61da57a concluded failure"
@@ -61,12 +61,14 @@ hitl-claims:
     round: B
     confirmed-by: Automation measurement
     confirmed-date: 2026-07-09
-  - id: claim-sbom-nonblock-pending
-    text: "SBOM continue-on-error change is expected to reduce Staging flakiness"
-    value: "projected"
-    source: "staging-deploy.yml continue-on-error true on SBOM steps"
+  - id: claim-sbom-nonblock-shipped
+    text: "SBOM continue-on-error shipped in 17f7edb; next Staging success still projected not guaranteed"
+    value: "shipped-projected-effect"
+    source: "commit 17f7edb staging-deploy.yml continue-on-error true"
     location: "staging-gate/3"
     round: B
+    confirmed-by: Automation measurement
+    confirmed-date: 2026-07-09
   - id: claim-wave-complete-business
     text: "Waves 0-13 mean product backlog complete without requiring live staging cutover"
     value: "definition-pending"
@@ -80,8 +82,9 @@ hitl-claims:
 **Repository:** JoeyJoziah/investment-analysis-platform  
 **Default branch:** main  
 **Report date:** 2026-07-09  
-**HEAD at gate (primary):** 61da57a (Docker COPY fix)  
-**Follow-up HEAD (SBOM non-blocking):** *see git log after this report if advanced*  
+**HEAD at gate (primary):** `61da57a` (Docker COPY fix)  
+**Follow-up HEAD (SBOM non-blocking):** `17f7edb` (SBOM continue-on-error shipped; re-Staging **projected** green unless other steps fail)  
+
 
 ---
 
