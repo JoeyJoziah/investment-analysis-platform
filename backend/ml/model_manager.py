@@ -28,7 +28,14 @@ HF_MODEL_MAP = {
 }
 
 class ModelManager:
-    """Centralized ML model management with error handling and HuggingFace Hub fallback"""
+    """Centralized per-model registry: load, fallback-detection, HuggingFace Hub
+    fallback, and ``assert_real_model`` refuse-to-serve gating.
+
+    T1.4 NOTE: distinct from ``backend.ml.runtime_models.ModelManager`` (the
+    ensemble trainer/predictor). Same class name, different responsibility; no
+    module imports both. A full merge (PRD T1.4) is deferred as a design
+    decision — see .loki/queue/dead-letter.json id T1.4-merge.
+    """
 
     def __init__(self, models_path: str = None, enable_hf_fallback: bool = None):
         # Use environment variable or default to a local directory
@@ -482,7 +489,14 @@ class ModelManager:
             raise ModelUnavailableError(model=model_name, reason=reason)
 
     def predict(self, model_name: str, data: Any) -> Any:
-        """Make prediction with error handling"""
+        """Make prediction with error handling.
+
+        NOTE: SEC-implicated HTTP call sites MUST gate with ``assert_real_model``
+        before calling this (see recommendations.py/analysis.py/ml.py) so a
+        fallback (Dummy*) model never serves np.random to users. ``predict`` is
+        deliberately not self-guarding to preserve the in-process fallback used
+        by health checks and the ML test pipeline.
+        """
         try:
             model = self.get_model(model_name)
             if model is None:

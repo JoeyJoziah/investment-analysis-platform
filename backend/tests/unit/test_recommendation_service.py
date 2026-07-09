@@ -34,10 +34,35 @@ def service():
     with the singleton instance, we patch using sys.modules directly."""
     import sys
     mod = sys.modules["backend.services.recommendation_service"]
+    # T1.2 (D1): the synthetic generator now refuses to run unless DEMO_MODE is
+    # on. These unit tests exercise that synthetic structure, so enable demo mode
+    # here; the production fail-loud contract is asserted separately below.
     with patch.object(mod, "RecommendationEngine", return_value=MagicMock()), \
-         patch.object(mod, "FundamentalAnalysisEngine", return_value=MagicMock()):
+         patch.object(mod, "FundamentalAnalysisEngine", return_value=MagicMock()), \
+         patch.object(mod.settings, "DEMO_MODE", True):
         svc = RecommendationService()
         yield svc
+
+
+# =========================================================================
+# generate_sample_recommendation — production fail-loud contract (T1.2/D1)
+# =========================================================================
+
+class TestGenerateSampleRecommendationFailLoud:
+
+    def test_refuses_in_production_mode(self):
+        """With DEMO_MODE off (production default) the synthetic generator must
+        raise ModelUnavailableError (-> HTTP 503) instead of fabricating data."""
+        import sys
+        from backend.exceptions import ModelUnavailableError
+        mod = sys.modules["backend.services.recommendation_service"]
+        with patch.object(mod, "RecommendationEngine", return_value=MagicMock()), \
+             patch.object(mod, "FundamentalAnalysisEngine", return_value=MagicMock()), \
+             patch.object(mod.settings, "DEMO_MODE", False):
+            svc = RecommendationService()
+            with pytest.raises(ModelUnavailableError) as excinfo:
+                svc.generate_sample_recommendation(symbol="AAPL")
+            assert excinfo.value.model == "recommendation_engine"
 
 
 # =========================================================================

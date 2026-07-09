@@ -27,6 +27,8 @@ from dataclasses import dataclass
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+from backend.exceptions import ModelUnavailableError
+
 logger = logging.getLogger(__name__)
 
 
@@ -283,7 +285,17 @@ class LightGBMModel:
 
 class ModelManager:
     """
-    Manages all ML models and ensemble predictions
+    Ensemble trainer/predictor (LSTM + Transformer + tree + Prophet).
+
+    T1.4 NOTE: this is a DISTINCT abstraction from
+    ``backend.ml.model_manager.ModelManager`` — that one is the per-model
+    *registry* (load/fallback-detection/``assert_real_model``) used by the API
+    routers; this one trains and ensembles models for the analytics
+    recommendation engine. They share a class name but not a responsibility, and
+    no module imports both. The PRD T1.4 "collapse to one canonical" assumed they
+    were duplicates; they are not, so a full merge is deferred as a design
+    decision (see .loki/queue/dead-letter.json id T1.4-merge). This class is
+    fail-loud as of T1.1 (predict() refuses without real weights).
     """
     
     def __init__(self):
@@ -292,6 +304,10 @@ class ModelManager:
         self.feature_columns = []
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.executor = ThreadPoolExecutor(max_workers=4)
+        # T1.1 (D1): never serve a random-initialised model. Stays False until
+        # real pretrained weights are loaded OR the models are trained. predict()
+        # raises ModelUnavailableError -> HTTP 503 while this is False.
+        self.weights_loaded = False
     
     async def load_models(self):
         """Load or initialize all models"""
@@ -325,9 +341,20 @@ class ModelManager:
                 except Exception:
                     logger.info("No pre-trained LightGBM model found")
 
+            self.weights_loaded = True
             logger.info("Loaded pre-trained models")
-        except:
-            logger.info("No pre-trained models found, will train from scratch")
+        except (FileNotFoundError, OSError) as exc:
+            # T1.1 (D1): missing/unreadable weight artifacts. Do NOT silently
+            # keep the random-initialised LSTM/Transformer — leave
+            # weights_loaded=False so predict() refuses to serve (503) instead
+            # of fabricating numbers. Training-from-scratch (train_models) is a
+            # separate, explicit flow that sets weights_loaded itself.
+            self.weights_loaded = False
+            logger.warning(
+                "No pre-trained model weights found (%s); ModelManager will "
+                "refuse to predict until models are trained or weights provided.",
+                exc,
+            )
     
     async def train_models(
         self,
@@ -351,7 +378,9 @@ class ModelManager:
             self._train_tree_models(X_train, y_train, X_val, y_val),
             self._train_time_series_models(training_data)
         )
-        
+
+        # T1.1 (D1): models are now real (trained), so predict() may serve them.
+        self.weights_loaded = True
         logger.info("Model training completed")
     
     def _prepare_features(
@@ -616,8 +645,16 @@ class ModelManager:
         """
         Make predictions using all models
         """
+        # T1.1 (D1): refuse to serve random-initialised models. If no real
+        # weights were loaded and the models were not trained, raise rather than
+        # return a fabricated prediction (mapped to HTTP 503 model_unavailable).
+        if not self.weights_loaded:
+            raise ModelUnavailableError(
+                model="runtime_ensemble", reason="binary_missing"
+            )
+
         predictions = {}
-        
+
         # Prepare features
         features, _ = self._prepare_features(current_data, 'dummy')
         

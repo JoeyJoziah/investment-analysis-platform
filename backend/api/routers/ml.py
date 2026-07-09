@@ -306,6 +306,11 @@ async def _run_single_model_prediction(
     if model is None:
         raise ValueError(f"Model '{model_type.value}' is not available")
 
+    # T1.3 (D1): refuse to serve a fallback (Dummy*) model — its predict()
+    # returns np.random. Raises ModelUnavailableError -> HTTP 503 instead of
+    # shipping fabricated LSTM/XGBoost/Prophet outputs to users.
+    model_manager.assert_real_model(model_key)
+
     bootstrap_mode = _os.environ.get("BOOTSTRAP_MODELS", "").lower() in ("1", "true", "yes")
 
     # Prepare input data appropriate for each model type
