@@ -31,21 +31,29 @@ _os.environ.setdefault("ENVIRONMENT", "development")
 # Required by secrets_manager (fail-fast in prod, skipped in dev)
 _os.environ.setdefault("MASTER_SECRET_KEY", "test-master-secret-key-finding-200")
 
-import sys
-import types
 import importlib
 import inspect
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 # ---------------------------------------------------------------------------
-# Stub out heavy optional dependencies that may not be installed in CI
-# (mlflow, torch, prophet, xgboost) and partially-stubbed sklearn.metrics
-# which uses a MagicMock stub but whose `from ... import name` forms fail.
-# We use MagicMock() for all of them so attribute access also works.
+# Stub OPTIONAL heavy deps only when missing. Never overwrite a real install
+# (especially torch): MagicMock(torch) breaks later tests that need real nn
+# (e.g. test_runtime_models_fail_loud) with isinstance() TypeError.
 # ---------------------------------------------------------------------------
+
+def _stub_optional_if_missing(mod_name: str) -> None:
+    existing = sys.modules.get(mod_name)
+    if existing is not None and not isinstance(existing, MagicMock):
+        return
+    try:
+        importlib.import_module(mod_name)
+    except ImportError:
+        sys.modules[mod_name] = MagicMock(name=mod_name)
+
 
 for _mod in [
     "mlflow",
@@ -58,7 +66,7 @@ for _mod in [
     "prophet",
     "xgboost",
 ]:
-    sys.modules[_mod] = MagicMock(name=_mod)
+    _stub_optional_if_missing(_mod)
 
 # sklearn itself is installed but model_versioning does
 # `from sklearn.metrics import accuracy_score, …`; the real module is fine
@@ -74,7 +82,11 @@ for _mod in [
     "backend.ml.pipeline.monitoring",
     "backend.ml.pipeline.deployment",
 ]:
-    sys.modules[_mod] = MagicMock(name=_mod)
+    if _mod not in sys.modules or isinstance(sys.modules[_mod], MagicMock):
+        try:
+            importlib.import_module(_mod)
+        except ImportError:
+            sys.modules[_mod] = MagicMock(name=_mod)
 
 
 # ---------------------------------------------------------------------------
