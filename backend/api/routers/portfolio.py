@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, Path, status
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timezone
 from enum import Enum
 import uuid
 import logging
@@ -508,11 +508,16 @@ async def get_portfolio_performance(
 async def analyze_portfolio(
     portfolio_id: str,
     current_user: User = Depends(get_current_user),
-    service: PortfolioService = Depends(get_portfolio_service)
+    service: PortfolioService = Depends(get_portfolio_service),
+    db: AsyncSession = Depends(get_async_db_session),
 ) -> ApiResponse[PortfolioAnalysis]:
-    """Perform comprehensive portfolio analysis"""
+    """Perform comprehensive portfolio analysis from live holdings (#108)."""
 
-    analysis_data = service.build_portfolio_analysis(portfolio_id)
+    analysis_data = await service.build_portfolio_analysis_async(
+        portfolio_id=portfolio_id,
+        user_id=current_user.id,
+        db=db,
+    )
     return success_response(data=PortfolioAnalysis(**analysis_data))
 
 @router.post("/{portfolio_id}/rebalance")

@@ -6,8 +6,7 @@ No database or external services required.
 """
 
 import pytest
-import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -315,7 +314,6 @@ class TestBuildPortfolioAnalysis:
 
     def test_full_analysis_structure(self, service):
         """Analysis dict should contain all required keys."""
-        random.seed(42)
         result = service.build_portfolio_analysis("p100")
         required_keys = {
             "portfolio_id", "analysis_date", "risk_analysis",
@@ -338,10 +336,25 @@ class TestBuildPortfolioAnalysis:
 
     def test_risk_analysis_keys(self, service):
         """Risk analysis sub-dict should have VaR, CVaR, etc."""
-        random.seed(42)
         result = service.build_portfolio_analysis("p1")
         ra = result["risk_analysis"]
         assert {"var_95", "cvar_95", "downside_deviation", "upside_potential"} == set(ra.keys())
+
+    def test_real_positions_drive_concentration(self, service):
+        """#108: concentration and diversification come from holdings, not random."""
+        positions = [
+            {"symbol": "AAPL", "sector": "Tech", "market_value": 7000, "unrealized_gain_percent": 10},
+            {"symbol": "MSFT", "sector": "Tech", "market_value": 2000, "unrealized_gain_percent": 5},
+            {"symbol": "JNJ", "sector": "Health", "market_value": 1000, "unrealized_gain_percent": -2},
+        ]
+        result = service.build_portfolio_analysis("p-real", positions=positions)
+        assert result["concentration_risk"]["top_holding"] == pytest.approx(0.7, abs=0.01)
+        assert result["diversification_score"] > 0
+        assert "AAPL" in result["correlation_matrix"]
+        assert result["risk_analysis"]["var_95"] is not None
+        assert any("concentration" in s.lower() or "High concentration" in s
+                   for s in result["optimization_suggestions"])
+        assert "random" not in str(result).lower()
 
 
 # =========================================================================
