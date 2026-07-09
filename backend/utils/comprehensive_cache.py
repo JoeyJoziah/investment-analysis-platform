@@ -493,6 +493,13 @@ class ComprehensiveCacheManager:
                     logger.debug(f"Data computed and cached: {cache_key}")
                     return computed_data, 'computed'
             except Exception as e:
+                # HTTPExceptions carry an intended status code (e.g. a 404 for
+                # "no data stored yet"). They MUST propagate so the framework
+                # returns that status, instead of this cache layer swallowing
+                # them into a None result that surfaces as an opaque 500.
+                from fastapi import HTTPException as _HTTPException
+                if isinstance(e, _HTTPException):
+                    raise
                 logger.error(f"Fallback function failed for {cache_key}: {e}")
 
         return None, 'miss'

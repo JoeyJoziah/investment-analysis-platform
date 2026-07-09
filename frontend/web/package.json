@@ -43,6 +43,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "build:analyze": "vite build --mode analyze",
     "build:typecheck": "tsc && vite build",
     "preview": "vite preview",

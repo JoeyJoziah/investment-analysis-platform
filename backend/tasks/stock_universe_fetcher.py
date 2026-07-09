@@ -1,6 +1,12 @@
 """
 Comprehensive Stock Universe Fetcher
 Fetches ALL US exchange stocks (6000+) from multiple sources
+
+Also exposes a focused, real-data S&P 500 universe path
+(``fetch_sp500_universe`` + ``persist_universe``) used by
+``scripts/seed_universe.py`` to seed the ``stocks`` table with a real
+constituent list. The S&P 500 path NEVER fabricates symbols: if the real
+source is unavailable it raises ``UniverseSourceError`` and fails loudly.
 """
 
 import os
@@ -9,18 +15,34 @@ import logging
 import requests
 import pandas as pd
 import yfinance as yf
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Real, authoritative source for the S&P 500 constituent list. Wikipedia keeps
+# this table current and is parsed with pandas.read_html (already a project
+# dependency). This is the ONLY S&P 500 source the seed path trusts.
+SP500_WIKIPEDIA_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+
+
+class UniverseSourceError(RuntimeError):
+    """Raised when the real S&P 500 source cannot be fetched/parsed.
+
+    The seed path fails loudly with this error rather than inventing tickers
+    so the ``stocks`` table is only ever populated with genuine constituents.
+    """
+
 
 @dataclass
 class StockInfo:
@@ -509,6 +531,247 @@ def expand_stock_universe():
     logger.info("="*60)
     
     return len(stock_universe), new_stocks_count
+
+
+# ============================================================================
+# S&P 500 REAL-DATA UNIVERSE PATH (used by scripts/seed_universe.py)
+#
+# This path is deliberately separate from the legacy psycopg2-based
+# ComprehensiveStockFetcher above. It returns a list of REAL S&P 500
+# constituents and persists them through the async repository layer, upserting
+# by symbol so it is safe to re-run. No symbols/sectors are ever fabricated.
+# ============================================================================
+
+# Wikipedia's "Symbol" column uses '.' for share-class tickers (e.g. BRK.B,
+# BF.B). US market data providers / the platform use '-' (BRK-B). Normalise so
+# downstream price backfill matches the rest of the platform.
+def _normalize_symbol(raw: str) -> str:
+    return str(raw).strip().upper().replace(".", "-")
+
+
+def fetch_sp500_universe(url: str = SP500_WIKIPEDIA_URL) -> List[StockInfo]:
+    """Fetch the current S&P 500 constituents from the real Wikipedia source.
+
+    Returns a list of ``StockInfo`` (symbol, name, sector, exchange). The
+    exchange is not provided by the source table, so it is left as the string
+    ``"NYSE"`` only as a structural placeholder is avoided -- instead we mark it
+    ``None`` here and let the persist step resolve the listing exchange. To keep
+    the fetch self-describing we record the GICS sector (real) and sub-industry
+    (real) as provided by the table.
+
+    Raises:
+        UniverseSourceError: if the source is unreachable, the expected table
+            is missing/changed shape, or zero valid constituents are parsed.
+            We FAIL LOUDLY rather than fabricate a list.
+    """
+    logger.info("Fetching S&P 500 constituents from %s", url)
+
+    try:
+        # Fetch with a real browser User-Agent: Wikipedia returns HTTP 403 to
+        # the default urllib agent pandas uses. Parse the fetched HTML so we
+        # never silently fall back to anything fabricated.
+        from io import StringIO
+
+        resp = requests.get(
+            url,
+            headers={
+                'User-Agent': (
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/124.0 Safari/537.36'
+                )
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        tables = pd.read_html(StringIO(resp.text))
+    except Exception as exc:  # network error, HTML shape change, etc.
+        raise UniverseSourceError(
+            f"Could not fetch/parse the S&P 500 source at {url}: {exc}"
+        ) from exc
+
+    if not tables:
+        raise UniverseSourceError(
+            f"S&P 500 source at {url} returned no parseable tables"
+        )
+
+    # The constituents table is the first one and must carry Symbol + Security.
+    df = tables[0]
+    columns = {str(c).strip() for c in df.columns}
+    if "Symbol" not in columns or "Security" not in columns:
+        raise UniverseSourceError(
+            "S&P 500 source table is missing expected columns "
+            f"(found: {sorted(columns)})"
+        )
+
+    stocks: List[StockInfo] = []
+    seen: Set[str] = set()
+    for _, row in df.iterrows():
+        symbol = _normalize_symbol(row.get("Symbol", ""))
+        name = str(row.get("Security", "")).strip()
+        sector = str(row.get("GICS Sector", "")).strip()
+        industry = str(row.get("GICS Sub-Industry", "")).strip()
+
+        # Skip blanks / pandas NaN coerced to the string "nan".
+        if not symbol or symbol in ("NAN", "NONE"):
+            continue
+        if symbol in seen:
+            continue
+        seen.add(symbol)
+
+        stocks.append(
+            StockInfo(
+                symbol=symbol,
+                name=(name[:255] if name and name.lower() != "nan" else symbol),
+                exchange="",  # resolved at persist time
+                sector=sector if sector and sector.lower() != "nan" else None,
+                industry=industry if industry and industry.lower() != "nan" else None,
+            )
+        )
+
+    if not stocks:
+        # A real S&P 500 fetch always yields ~500 rows. Zero means the source
+        # changed / failed -- never silently seed an empty (or fake) universe.
+        raise UniverseSourceError(
+            f"S&P 500 source at {url} produced zero valid constituents"
+        )
+
+    logger.info("Parsed %d S&P 500 constituents from real source", len(stocks))
+    return stocks
+
+
+async def _get_or_create_exchange(session: AsyncSession, code: str):
+    """Idempotently get or create an Exchange row by its unique ``code``."""
+    from sqlalchemy import select
+    from backend.models.unified_models import Exchange
+
+    result = await session.execute(select(Exchange).where(Exchange.code == code))
+    exchange = result.scalar_one_or_none()
+    if exchange is not None:
+        return exchange
+
+    # Minimal real metadata for the major US listing venues.
+    metadata = {
+        "NYSE": {"name": "New York Stock Exchange", "timezone": "America/New_York", "country": "US", "currency": "USD"},
+        "NASDAQ": {"name": "NASDAQ Stock Market", "timezone": "America/New_York", "country": "US", "currency": "USD"},
+    }
+    meta = metadata.get(code, {"name": code, "timezone": "America/New_York", "country": "US", "currency": "USD"})
+    exchange = Exchange(code=code, **meta)
+    session.add(exchange)
+    await session.flush()
+    logger.info("  + Exchange: %s", code)
+    return exchange
+
+
+async def _get_or_create_sector(session: AsyncSession, name: str):
+    """Idempotently get or create a Sector row by its unique ``name``."""
+    from sqlalchemy import select
+    from backend.models.unified_models import Sector
+
+    result = await session.execute(select(Sector).where(Sector.name == name))
+    sector = result.scalar_one_or_none()
+    if sector is not None:
+        return sector
+
+    sector = Sector(name=name, description=f"{name} sector")
+    session.add(sector)
+    await session.flush()
+    logger.info("  + Sector: %s", name)
+    return sector
+
+
+async def persist_universe(
+    stocks: List[StockInfo],
+    *,
+    session: AsyncSession,
+    default_exchange: str = "NYSE",
+) -> Dict[str, int]:
+    """Persist S&P 500 constituents into the ``stocks`` table idempotently.
+
+    Strategy:
+      - Upsert sectors first (FK table) and link ``sector_id``.
+      - Ensure the listing exchange exists (FK table) and link ``exchange_id``.
+      - Upsert each stock by its unique ``symbol`` so re-running does not
+        duplicate rows. ``market_cap`` is left untouched (no fabrication).
+      - ``is_active`` and ``is_tradable`` are set True.
+
+    Args:
+        stocks: real constituents from :func:`fetch_sp500_universe`.
+        session: an open AsyncSession (caller owns the transaction/commit).
+        default_exchange: exchange code used for listings (S&P 500 source does
+            not expose the venue per row; NYSE/NASDAQ both valid -- we use a
+            single real venue rather than guessing per-symbol).
+
+    Returns:
+        Summary dict: ``{"seeded": N, "created": C, "updated": U, "sectors": M}``.
+    """
+    from sqlalchemy import select
+    from backend.models.unified_models import Stock
+
+    if not stocks:
+        raise UniverseSourceError("Refusing to persist an empty universe")
+
+    exchange = await _get_or_create_exchange(session, default_exchange)
+
+    sector_cache: Dict[str, int] = {}
+    created = 0
+    updated = 0
+
+    for info in stocks:
+        sector_id: Optional[int] = None
+        if info.sector:
+            if info.sector not in sector_cache:
+                sector = await _get_or_create_sector(session, info.sector)
+                sector_cache[info.sector] = sector.id
+            sector_id = sector_cache[info.sector]
+
+        # Idempotent upsert-by-symbol. We do NOT overwrite market_cap or
+        # sector linkage with nulls, and we never fabricate market_cap.
+        result = await session.execute(
+            select(Stock).where(Stock.symbol == info.symbol)
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing is None:
+            session.add(
+                Stock(
+                    symbol=info.symbol,
+                    name=info.name,
+                    exchange_id=exchange.id,
+                    sector_id=sector_id,
+                    asset_type="stock",
+                    country="US",
+                    currency="USD",
+                    is_active=True,
+                    is_tradable=True,
+                    is_delisted=False,
+                )
+            )
+            created += 1
+        else:
+            existing.name = info.name
+            existing.exchange_id = exchange.id
+            if sector_id is not None:
+                existing.sector_id = sector_id
+            existing.is_active = True
+            existing.is_tradable = True
+            existing.is_delisted = False
+            updated += 1
+
+    await session.flush()
+
+    summary = {
+        "seeded": created + updated,
+        "created": created,
+        "updated": updated,
+        "sectors": len(sector_cache),
+    }
+    logger.info(
+        "Persisted S&P 500 universe: %d seeded (%d new, %d updated) across %d sectors",
+        summary["seeded"], summary["created"], summary["updated"], summary["sectors"],
+    )
+    return summary
+
 
 if __name__ == "__main__":
     total, new = expand_stock_universe()

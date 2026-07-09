@@ -111,6 +111,12 @@ class BaseAPIClient(ABC):
         """
         Internal method to make HTTP request with rate limiting and error handling
         """
+        # Lazily create the HTTP session. The module-level client singletons are called
+        # directly (not via `async with`), so __aenter__ never ran and self.session was
+        # None -> "'NoneType' object has no attribute 'request'".
+        if self.session is None:
+            self.session = aiohttp.ClientSession(timeout=self.timeout)
+
         # Check rate limits
         if not await cost_monitor.check_api_limit(self.provider_name, endpoint):
             logger.warning(f"Rate limit reached for {self.provider_name}")

@@ -7,10 +7,9 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { apiConfig, buildApiUrl } from '../config/api.config';
 
 export interface RegisterUserData {
-  username: string;
   email: string;
   password: string;
-  fullName?: string;
+  full_name: string;
 }
 
 // Create axios instance with default config

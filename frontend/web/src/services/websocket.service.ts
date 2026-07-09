@@ -13,7 +13,18 @@ class WebSocketService {
   private reconnectDelay = 5000;
 
   connect(token?: string) {
-    if (this.socket?.connected) {
+    // Real-time updates are opt-in (VITE_ENABLE_WEBSOCKETS). Gate here -- inside
+    // connect() -- so EVERY caller is covered (store auto-connect AND direct callers
+    // like usePortfolioWebSocket). Without a reachable socket server this prevents
+    // the "Unable to establish real-time connection" toast spam + the Offline badge.
+    if (!env.ENABLE_WEBSOCKETS) {
+      return;
+    }
+    // Bail if a socket already exists (connected OR mid-connection/retrying). The
+    // previous guard only checked `.connected`, so every Redux state change spawned
+    // a fresh socket while the old one was still failing -- leaking sockets and
+    // emitting a duplicate "Unable to establish real-time connection" toast each time.
+    if (this.socket) {
       return;
     }
 
@@ -262,8 +273,12 @@ class WebSocketService {
 // Create singleton instance
 const wsService = new WebSocketService();
 
-// Auto-connect when user is authenticated
+// Auto-connect when user is authenticated. Real-time updates are opt-in via
+// VITE_ENABLE_WEBSOCKETS; without a reachable socket server (e.g. local dev) we skip
+// connecting entirely so the UI doesn't show a permanent "Offline" badge or spam
+// connection-error notifications.
 store.subscribe(() => {
+  if (!env.ENABLE_WEBSOCKETS) return;
   const state = store.getState();
   if (state.app.isAuthenticated && !wsService.isConnected()) {
     wsService.connect();

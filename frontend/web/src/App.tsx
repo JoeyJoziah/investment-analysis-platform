@@ -47,6 +47,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Help = lazy(() => import('./pages/Help'));
 const InvestmentThesis = lazy(() => import('./pages/InvestmentThesis'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 // =============================================================================
 // ROUTE PREFETCHING
@@ -284,7 +285,14 @@ function AppContent() {
                   </SuspenseWrapper>
                 }
               />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route
+                path="*"
+                element={
+                  <SuspenseWrapper skeletonType="default">
+                    <NotFound />
+                  </SuspenseWrapper>
+                }
+              />
             </Route>
           )}
         </Routes>

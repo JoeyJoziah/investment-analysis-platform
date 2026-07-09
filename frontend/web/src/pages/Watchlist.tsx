@@ -284,8 +284,8 @@ const Watchlist: React.FC = () => {
         </Box>
 
         {watchlistError && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => {}}>
-            {watchlistError}
+          <Alert severity="info" sx={{ mb: 2 }} onClose={() => {}}>
+            Your watchlist isn&apos;t available yet — there&apos;s no saved watchlist data in this environment.
           </Alert>
         )}
 

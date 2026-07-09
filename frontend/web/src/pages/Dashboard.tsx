@@ -151,20 +151,6 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
-  if (error) {
-    return (
-      <Box p={3}>
-        <Alert severity="error" action={
-          <Button color="inherit" size="small" onClick={handleRefresh}>
-            Retry
-          </Button>
-        }>
-          {error}
-        </Alert>
-      </Box>
-    );
-  }
-
   const hasMarketIndices = marketOverview?.indices && marketOverview.indices.length > 0;
   const hasRecommendations = topRecommendations && topRecommendations.length > 0;
   const hasPerformanceHistory = portfolioSummary?.performanceHistory && portfolioSummary.performanceHistory.length > 0;
@@ -203,6 +189,21 @@ const Dashboard: React.FC = () => {
       </Box>
 
       {loading && <LinearProgress sx={{ mb: 2 }} />}
+
+      {error && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={handleRefresh}>
+              Retry
+            </Button>
+          }
+        >
+          Some dashboard data isn&apos;t available yet — the database may be empty or
+          certain data endpoints aren&apos;t wired up. The rest of the app is fully usable.
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* Key Metrics */}

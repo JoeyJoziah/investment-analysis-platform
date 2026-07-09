@@ -81,8 +81,8 @@ describe('Login', () => {
 
     await user.click(screen.getByRole('button', { name: /use demo account/i }));
 
-    expect(screen.getByLabelText(/email address/i)).toHaveValue('demo@investai.com');
-    expect(container.querySelector('#password')).toHaveValue('demo123');
+    expect(screen.getByLabelText(/email address/i)).toHaveValue('demo@invest.com');
+    expect(container.querySelector('#password')).toHaveValue('Demo12345!');
   });
 
   it('toggles password visibility', async () => {
@@ -217,7 +217,7 @@ describe('Register', () => {
 
     await waitFor(() => {
       expect(apiService.auth.register).toHaveBeenCalledWith({
-        name: 'John Doe',
+        full_name: 'John Doe',
         email: 'john@example.com',
         password: 'password123',
       });
@@ -345,7 +345,7 @@ describe('ForgotPassword', () => {
     await user.click(screen.getByRole('button', { name: /send reset link/i }));
 
     await waitFor(() => {
-      expect(apiService.post).toHaveBeenCalledWith('/auth/forgot-password', {
+      expect(apiService.post).toHaveBeenCalledWith('/api/v1/auth/forgot-password', {
         email: 'test@example.com',
       });
     });

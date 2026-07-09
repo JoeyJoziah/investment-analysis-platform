@@ -107,27 +107,53 @@ const initialState: PortfolioState = {
   lastUpdated: null,
 };
 
+// The backend wraps successful watchlist responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual Watchlist/WatchlistItem (not the envelope) — otherwise
+// state.watchlist.items is undefined and the list silently renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
+// Resolved payload for the portfolio endpoint, consumed by the fulfilled reducer.
+export interface PortfolioPayload {
+  positions: Position[];
+  metrics: PortfolioMetrics;
+}
+
 // Async thunks
-export const fetchPortfolio = createAsyncThunk(
+export const fetchPortfolio = createAsyncThunk<PortfolioPayload>(
   'portfolio/fetchPortfolio',
   async () => {
-    const response = await apiService.get('/portfolio');
+    const response = await apiService.get<PortfolioPayload>('/api/v1/portfolio');
     return response.data;
   }
 );
 
-export const fetchTransactions = createAsyncThunk(
+export const fetchTransactions = createAsyncThunk<
+  Transaction[],
+  { limit?: number; offset?: number } | undefined
+>(
   'portfolio/fetchTransactions',
   async (params?: { limit?: number; offset?: number }) => {
-    const response = await apiService.get('/portfolio/transactions', { params });
+    const response = await apiService.get<Transaction[]>('/api/v1/portfolio/transactions', {
+      params,
+    });
     return response.data;
   }
 );
 
-export const addTransaction = createAsyncThunk(
+export const addTransaction = createAsyncThunk<Transaction, Omit<Transaction, 'id'>>(
   'portfolio/addTransaction',
   async (transaction: Omit<Transaction, 'id'>) => {
-    const response = await apiService.post('/portfolio/transactions', transaction);
+    const response = await apiService.post<Transaction>(
+      '/api/v1/portfolio/transactions',
+      transaction
+    );
     return response.data;
   }
 );
@@ -135,7 +161,7 @@ export const addTransaction = createAsyncThunk(
 export const deletePosition = createAsyncThunk(
   'portfolio/deletePosition',
   async (positionId: string) => {
-    await apiService.delete(`/portfolio/positions/${positionId}`);
+    await apiService.delete(`/api/v1/portfolio/positions/${positionId}`);
     return positionId;
   }
 );
@@ -145,8 +171,8 @@ export const fetchWatchlist = createAsyncThunk(
   'portfolio/fetchWatchlist',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get('/api/watchlists/default');
-      return response.data;
+      const response = await apiService.get('/api/v1/watchlists/default');
+      return unwrapData<Watchlist>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlist');
@@ -161,11 +187,11 @@ export const addToWatchlist = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await apiService.post(`/api/watchlists/default/symbols/${symbol}`, {
+      const response = await apiService.post(`/api/v1/watchlists/default/symbols/${symbol}`, {
         target_price: targetPrice,
         notes,
       });
-      return response.data;
+      return unwrapData<WatchlistItem>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to add to watchlist');
@@ -177,7 +203,7 @@ export const removeFromWatchlist = createAsyncThunk(
   'portfolio/removeFromWatchlist',
   async (symbol: string, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/watchlists/default/symbols/${symbol}`);
+      await apiService.delete(`/api/v1/watchlists/default/symbols/${symbol}`);
       return symbol;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
@@ -202,10 +228,10 @@ export const updateWatchlistItem = createAsyncThunk(
   ) => {
     try {
       const response = await apiService.put(
-        `/api/watchlists/${watchlistId}/items/${itemId}`,
+        `/api/v1/watchlists/${watchlistId}/items/${itemId}`,
         updates
       );
-      return response.data;
+      return unwrapData<WatchlistItem>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to update watchlist item');
@@ -218,8 +244,8 @@ export const fetchAllWatchlists = createAsyncThunk(
   'portfolio/fetchAllWatchlists',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiService.get('/api/watchlists');
-      return response.data;
+      const response = await apiService.get('/api/v1/watchlists');
+      return unwrapData(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to fetch watchlists');
@@ -235,12 +261,12 @@ export const createWatchlist = createAsyncThunk(
     { rejectWithValue }
   ) => {
     try {
-      const response = await apiService.post('/api/watchlists', {
+      const response = await apiService.post('/api/v1/watchlists', {
         name,
         description,
         is_public: isPublic,
       });
-      return response.data;
+      return unwrapData<Watchlist>(response.data);
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       return rejectWithValue(axiosError.response?.data?.detail ?? 'Failed to create watchlist');
@@ -253,7 +279,7 @@ export const deleteWatchlist = createAsyncThunk(
   'portfolio/deleteWatchlist',
   async (watchlistId: number, { rejectWithValue }) => {
     try {
-      await apiService.delete(`/api/watchlists/${watchlistId}`);
+      await apiService.delete(`/api/v1/watchlists/${watchlistId}`);
       return watchlistId;
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };

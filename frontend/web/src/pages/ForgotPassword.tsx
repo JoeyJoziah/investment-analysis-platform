@@ -36,7 +36,7 @@ const ForgotPassword: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await apiService.post('/auth/forgot-password', { email: email.trim() });
+      await apiService.post('/api/v1/auth/forgot-password', { email: email.trim() });
       setIsSubmitted(true);
     } catch {
       // Show success even on error to prevent email enumeration

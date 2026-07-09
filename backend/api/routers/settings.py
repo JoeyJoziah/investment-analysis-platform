@@ -8,12 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Dict, Any
 import logging
+import os
+import re
+from pathlib import Path
 
 from backend.config.database import get_async_db_session
 from backend.models.api_response import ApiResponse, success_response
 from backend.auth.oauth2 import get_current_user
 from backend.models.unified_models import User
 from backend.services import settings_service
+from backend.config.settings import settings as app_settings
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -352,3 +356,175 @@ async def reset_to_defaults(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to reset settings"
         )
+
+
+# ============================================================================
+# Provider API keys
+# ============================================================================
+# UI field name -> .env variable name. Only these keys may ever be written.
+_API_KEY_ENV_VARS = {
+    "alpha_vantage": "ALPHA_VANTAGE_API_KEY",
+    "finnhub": "FINNHUB_API_KEY",
+    "polygon": "POLYGON_API_KEY",
+    "fmp": "FMP_API_KEY",
+    "news_api": "NEWS_API_KEY",
+    "marketaux": "MARKETAUX_API_KEY",
+    "fred": "FRED_API_KEY",
+    "openweather": "OPENWEATHER_API_KEY",
+}
+# Safe charset only -- prevents .env injection (no newlines, no '=').
+_API_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{8,128}$")
+_PLACEHOLDER_RE = re.compile(r"your|placeholder|xxx|changeme|demo", re.I)
+
+
+class ApiKeysUpdate(BaseModel):
+    """Provider API keys. Any subset may be sent; blank/omitted values are ignored
+    (so unchanged fields are never overwritten)."""
+    alpha_vantage: Optional[str] = None
+    finnhub: Optional[str] = None
+    polygon: Optional[str] = None
+    fmp: Optional[str] = None
+    news_api: Optional[str] = None
+    marketaux: Optional[str] = None
+    fred: Optional[str] = None
+    openweather: Optional[str] = None
+
+
+def _mask_key(value: Optional[str]) -> Optional[str]:
+    """Return a masked preview (e.g. 'abcd…wxyz') or None if unset/placeholder. Never
+    returns the full secret."""
+    if not value or _PLACEHOLDER_RE.search(value):
+        return None
+    if len(value) <= 8:
+        return "*" * len(value)
+    return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
+
+
+def _current_key(env_var: str) -> Optional[str]:
+    # Prefer runtime os.environ (reflects in-process updates) then startup settings.
+    return os.environ.get(env_var) or getattr(app_settings, env_var, None)
+
+
+def _masked_status() -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for ui_key, env_var in _API_KEY_ENV_VARS.items():
+        masked = _mask_key(_current_key(env_var))
+        out[ui_key] = {"configured": masked is not None, "masked": masked}
+    return out
+
+
+def _env_path() -> Path:
+    # backend/api/routers/settings.py -> project root is parents[3]
+    return Path(__file__).resolve().parents[3] / ".env"
+
+
+def _write_env_keys(updates: Dict[str, str]) -> None:
+    """Persist whitelisted KEY=value lines to .env, preserving all other content.
+
+    Backs up .env to .env.bak first, then replaces only matching ``KEY=`` lines
+    (appending any missing). Values are pre-validated to a safe charset, so no .env
+    injection is possible and unrelated secrets (DB password, JWT keys) are untouched.
+    """
+    env_path = _env_path()
+    lines = (
+        env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if env_path.exists() else []
+    )
+    if lines:
+        (env_path.parent / ".env.bak").write_text("".join(lines), encoding="utf-8")
+
+    remaining = dict(updates)
+    out = []
+    for line in lines:
+        replaced = False
+        for env_var, value in updates.items():
+            if line.lstrip().startswith(f"{env_var}="):
+                out.append(f"{env_var}={value}\n")
+                remaining.pop(env_var, None)
+                replaced = True
+                break
+        if not replaced:
+            out.append(line)
+    if out and not out[-1].endswith("\n"):
+        out[-1] += "\n"
+    for env_var, value in remaining.items():
+        out.append(f"{env_var}={value}\n")
+    env_path.write_text("".join(out), encoding="utf-8")
+
+
+@router.get("/api-keys")
+async def get_api_keys(
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Return masked configured-status for each provider key. Never returns full keys."""
+    return success_response(data=_masked_status())
+
+
+@router.put("/api-keys")
+async def update_api_keys(
+    payload: ApiKeysUpdate,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Persist provider API keys to .env (development only).
+
+    Writing provider keys via the API is a local/single-user dev convenience and is
+    refused outside development -- elsewhere keys come from the deployment environment
+    or secret manager. Values are charset-validated; only whitelisted provider keys are
+    written; .env is backed up first. A backend restart is recommended so module-level
+    provider clients (built from ``settings.*`` at import) pick up the new values.
+    """
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    if environment != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Saving API keys via the API is only permitted in development; "
+                   "set them in the deployment environment otherwise.",
+        )
+
+    provided = payload.model_dump()
+    updates: Dict[str, str] = {}
+    rejected = []
+    for ui_key, env_var in _API_KEY_ENV_VARS.items():
+        value = provided.get(ui_key)
+        if value is None:
+            continue
+        value = value.strip()
+        if value == "" or "*" in value:  # blank or a masked echo from the UI -> ignore
+            continue
+        if not _API_KEY_PATTERN.match(value):
+            rejected.append(ui_key)
+            continue
+        updates[env_var] = value
+
+    if rejected:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid key format for: {', '.join(rejected)} "
+                   "(allowed: letters, digits, '.', '_', '-'; length 8-128).",
+        )
+
+    if updates:
+        try:
+            _write_env_keys(updates)
+        except Exception as e:
+            logger.error(f"Error persisting API keys to .env: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to persist API keys",
+            )
+        # Apply in-process so os.getenv consumers see them immediately.
+        for env_var, value in updates.items():
+            os.environ[env_var] = value
+            try:
+                setattr(app_settings, env_var, value)
+            except Exception:  # pragma: no cover - settings is a plain attr holder
+                pass
+
+    logger.info(
+        "User %s updated API keys: %s", current_user.id, sorted(updates.keys())
+    )
+    return success_response(data={
+        "updated": [k for k, v in _API_KEY_ENV_VARS.items() if v in updates],
+        "restart_recommended": bool(updates),
+        "keys": _masked_status(),
+    })

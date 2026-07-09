@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, date, timezone
 import asyncio
 import logging
 import json
+import time
 from decimal import Decimal
 
 from backend.tasks.celery_app import celery_app, TaskPriority
@@ -16,7 +17,8 @@ from backend.data_ingestion.finnhub_client import FinnhubClient
 from backend.data_ingestion.polygon_client import PolygonClient
 from backend.utils.database import get_db_sync
 from backend.utils.cache import get_redis_client
-from backend.models.unified_models import Stock, PriceHistory, Fundamental, News
+from backend.utils.cost_monitor import cost_monitor
+from backend.models.unified_models import Stock, PriceHistory, Fundamentals, News
 from sqlalchemy import select, and_
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,13 @@ logger = logging.getLogger(__name__)
 ALPHA_VANTAGE_DAILY_LIMIT = 25
 FINNHUB_MINUTE_LIMIT = 60
 POLYGON_MINUTE_LIMIT = 5
+
+# Daily-candle backfill tuning.
+# Finnhub free tier allows 60 calls/minute. We keep a conservative throttle so
+# that a single backfill worker, plus any concurrent quote traffic, stays well
+# under the limit. cost_monitor.check_api_limit is still the authoritative gate.
+FINNHUB_BACKFILL_SLEEP_SECONDS = 1.1  # ~54 calls/min, leaves headroom under 60
+DEFAULT_BACKFILL_DAYS = 365  # ~1 year of daily candles
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=300)
 def fetch_stock_data(self, symbol: str, source: str = "all") -> Dict[str, Any]:
@@ -290,72 +299,323 @@ def fetch_news_data(symbol: Optional[str] = None, limit: int = 100) -> Dict[str,
 
 @celery_app.task
 def store_price_data(symbol: str, data: Dict[str, Any]) -> bool:
-    """Store price data in database"""
+    """
+    Store *real* daily OHLC candle data for a symbol.
+
+    Compliance: this task NEVER fabricates a flat OHLC row from a single
+    real-time quote (the previous implementation wrote
+    ``open=high=low=close=current_price``, which is synthetic data and
+    violates the project's strict no-synthetic-data rule). Instead it pulls
+    the most recent real daily candles from Finnhub and upserts them via the
+    price repository.
+
+    The ``data`` argument is accepted for backward compatibility with the
+    existing ``fetch_stock_data`` call site but is no longer used to
+    manufacture price rows; only real provider candles are persisted.
+
+    Args:
+        symbol: Stock ticker symbol.
+        data: Legacy payload (ignored for OHLC; kept for signature compat).
+
+    Returns:
+        True if at least one real candle was persisted, False otherwise.
+    """
     try:
-        with get_db_sync() as db:
-            # Get stock record
-            stock = db.query(Stock).filter(Stock.symbol == symbol).first()
-            if not stock:
-                logger.warning(f"Stock {symbol} not found in database")
-                return False
-            
-            # Extract price from different sources
-            current_price = None
-            volume = None
-            
-            if 'finnhub' in data:
-                fh_data = data['finnhub']
-                current_price = fh_data.get('c')  # Current price
-                volume = fh_data.get('v')  # Volume
-            elif 'alpha_vantage' in data:
-                av_data = data['alpha_vantage']
-                if 'Global Quote' in av_data:
-                    quote = av_data['Global Quote']
-                    current_price = float(quote.get('05. price', 0))
-                    volume = int(quote.get('06. volume', 0))
-            
-            # Create price history record
-            if current_price:
-                price_record = PriceHistory(
-                    stock_id=stock.id,
-                    date=date.today(),
-                    open=current_price,  # Using current price as placeholder
-                    high=current_price,
-                    low=current_price,
-                    close=current_price,
-                    volume=volume or 0
-                )
-                
-                # Check if record for today already exists
-                existing = db.query(PriceHistory).filter(
-                    and_(
-                        PriceHistory.stock_id == stock.id,
-                        PriceHistory.date == date.today()
-                    )
-                ).first()
-                
-                if existing:
-                    # Update existing record
-                    existing.close = current_price
-                    existing.high = max(existing.high, current_price)
-                    existing.low = min(existing.low, current_price)
-                    if volume:
-                        existing.volume = volume
-                else:
-                    db.add(price_record)
-                
-                # Update stock's last price update time
-                stock.last_price_update = datetime.now(timezone.utc)
-                
-                db.commit()
-                logger.info(f"Price data stored for {symbol}")
-                return True
-            
+        # Recent incremental refresh: last few calendar days of daily candles.
+        # We request a small window (covers weekends/holidays) and upsert only
+        # the real candles the provider returns. Empty -> skip, never fabricate.
+        result = backfill_symbol_prices(symbol, days=5)
+        rows_written = result.get("rows_written", 0)
+        if rows_written > 0:
+            logger.info(
+                f"store_price_data: stored {rows_written} real candle(s) for {symbol}"
+            )
+            return True
+
+        logger.info(
+            f"store_price_data: no real candles available for {symbol} "
+            f"(status={result.get('status')}); nothing written"
+        )
         return False
-        
+
     except Exception as e:
         logger.error(f"Error storing price data for {symbol}: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Daily-OHLC backfill -- the real-history path for charts/technical/stats/etc.
+# ---------------------------------------------------------------------------
+
+def _candles_to_price_rows(stock_id: int, candles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Map Finnhub candle dicts to PriceHistory row dicts for bulk upsert.
+
+    Each candle from ``FinnhubClient.get_candles`` has the shape::
+
+        {"timestamp": <unix>, "date": <iso>, "open": .., "high": ..,
+         "low": .., "close": .., "volume": ..}
+
+    The ``PriceHistory.date`` column is a ``DateTime`` with a unique
+    constraint on ``(stock_id, date)``. We normalize each candle's unix
+    timestamp to the UTC calendar day (midnight) so that daily candles
+    de-duplicate cleanly across runs.
+
+    Rows missing any required OHLC field (or with a non-positive close) are
+    skipped -- we never substitute synthetic values.
+
+    Returns:
+        List of row dicts suitable for ``bulk_upsert_prices``.
+    """
+    rows: List[Dict[str, Any]] = []
+    for candle in candles:
+        ts = candle.get("timestamp")
+        open_ = candle.get("open")
+        high = candle.get("high")
+        low = candle.get("low")
+        close = candle.get("close")
+        volume = candle.get("volume")
+
+        # Require a real, complete candle. Skip anything incomplete rather
+        # than fabricating values.
+        if ts is None or open_ is None or high is None or low is None or close is None:
+            continue
+        if close <= 0:
+            continue
+
+        candle_date = datetime.fromtimestamp(ts, tz=timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0, tzinfo=None
+        )
+
+        rows.append({
+            "stock_id": stock_id,
+            "date": candle_date,
+            "open": Decimal(str(open_)),
+            "high": Decimal(str(high)),
+            "low": Decimal(str(low)),
+            "close": Decimal(str(close)),
+            "volume": int(volume) if volume is not None else 0,
+        })
+
+    return rows
+
+
+def _persist_price_rows(stock_id: int, rows: List[Dict[str, Any]]) -> int:
+    """
+    Persist mapped price rows via the price repository's bulk upsert.
+
+    The repository's bulk upsert resolves conflicts on the table primary key
+    (``id``). Because we never supply ``id``, we defensively drop rows whose
+    ``(stock_id, date)`` already exist so a re-run does not violate the
+    ``uq_stock_date`` unique constraint. This keeps the backfill idempotent
+    without modifying the repository.
+
+    Returns:
+        Number of rows actually written.
+    """
+    if not rows:
+        return 0
+
+    from backend.repositories.price_repository import price_repository
+    from backend.config.database import get_db_session
+
+    async def _do_persist() -> int:
+        async with get_db_session() as session:
+            candidate_dates = [r["date"] for r in rows]
+            existing_result = await session.execute(
+                select(PriceHistory.date).where(
+                    and_(
+                        PriceHistory.stock_id == stock_id,
+                        PriceHistory.date.in_(candidate_dates),
+                    )
+                )
+            )
+            existing_dates = {row[0] for row in existing_result}
+
+            new_rows = [r for r in rows if r["date"] not in existing_dates]
+            if not new_rows:
+                return 0
+
+            return await price_repository.bulk_upsert_prices(new_rows, session=session)
+
+    return _run_async(_do_persist())
+
+
+def _run_async(coro):
+    """
+    Run an async coroutine from sync (Celery / standalone) context.
+
+    Uses a fresh event loop to avoid clashing with any loop that may already
+    be bound to the current thread.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+
+def _fetch_yfinance_candles(symbol: str, days: int) -> List[Dict[str, Any]]:
+    """
+    Fetch real daily OHLCV from Yahoo Finance (yfinance) as candle dicts.
+
+    Finnhub's free tier returns HTTP 403 for /stock/candle, so yfinance (free,
+    no API key) is the daily-history source. The output is shaped exactly like
+    ``FinnhubClient.get_candles`` candles so the existing
+    ``_candles_to_price_rows`` mapping and persistence are reused unchanged.
+    Returns ``[]`` on any failure or empty result -- the caller then SKIPS the
+    symbol and never fabricates data.
+    """
+    try:
+        import yfinance as yf
+
+        start = (datetime.now(timezone.utc) - timedelta(days=max(int(days), 1))).date()
+        df = yf.Ticker(symbol.upper()).history(start=start.isoformat(), auto_adjust=False)
+        if df is None or df.empty:
+            return []
+
+        candles: List[Dict[str, Any]] = []
+        for idx, row in df.iterrows():
+            ts = int(datetime(idx.year, idx.month, idx.day, tzinfo=timezone.utc).timestamp())
+            vol = row.get("Volume")
+            candles.append({
+                "timestamp": ts,
+                "open": float(row["Open"]),
+                "high": float(row["High"]),
+                "low": float(row["Low"]),
+                "close": float(row["Close"]),
+                # vol == vol filters NaN (NaN != NaN); never substitute a guess.
+                "volume": int(vol) if vol is not None and vol == vol else 0,
+            })
+        return candles
+    except Exception as exc:
+        logger.warning(f"yfinance candle fetch failed for {symbol}: {exc}")
+        return []
+
+
+def backfill_symbol_prices(
+    symbol: str,
+    days: int = DEFAULT_BACKFILL_DAYS,
+) -> Dict[str, Any]:
+    """
+    Fetch real daily candles for a single symbol and persist them.
+
+    Daily history comes from Yahoo Finance via yfinance (Finnhub's free tier
+    blocks /stock/candle). If the source returns no candles for the symbol, the
+    symbol is SKIPPED (no synthetic data is ever written).
+
+    Args:
+        symbol: Stock ticker symbol.
+        days: How many days of history to request (default ~1 year).
+
+    Returns:
+        Dict with ``symbol``, ``status`` and ``rows_written``.
+    """
+    # Resolve the stock id first (sync session is fine for a simple lookup).
+    with get_db_sync() as db:
+        stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+        if not stock:
+            logger.warning(f"backfill_symbol_prices: stock {symbol} not found")
+            return {"symbol": symbol, "status": "not_found", "rows_written": 0}
+        stock_id = stock.id
+
+    candles = _fetch_yfinance_candles(symbol, days)
+    if not candles:
+        # Source returned nothing -> skip, do not fabricate.
+        logger.info(f"backfill_symbol_prices: no candles for {symbol}, skipping")
+        return {"symbol": symbol, "status": "no_data", "rows_written": 0}
+
+    rows = _candles_to_price_rows(stock_id, candles)
+    if not rows:
+        return {"symbol": symbol, "status": "no_valid_candles", "rows_written": 0}
+
+    rows_written = _persist_price_rows(stock_id, rows)
+    return {
+        "symbol": symbol,
+        "status": "success",
+        "rows_written": rows_written,
+        "candles_fetched": len(candles),
+    }
+
+
+@celery_app.task
+def backfill_daily_prices(
+    limit: Optional[int] = None,
+    days: int = DEFAULT_BACKFILL_DAYS,
+    symbols: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Backfill real daily OHLC candles for the active stock universe.
+
+    For each active, tradable stock this fetches ~``days`` of daily candles
+    from Finnhub and upserts them via the price repository. Calls are throttled
+    (``FINNHUB_BACKFILL_SLEEP_SECONDS``) and gated by ``cost_monitor`` to stay
+    under the 60/min free-tier limit. Symbols the provider returns nothing for
+    are skipped -- never fabricated.
+
+    Args:
+        limit: Optional cap on number of symbols (useful for partial runs).
+        days: Days of history per symbol (default ~1 year).
+        symbols: Optional explicit symbol list (overrides universe lookup).
+
+    Returns:
+        Summary dict with counts of processed / written / skipped symbols.
+    """
+    # Build the work list.
+    if symbols:
+        work_symbols = [s.strip().upper() for s in symbols if s and s.strip()]
+    else:
+        with get_db_sync() as db:
+            query = db.query(Stock).filter(
+                Stock.is_active == True,  # noqa: E712
+                Stock.is_tradable == True,  # noqa: E712
+            ).order_by(Stock.market_cap.desc().nullslast())
+            if limit:
+                query = query.limit(limit)
+            work_symbols = [s.symbol for s in query.all()]
+
+    if limit and not symbols:
+        work_symbols = work_symbols[:limit]
+    elif limit and symbols:
+        work_symbols = work_symbols[:limit]
+
+    summary = {
+        "total": len(work_symbols),
+        "succeeded": 0,
+        "skipped_no_data": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "rows_written": 0,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    for idx, sym in enumerate(work_symbols):
+        try:
+            result = backfill_symbol_prices(sym, days=days)
+            status = result.get("status")
+            if status == "success":
+                summary["succeeded"] += 1
+                summary["rows_written"] += result.get("rows_written", 0)
+            elif status in ("no_data", "no_valid_candles", "not_found"):
+                summary["skipped_no_data"] += 1
+            elif status == "rate_limited":
+                summary["rate_limited"] += 1
+        except Exception as e:
+            summary["errors"] += 1
+            logger.error(f"backfill_daily_prices: error for {sym}: {e}")
+
+        # Throttle between symbols to stay under the Finnhub minute limit.
+        if idx < len(work_symbols) - 1:
+            time.sleep(FINNHUB_BACKFILL_SLEEP_SECONDS)
+
+    logger.info(
+        f"backfill_daily_prices completed: {summary['succeeded']} succeeded, "
+        f"{summary['skipped_no_data']} skipped, {summary['rate_limited']} rate-limited, "
+        f"{summary['errors']} errors, {summary['rows_written']} rows written"
+    )
+    return summary
 
 @celery_app.task
 def store_historical_data(symbol: str, data: List[Dict]) -> bool:
@@ -417,29 +677,33 @@ def store_fundamental_data(symbol: str, data: Dict[str, Any]) -> bool:
                 stock.industry = overview.get('Industry')
                 stock.description = overview.get('Description')
                 
-                # Create fundamental record
-                fundamental = Fundamental(
+                # Create fundamental record.
+                # NOTE: the model is ``Fundamentals`` (plural) and uses
+                # ``period_date``/``period_type`` columns -- not the
+                # ``report_date``/``period`` names that the old AlphaVantage
+                # mapping assumed. ``dividend_yield`` is not a column on this
+                # model, so it is intentionally omitted.
+                fundamental = Fundamentals(
                     stock_id=stock.id,
-                    report_date=date.today(),
-                    period='Current',
+                    period_date=date.today(),
+                    period_type='annual',
                     pe_ratio=float(overview.get('PERatio', 0)) if overview.get('PERatio') else None,
                     peg_ratio=float(overview.get('PEGRatio', 0)) if overview.get('PEGRatio') else None,
                     ps_ratio=float(overview.get('PriceToSalesRatioTTM', 0)) if overview.get('PriceToSalesRatioTTM') else None,
                     pb_ratio=float(overview.get('PriceToBookRatio', 0)) if overview.get('PriceToBookRatio') else None,
-                    dividend_yield=float(overview.get('DividendYield', 0)) if overview.get('DividendYield') else None,
                     roe=float(overview.get('ReturnOnEquityTTM', 0)) if overview.get('ReturnOnEquityTTM') else None,
                     roa=float(overview.get('ReturnOnAssetsTTM', 0)) if overview.get('ReturnOnAssetsTTM') else None,
                     gross_margin=float(overview.get('GrossProfitMargin', 0)) if overview.get('GrossProfitMargin') else None,
                     operating_margin=float(overview.get('OperatingMarginTTM', 0)) if overview.get('OperatingMarginTTM') else None,
                     net_margin=float(overview.get('ProfitMargin', 0)) if overview.get('ProfitMargin') else None
                 )
-                
+
                 # Check if record exists
-                existing = db.query(Fundamental).filter(
+                existing = db.query(Fundamentals).filter(
                     and_(
-                        Fundamental.stock_id == stock.id,
-                        Fundamental.report_date == date.today(),
-                        Fundamental.period == 'Current'
+                        Fundamentals.stock_id == stock.id,
+                        Fundamentals.period_date == date.today(),
+                        Fundamentals.period_type == 'annual'
                     )
                 ).first()
                 

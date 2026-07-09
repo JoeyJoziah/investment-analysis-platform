@@ -24,7 +24,7 @@ export const apiConfig = {
       logout: '/api/v1/auth/logout',
       refresh: '/api/v1/auth/refresh',
       register: '/api/v1/auth/register',
-      profile: '/api/v1/auth/profile',
+      profile: '/api/v1/auth/me',
     },
 
     // Stocks

@@ -144,6 +144,20 @@ export interface OptionsChain {
   }>;
 }
 
+export interface SimilarStock {
+  ticker: string;
+  name: string;
+  correlation: number;
+  changePercent: number;
+}
+
+export interface StockSearchResult {
+  ticker: string;
+  name: string;
+  exchange: string;
+  type: string;
+}
+
 interface StockState {
   selectedTicker: string | null;
   quote: StockQuote | null;
@@ -152,20 +166,20 @@ interface StockState {
   fundamentalData: FundamentalData | null;
   news: StockNews[];
   optionsChain: OptionsChain | null;
-  similarStocks: Array<{
-    ticker: string;
-    name: string;
-    correlation: number;
-    changePercent: number;
-  }>;
-  searchResults: Array<{
-    ticker: string;
-    name: string;
-    exchange: string;
-    type: string;
-  }>;
+  similarStocks: SimilarStock[];
+  searchResults: StockSearchResult[];
   isLoading: boolean;
   error: string | null;
+}
+
+// Resolved payload for fetchStockData. The quote is always present (the thunk
+// throws otherwise); technical/fundamental/news are best-effort and may be null.
+export interface StockDataPayload {
+  ticker: string;
+  quote: StockQuote;
+  technical: TechnicalIndicators | null;
+  fundamental: FundamentalData | null;
+  news: StockNews[];
 }
 
 const initialState: StockState = {
@@ -182,60 +196,119 @@ const initialState: StockState = {
   error: null,
 };
 
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual payload rather than the envelope — otherwise the consumed
+// fields are undefined and the page renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 // Async thunks
-export const fetchStockData = createAsyncThunk(
+export const fetchStockData = createAsyncThunk<StockDataPayload, string>(
   'stock/fetchData',
   async (ticker: string) => {
-    const [quote, technical, fundamental, news] = await Promise.all([
-      apiService.get(`/stocks/${ticker}/quote`),
-      apiService.get(`/stocks/${ticker}/technical`),
-      apiService.get(`/stocks/${ticker}/fundamental`),
-      apiService.get(`/stocks/${ticker}/news`),
+    // Use allSettled so a missing/optional sub-endpoint (technical, fundamental and
+    // news are not all implemented yet -> 404) does NOT discard the working quote.
+    // The quote is the primary data; the rest are best-effort.
+    const [quoteR, technicalR, fundamentalR, newsR] = await Promise.allSettled([
+      apiService.get(`/api/v1/stocks/${ticker}/quote`),
+      apiService.get(`/api/v1/stocks/${ticker}/technical`),
+      apiService.get(`/api/v1/stocks/${ticker}/fundamental`),
+      apiService.get(`/api/v1/stocks/${ticker}/news`),
     ]);
-    
+
+    // r.value is the axios response, so r.value.data is the ApiResponse ENVELOPE.
+    // Unwrap one more level via unwrapData so callers receive the real payload
+    // (r.value.data.data) for quote/technical/fundamental/news.
+    const dataOf = (r: PromiseSettledResult<{ data: unknown }>): unknown =>
+      r.status === 'fulfilled' ? unwrapData(r.value.data) : null;
+
+    const rawQuote = dataOf(quoteR);
+    if (!rawQuote) {
+      // Only fail the whole load if even the quote is unavailable.
+      throw new Error(`No quote data available for ${ticker}`);
+    }
+
+    // The backend returns snake_case quote fields; map them to the camelCase StockQuote
+    // shape the UI renders so values display and undefined fields never crash *.toFixed().
+    const q = rawQuote as Record<string, unknown>;
+    const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    const quote: StockQuote = {
+      ticker: str(q.symbol ?? q.ticker) || ticker,
+      companyName: str(q.company_name ?? q.companyName ?? q.name),
+      price: num(q.price),
+      change: num(q.change),
+      changePercent: num(q.change_percent ?? q.changePercent),
+      volume: num(q.volume),
+      avgVolume: num(q.avg_volume ?? q.avgVolume),
+      marketCap: num(q.market_cap ?? q.marketCap),
+      peRatio: num(q.pe_ratio ?? q.peRatio),
+      week52High: num(q.fifty_two_week_high ?? q.week52High),
+      week52Low: num(q.fifty_two_week_low ?? q.week52Low),
+      dividendYield: num(q.dividend_yield ?? q.dividendYield),
+      beta: num(q.beta),
+      eps: num(q.eps),
+      open: num(q.open),
+      high: num(q.high),
+      low: num(q.low),
+      previousClose: num(q.previous_close ?? q.previousClose),
+      timestamp: str(q.timestamp),
+    };
+
     return {
       ticker,
-      quote: quote.data,
-      technical: technical.data,
-      fundamental: fundamental.data,
-      news: news.data,
+      quote,
+      // technical/fundamental are best-effort: dataOf returns the unwrapped
+      // payload or null. news falls back to [] so the reducer always gets an array.
+      technical: dataOf(technicalR) as TechnicalIndicators | null,
+      fundamental: dataOf(fundamentalR) as FundamentalData | null,
+      news: (dataOf(newsR) as StockNews[] | null) ?? [],
     };
   }
 );
 
-export const fetchStockChart = createAsyncThunk(
+export const fetchStockChart = createAsyncThunk<
+  StockChart,
+  { ticker: string; interval: string }
+>(
   'stock/fetchChart',
   async ({ ticker, interval }: { ticker: string; interval: string }) => {
-    const response = await apiService.get(`/stocks/${ticker}/chart`, {
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/chart`, {
       params: { interval },
     });
-    return response.data;
+    return unwrapData<StockChart>(response.data);
   }
 );
 
-export const fetchOptionsChain = createAsyncThunk(
+export const fetchOptionsChain = createAsyncThunk<OptionsChain, string>(
   'stock/fetchOptions',
   async (ticker: string) => {
-    const response = await apiService.get(`/stocks/${ticker}/options`);
-    return response.data;
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/options`);
+    return unwrapData<OptionsChain>(response.data);
   }
 );
 
-export const searchStocks = createAsyncThunk(
+export const searchStocks = createAsyncThunk<StockSearchResult[], string>(
   'stock/search',
   async (query: string) => {
-    const response = await apiService.get('/stocks/search', {
+    const response = await apiService.get('/api/v1/stocks/search', {
       params: { q: query },
     });
-    return response.data;
+    return unwrapData<StockSearchResult[]>(response.data);
   }
 );
 
-export const fetchSimilarStocks = createAsyncThunk(
+export const fetchSimilarStocks = createAsyncThunk<SimilarStock[], string>(
   'stock/fetchSimilar',
   async (ticker: string) => {
-    const response = await apiService.get(`/stocks/${ticker}/similar`);
-    return response.data;
+    const response = await apiService.get(`/api/v1/stocks/${ticker}/similar`);
+    return unwrapData(response.data);
   }
 );
 

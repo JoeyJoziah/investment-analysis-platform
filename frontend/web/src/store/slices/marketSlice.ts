@@ -62,6 +62,25 @@ export interface MarketBreadth {
   totalVolume: number;
 }
 
+export interface HeatmapEntry {
+  ticker: string;
+  name: string;
+  sector: string;
+  changePercent: number;
+  marketCap: number;
+  volume: number;
+}
+
+export interface EconomicCalendarEntry {
+  date: string;
+  time: string;
+  event: string;
+  importance: 'high' | 'medium' | 'low';
+  actual?: number;
+  forecast?: number;
+  previous?: number;
+}
+
 interface MarketState {
   indices: MarketIndex[];
   topGainers: MarketMover[];
@@ -70,26 +89,28 @@ interface MarketState {
   sectorPerformance: SectorPerformance[];
   marketNews: MarketNews[];
   marketBreadth: MarketBreadth | null;
-  heatmapData: Array<{
-    ticker: string;
-    name: string;
-    sector: string;
-    changePercent: number;
-    marketCap: number;
-    volume: number;
-  }>;
-  economicCalendar: Array<{
-    date: string;
-    time: string;
-    event: string;
-    importance: 'high' | 'medium' | 'low';
-    actual?: number;
-    forecast?: number;
-    previous?: number;
-  }>;
+  heatmapData: HeatmapEntry[];
+  economicCalendar: EconomicCalendarEntry[];
   isLoading: boolean;
   error: string | null;
   lastUpdated: string | null;
+}
+
+// Resolved payload shapes for the async thunks. Defining these explicitly lets
+// createAsyncThunk infer a concrete `action.payload` type in the fulfilled
+// reducers instead of `unknown`/RejectWithValue<unknown, unknown>.
+export interface MarketOverviewPayload {
+  indices: MarketIndex[];
+  topGainers: MarketMover[];
+  topLosers: MarketMover[];
+  mostActive: MarketMover[];
+  marketBreadth: MarketBreadth | null;
+}
+
+export interface MarketMoversPayload {
+  gainers: MarketMover[];
+  losers: MarketMover[];
+  active: MarketMover[];
 }
 
 const initialState: MarketState = {
@@ -107,60 +128,78 @@ const initialState: MarketState = {
   lastUpdated: null,
 };
 
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual market payload (e.g. .indices, .gainers) rather than the
+// envelope — otherwise those fields are undefined and the pages render empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
 // Async thunks
-export const fetchMarketOverview = createAsyncThunk(
+export const fetchMarketOverview = createAsyncThunk<MarketOverviewPayload>(
   'market/fetchOverview',
   async () => {
-    const response = await apiService.get('/market/overview');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/overview');
+    return unwrapData<MarketOverviewPayload>(response.data);
   }
 );
 
-export const fetchMarketIndices = createAsyncThunk(
+export const fetchMarketIndices = createAsyncThunk<MarketIndex[]>(
   'market/fetchIndices',
   async () => {
-    const response = await apiService.get('/market/indices');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/indices');
+    return unwrapData<MarketIndex[]>(response.data);
   }
 );
 
-export const fetchMarketMovers = createAsyncThunk(
+export const fetchMarketMovers = createAsyncThunk<MarketMoversPayload>(
   'market/fetchMovers',
   async () => {
-    const response = await apiService.get('/market/movers');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/movers');
+    return unwrapData<MarketMoversPayload>(response.data);
   }
 );
 
-export const fetchSectorPerformance = createAsyncThunk(
+export const fetchSectorPerformance = createAsyncThunk<SectorPerformance[]>(
   'market/fetchSectors',
   async () => {
-    const response = await apiService.get('/market/sectors');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/sectors');
+    return unwrapData<SectorPerformance[]>(response.data);
   }
 );
 
-export const fetchMarketNews = createAsyncThunk(
+export const fetchMarketNews = createAsyncThunk<
+  MarketNews[],
+  { limit?: number; category?: string } | undefined
+>(
   'market/fetchNews',
   async (params?: { limit?: number; category?: string }) => {
-    const response = await apiService.get('/market/news', { params });
-    return response.data;
+    const response = await apiService.get('/api/v1/market/news', { params });
+    return unwrapData<MarketNews[]>(response.data);
   }
 );
 
-export const fetchHeatmapData = createAsyncThunk(
+export const fetchHeatmapData = createAsyncThunk<
+  HeatmapEntry[],
+  { index?: string; sector?: string } | undefined
+>(
   'market/fetchHeatmap',
   async (params?: { index?: string; sector?: string }) => {
-    const response = await apiService.get('/market/heatmap', { params });
-    return response.data;
+    const response = await apiService.get('/api/v1/market/heatmap', { params });
+    return unwrapData<HeatmapEntry[]>(response.data);
   }
 );
 
-export const fetchEconomicCalendar = createAsyncThunk(
+export const fetchEconomicCalendar = createAsyncThunk<EconomicCalendarEntry[]>(
   'market/fetchCalendar',
   async () => {
-    const response = await apiService.get('/market/calendar');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/calendar');
+    return unwrapData<EconomicCalendarEntry[]>(response.data);
   }
 );
 

@@ -240,10 +240,17 @@ class ETagMiddleware:
                     })
                     start_sent = True
 
-                    # Send the body
-                    await send(message)
+                    # Send the FULL buffered body in a single chunk. Previously this sent
+                    # only the final `message` chunk, dropping every earlier buffered
+                    # chunk -> truncated body and "Response content shorter than
+                    # Content-Length" for any multi-chunk (e.g. gzip-compressed) response.
+                    await send({
+                        "type": "http.response.body",
+                        "body": full_body,
+                        "more_body": False,
+                    })
                 else:
-                    # More body chunks coming - hold them
+                    # More body chunks coming - hold them (accumulated above)
                     return
             else:
                 await send(message)

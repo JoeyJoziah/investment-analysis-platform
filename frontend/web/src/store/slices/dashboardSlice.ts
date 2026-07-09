@@ -109,43 +109,58 @@ interface CostMetricsState {
   emergencyMode: boolean;
 }
 
+interface DashboardMarketOverview {
+  indices: MarketIndex[];
+  heatmap: HeatmapEntry[];
+  sectors: Sector[];
+}
+
+interface DashboardPortfolioSummary {
+  totalValue: number;
+  totalCost: number;
+  totalReturn: number;
+  totalReturnPercent: number;
+  dayChange: number;
+  dayChangePercent: number;
+  weekChange: number;
+  monthChange: number;
+  yearChange: number;
+  activePositions: number;
+  performanceHistory: Array<{ date: string; value: number }>;
+  topGainers: PositionSummary[];
+  topLosers: PositionSummary[];
+  allocation: AllocationEntry[];
+  riskMetrics: {
+    sharpeRatio: number;
+    beta: number;
+    standardDeviation: number;
+    maxDrawdown: number;
+  };
+  diversificationScore: number;
+  cashBalance: number;
+  marginUsed: number;
+}
+
 interface DashboardState {
-  marketOverview: {
-    indices: MarketIndex[];
-    heatmap: HeatmapEntry[];
-    sectors: Sector[];
-  } | null;
+  marketOverview: DashboardMarketOverview | null;
   topRecommendations: Recommendation[];
-  portfolioSummary: {
-    totalValue: number;
-    totalCost: number;
-    totalReturn: number;
-    totalReturnPercent: number;
-    dayChange: number;
-    dayChangePercent: number;
-    weekChange: number;
-    monthChange: number;
-    yearChange: number;
-    activePositions: number;
-    performanceHistory: Array<{ date: string; value: number }>;
-    topGainers: PositionSummary[];
-    topLosers: PositionSummary[];
-    allocation: AllocationEntry[];
-    riskMetrics: {
-      sharpeRatio: number;
-      beta: number;
-      standardDeviation: number;
-      maxDrawdown: number;
-    };
-    diversificationScore: number;
-    cashBalance: number;
-    marginUsed: number;
-  } | null;
+  portfolioSummary: DashboardPortfolioSummary | null;
   recentNews: NewsItem[];
   marketSentiment: MarketSentimentState | null;
   costMetrics: CostMetricsState | null;
   loading: boolean;
   error: string | null;
+}
+
+// Resolved payload for the aggregate dashboard endpoint. Reuses the nested
+// interfaces above so the fulfilled reducer sees concrete field types.
+interface DashboardDataPayload {
+  marketOverview: DashboardMarketOverview | null;
+  topRecommendations: Recommendation[];
+  portfolioSummary: DashboardPortfolioSummary | null;
+  recentNews: NewsItem[];
+  marketSentiment: MarketSentimentState | null;
+  costMetrics: CostMetricsState | null;
 }
 
 const initialState: DashboardState = {
@@ -159,35 +174,48 @@ const initialState: DashboardState = {
   error: null,
 };
 
-export const fetchDashboardData = createAsyncThunk(
+// The backend wraps successful responses in an ApiResponse envelope
+// ({ success, data: <payload> }). Axios exposes the body on response.data, so
+// the real payload lives at response.data.data. Unwrap defensively so reducers
+// receive the actual dashboard payload (e.g. .marketOverview, .portfolioSummary)
+// rather than the envelope — otherwise those fields are undefined and the
+// dashboard renders empty.
+const unwrapData = <T = unknown>(body: unknown): T => {
+  if (body && typeof body === 'object' && 'data' in body) {
+    return (body as { data: T }).data;
+  }
+  return body as T;
+};
+
+export const fetchDashboardData = createAsyncThunk<DashboardDataPayload>(
   'dashboard/fetchData',
   async () => {
-    const response = await apiService.get('/dashboard');
-    return response.data;
+    const response = await apiService.get('/api/v1/dashboard');
+    return unwrapData<DashboardDataPayload>(response.data);
   }
 );
 
-export const fetchMarketOverview = createAsyncThunk(
+export const fetchMarketOverview = createAsyncThunk<DashboardMarketOverview>(
   'dashboard/fetchMarketOverview',
   async () => {
-    const response = await apiService.get('/market/overview');
-    return response.data;
+    const response = await apiService.get('/api/v1/market/overview');
+    return unwrapData<DashboardMarketOverview>(response.data);
   }
 );
 
-export const fetchPortfolioSummary = createAsyncThunk(
+export const fetchPortfolioSummary = createAsyncThunk<DashboardPortfolioSummary>(
   'dashboard/fetchPortfolioSummary',
   async () => {
-    const response = await apiService.get('/portfolio/summary');
-    return response.data;
+    const response = await apiService.get('/api/v1/portfolio/summary');
+    return unwrapData<DashboardPortfolioSummary>(response.data);
   }
 );
 
-export const fetchCostMetrics = createAsyncThunk(
+export const fetchCostMetrics = createAsyncThunk<CostMetricsState>(
   'dashboard/fetchCostMetrics',
   async () => {
-    const response = await apiService.get('/admin/cost-metrics');
-    return response.data;
+    const response = await apiService.get('/api/v1/admin/metrics');
+    return unwrapData<CostMetricsState>(response.data);
   }
 );
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Container,
   Paper,
@@ -27,11 +27,34 @@ import {
 } from '../components/settings/SettingsTabs';
 import type { AlertItem, NewAlertInput } from '../components/settings/SettingsTabs';
 import { ApiKeysForm } from '../components/settings/SettingsForm';
-import type { ApiKeysState } from '../components/settings/SettingsForm';
+import type { ApiKeysState, ApiKeysConfiguredStatus } from '../components/settings/SettingsForm';
+import { apiService } from '../services/api.service';
+import { apiConfig } from '../config/api.config';
+
+// state.app.user is normalized to the camelCase `User` shape (name/email) in
+// appSlice. Read `full_name` too as a defensive fallback in case an
+// un-normalized payload ever reaches here.
+const resolveUserName = (user: { name?: string; full_name?: string } | null | undefined): string =>
+  user?.name ?? user?.full_name ?? '';
 
 const Settings: React.FC = () => {
   const dispatch = useAppDispatch();
   const { themeMode, user } = useAppSelector((state) => state.app);
+
+  // Pre-fill the Profile form from the logged-in user. `user` may briefly be
+  // null on first render (before GET /api/v1/auth/me resolves), so we seed from
+  // whatever is present and sync via useEffect once the user loads.
+  const [profile, setProfile] = useState({
+    name: resolveUserName(user),
+    email: user?.email ?? '',
+  });
+
+  useEffect(() => {
+    setProfile({
+      name: resolveUserName(user),
+      email: user?.email ?? '',
+    });
+  }, [user]);
 
   const [tabValue, setTabValue] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
@@ -41,6 +64,46 @@ const Settings: React.FC = () => {
     polygon: '',
     newsApi: '',
   });
+  // Masked configured-status from the backend so the user can see which keys
+  // are already saved (and not blindly re-enter, which can overwrite a good
+  // key). The GET endpoint never returns full secrets — only masked previews.
+  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeysConfiguredStatus>({});
+
+  const loadApiKeyStatus = React.useCallback(async () => {
+    type KeyStatus = { configured?: boolean; masked?: string | null };
+    type StatusMap = Record<string, KeyStatus>;
+    try {
+      const resp = await apiService.get<{ data?: StatusMap } & StatusMap>(
+        apiConfig.endpoints.settings.apiKeys
+      );
+      const data: StatusMap | undefined = resp.data?.data ?? resp.data;
+      if (!data) return;
+      setApiKeyStatus({
+        alphaVantage: data.alpha_vantage && {
+          configured: !!data.alpha_vantage.configured,
+          masked: data.alpha_vantage.masked ?? null,
+        },
+        finnhub: data.finnhub && {
+          configured: !!data.finnhub.configured,
+          masked: data.finnhub.masked ?? null,
+        },
+        polygon: data.polygon && {
+          configured: !!data.polygon.configured,
+          masked: data.polygon.masked ?? null,
+        },
+        newsApi: data.news_api && {
+          configured: !!data.news_api.configured,
+          masked: data.news_api.masked ?? null,
+        },
+      });
+    } catch {
+      // Status is a convenience; ignore failures (form still works).
+    }
+  }, []);
+
+  useEffect(() => {
+    loadApiKeyStatus();
+  }, [loadApiKeyStatus]);
   const [preferences, setPreferences] = useState({
     defaultView: 'dashboard',
     autoRefresh: true,
@@ -81,13 +144,34 @@ const Settings: React.FC = () => {
     );
   };
 
-  const handleSaveApiKeys = () => {
-    dispatch(
-      addNotification({
-        type: 'success',
-        message: 'API keys saved successfully',
-      })
-    );
+  const handleSaveApiKeys = async () => {
+    // Map the UI's camelCase fields to the backend snake_case contract. Blank fields
+    // are sent as empty strings and ignored server-side (so they aren't overwritten).
+    const payload = {
+      alpha_vantage: apiKeys.alphaVantage,
+      finnhub: apiKeys.finnhub,
+      polygon: apiKeys.polygon,
+      news_api: apiKeys.newsApi,
+    };
+    try {
+      await apiService.put(apiConfig.endpoints.settings.apiKeys, payload);
+      // Clear the typed values and refresh the masked status so the saved
+      // (masked) keys are reflected and aren't accidentally re-submitted.
+      setApiKeys({ alphaVantage: '', finnhub: '', polygon: '', newsApi: '' });
+      await loadApiKeyStatus();
+      dispatch(
+        addNotification({
+          type: 'success',
+          message: 'API keys saved. Restart the backend for all data providers to pick them up.',
+        })
+      );
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err as { message?: string })?.message ||
+        'Failed to save API keys';
+      dispatch(addNotification({ type: 'error', message: detail }));
+    }
   };
 
   const handleAddAlert = () => {
@@ -156,8 +240,9 @@ const Settings: React.FC = () => {
 
         <TabPanel value={tabValue} index={0}>
           <ProfileTab
-            userName={user?.name || ''}
-            userEmail={user?.email || ''}
+            key={`${profile.name}|${profile.email}`}
+            userName={profile.name}
+            userEmail={profile.email}
             timezone={preferences.timezone}
             onTimezoneChange={(timezone) =>
               setPreferences({ ...preferences, timezone })
@@ -220,6 +305,7 @@ const Settings: React.FC = () => {
             onApiKeysChange={setApiKeys}
             onToggleShowPassword={() => setShowPassword(!showPassword)}
             onSave={handleSaveApiKeys}
+            configuredStatus={apiKeyStatus}
           />
         </TabPanel>
 
