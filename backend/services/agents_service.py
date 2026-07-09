@@ -109,19 +109,40 @@ async def run_fundamental_analysis(ticker: str, depth: str) -> Dict[str, Any]:
     return {"score": composite, "summary": summary, "details": details}
 
 
-async def run_technical_analysis(ticker: str, depth: str) -> Dict[str, Any]:
-    """
-    Execute technical analysis and normalise the output into a standard dict.
-
-    Returns a dict with keys: score, summary, details.
-    """
+async def _load_ohlcv_frame(ticker: str, *, limit: int = 250):
+    """Load real OHLCV for technical analysis (oldest→newest). None if missing."""
     import pandas as pd
-    import numpy as np
 
-    engine = _get_technical_engine()
+    try:
+        from backend.repositories.price_repository import price_repository
+
+        records = await price_repository.get_price_history(ticker, limit=limit)
+    except Exception as exc:
+        logger.warning("price history load failed for %s: %s", ticker, exc)
+        return None
+
+    if not records or len(records) < 30:
+        return None
+
+    # Repository returns newest-first; technical engine expects chronological.
+    rows = list(reversed(records))
+    return pd.DataFrame(
+        {
+            "open": [float(r.open) for r in rows],
+            "high": [float(r.high) for r in rows],
+            "low": [float(r.low) for r in rows],
+            "close": [float(r.close) for r in rows],
+            "volume": [float(r.volume) for r in rows],
+        }
+    )
+
+
+def _synthetic_ohlcv_demo_only(ticker: str, n: int = 250):
+    """Synthetic OHLCV — DEMO_MODE only. Never used in production paths."""
+    import numpy as np
+    import pandas as pd
 
     np.random.seed(hash(ticker) % (2**31))
-    n = 250
     base = 150.0
     returns = np.random.normal(0.0005, 0.02, n)
     close = base * np.cumprod(1 + returns)
@@ -129,14 +150,46 @@ async def run_technical_analysis(ticker: str, depth: str) -> Dict[str, Any]:
     low = close * (1 - np.abs(np.random.normal(0, 0.005, n)))
     open_prices = close * (1 + np.random.normal(0, 0.003, n))
     volume = np.random.randint(1_000_000, 50_000_000, n).astype(float)
+    return pd.DataFrame(
+        {
+            "open": open_prices,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        }
+    )
 
-    df = pd.DataFrame({
-        "open": open_prices,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+
+async def run_technical_analysis(ticker: str, depth: str) -> Dict[str, Any]:
+    """
+    Execute technical analysis and normalise the output into a standard dict.
+
+    Uses real price history from the repository. Production refuses fabricated
+    OHLCV (ModelUnavailableError). DEMO_MODE may fall back to tagged synthetic
+    bars for demos only.
+
+    Returns a dict with keys: score, summary, details.
+    """
+    from backend.config.settings import settings
+    from backend.exceptions import ModelUnavailableError
+
+    engine = _get_technical_engine()
+
+    df = await _load_ohlcv_frame(ticker)
+    data_source = "price_history"
+    if df is None:
+        if settings.DEMO_MODE:
+            df = _synthetic_ohlcv_demo_only(ticker)
+            data_source = "simulated"
+            logger.warning(
+                "run_technical_analysis: DEMO_MODE synthetic OHLCV for %s", ticker
+            )
+        else:
+            raise ModelUnavailableError(
+                model="technical_analysis",
+                reason="insufficient_price_history",
+            )
 
     analysis = engine.analyze_stock(df)
     analysis = sanitize_numpy(analysis)
@@ -157,8 +210,11 @@ async def run_technical_analysis(ticker: str, depth: str) -> Dict[str, Any]:
             "composite_score": composite,
             "trend": trend,
             "signals": signals[:5],
+            "data_source": data_source,
         }
     )
+    if depth == "deep" and isinstance(details, dict):
+        details = {**details, "data_source": data_source}
 
     return {"score": composite, "summary": summary, "details": details}
 

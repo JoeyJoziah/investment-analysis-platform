@@ -296,7 +296,19 @@ class TestRunTechnicalAnalysis:
             "market_structure": {"trend": "bullish"},
         }
 
+        import pandas as pd
+
+        fake_df = pd.DataFrame(
+            {
+                "open": [1.0] * 40,
+                "high": [1.1] * 40,
+                "low": [0.9] * 40,
+                "close": [1.0] * 40,
+                "volume": [1e6] * 40,
+            }
+        )
         with patch.object(agents_mod, "_get_technical_engine", return_value=mock_engine), \
+             patch.object(agents_mod, "_load_ohlcv_frame", AsyncMock(return_value=fake_df)), \
              patch("backend.services.agents_service.sanitize_numpy", side_effect=lambda x: x):
             result = await run_technical_analysis("AAPL", "standard")
 
@@ -306,6 +318,8 @@ class TestRunTechnicalAnalysis:
 
     @pytest.mark.asyncio
     async def test_standard_depth_truncates_signals(self):
+        import pandas as pd
+
         mock_engine = MagicMock()
         mock_engine.analyze_stock.return_value = {
             "composite_score": -0.3,
@@ -313,8 +327,18 @@ class TestRunTechnicalAnalysis:
             "market_structure": {"trend": "bearish"},
             "extra": "data",
         }
+        fake_df = pd.DataFrame(
+            {
+                "open": [1.0] * 40,
+                "high": [1.1] * 40,
+                "low": [0.9] * 40,
+                "close": [1.0] * 40,
+                "volume": [1e6] * 40,
+            }
+        )
 
         with patch.object(agents_mod, "_get_technical_engine", return_value=mock_engine), \
+             patch.object(agents_mod, "_load_ohlcv_frame", AsyncMock(return_value=fake_df)), \
              patch("backend.services.agents_service.sanitize_numpy", side_effect=lambda x: x):
             result = await run_technical_analysis("TSLA", "standard")
 
@@ -323,6 +347,8 @@ class TestRunTechnicalAnalysis:
 
     @pytest.mark.asyncio
     async def test_deep_depth_returns_full_analysis(self):
+        import pandas as pd
+
         full = {
             "composite_score": 0.5,
             "signals": [],
@@ -331,28 +357,62 @@ class TestRunTechnicalAnalysis:
         }
         mock_engine = MagicMock()
         mock_engine.analyze_stock.return_value = full
+        fake_df = pd.DataFrame(
+            {
+                "open": [1.0] * 40,
+                "high": [1.1] * 40,
+                "low": [0.9] * 40,
+                "close": [1.0] * 40,
+                "volume": [1e6] * 40,
+            }
+        )
 
         with patch.object(agents_mod, "_get_technical_engine", return_value=mock_engine), \
+             patch.object(agents_mod, "_load_ohlcv_frame", AsyncMock(return_value=fake_df)), \
              patch("backend.services.agents_service.sanitize_numpy", side_effect=lambda x: x):
             result = await run_technical_analysis("GOOG", "deep")
 
-        assert result["details"] is full
+        assert result["details"]["extras"] is True
+        assert result["details"]["data_source"] == "price_history"
 
     @pytest.mark.asyncio
     async def test_no_signals_produces_clean_summary(self):
+        import pandas as pd
+
         mock_engine = MagicMock()
         mock_engine.analyze_stock.return_value = {
             "composite_score": 0.0,
             "signals": [],
             "market_structure": {"trend": "neutral"},
         }
+        fake_df = pd.DataFrame(
+            {
+                "open": [1.0] * 40,
+                "high": [1.1] * 40,
+                "low": [0.9] * 40,
+                "close": [1.0] * 40,
+                "volume": [1e6] * 40,
+            }
+        )
 
         with patch.object(agents_mod, "_get_technical_engine", return_value=mock_engine), \
+             patch.object(agents_mod, "_load_ohlcv_frame", AsyncMock(return_value=fake_df)), \
              patch("backend.services.agents_service.sanitize_numpy", side_effect=lambda x: x):
             result = await run_technical_analysis("XYZ", "standard")
 
         assert "Signals:" not in result["summary"]
         assert "neutral" in result["summary"]
+
+    @pytest.mark.asyncio
+    async def test_refuses_when_no_price_history_and_not_demo(self, monkeypatch):
+        from backend.config.settings import settings
+        from backend.exceptions import ModelUnavailableError
+
+        monkeypatch.setattr(settings, "DEMO_MODE", False, raising=False)
+        with patch.object(agents_mod, "_load_ohlcv_frame", AsyncMock(return_value=None)):
+            with pytest.raises(ModelUnavailableError) as exc:
+                await run_technical_analysis("NODATA", "standard")
+        assert exc.value.reason == "insufficient_price_history"
 
 
 # ---------------------------------------------------------------------------
