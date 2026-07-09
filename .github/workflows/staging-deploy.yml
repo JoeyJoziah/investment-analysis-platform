@@ -108,14 +108,19 @@ jobs:
           VITE_APP_ENV=staging
           VITE_API_URL=https://api-staging.investment-analysis.com
 
+    # SBOM is best-effort: external Syft download can 504 and must not fail image publish
     - name: Generate SBOM for backend
+      id: sbom-backend
+      continue-on-error: true
       uses: anchore/sbom-action@v0
       with:
         image: ${{ steps.backend-meta.outputs.tags }}
         output-file: backend-sbom.spdx.json
         format: spdx-json
 
-    - name: Generate SBOM for frontend  
+    - name: Generate SBOM for frontend
+      id: sbom-frontend
+      continue-on-error: true
       uses: anchore/sbom-action@v0
       with:
         image: ${{ steps.frontend-meta.outputs.tags }}
@@ -123,12 +128,15 @@ jobs:
         format: spdx-json
 
     - name: Upload SBOMs
+      if: always()
+      continue-on-error: true
       uses: actions/upload-artifact@v4
       with:
         name: sbom-reports
         path: |
           backend-sbom.spdx.json
           frontend-sbom.spdx.json
+        if-no-files-found: ignore
 
   # Security scanning
   security-scan:

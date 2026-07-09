@@ -25,3 +25,13 @@ def test_dockerignore_scopes_root_tests_only():
     ]
     broad = [ln for ln in lines if ln in {"tests/", "tests", "**/tests/", "**/tests"}]
     assert not broad, f"broad tests ignore still present: {broad}"
+
+
+def test_staging_sbom_steps_are_non_blocking():
+    """SBOM must not fail image publish on external Syft download errors."""
+    yml = Path(".github/workflows/staging-deploy.yml").read_text(encoding="utf-8")
+    assert "anchore/sbom-action" in yml
+    # Both SBOM steps should tolerate failure (continue-on-error)
+    assert yml.count("continue-on-error: true") >= 2
+    assert "Generate SBOM for backend" in yml
+    assert "Generate SBOM for frontend" in yml
