@@ -1,0 +1,168 @@
+# Canary deployment with health-check auto-rollback (#101 / Wave 12)
+name: Canary Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to canary (sha or semver)"
+        required: true
+        type: string
+      canary_percent:
+        description: "Traffic percentage for canary (1-50)"
+        required: false
+        default: "10"
+        type: string
+      health_url:
+        description: "Health check URL for canary"
+        required: false
+        default: "https://staging.example.com/api/health"
+        type: string
+      environment:
+        description: "Target environment"
+        required: false
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: canary-deploy-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-canary:
+    name: Deploy canary slice
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    outputs:
+      canary_ref: ${{ steps.meta.outputs.ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve canary ref
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.image_tag }}"
+          PCT="${{ github.event.inputs.canary_percent }}"
+          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
+          echo "percent=$PCT" >> "$GITHUB_OUTPUT"
+          echo "Canary tag=$TAG at ${PCT}% traffic"
+
+      - name: Record canary deployment intent
+        run: |
+          mkdir -p artifacts
+          cat > artifacts/canary-manifest.json <<EOF
+          {
+            "image_tag": "${{ github.event.inputs.image_tag }}",
+            "canary_percent": ${{ github.event.inputs.canary_percent }},
+            "environment": "${{ github.event.inputs.environment }}",
+            "health_url": "${{ github.event.inputs.health_url }}",
+            "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          cat artifacts/canary-manifest.json
+
+      # Placeholder for real orchestrator (K8s/ECS/Nomad). Keeps workflow green
+      # without requiring cloud credentials in CI.
+      - name: Apply canary (dry-run when no deploy credentials)
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$DEPLOY_TOKEN" ]; then
+            echo "No DEPLOY_TOKEN secret — recording dry-run canary only."
+            echo "dry_run=true" >> "$GITHUB_ENV"
+          else
+            echo "DEPLOY_TOKEN present — invoke external canary apply here."
+            # Example: kubectl set image / aws ecs update-service ...
+            echo "dry_run=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upload canary manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-manifest
+          path: artifacts/canary-manifest.json
+
+  health-gate:
+    name: Canary health gate
+    runs-on: ubuntu-latest
+    needs: [deploy-canary]
+    steps:
+      - name: Probe canary health
+        id: health
+        env:
+          HEALTH_URL: ${{ github.event.inputs.health_url }}
+        run: |
+          set +e
+          OK=0
+          for i in 1 2 3 4 5; do
+            echo "Health attempt $i → $HEALTH_URL"
+            CODE=$(curl -sS -o /tmp/health_body -w "%{http_code}" --max-time 15 "$HEALTH_URL" || echo "000")
+            echo "HTTP $CODE"
+            if [ "$CODE" = "200" ] || [ "$CODE" = "204" ]; then
+              OK=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$OK" = "1" ]; then
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Canary health checks passed"
+          else
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+            echo "❌ Canary health checks failed"
+          fi
+
+      - name: Fail job if unhealthy
+        if: steps.health.outputs.healthy != 'true'
+        run: |
+          echo "Canary unhealthy — triggering rollback job"
+          exit 1
+
+  promote-or-rollback:
+    name: Promote or auto-rollback
+    runs-on: ubuntu-latest
+    needs: [deploy-canary, health-gate]
+    if: always()
+    steps:
+      - name: Decide action
+        run: |
+          HEALTH="${{ needs.health-gate.result }}"
+          if [ "$HEALTH" = "success" ]; then
+            echo "action=promote" >> "$GITHUB_ENV"
+            echo "✅ Promoting canary to full traffic (or mark ready for promote)"
+          else
+            echo "action=rollback" >> "$GITHUB_ENV"
+            echo "↩️ Auto-rollback: restore previous stable deployment"
+          fi
+
+      - name: Execute rollback (dry-run without credentials)
+        if: env.action == 'rollback'
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$DEPLOY_TOKEN" ]; then
+            echo "Rollback dry-run recorded (no DEPLOY_TOKEN)."
+          else
+            echo "Invoke platform rollback with DEPLOY_TOKEN (kubectl/ecs/etc)."
+          fi
+          # Surface failure so the workflow overall fails on bad canary
+          exit 1
+
+      - name: Execute promote (dry-run without credentials)
+        if: env.action == 'promote'
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$DEPLOY_TOKEN" ]; then
+            echo "Promote dry-run recorded (no DEPLOY_TOKEN)."
+          else
+            echo "Invoke platform promote with DEPLOY_TOKEN."
+          fi

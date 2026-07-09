@@ -2,7 +2,7 @@
 Celery tasks for system maintenance and cleanup
 """
 from celery import shared_task
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, date, timezone
 import logging
 import os
@@ -274,6 +274,11 @@ def backup_database() -> Dict[str, Any]:
         
         with open(metadata_file, 'w') as f:
             json.dump(existing_metadata, f, indent=2)
+
+        # Optional S3 offsite copy (#6) when BACKUP_S3_BUCKET is configured
+        s3_result = _maybe_upload_backup_to_s3(compressed_file)
+        if s3_result:
+            backup_metadata["s3"] = s3_result
         
         logger.info(f"Database backup completed: {compressed_file}")
         return backup_metadata
@@ -284,6 +289,50 @@ def backup_database() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error in backup_database: {e}")
         return {'status': 'failed', 'error': str(e)}
+
+
+def _maybe_upload_backup_to_s3(local_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Upload a local backup file to S3 when BACKUP_S3_BUCKET is set (#6).
+
+    Returns None when S3 is not configured. Never raises — failures are logged
+    and returned as a status dict so local backups still succeed.
+    """
+    bucket = os.getenv("BACKUP_S3_BUCKET", "").strip()
+    if not bucket or bucket.startswith("optional_"):
+        return None
+
+    prefix = os.getenv("BACKUP_S3_PREFIX", "db-backups").strip().strip("/")
+    key = f"{prefix}/{os.path.basename(local_path)}" if prefix else os.path.basename(local_path)
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
+
+    try:
+        import boto3  # type: ignore
+        from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+    except ImportError:
+        logger.warning("boto3 not installed — skipping S3 backup upload")
+        return {"status": "skipped", "reason": "boto3_not_installed"}
+
+    try:
+        client = boto3.client("s3", region_name=region)
+        extra_args: Dict[str, Any] = {"ServerSideEncryption": "AES256"}
+        kms_key = os.getenv("BACKUP_ENCRYPTION_KEY", "").strip()
+        if kms_key and not kms_key.startswith("optional_"):
+            extra_args = {
+                "ServerSideEncryption": "aws:kms",
+                "SSEKMSKeyId": kms_key,
+            }
+        client.upload_file(local_path, bucket, key, ExtraArgs=extra_args)
+        logger.info("Backup uploaded to s3://%s/%s", bucket, key)
+        return {
+            "status": "uploaded",
+            "bucket": bucket,
+            "key": key,
+            "region": region,
+        }
+    except Exception as exc:  # pragma: no cover - network/AWS failures
+        logger.error("S3 backup upload failed: %s", exc)
+        return {"status": "failed", "error": str(exc)}
 
 @celery_app.task
 def check_system_health() -> Dict[str, Any]:
