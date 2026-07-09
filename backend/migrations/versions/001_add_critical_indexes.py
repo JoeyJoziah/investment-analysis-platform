@@ -178,8 +178,8 @@ def upgrade():
         op.create_index(
             'idx_stocks_active',
             'stocks',
-            ['is_active', 'is_tradeable', 'market_cap'],
-            postgresql_where=sa.text('is_active = true AND is_tradeable = true'),
+            ['is_active', 'is_tradable', 'market_cap'],
+            postgresql_where=sa.text('is_active = true AND is_tradable = true'),
             postgresql_concurrently=True
         )
     

@@ -140,8 +140,8 @@ jobs:
       id: frontend-build
       uses: docker/build-push-action@v5
       with:
-        context: ./frontend/web
-        file: ./frontend/web/Dockerfile
+        context: .
+        file: ./Dockerfile.frontend
         platforms: ${{ inputs.platforms }}
         push: ${{ inputs.push-images }}
         tags: ${{ steps.frontend-meta.outputs.tags }}

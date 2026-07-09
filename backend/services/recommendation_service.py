@@ -189,7 +189,22 @@ class RecommendationService:
 
         Returns:
             Dictionary representing a RecommendationDetail-compatible structure
+
+        Raises:
+            ModelUnavailableError: when ``settings.DEMO_MODE`` is False
+                (production default). T1.2/T1.3 (D1): every field below is a
+                ``random.*`` fabrication. This is the single source funnelling
+                ~10 service/CRUD call sites, so gating it here makes all of them
+                refuse-to-serve (HTTP 503 model_unavailable via the router's
+                exception handler) instead of shipping fake prices/ratings to
+                users. ``DEMO_MODE=true`` preserves the synthetic path for demos.
         """
+        if not settings.DEMO_MODE:
+            raise ModelUnavailableError(
+                model="recommendation_engine",
+                reason="fallback_active",
+            )
+
         if not symbol:
             symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA", "JPM", "V", "JNJ"]
             symbol = random.choice(symbols)

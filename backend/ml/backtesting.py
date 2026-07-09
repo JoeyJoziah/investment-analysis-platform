@@ -15,6 +15,8 @@ import asyncio
 from pathlib import Path
 import json
 
+from backend.exceptions import ModelUnavailableError
+
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import matplotlib.pyplot as plt
@@ -159,8 +161,13 @@ class BacktestEngine:
     Comprehensive backtesting engine with advanced analytics
     """
     
-    def __init__(self, data_provider: Any = None):
+    def __init__(self, data_provider: Any = None, allow_synthetic: bool = False):
         self.data_provider = data_provider
+        # T1.3 (D1): the np.random OHLCV fallback may only run when explicitly
+        # opted-in (tests). On a live path with no provider it raises instead of
+        # fabricating prices/returns. The production singleton wires a real
+        # data_provider, so this only bites accidental no-provider construction.
+        self.allow_synthetic = allow_synthetic
         self.results_cache = {}
         
     def backtest_strategy(self,
@@ -538,7 +545,14 @@ class BacktestEngine:
                 universe, start_date, end_date
             )
 
-        # Legacy synthetic fallback (no provider wired).
+        # T1.3 (D1): no real provider — refuse to fabricate unless explicitly
+        # allowed (test-only). Never serve np.random prices as real market data.
+        if not self.allow_synthetic:
+            raise ModelUnavailableError(
+                model="backtest_market_data", reason="no_data_provider"
+            )
+
+        # Legacy synthetic fallback (no provider wired; allow_synthetic=True).
         market_data = {}
         
         for ticker in universe:
@@ -575,7 +589,14 @@ class BacktestEngine:
             benchmark['returns'] = benchmark['close'].pct_change().fillna(0)
             return benchmark
 
-        # Mock benchmark data
+        # T1.3 (D1): no real provider — refuse to fabricate unless explicitly
+        # allowed (test-only). Never serve np.random returns as a real benchmark.
+        if not self.allow_synthetic:
+            raise ModelUnavailableError(
+                model="backtest_benchmark_data", reason="no_data_provider"
+            )
+
+        # Mock benchmark data (allow_synthetic=True only)
         dates = pd.date_range(start_date, end_date, freq='D')
         dates = dates[dates.weekday < 5]
         

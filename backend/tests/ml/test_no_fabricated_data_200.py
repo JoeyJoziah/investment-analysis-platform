@@ -82,10 +82,15 @@ for _mod in [
 # ---------------------------------------------------------------------------
 
 def _make_mock_model_manager(model_available: bool = False) -> MagicMock:
-    mm = MagicMock()
+    # MagicMock treats names starting with ``assert_`` as unittest assertions.
+    # ModelManager.assert_real_model must be a real child mock, so use a spec.
+    mm = MagicMock(
+        spec=["model_metadata", "get_model", "predict", "assert_real_model"]
+    )
     mm.model_metadata = {}
     mm.get_model.return_value = MagicMock() if model_available else None
     mm.predict.return_value = [100.0]
+    mm.assert_real_model = MagicMock()
     return mm
 
 
@@ -213,17 +218,18 @@ class TestMLRouterNoFabricatedData:
 
 class TestBacktestEngineNoFabricatedData:
     """
-    BacktestEngine._get_market_data / _get_benchmark_data must raise
-    RuntimeError when no data_provider is configured.
+    BacktestEngine._get_market_data / _get_benchmark_data must refuse
+    fabrication when no data_provider is configured (T1.3).
     """
 
     def test_get_market_data_raises_without_provider(self):
         from datetime import datetime
+        from backend.exceptions import ModelUnavailableError
         from backend.ml.backtesting import BacktestEngine
 
         engine = BacktestEngine(data_provider=None)
 
-        with pytest.raises(RuntimeError, match="data_provider"):
+        with pytest.raises(ModelUnavailableError, match="no_data_provider"):
             engine._get_market_data(
                 ["AAPL"],
                 datetime(2023, 1, 1),
@@ -232,11 +238,12 @@ class TestBacktestEngineNoFabricatedData:
 
     def test_get_benchmark_data_raises_without_provider(self):
         from datetime import datetime
+        from backend.exceptions import ModelUnavailableError
         from backend.ml.backtesting import BacktestEngine
 
         engine = BacktestEngine(data_provider=None)
 
-        with pytest.raises(RuntimeError, match="data_provider"):
+        with pytest.raises(ModelUnavailableError, match="no_data_provider"):
             engine._get_benchmark_data(
                 "SPY",
                 datetime(2023, 1, 1),
@@ -248,10 +255,13 @@ class TestBacktestEngineNoFabricatedData:
         from backend.ml.backtesting import BacktestEngine
 
         failing_provider = MagicMock()
-        failing_provider.get_historical_prices.side_effect = ConnectionError("timeout")
+        failing_provider.get_bulk_historical_prices.side_effect = ConnectionError(
+            "timeout"
+        )
         engine = BacktestEngine(data_provider=failing_provider)
 
-        with pytest.raises(RuntimeError, match="Data provider failed"):
+        # Fail-loud: provider errors must surface, never fall through to synthetic
+        with pytest.raises(ConnectionError, match="timeout"):
             engine._get_market_data(
                 ["AAPL"],
                 datetime(2023, 1, 1),
@@ -266,7 +276,7 @@ class TestBacktestEngineNoFabricatedData:
         failing_provider.get_historical_prices.side_effect = ConnectionError("timeout")
         engine = BacktestEngine(data_provider=failing_provider)
 
-        with pytest.raises(RuntimeError, match="Data provider failed"):
+        with pytest.raises(ConnectionError, match="timeout"):
             engine._get_benchmark_data(
                 "SPY",
                 datetime(2023, 1, 1),
@@ -275,25 +285,49 @@ class TestBacktestEngineNoFabricatedData:
 
     def test_no_random_seed_in_market_data_path(self):
         """
-        Verify the synthetic fallback code path (np.random.seed / np.random.normal
-        inside _get_market_data) no longer exists in the production code.
+        Default path refuses fabrication; synthetic np.random is gated behind
+        allow_synthetic=True (test-only opt-in).
         """
+        from datetime import datetime
+        from backend.exceptions import ModelUnavailableError
         from backend.ml.backtesting import BacktestEngine
 
         source = inspect.getsource(BacktestEngine._get_market_data)
-        assert "np.random.normal" not in source, (
-            "np.random.normal found in _get_market_data — synthetic prices still present"
+        assert "if not self.allow_synthetic" in source
+        assert "ModelUnavailableError" in source
+
+        default = BacktestEngine(data_provider=None, allow_synthetic=False)
+        with pytest.raises(ModelUnavailableError):
+            default._get_market_data(
+                ["AAPL"], datetime(2023, 1, 1), datetime(2023, 6, 1)
+            )
+
+        synthetic = BacktestEngine(data_provider=None, allow_synthetic=True)
+        data = synthetic._get_market_data(
+            ["AAPL"], datetime(2023, 1, 1), datetime(2023, 1, 10)
         )
-        assert "np.random.seed" not in source, (
-            "np.random.seed found in _get_market_data — synthetic prices still present"
-        )
+        assert "AAPL" in data
 
     def test_no_random_seed_in_benchmark_data_path(self):
+        from datetime import datetime
+        from backend.exceptions import ModelUnavailableError
         from backend.ml.backtesting import BacktestEngine
 
         source = inspect.getsource(BacktestEngine._get_benchmark_data)
-        assert "np.random.normal" not in source
-        assert "np.random.seed" not in source
+        assert "if not self.allow_synthetic" in source
+        assert "ModelUnavailableError" in source
+
+        default = BacktestEngine(data_provider=None, allow_synthetic=False)
+        with pytest.raises(ModelUnavailableError):
+            default._get_benchmark_data(
+                "SPY", datetime(2023, 1, 1), datetime(2023, 6, 1)
+            )
+
+        synthetic = BacktestEngine(data_provider=None, allow_synthetic=True)
+        frame = synthetic._get_benchmark_data(
+            "SPY", datetime(2023, 1, 1), datetime(2023, 1, 10)
+        )
+        assert not frame.empty
 
 
 # ===========================================================================
