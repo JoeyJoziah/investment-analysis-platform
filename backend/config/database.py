@@ -3,10 +3,9 @@ Async Database Configuration
 Comprehensive async database setup with connection pooling, transaction management, and monitoring.
 """
 
-import os
 import asyncio
 import logging
-from typing import Optional, AsyncGenerator, Dict, Any, Union
+from typing import Optional, AsyncGenerator, Dict, Any
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -19,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import NullPool, AsyncAdaptedQueuePool
 from sqlalchemy import text, event
-from sqlalchemy.exc import SQLAlchemyError, DisconnectionError, TimeoutError
+from sqlalchemy.exc import DisconnectionError, TimeoutError
 import asyncpg
 
 from backend.config.settings import settings
@@ -153,7 +152,8 @@ class AsyncDatabaseManager:
                     if "sslmode=disable" in url_l or "ssl=false" in url_l:
                         raise ValueError(
                             "DATABASE_URL must not disable SSL in production "
-                            "(remove sslmode=disable / ssl=false; asyncpg uses ssl=require)"
+                            "(remove sslmode=disable / ssl=false; "
+                            "asyncpg uses ssl=require)"
                         )
                     connect_args["ssl"] = "require"
             else:

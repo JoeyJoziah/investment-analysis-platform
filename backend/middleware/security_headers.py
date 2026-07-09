@@ -15,6 +15,7 @@ Part of: Phase 3 Security Remediation (HIGH-4)
 """
 
 import logging
+import secrets
 from typing import Optional, Dict, List, Set
 from dataclasses import dataclass, field
 from enum import Enum
@@ -61,21 +62,35 @@ class ContentSecurityPolicy:
     upgrade_insecure_requests: bool = True
     block_all_mixed_content: bool = True
     report_uri: Optional[str] = None
+    # When True, build() expects a per-request nonce for script-src (#86)
+    script_nonce: bool = True
 
-    def build(self) -> str:
+    def build(self, nonce: Optional[str] = None) -> str:
         """
-        Build CSP header value
+        Build CSP header value.
+
+        Args:
+            nonce: Optional per-request CSP nonce for script-src (and style if
+                callers opt in later). Style keeps 'unsafe-inline' for MUI
+                CSS-in-JS; scripts use nonce when provided.
 
         Returns:
             Formatted CSP header string
         """
         directives = []
 
+        script_src = list(self.script_src)
+        if nonce and self.script_nonce:
+            # Drop bare unsafe-inline for scripts when nonces are active
+            script_src = [s for s in script_src if s != "'unsafe-inline'"]
+            script_src = [s for s in script_src if not s.startswith("'nonce-")]
+            script_src.append(f"'nonce-{nonce}'")
+
         # Standard directives
         if self.default_src:
             directives.append(f"default-src {' '.join(self.default_src)}")
-        if self.script_src:
-            directives.append(f"script-src {' '.join(self.script_src)}")
+        if script_src:
+            directives.append(f"script-src {' '.join(script_src)}")
         if self.style_src:
             directives.append(f"style-src {' '.join(self.style_src)}")
         if self.img_src:
@@ -183,6 +198,8 @@ class SecurityHeadersConfig:
     # Content-Security-Policy
     csp_enabled: bool = True
     csp: Optional[ContentSecurityPolicy] = None
+    # Per-request nonce for script-src; exposed as X-CSP-Nonce (#86)
+    csp_nonce_enabled: bool = True
 
     # Referrer-Policy
     referrer_policy: ReferrerPolicy = ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
@@ -291,11 +308,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if self.config.hsts_enabled and request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = self._build_hsts_header()
 
-        # Content-Security-Policy
+        # Content-Security-Policy (nonce-based script-src when enabled)
+        csp_nonce: Optional[str] = None
         if self.config.csp_enabled and self.config.csp:
-            csp_value = self.config.csp.build()
+            if self.config.csp_nonce_enabled and self.config.csp.script_nonce:
+                csp_nonce = secrets.token_urlsafe(16)
+                # Stash for handlers/templates that inject scripts
+                try:
+                    request.state.csp_nonce = csp_nonce
+                except Exception:
+                    pass
+            csp_value = self.config.csp.build(nonce=csp_nonce)
             if csp_value:
                 response.headers["Content-Security-Policy"] = csp_value
+            if csp_nonce:
+                response.headers["X-CSP-Nonce"] = csp_nonce
 
         # Referrer-Policy
         response.headers["Referrer-Policy"] = self.config.referrer_policy.value
