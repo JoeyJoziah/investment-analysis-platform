@@ -126,13 +126,18 @@ async def _load_ohlcv_frame(ticker: str, *, limit: int = 250):
 
     # Repository returns newest-first; technical engine expects chronological.
     rows = list(reversed(records))
+
+    def _num(value: object) -> float:
+        # PriceHistory columns are Decimal/int at runtime; cast for analysis/pyright.
+        return float(value)  # type: ignore[arg-type]
+
     return pd.DataFrame(
         {
-            "open": [float(r.open) for r in rows],
-            "high": [float(r.high) for r in rows],
-            "low": [float(r.low) for r in rows],
-            "close": [float(r.close) for r in rows],
-            "volume": [float(r.volume) for r in rows],
+            "open": [_num(r.open) for r in rows],
+            "high": [_num(r.high) for r in rows],
+            "low": [_num(r.low) for r in rows],
+            "close": [_num(r.close) for r in rows],
+            "volume": [_num(r.volume) for r in rows],
         }
     )
 
