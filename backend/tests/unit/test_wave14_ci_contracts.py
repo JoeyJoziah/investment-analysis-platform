@@ -60,3 +60,13 @@ def test_staging_codeql_sarif_upload_is_v3():
     assert "backend-trivy-results.sarif" in yml
     assert "frontend-trivy-results.sarif" in yml
     assert "security-events: write" in yml
+
+
+def test_staging_deploy_skips_ssh_when_host_unset():
+    """Without STAGING_HOST, SSH deploy must skip instead of failing appleboy missing host."""
+    yml = Path(".github/workflows/staging-deploy.yml").read_text(encoding="utf-8")
+    assert "Preflight staging host" in yml
+    assert "configured=false" in yml
+    assert "STAGING_HOST unset" in yml or "STAGING_HOST is not set" in yml
+    # Smoke/rollback only when a real deploy was attempted
+    assert "needs.deploy-staging.outputs.deployed == 'true'" in yml

@@ -270,16 +270,52 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-images, security-scan]
     environment: staging
+    outputs:
+      deployed: ${{ steps.preflight.outputs.configured }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    # Skip remote SSH when STAGING_HOST is not provisioned yet (avoids "missing server host")
+    - name: Preflight staging host
+      id: preflight
+      env:
+        STAGING_HOST: ${{ secrets.STAGING_HOST }}
+        STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+        STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      run: |
+        set -euo pipefail
+        if [ -z "${STAGING_HOST:-}" ]; then
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Staging deploy skipped"
+            echo ""
+            echo "\`STAGING_HOST\` is not set on the **staging** GitHub Environment."
+            echo "Image build + security scan completed; remote cutover requires a server."
+            echo ""
+            echo "1. Provision host and install public key from 1Password item"
+            echo "   **Investment Analysis Platform - Staging SSH & Deploy** (or repo variable \`STAGING_SSH_PUBLIC_KEY\`)."
+            echo "2. Set secret \`STAGING_HOST\` on environment **staging**."
+            echo "3. Re-run this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "STAGING_HOST unset — remote deploy skipped (not a scan/build failure)."
+          exit 0
+        fi
+        if [ -z "${STAGING_SSH_USER:-}" ] || [ -z "${STAGING_SSH_KEY:-}" ]; then
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "STAGING_HOST set but STAGING_SSH_USER or STAGING_SSH_KEY missing — cannot deploy."
+          exit 1
+        fi
+        echo "configured=true" >> "$GITHUB_OUTPUT"
+        echo "STAGING_HOST configured — proceeding with SSH deploy."
 
     # TODO: Add K8s manifests when ready for K8s deployment
     # The steps below use docker-compose based deployment via blue_green_deploy.sh
     # which is the existing deployment mechanism for this project.
 
     - name: Write environment file
+      if: steps.preflight.outputs.configured == 'true'
       run: |
         cat > .env.staging << EOF
         DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}
@@ -295,6 +331,7 @@ jobs:
         EOF
 
     - name: Deploy to staging via SSH
+      if: steps.preflight.outputs.configured == 'true'
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.STAGING_HOST }}
@@ -341,6 +378,7 @@ jobs:
             --skip-backup
 
     - name: Verify staging deployment health
+      if: steps.preflight.outputs.configured == 'true'
       run: |
         echo "Waiting for staging services to stabilize..."
         sleep 30
@@ -355,6 +393,7 @@ jobs:
   smoke-tests:
     runs-on: ubuntu-latest
     needs: [deploy-staging]
+    if: needs.deploy-staging.outputs.deployed == 'true'
     
     steps:
     - name: Checkout code
@@ -418,7 +457,7 @@ jobs:
   performance-test:
     runs-on: ubuntu-latest
     needs: [smoke-tests]
-    if: github.event_name == 'push'  # Only run on push, not manual dispatch
+    if: github.event_name == 'push' && needs.smoke-tests.result == 'success'
     
     steps:
     - name: Checkout code
@@ -457,6 +496,7 @@ jobs:
   coverage-report:
     runs-on: ubuntu-latest
     needs: [smoke-tests]
+    if: needs.smoke-tests.result == 'success'
     
     steps:
     - name: Checkout code
@@ -577,7 +617,7 @@ jobs:
   # Rollback capability
   rollback:
     runs-on: ubuntu-latest
-    if: failure() && needs.deploy-staging.result == 'failure'
+    if: failure() && needs.deploy-staging.result == 'failure' && needs.deploy-staging.outputs.deployed == 'true'
     needs: [deploy-staging]
     environment: staging
 
