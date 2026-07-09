@@ -41,10 +41,9 @@ docs/
 *.md
 !README.md
 
-# Tests
-tests/
-test/
-*_test.py
+# Tests — only ignore repo-root tests/ (backend/tests is required for Docker test stage)
+/tests/
+/test/
 *_test.go
 *.test
 
