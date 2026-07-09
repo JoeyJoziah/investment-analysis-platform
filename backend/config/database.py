@@ -147,8 +147,14 @@ class AsyncDatabaseManager:
                     "statement_cache_size": self.config.prepared_statement_cache_size,  # Enable prepared statement caching (default: 100)
                 }
 
-                # Enforce SSL in production for security
+                # Enforce SSL in production for security (#85)
                 if settings.ENVIRONMENT == "production":
+                    url_l = self.config.url.lower()
+                    if "sslmode=disable" in url_l or "ssl=false" in url_l:
+                        raise ValueError(
+                            "DATABASE_URL must not disable SSL in production "
+                            "(remove sslmode=disable / ssl=false; asyncpg uses ssl=require)"
+                        )
                     connect_args["ssl"] = "require"
             else:
                 # SQLite connect_args (aiosqlite driver)
