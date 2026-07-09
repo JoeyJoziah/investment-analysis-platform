@@ -227,6 +227,8 @@ jobs:
     - name: Check for critical vulnerabilities
       run: |
         set -euo pipefail
+        # Trivy SARIF maps CRITICAL+HIGH to level=error; this gate must count CRITICAL only
+        # (CVSS security-severity >= 9.0), matching production-deploy's Severity==CRITICAL check.
         for f in backend-trivy-results.sarif frontend-trivy-results.sarif; do
           if [ ! -f "$f" ]; then
             echo "ERROR: missing SARIF report $f (Trivy scan did not produce output)"
@@ -234,17 +236,33 @@ jobs:
           fi
         done
 
-        CRITICAL_BACKEND=$(jq '[.runs[].results[]? | select(.level == "error")] | length' backend-trivy-results.sarif)
-        CRITICAL_FRONTEND=$(jq '[.runs[].results[]? | select(.level == "error")] | length' frontend-trivy-results.sarif)
-        
-        echo "Backend critical vulnerabilities: $CRITICAL_BACKEND"
-        echo "Frontend critical vulnerabilities: $CRITICAL_FRONTEND"
-        
+        count_critical() {
+          jq '
+            [
+              .runs[]?.results[]?
+              | select(
+                  ((.properties["security-severity"] // "0") | tonumber) >= 9.0
+                )
+            ] | length
+          ' "$1"
+        }
+        count_high_error() {
+          jq '[.runs[]?.results[]? | select(.level == "error")] | length' "$1"
+        }
+
+        CRITICAL_BACKEND=$(count_critical backend-trivy-results.sarif)
+        CRITICAL_FRONTEND=$(count_critical frontend-trivy-results.sarif)
+        ERROR_BACKEND=$(count_high_error backend-trivy-results.sarif)
+        ERROR_FRONTEND=$(count_high_error frontend-trivy-results.sarif)
+
+        echo "Backend CRITICAL (CVSS>=9.0): $CRITICAL_BACKEND (SARIF error-level HIGH+CRITICAL: $ERROR_BACKEND)"
+        echo "Frontend CRITICAL (CVSS>=9.0): $CRITICAL_FRONTEND (SARIF error-level HIGH+CRITICAL: $ERROR_FRONTEND)"
+
         if [ "$CRITICAL_BACKEND" -gt 0 ] || [ "$CRITICAL_FRONTEND" -gt 0 ]; then
-          echo "❌ Critical vulnerabilities found! Deployment blocked."
+          echo "❌ CRITICAL vulnerabilities found! Deployment blocked."
           exit 1
         else
-          echo "✅ No critical vulnerabilities found."
+          echo "✅ No CRITICAL vulnerabilities (CVSS>=9.0). HIGH findings may still appear in SARIF upload."
         fi
 
   # Deploy to staging environment
