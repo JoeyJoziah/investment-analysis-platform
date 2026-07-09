@@ -2,18 +2,28 @@
 Portfolio Rebalancing
 Rebalancing logic, performance data generation, and analysis building
 extracted from PortfolioService.
+
+Wave 13: all synthetic paths are DEMO_MODE-gated (F-02-003 / fail-loud).
 """
+
+from __future__ import annotations
 
 import logging
 import random
 import uuid
-from typing import Dict, List, Any, Optional
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from backend.config.settings import settings
 from backend.exceptions import ModelUnavailableError
 
 logger = logging.getLogger(__name__)
+
+
+def _require_demo(model: str) -> None:
+    """Refuse synthetic data outside DEMO_MODE."""
+    if not settings.DEMO_MODE:
+        raise ModelUnavailableError(model=model, reason="not_implemented")
 
 
 def generate_performance_data_points(
@@ -24,20 +34,10 @@ def generate_performance_data_points(
     """Generate portfolio performance data points over the requested period.
 
     Per PRD audit 2026-04 F-02-003 / Q4 default: this function previously
-    returned ``random.uniform``-derived chart data and metrics. It is now
-    gated behind ``settings.DEMO_MODE`` so production raises
-    ``ModelUnavailableError`` (surfaced as HTTP 503 ``model_unavailable``
-    by the portfolio router) rather than fabricating chart values.
-
-    The full real implementation requires a portfolio time-series store; the
-    G2a workstream owns the ML/analytics path that will populate it. Until
-    that lands, refusing-to-serve is the SEC-conservative posture.
+    returned ``random.uniform``-derived chart data and metrics. It is gated
+    behind ``settings.DEMO_MODE`` so production raises ``ModelUnavailableError``.
     """
-    if not settings.DEMO_MODE:
-        raise ModelUnavailableError(
-            model="portfolio_performance",
-            reason="not_implemented",
-        )
+    _require_demo("portfolio_performance")
 
     period_map = {
         "1D": 24,
@@ -69,7 +69,7 @@ def generate_performance_data_points(
     return {
         "portfolio_id": portfolio_id,
         "period": period,
-        "data_source": "simulated",  # F-02-003: explicit demo tag
+        "data_source": "simulated",
         "data_points": data_points,
         "metrics": {
             "total_return": round(total_return, 4),
@@ -89,17 +89,15 @@ def generate_performance_data_points(
 
 def build_portfolio_analysis(portfolio_id: str) -> Dict[str, Any]:
     """
-    Build a comprehensive portfolio analysis result.
-
-    Args:
-        portfolio_id: Portfolio ID
-
-    Returns:
-        Dictionary with all analysis fields matching PortfolioAnalysis schema
+    Demo-only portfolio analysis. Production must use
+    ``PortfolioService.build_portfolio_analysis`` with live holdings.
     """
+    _require_demo("portfolio_analysis")
+
     return {
         "portfolio_id": portfolio_id,
         "analysis_date": date.today(),
+        "data_source": "simulated",
         "risk_analysis": {
             "var_95": random.uniform(-0.1, -0.02),
             "cvar_95": random.uniform(-0.15, -0.03),
@@ -144,19 +142,9 @@ def generate_rebalancing_trades(
     min_trade_value: float,
     tax_efficient: bool,
 ) -> Dict[str, Any]:
-    """
-    Generate a rebalancing plan given a target asset allocation.
+    """Demo-only rebalancing plan. Refuse outside DEMO_MODE."""
+    _require_demo("portfolio_rebalancing")
 
-    Args:
-        portfolio_id: Portfolio ID
-        target_allocation: Mapping of AssetClass -> target percentage
-        max_trades: Maximum number of trades to include in the plan
-        min_trade_value: Minimum trade dollar value to include
-        tax_efficient: Whether to factor in tax efficiency
-
-    Returns:
-        Dictionary with rebalancing plan, estimated cost, tax impact, and status
-    """
     trades = []
     for asset_class, target_percent in target_allocation.items():
         current_percent = random.uniform(0, 30)
@@ -177,6 +165,7 @@ def generate_rebalancing_trades(
 
     return {
         "portfolio_id": portfolio_id,
+        "data_source": "simulated",
         "rebalancing_plan": trades,
         "estimated_cost": sum(t["amount"] * 0.001 for t in trades),
         "tax_impact": random.uniform(-1000, -100) if tax_efficient else 0,
@@ -193,21 +182,9 @@ def generate_transaction_list(
     start_date: Optional[date],
     end_date: Optional[date],
 ) -> List[Dict[str, Any]]:
-    """
-    Generate a simulated transaction history list for a portfolio.
+    """Demo-only transaction history. Refuse outside DEMO_MODE."""
+    _require_demo("portfolio_transactions")
 
-    Args:
-        portfolio_id: Portfolio ID
-        limit: Maximum number of records to return
-        offset: Number of records to skip
-        transaction_type_filter: Optional TransactionType enum value to filter by
-        symbol_filter: Optional ticker symbol to filter by
-        start_date: Optional start date filter
-        end_date: Optional end date filter
-
-    Returns:
-        Filtered, sorted list of transaction dictionaries (sliced per limit/offset)
-    """
     from backend.services.portfolio_helpers import _all_transaction_types
 
     symbols = ["AAPL", "GOOGL", "MSFT", "AMZN", "META", "NVDA", "TSLA"]
@@ -248,21 +225,10 @@ def generate_transaction_list(
 
 
 async def execute_rebalancing(portfolio_id: str, trades: List[Dict]) -> None:
-    """
-    Background task: execute rebalancing trades.
-
-    Args:
-        portfolio_id: Portfolio ID
-        trades: List of trade dictionaries to execute
-    """
-    print(f"Executing {len(trades)} trades for portfolio {portfolio_id}")
+    """Background task: execute rebalancing trades (stub)."""
+    logger.info("Executing %s trades for portfolio %s", len(trades), portfolio_id)
 
 
 async def update_portfolio_metrics(portfolio_id: str) -> None:
-    """
-    Background task: update portfolio metrics after a transaction.
-
-    Args:
-        portfolio_id: Portfolio ID to update
-    """
-    print(f"Updating metrics for portfolio {portfolio_id}")
+    """Background task: update portfolio metrics after a transaction (stub)."""
+    logger.info("Updating metrics for portfolio %s", portfolio_id)

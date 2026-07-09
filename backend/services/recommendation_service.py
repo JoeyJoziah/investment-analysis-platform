@@ -9,80 +9,43 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.analytics.recommendation_engine import RecommendationEngine, StockRecommendation
+from backend.analytics.recommendation_engine import RecommendationEngine
 from backend.analytics.fundamental_analysis import FundamentalAnalysisEngine
 from backend.config.settings import settings
 from backend.exceptions import ModelUnavailableError
+from backend.services.recommendation_compliance import (
+    MOMENTUM_MIN_ROWS,
+    MOMENTUM_WINDOW_DAYS,
+    RECOMMENDATION_MODEL_TRAINING_DATE,
+    RECOMMENDATION_MODEL_VERSION,
+    RULES_BASED_ALGORITHM_TYPE,
+    RULES_BASED_METHODOLOGY_DISCLOSURE,
+    SEC_LIMITATIONS_STATEMENT,
+    SEC_METHODOLOGY_DISCLOSURE_TEMPLATE,
+    SEC_RISK_WARNING,
+    TARGET_PRICE_MOMENTUM_CLAMP,
+    build_sec_disclosure,
+)
+
+# Re-export SEC policy symbols for routers/tests that import from this module
+__all__ = [
+    "RecommendationService",
+    "SEC_RISK_WARNING",
+    "SEC_METHODOLOGY_DISCLOSURE_TEMPLATE",
+    "SEC_LIMITATIONS_STATEMENT",
+    "RECOMMENDATION_MODEL_VERSION",
+    "RECOMMENDATION_MODEL_TRAINING_DATE",
+    "RULES_BASED_ALGORITHM_TYPE",
+    "RULES_BASED_METHODOLOGY_DISCLOSURE",
+    "MOMENTUM_WINDOW_DAYS",
+    "MOMENTUM_MIN_ROWS",
+    "TARGET_PRICE_MOMENTUM_CLAMP",
+]
 
 logger = logging.getLogger(__name__)
 
 # Sentinel to distinguish "not provided" from an explicit None
 _UNSET = object()
-
-# =============================================================================
-# SEC 2025 COMPLIANCE CONSTANTS
-# =============================================================================
-
-# Standard SEC Risk Warning (required on all recommendations)
-SEC_RISK_WARNING = (
-    "IMPORTANT: Past performance does not guarantee future results. All investments "
-    "involve risk, including possible loss of principal. The value of investments can "
-    "fluctuate, and investors may not get back the amount originally invested. Before "
-    "making any investment decision, you should carefully consider your investment "
-    "objectives, level of experience, and risk appetite."
-)
-
-# Standard Methodology Disclosure Template
-SEC_METHODOLOGY_DISCLOSURE_TEMPLATE = (
-    "This recommendation was generated using {algorithm_type} analysis incorporating "
-    "technical indicators, fundamental metrics, and market sentiment data. Model version: "
-    "{model_version}. Last model training date: {training_date}."
-)
-
-# Standard Limitations Statement
-SEC_LIMITATIONS_STATEMENT = (
-    "This analysis does NOT consider: (1) your individual financial situation or goals, "
-    "(2) tax implications specific to your circumstances, (3) real-time market conditions "
-    "that may have changed since data collection, (4) non-public information, (5) geopolitical "
-    "events occurring after the analysis date. Data freshness may vary by source; prices and "
-    "metrics may be delayed up to 15 minutes for free-tier data sources."
-)
-
-# Current model version for SEC disclosure
-RECOMMENDATION_MODEL_VERSION = "1.0.0"
-RECOMMENDATION_MODEL_TRAINING_DATE = "2025-12-15"
-
-# =============================================================================
-# RULES-BASED QUANTITATIVE SCREEN (no ML, transparent, deterministic)
-# =============================================================================
-
-# Honest algorithm label for the transparent screen. This MUST NOT claim
-# machine learning — the screen is a deterministic momentum + valuation rank
-# over stored historical data (PRD audit 2026-05 Lane C, no-synthetic-data rule).
-RULES_BASED_ALGORITHM_TYPE = "rules-based quantitative screen"
-
-# Standalone methodology disclosure for the rules-based screen. Used instead of
-# SEC_METHODOLOGY_DISCLOSURE_TEMPLATE so the text accurately describes the
-# transparent momentum + P/E percentile methodology rather than an ML model.
-RULES_BASED_METHODOLOGY_DISCLOSURE = (
-    "This recommendation was generated using a transparent, rules-based "
-    "quantitative screen over stored historical data. It does NOT use machine "
-    "learning, neural networks, or predictive models. Momentum is measured as "
-    "the trailing 60-trading-day price return computed from end-of-day closing "
-    "prices. Valuation is measured as the cross-sectional percentile rank of the "
-    "price-to-earnings (P/E) ratio across the screened universe (a lower P/E "
-    "ranks more favorably), with the PEG ratio used as a tiebreaker. The "
-    "composite score equally weights momentum percentile and inverse-valuation "
-    "percentile when both inputs are available, and uses momentum alone "
-    "otherwise. Recommendation tiers and confidence are derived deterministically "
-    "from the composite rank; identical inputs always produce identical outputs."
-)
-
-# Trading-day window for the momentum signal and the minimum rows required.
-MOMENTUM_WINDOW_DAYS = 60
-MOMENTUM_MIN_ROWS = 30
-# Bound on the momentum component used to derive the target price.
-TARGET_PRICE_MOMENTUM_CLAMP = 0.30
 
 
 class RecommendationService:
@@ -119,60 +82,13 @@ class RecommendationService:
         confidence_score: float = 0.5,
         methodology_disclosure: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Generate SEC 2025 compliant disclosure for a recommendation.
-
-        Args:
-            algorithm_type: Description of the algorithm used
-            data_sources: List of data sources with timestamps
-            confidence_score: Model confidence score (0-1)
-            methodology_disclosure: Optional explicit methodology text. When
-                provided it is used verbatim instead of the generic ML template
-                — required for the rules-based screen so the disclosure does not
-                misrepresent a transparent screen as machine learning.
-
-        Returns:
-            Dictionary with all SEC required disclosure fields
-        """
-        # Default data sources if not provided
-        if data_sources is None:
-            data_sources = [
-                f"Alpha Vantage API (delayed 15 min) - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-                f"Finnhub Market Data - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-                f"Historical price data (EOD) - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-                f"Financial statements (quarterly) - Last updated Q4 2025",
-            ]
-
-        # Determine confidence level from score
-        if confidence_score >= 0.8:
-            confidence_level = "high"
-        elif confidence_score >= 0.6:
-            confidence_level = "moderate"
-        else:
-            confidence_level = "low"
-
-        # Generate methodology disclosure. An explicit override (rules-based
-        # screen) is used verbatim; otherwise fall back to the generic template.
-        if methodology_disclosure is None:
-            methodology_disclosure = SEC_METHODOLOGY_DISCLOSURE_TEMPLATE.format(
-                algorithm_type=algorithm_type,
-                model_version=RECOMMENDATION_MODEL_VERSION,
-                training_date=RECOMMENDATION_MODEL_TRAINING_DATE
-            )
-
-        return {
-            "methodology_disclosure": methodology_disclosure,
-            "data_sources": data_sources,
-            "model_version": RECOMMENDATION_MODEL_VERSION,
-            "model_training_date": RECOMMENDATION_MODEL_TRAINING_DATE,
-            "risk_warning": SEC_RISK_WARNING,
-            "limitations_statement": SEC_LIMITATIONS_STATEMENT,
-            "confidence_level": confidence_level,
-            "conflict_of_interest_statement": (
-                "This platform does not hold positions in any recommended securities. "
-                "No material relationships exist between this platform and any recommended issuers."
-            ),
-        }
+        """Generate SEC 2025 compliant disclosure (delegates to compliance module)."""
+        return build_sec_disclosure(
+            algorithm_type=algorithm_type,
+            data_sources=data_sources,
+            confidence_score=confidence_score,
+            methodology_disclosure=methodology_disclosure,
+        )
 
     # =========================================================================
     # Sample / Fallback Recommendation Generation
@@ -218,7 +134,7 @@ class RecommendationService:
             algorithm_type="quantitative technical and fundamental",
             data_sources=[
                 f"Market data feed - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
-                f"Financial statements - Q4 2025",
+                "Financial statements - Q4 2025",
                 f"Analyst consensus data - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
             ],
             confidence_score=confidence_score
