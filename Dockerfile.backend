@@ -58,7 +58,8 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt stopwords wordnet vader_lexicon
 
 # Stage 2: Runtime
-FROM python:${PYTHON_VERSION}-slim
+# Named stage required by docker-compose.production.yml `target: runtime`
+FROM python:${PYTHON_VERSION}-slim AS runtime
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \

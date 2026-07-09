@@ -72,11 +72,13 @@ def upgrade():
             WHERE industry_id IS NOT NULL;
         """))
 
-        # Index for sector filter queries
+        # Index for sector filter queries.
+        # NOTE: stocks has no `sector` column — sector is a FK (`sector_id`).
+        # The original `(sector)` reference broke `alembic upgrade head` (#242).
         op.execute(text("""
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_stocks_sector
-            ON stocks (sector)
-            WHERE sector IS NOT NULL;
+            ON stocks (sector_id)
+            WHERE sector_id IS NOT NULL;
         """))
 
         # Index for last_price_update queries (data freshness checks)
@@ -136,11 +138,15 @@ def upgrade():
             ON recommendations (recommendation_id);
         """))
 
-        # Index for confidence filtering and ordering
+        # Index for confidence filtering and ordering.
+        # NOTE: a partial-index predicate must be IMMUTABLE — `CURRENT_TIMESTAMP`
+        # is STABLE and made `alembic upgrade head` fail (#242). Drop the time
+        # clause; `valid_until` is filtered at query time. The index still covers
+        # the active/confidence-ordered access pattern.
         op.execute(text("""
             CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_recommendations_confidence_desc
             ON recommendations (confidence DESC)
-            WHERE is_active = true AND valid_until > CURRENT_TIMESTAMP;
+            WHERE is_active = true;
         """))
 
         # ==========================================================================

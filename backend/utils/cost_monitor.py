@@ -469,3 +469,41 @@ class SmartDataFetcher:
 # Global instance
 cost_monitor = CostMonitor()
 smart_fetcher = SmartDataFetcher(cost_monitor)
+
+
+async def _run_service() -> None:
+    """Long-running cost-monitor service loop.
+
+    Production entrypoint for the ``cost_monitor`` service in
+    docker-compose.production.yml. Periodically evaluates budget thresholds
+    (enabling cost-saving mode when breached) and logs a usage heartbeat.
+
+    See PRD docs/audits/2026-06 task T0.3 / decision D6.
+    """
+    import os
+
+    interval = int(os.getenv("COST_MONITOR_INTERVAL_SECONDS", "300"))
+    budget = os.getenv("COST_BUDGET_MONTHLY", "unset")
+    monitor = CostMonitor()
+    await monitor.initialize()
+    logger.info(
+        "cost_monitor service started (interval=%ss, monthly_budget=$%s)",
+        interval,
+        budget,
+    )
+    while True:
+        try:
+            await monitor._check_cost_thresholds()
+            usage = await monitor.get_monthly_usage()
+            logger.info("cost_monitor heartbeat: monthly_usage=%s", usage)
+        except Exception:  # pragma: no cover - service must not crash on a transient cycle
+            logger.exception("cost_monitor cycle failed; continuing")
+        await asyncio.sleep(interval)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    asyncio.run(_run_service())
