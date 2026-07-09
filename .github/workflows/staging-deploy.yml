@@ -23,6 +23,7 @@ env:
 permissions:
   contents: read
   packages: write
+  security-events: write
 
 concurrency:
   group: staging-deploy-${{ github.ref }}
@@ -33,8 +34,9 @@ jobs:
   build-images:
     runs-on: ubuntu-latest
     outputs:
-      backend-image: ${{ steps.backend-meta.outputs.tags }}
-      frontend-image: ${{ steps.frontend-meta.outputs.tags }}
+      # Single primary tag for Trivy/SBOM/deploy (multi-line tags break image-ref parsers)
+      backend-image: ${{ steps.primary-images.outputs.backend }}
+      frontend-image: ${{ steps.primary-images.outputs.frontend }}
       backend-digest: ${{ steps.backend-build.outputs.digest }}
       frontend-digest: ${{ steps.frontend-build.outputs.digest }}
     
@@ -108,13 +110,45 @@ jobs:
           VITE_APP_ENV=staging
           VITE_API_URL=https://api-staging.investment-analysis.com
 
+    # metadata-action emits newline-separated tags; scanners/deploy need exactly one ref
+    - name: Export primary image refs
+      id: primary-images
+      env:
+        BACKEND_TAGS: ${{ steps.backend-meta.outputs.tags }}
+        FRONTEND_TAGS: ${{ steps.frontend-meta.outputs.tags }}
+      run: |
+        set -euo pipefail
+        pick_primary() {
+          local tags="$1"
+          local primary
+          primary=$(printf '%s\n' "$tags" | grep -E ':staging-[0-9a-f]{7,40}$' | head -n1 || true)
+          if [ -z "$primary" ]; then
+            primary=$(printf '%s\n' "$tags" | grep -v 'staging-latest' | head -n1 || true)
+          fi
+          if [ -z "$primary" ]; then
+            primary=$(printf '%s\n' "$tags" | head -n1 || true)
+          fi
+          if [ -z "$primary" ]; then
+            echo "ERROR: no image tags available to select as primary" >&2
+            exit 1
+          fi
+          # Collapse any residual whitespace/newlines into a single token
+          printf '%s' "$primary" | tr -d '\r' | head -n1
+        }
+        backend_ref=$(pick_primary "$BACKEND_TAGS")
+        frontend_ref=$(pick_primary "$FRONTEND_TAGS")
+        echo "backend=$backend_ref" >> "$GITHUB_OUTPUT"
+        echo "frontend=$frontend_ref" >> "$GITHUB_OUTPUT"
+        echo "Primary backend image: $backend_ref"
+        echo "Primary frontend image: $frontend_ref"
+
     # SBOM is best-effort: external Syft download can 504 and must not fail image publish
     - name: Generate SBOM for backend
       id: sbom-backend
       continue-on-error: true
       uses: anchore/sbom-action@v0
       with:
-        image: ${{ steps.backend-meta.outputs.tags }}
+        image: ${{ steps.primary-images.outputs.backend }}
         output-file: backend-sbom.spdx.json
         format: spdx-json
 
@@ -123,7 +157,7 @@ jobs:
       continue-on-error: true
       uses: anchore/sbom-action@v0
       with:
-        image: ${{ steps.frontend-meta.outputs.tags }}
+        image: ${{ steps.primary-images.outputs.frontend }}
         output-file: frontend-sbom.spdx.json
         format: spdx-json
 
@@ -142,40 +176,66 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: [build-images]
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Run Trivy vulnerability scanner on backend
-      uses: aquasecurity/trivy-action@master
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
       with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        # Must be a single image reference (not newline-separated multi-tags)
         image-ref: ${{ needs.build-images.outputs.backend-image }}
         format: 'sarif'
         output: 'backend-trivy-results.sarif'
         severity: 'CRITICAL,HIGH,MEDIUM'
 
     - name: Run Trivy vulnerability scanner on frontend
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         image-ref: ${{ needs.build-images.outputs.frontend-image }}
-        format: 'sarif' 
+        format: 'sarif'
         output: 'frontend-trivy-results.sarif'
         severity: 'CRITICAL,HIGH,MEDIUM'
 
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
+    # CodeQL Action v2 is deprecated; upload one SARIF per step (v3 rejects multi-path lists)
+    - name: Upload backend Trivy SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always() && hashFiles('backend-trivy-results.sarif') != ''
       with:
-        sarif_file: |
-          backend-trivy-results.sarif
-          frontend-trivy-results.sarif
+        sarif_file: backend-trivy-results.sarif
+        category: trivy-backend-staging
+
+    - name: Upload frontend Trivy SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always() && hashFiles('frontend-trivy-results.sarif') != ''
+      with:
+        sarif_file: frontend-trivy-results.sarif
+        category: trivy-frontend-staging
 
     - name: Check for critical vulnerabilities
       run: |
-        # Check if there are any CRITICAL vulnerabilities
-        CRITICAL_BACKEND=$(jq '[.runs[].results[] | select(.level == "error")] | length' backend-trivy-results.sarif)
-        CRITICAL_FRONTEND=$(jq '[.runs[].results[] | select(.level == "error")] | length' frontend-trivy-results.sarif)
+        set -euo pipefail
+        for f in backend-trivy-results.sarif frontend-trivy-results.sarif; do
+          if [ ! -f "$f" ]; then
+            echo "ERROR: missing SARIF report $f (Trivy scan did not produce output)"
+            exit 1
+          fi
+        done
+
+        CRITICAL_BACKEND=$(jq '[.runs[].results[]? | select(.level == "error")] | length' backend-trivy-results.sarif)
+        CRITICAL_FRONTEND=$(jq '[.runs[].results[]? | select(.level == "error")] | length' frontend-trivy-results.sarif)
         
         echo "Backend critical vulnerabilities: $CRITICAL_BACKEND"
         echo "Frontend critical vulnerabilities: $CRITICAL_FRONTEND"

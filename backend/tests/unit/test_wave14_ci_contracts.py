@@ -35,3 +35,28 @@ def test_staging_sbom_steps_are_non_blocking():
     assert yml.count("continue-on-error: true") >= 2
     assert "Generate SBOM for backend" in yml
     assert "Generate SBOM for frontend" in yml
+
+
+def test_staging_trivy_uses_single_primary_image_ref():
+    """Multi-line metadata tags break Trivy image-ref parsing (Staging security-scan)."""
+    yml = Path(".github/workflows/staging-deploy.yml").read_text(encoding="utf-8")
+    assert "Export primary image refs" in yml
+    assert "primary-images" in yml
+    # Job outputs must resolve to primary single-ref step, not meta.outputs.tags
+    assert "steps.primary-images.outputs.backend" in yml
+    assert "steps.primary-images.outputs.frontend" in yml
+    # Trivy consumes the single-ref job outputs
+    assert "needs.build-images.outputs.backend-image" in yml
+    assert "image-ref:" in yml
+
+
+def test_staging_codeql_sarif_upload_is_v3():
+    """CodeQL Action v1/v2 are deprecated; Staging must use upload-sarif@v3."""
+    yml = Path(".github/workflows/staging-deploy.yml").read_text(encoding="utf-8")
+    assert "github/codeql-action/upload-sarif@v3" in yml
+    assert "github/codeql-action/upload-sarif@v2" not in yml
+    assert "github/codeql-action/upload-sarif@v1" not in yml
+    # One SARIF file per upload step (v3 does not accept multi-path lists reliably)
+    assert "backend-trivy-results.sarif" in yml
+    assert "frontend-trivy-results.sarif" in yml
+    assert "security-events: write" in yml

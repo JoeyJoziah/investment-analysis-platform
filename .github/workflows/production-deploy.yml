@@ -299,9 +299,11 @@ jobs:
         severity: 'CRITICAL,HIGH,MEDIUM'
 
     - name: Upload SARIF reports
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
+      if: always() && hashFiles('backend-trivy.sarif') != ''
       with:
         sarif_file: backend-trivy.sarif
+        category: trivy-backend-production
 
     - name: Security gate check
       run: |
