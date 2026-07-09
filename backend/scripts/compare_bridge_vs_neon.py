@@ -34,6 +34,18 @@ Exit codes:
     0  report produced (divergence, if any, is reported not failed on)
     2  bridge snapshot unreadable
     3  no DSN in the environment
+    4  Neon returned zero fill-shaped rows -- see EMPTY LEDGER below
+
+Empty ledger
+------------
+The FIFO deriver only understands rows whose ``raw`` payload carries
+``symbol``/``side``/``qty``/``price``, and only reads sources listed in
+``sync_portfolio_from_neon.FILL_SHAPED_SOURCES``. If that query returns
+nothing, EVERY bridge position trivially "diverges" from an empty Neon side,
+and the report becomes a wall of false DIVERGENT flags that looks like a
+finding. That is a defect in the comparison, not a divergence, so the script
+exits 4 instead of printing it. Pass ``--allow-empty-neon`` to print the
+table anyway (useful only for inspecting the bridge side).
 """
 
 from __future__ import annotations
@@ -66,6 +78,21 @@ __all__ = [
 BASIS_TOLERANCE = Decimal("0.01")
 EXIT_OK = 0
 EXIT_NO_DSN = 3
+EXIT_EMPTY_NEON = 4
+
+_EMPTY_NEON_HELP = """Neon returned zero fill-shaped rows; refusing to print a
+report in which every bridge position trivially "diverges" from nothing.
+
+The FIFO deriver reads only sources listed in
+sync_portfolio_from_neon.FILL_SHAPED_SOURCES ({sources}), and only rows whose
+`raw` payload carries symbol/side/qty/price.
+
+Either that source has not been ingested into tax_advisor.transactions, or the
+brokerage fills live under a different source name. Check with:
+
+    SELECT source, count(*) FROM tax_advisor.transactions GROUP BY source;
+
+Pass --allow-empty-neon to print the table anyway (bridge side only)."""
 
 _DSN_ENV_VARS = ("NEON_DSN", "TAX_ADVISOR_NEON_DSN")
 _DSN_HELP = """No Neon DSN found in the environment.
@@ -241,6 +268,11 @@ def main(argv: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None)
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true", help="Machine-readable output.")
+    parser.add_argument(
+        "--allow-empty-neon",
+        action="store_true",
+        help="Print the report even when Neon yields no fill-shaped rows.",
+    )
     args = parser.parse_args(argv)
 
     dsn = resolve_dsn(dict(os.environ) if env is None else env)
@@ -261,7 +293,15 @@ def main(argv: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None)
         usable_sources=usable,
         account_source=build_account_source_map(snapshot.get("accounts", [])),
     )
-    neon = derive_neon_fifo(_fetch_neon_rows(dsn))
+    neon_rows = _fetch_neon_rows(dsn)
+    if not neon_rows and not args.allow_empty_neon:
+        print(
+            _EMPTY_NEON_HELP.format(sources=", ".join(FILL_SHAPED_SOURCES)),
+            file=sys.stderr,
+        )
+        return EXIT_EMPTY_NEON
+
+    neon = derive_neon_fifo(neon_rows)
     rows = build_report(neon=neon, bridge=bridge)
 
     if args.json:

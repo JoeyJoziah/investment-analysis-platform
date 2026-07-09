@@ -62,6 +62,50 @@ def _write_hub(tmp_path, monkeypatch, positions):
     monkeypatch.setenv("FINANCE_DATA_DIR", str(tmp_path))
 
 
+# -------------------------------------------------------- empty-Neon gate
+
+
+class TestEmptyNeonGate:
+    """An empty Neon side must not masquerade as total divergence.
+
+    Observed live 2026-07-08: FILL_SHAPED_SOURCES is ("alpaca_phf",), which has
+    zero rows in tax_advisor.transactions. Every bridge position then "diverged"
+    from nothing and the report printed 15/15 DIVERGENT -- a defect in the
+    comparison presented as a finding.
+    """
+
+    def _hub(self, tmp_path, monkeypatch):
+        _write_hub(tmp_path, monkeypatch,
+                   [_equity("webull:aaaa1111", "ACME", 10, "5.00")])
+        monkeypatch.setenv("NEON_DSN", "postgresql://unused")
+
+    def test_exits_4_when_neon_has_no_fill_rows(self, tmp_path, monkeypatch, capsys):
+        self._hub(tmp_path, monkeypatch)
+        monkeypatch.setattr(compare, "_fetch_neon_rows", lambda dsn: [])
+
+        assert compare.main([]) == compare.EXIT_EMPTY_NEON
+        assert "zero fill-shaped rows" in capsys.readouterr().err
+
+    def test_allow_empty_neon_prints_report(self, tmp_path, monkeypatch, capsys):
+        self._hub(tmp_path, monkeypatch)
+        monkeypatch.setattr(compare, "_fetch_neon_rows", lambda dsn: [])
+
+        assert compare.main(["--allow-empty-neon"]) == compare.EXIT_OK
+        assert "ACME" in capsys.readouterr().out
+
+    def test_populated_neon_still_reports_normally(self, tmp_path, monkeypatch, capsys):
+        self._hub(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            compare, "_fetch_neon_rows",
+            lambda dsn: [_fill("ACME", "buy", 10, "5.00")],
+        )
+
+        assert compare.main([]) == compare.EXIT_OK
+        out = capsys.readouterr().out
+        assert "ACME" in out
+        assert "0 divergent" in out
+
+
 # --------------------------------------------------- basis rounding regression
 
 
@@ -149,7 +193,7 @@ class TestResolveDsn:
         _write_hub(tmp_path, monkeypatch, [])
         monkeypatch.setattr(compare, "_fetch_neon_rows", lambda dsn: [])
         secret = "postgresql://user:hunter2@host/db"
-        assert compare.main([], env={"NEON_DSN": secret}) == 0
+        assert compare.main(["--allow-empty-neon"], env={"NEON_DSN": secret}) == 0
         captured = capsys.readouterr()
         assert "hunter2" not in captured.out + captured.err
 
@@ -289,7 +333,9 @@ class TestMainReadOnly:
     def test_table_output_states_precedence_rule(self, tmp_path, monkeypatch, capsys):
         _write_hub(tmp_path, monkeypatch, [])
         monkeypatch.setattr(compare, "_fetch_neon_rows", lambda dsn: [])
-        assert compare.main([], env={"NEON_DSN": "postgresql://x/y"}) == 0
+        assert compare.main(
+            ["--allow-empty-neon"], env={"NEON_DSN": "postgresql://x/y"}
+        ) == 0
         out = capsys.readouterr().out
         assert "Neon FIFO is authoritative for tax" in out
         assert "not automatically an error" in out
@@ -314,7 +360,9 @@ class TestMainReadOnly:
         monkeypatch.setenv("FINANCE_DATA_DIR", str(tmp_path))
         monkeypatch.setattr(compare, "_fetch_neon_rows", lambda dsn: [])
 
-        assert compare.main(["--json"], env={"NEON_DSN": "postgresql://x/y"}) == 0
+        assert compare.main(
+            ["--json", "--allow-empty-neon"], env={"NEON_DSN": "postgresql://x/y"}
+        ) == 0
         assert json.loads(capsys.readouterr().out)["rows"] == []
 
     def test_module_docstring_states_precedence_rule_verbatim(self):
@@ -333,5 +381,7 @@ class TestMainReadOnly:
             return []
 
         monkeypatch.setattr(compare, "_fetch_neon_rows", _boom)
-        assert compare.main([], env={"NEON_DSN": "postgresql://x/y"}) == 0
+        assert compare.main(
+            ["--allow-empty-neon"], env={"NEON_DSN": "postgresql://x/y"}
+        ) == 0
         assert called["n"] == 1
