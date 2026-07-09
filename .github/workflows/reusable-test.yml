@@ -227,12 +227,12 @@ jobs:
     - name: Run frontend tests
       working-directory: frontend/web
       run: |
-        TEST_ARGS="--coverage --ci --watchAll=false"
+        TEST_ARGS="--run --coverage --coverage.reporter=json-summary --coverage.reporter=lcov"
         if [[ "${{ inputs.skip-slow-tests }}" == "true" ]]; then
           TEST_ARGS="$TEST_ARGS --testNamePattern='^(?!.*slow).*$'"
         fi
         
-        npm test -- $TEST_ARGS --testResultsProcessor=jest-junit
+        npm test -- $TEST_ARGS --reporter=default --reporter=junit --outputFile=./test-results/results.xml
       env:
         CI: true
         JEST_JUNIT_OUTPUT_DIR: ./test-results
