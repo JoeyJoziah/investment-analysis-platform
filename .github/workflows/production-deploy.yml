@@ -275,7 +275,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Run comprehensive Trivy scan on backend
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: ${{ needs.build-production-images.outputs.backend-image }}
         format: 'json'
@@ -283,7 +283,7 @@ jobs:
         severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
     - name: Run comprehensive Trivy scan on frontend
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: ${{ needs.build-production-images.outputs.frontend-image }}
         format: 'json'
@@ -291,7 +291,7 @@ jobs:
         severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
     - name: Generate SARIF reports
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: ${{ needs.build-production-images.outputs.backend-image }}
         format: 'sarif'

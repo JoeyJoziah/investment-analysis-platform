@@ -275,7 +275,7 @@ jobs:
         "
 
     - name: Yarn/NPM dependency scan with Snyk
-      uses: snyk/actions/node@master
+      uses: snyk/actions/node@0.4.0
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -452,7 +452,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on backend (all severities, report only)
       continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-backend:latest'
         format: 'json'
@@ -461,7 +461,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on backend (advisory; remediation tracked separately)
       continue-on-error: true  # CVE remediation is an ongoing maintenance task, not gating
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-backend:latest'
         format: 'table'
@@ -471,7 +471,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on frontend (all severities, report only)
       continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-frontend:latest'
         format: 'json'
@@ -480,7 +480,7 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on frontend (advisory)
       continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-frontend:latest'
         format: 'table'
@@ -489,7 +489,7 @@ jobs:
         ignore-unfixed: true
 
     - name: Run Trivy config scan
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         scan-type: 'config'
         format: 'json'
