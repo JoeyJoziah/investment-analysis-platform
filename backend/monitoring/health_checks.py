@@ -51,13 +51,22 @@ class ServiceType(Enum):
 # "Duplicated timeseries" in the global default REGISTRY — that broke
 # `pytest --collect-only`. Reuse the existing collector if one is already
 # registered under the same metric name.
+#
+# F8-10-016: reuse only a compatible collector. A name clash with different
+# labelnames (or a different metric type) must raise — silently returning
+# another module's collector hands callers a metric whose .labels(...) contract
+# they don't hold.
 def _get_or_create_metric(metric_cls, name, documentation, labelnames):
     from prometheus_client import REGISTRY
     try:
         return metric_cls(name, documentation, labelnames)
     except ValueError:
         existing = REGISTRY._names_to_collectors.get(name)
-        if existing is not None:
+        if (
+            existing is not None
+            and isinstance(existing, metric_cls)
+            and tuple(getattr(existing, "_labelnames", ())) == tuple(labelnames)
+        ):
             return existing
         raise
 
