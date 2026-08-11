@@ -18,6 +18,11 @@ on:
         type: boolean
         default: false
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
   NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
@@ -322,6 +327,8 @@ jobs:
         continue-on-error: true
 
   update-index:
+    permissions:
+      contents: write
     name: Update Documentation Index
     runs-on: ubuntu-latest
     needs: [detect-duplicates, validate-links, check-versions]

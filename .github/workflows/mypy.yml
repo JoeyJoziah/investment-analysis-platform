@@ -5,6 +5,11 @@ name: Type Checking (mypy) [DEPRECATED]
 on:
   workflow_dispatch:  # manual only — push/PR type checks live in type-check.yml
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 jobs:
   mypy:
     name: Deprecated — use type-check.yml

@@ -16,6 +16,11 @@ on:
     # Hourly infrastructure health check
     - cron: '0 * * * *'
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 concurrency:
   group: github-swarm-${{ github.event_name }}-${{ github.event.number || github.ref }}
   cancel-in-progress: false

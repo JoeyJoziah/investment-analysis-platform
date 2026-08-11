@@ -49,3 +49,16 @@ class TestF8_14_003_ProductionTrivyGate:
         assert gate.index("! -f") < gate.index("jq "), (
             "existence check must run before any jq parse"
         )
+
+
+class TestF8_14_002_PermissionsBlocks:
+    """Every workflow must declare a top-level permissions: block so jobs
+    stop inheriting the repo-default GITHUB_TOKEN scope (F-14-006 regressed
+    12 -> 22 missing)."""
+
+    def test_every_workflow_declares_top_level_permissions(self):
+        missing = [
+            wf.name for wf in _workflow_files()
+            if not re.search(r"^permissions:", wf.read_text(), re.M)
+        ]
+        assert missing == [], missing

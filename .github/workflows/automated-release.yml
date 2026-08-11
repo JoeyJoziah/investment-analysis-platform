@@ -28,6 +28,11 @@ on:
     paths:
       - 'VERSION'
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -274,6 +279,8 @@ jobs:
 
   # Create GitHub release
   create-release:
+    permissions:
+      contents: write
     needs: [calculate-version, pre-release-checks]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -342,6 +349,8 @@ jobs:
 
   # Trigger deployment
   trigger-deployment:
+    permissions:
+      actions: write
     needs: [calculate-version, create-release]
     if: needs.calculate-version.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest

@@ -52,6 +52,11 @@ on:
         description: 'Overall test results'
         value: ${{ jobs.test-summary.outputs.results }}
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: ${{ inputs.python-version }}
   NODE_VERSION: ${{ inputs.node-version }}

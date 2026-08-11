@@ -29,6 +29,11 @@ on:
         type: boolean
         default: false
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -147,6 +152,8 @@ jobs:
 
   # Security scan coordination
   coordinated-security:
+    permissions:
+      actions: write
     needs: [orchestration-setup]
     if: needs.orchestration-setup.outputs.run_security == 'true'
     runs-on: ubuntu-latest
@@ -171,6 +178,9 @@ jobs:
 
   # Build coordination
   coordinated-build:
+    permissions:
+      contents: read
+      packages: write
     needs: [orchestration-setup, coordinated-tests]
     if: |
       always() &&

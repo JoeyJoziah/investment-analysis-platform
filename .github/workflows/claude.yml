@@ -10,6 +10,11 @@ on:
   pull_request_review:
     types: [submitted]
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 jobs:
   claude:
     if: |

@@ -9,6 +9,11 @@ on:
     # Run comprehensive tests daily at 2 AM UTC
     - cron: '0 2 * * *'
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -722,6 +727,9 @@ ENVEOF
 
   # Generate comprehensive test report
   test-report:
+    permissions:
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     name: Generate Test Report
     needs: [security-scan, code-quality, unit-tests, integration-tests, financial-model-tests, security-compliance-tests, frontend-tests]

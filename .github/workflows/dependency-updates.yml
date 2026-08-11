@@ -22,6 +22,11 @@ on:
         default: false
         type: boolean
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -367,6 +372,9 @@ jobs:
 
   # Create pull request with updates
   create-update-pr:
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: ubuntu-latest
     needs: [security-check, update-python-deps, update-js-deps]
     if: always() && (needs.update-python-deps.result == 'success' || needs.update-js-deps.result == 'success')
