@@ -84,3 +84,36 @@ class TestF8_14_005_CanaryInterpolation:
             if in_run and re.search(r"\$\{\{\s*(github\.event\.|inputs\.)", line):
                 offenders.append(i)
         assert offenders == [], f"input interpolation inside run blocks at lines {offenders}"
+
+
+class TestF8_14_011_CanaryHealthUrl:
+    """The canary health gate must not default to a reserved example domain
+    (every default-input dispatch probed https://staging.example.com five
+    times, failed, and rolled back)."""
+
+    def test_health_url_is_required_with_no_default(self):
+        text = (WORKFLOWS / "canary-deploy.yml").read_text()
+        block = re.search(r"health_url:\n(?:\s{8}.+\n)+", text).group(0)
+        assert "required: true" in block, block
+        assert "example.com" not in block, "placeholder default still present"
+
+    def test_early_validation_rejects_example_domain(self):
+        lines = (WORKFLOWS / "canary-deploy.yml").read_text().split("\n")
+        for i, line in enumerate(lines):
+            window = "\n".join(lines[i:i + 10])
+            if ("HEALTH_URL" in line and "example.com" in window
+                    and "exit 1" in window):
+                return
+        raise AssertionError("no fail-fast validation step rejecting an "
+                             "example.com HEALTH_URL")
+
+
+class TestF8_14_013_DryRunVar:
+    """dry_run must be consumed or deleted — a GITHUB_ENV write nothing
+    reads (and which cannot cross jobs anyway) is dead signalling."""
+
+    def test_dry_run_written_only_if_read(self):
+        text = (WORKFLOWS / "canary-deploy.yml").read_text()
+        writes = len(re.findall(r'"?dry_run=', text))
+        reads = len(re.findall(r"env\.dry_run|\$dry_run|\$\{dry_run\}", text))
+        assert writes == 0 or reads > 0, f"{writes} writes, {reads} reads"

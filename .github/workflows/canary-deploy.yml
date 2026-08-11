@@ -14,9 +14,8 @@ on:
         default: "10"
         type: string
       health_url:
-        description: "Health check URL for canary"
-        required: false
-        default: "https://staging.example.com/api/health"
+        description: "Health check URL for canary (no default — F8-14-011)"
+        required: true
         type: string
       environment:
         description: "Target environment"
@@ -48,6 +47,19 @@ jobs:
     outputs:
       canary_ref: ${{ steps.meta.outputs.ref }}
     steps:
+      # F8-14-011: with the old example.com default, every default-input
+      # dispatch probed a reserved domain five times and rolled back. Fail
+      # at input validation instead, with an actionable message.
+      - name: Validate health_url input
+        env:
+          HEALTH_URL: ${{ github.event.inputs.health_url }}
+        run: |
+          case "$HEALTH_URL" in
+            ""|*example.com*)
+              echo "ERROR: health_url is '$HEALTH_URL' — supply the real canary health endpoint (example.com is a reserved placeholder)."
+              exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -91,13 +103,14 @@ jobs:
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         run: |
+          # F8-14-013: the former dry_run GITHUB_ENV writes were read by
+          # nothing (and job env cannot cross jobs); promote/rollback derive
+          # credential presence from DEPLOY_TOKEN directly.
           if [ -z "$DEPLOY_TOKEN" ]; then
             echo "No DEPLOY_TOKEN secret — recording dry-run canary only."
-            echo "dry_run=true" >> "$GITHUB_ENV"
           else
             echo "DEPLOY_TOKEN present — invoke external canary apply here."
             # Example: kubectl set image / aws ecs update-service ...
-            echo "dry_run=false" >> "$GITHUB_ENV"
           fi
 
       - name: Upload canary manifest
