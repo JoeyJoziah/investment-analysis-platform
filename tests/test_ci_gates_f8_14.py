@@ -201,7 +201,8 @@ class TestF8_14_006_DenyByDefaultGuard:
         assert "AUTHOR|TITLE|BODY" not in text, "old name-allowlist regex remains"
 
     def test_repo_tree_has_no_unbaselined_findings(self):
-        import subprocess, sys
+        import subprocess
+        import sys
         r = subprocess.run(
             [sys.executable, ".github/scripts/injection_guard.py",
              "--baseline", ".github/scripts/injection_guard_baseline.txt"],
