@@ -579,12 +579,9 @@ jobs:
           cd frontend/web
           npm test -- --coverage --run
 
-      - name: Run frontend E2E tests
-        continue-on-error: true
-        run: |
-          cd frontend/web
-          npm run test:e2e || echo "E2E tests skipped (Cypress not configured)"
-
+      # F8-15-002: E2E runs in the dedicated e2e-tests job below; this job
+      # keeps unit tests only (the old step here echo-skipped and pointed its
+      # artifacts at directories Playwright never writes).
       - name: Upload frontend test reports
         uses: actions/upload-artifact@v4
         if: always()
@@ -592,8 +589,6 @@ jobs:
           name: frontend-test-reports
           path: |
             frontend/web/coverage/
-            frontend/web/cypress/screenshots/
-            frontend/web/cypress/videos/
 
   # Docker build and test
   docker-build:
@@ -680,58 +675,109 @@ ENVEOF
             backend-security-scan.json
             frontend-security-scan.json
 
-  # End-to-end testing
+  # End-to-end testing (F8-15-002: real Playwright suite, no
+  # continue-on-error — this job MUST be able to fail. Chromium-only on
+  # push; the full 5-browser matrix runs on the nightly schedule only
+  # (F8-15-023). Kept on main-push + schedule until proven green, then
+  # widen to PRs.)
   e2e-tests:
     runs-on: ubuntu-latest
-    name: End-to-End Tests
+    name: End-to-End Tests (Playwright)
     needs: [unit-tests, integration-tests]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule'
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://postgres:testpass@localhost:5432/test_db
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: test-secret-key-for-ci
+      JWT_SECRET_KEY: test-jwt-secret-key-for-ci
+      MASTER_SECRET_KEY: test-master-secret-key-for-ci
+      SESSION_SECRET_KEY: test-session-secret-key-for-ci
+      ENVIRONMENT: testing
+      TESTING: "True"
+      E2E_USER_PASSWORD: E2eCiPassword123!
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Start full application stack
-        continue-on-error: true
+      - name: Install backend dependencies (for the Playwright webServer)
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+          sudo apt-get update
+          sudo apt-get install -y build-essential libpq-dev
+          # TA-Lib (F-14-003 / F-13-009: HTTPS + sha256 verify)
+          TA_LIB_VERSION="0.4.0"
+          TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651"
+          curl -fsSL --proto '=https' --tlsv1.2 \
+            "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/ta-lib-${TA_LIB_VERSION}-src.tar.gz" \
+            -o ta-lib-src.tar.gz
+          echo "${TA_LIB_SHA256}  ta-lib-src.tar.gz" | sha256sum -c -
+          tar -xzf ta-lib-src.tar.gz
+          (cd ta-lib/ && ./configure --prefix=/usr && make && sudo make install)
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-          # Wait for all services to be ready
-          sleep 60
-
-      - name: Set up Node.js for E2E tests
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/web/package-lock.json
 
-      - name: Install E2E test dependencies
-        continue-on-error: true
-        run: |
-          npm install -g cypress
-
-      - name: Run E2E tests
-        continue-on-error: true
+      - name: Install frontend dependencies + Playwright chromium
         run: |
           cd frontend/web
-          npm run cypress:run || echo "E2E tests skipped or failed"
+          npm ci
+          npx playwright install --with-deps chromium
 
-      - name: Stop application stack
-        if: always()
-        continue-on-error: true
+      - name: Run Playwright suite (chromium)
+        if: github.event_name != 'schedule'
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.test.yml down || true
+          cd frontend/web
+          npx playwright test --project=chromium
 
-      - name: Upload E2E test reports
+      - name: Install remaining browsers (nightly)
+        if: github.event_name == 'schedule'
+        run: |
+          cd frontend/web
+          npx playwright install --with-deps
+
+      - name: Run Playwright suite (full matrix, nightly)
+        if: github.event_name == 'schedule'
+        run: |
+          cd frontend/web
+          npx playwright test
+
+      - name: Upload Playwright artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-test-reports
+          name: playwright-artifacts
           path: |
-            frontend/web/cypress/screenshots/
-            frontend/web/cypress/videos/
-            frontend/web/cypress/reports/
+            frontend/web/playwright-report/
+            frontend/web/test-results/
 
   # Generate comprehensive test report
   test-report:
