@@ -250,6 +250,12 @@ jobs:
               },
               {
                 "pattern": "^https://financialmodelingprep\\.com"
+              },
+              {
+                "pattern": "^https?://yourdomain\\.com"
+              },
+              {
+                "pattern": "^https://www\\.sec\\.gov"
               }
             ],
             "replacementPatterns": [],
@@ -272,6 +278,13 @@ jobs:
       - name: Check external links
         run: |
           echo "${{ needs.analyze-changes.outputs.changed_files }}" | while read file; do
+            case "$file" in
+              docs/_superseded/*|docs/_process/*)
+                # Frozen historical archives are exempt from link validation
+                # (2026-08 audit, T2.2/T2.3 sweep) — their links describe the
+                # repo as it was, not as it is.
+                echo "Skipping archived file $file"; continue ;;
+            esac
             if [ -f "$file" ]; then
               echo "Checking links in $file"
               markdown-link-check "$file" --config .github/markdown-link-check.json
@@ -286,7 +299,9 @@ jobs:
           const glob = require('fast-glob');
 
           async function validateInternalLinks() {
-            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+            // Frozen archives exempt (see external-link step).
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean)
+              .filter(f => !f.startsWith('docs/_superseded/') && !f.startsWith('docs/_process/'));
             const allFiles = await glob(['docs/**/*.md', '.claude/**/*.md', 'README.md']);
             const allFilesSet = new Set(allFiles.map(f => path.resolve(f)));
 
