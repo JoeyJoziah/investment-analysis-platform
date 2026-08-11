@@ -241,6 +241,15 @@ jobs:
               },
               {
                 "pattern": "^https://localhost"
+              },
+              {
+                "pattern": "^#"
+              },
+              {
+                "pattern": "^https://fred\\.stlouisfed\\.org"
+              },
+              {
+                "pattern": "^https://financialmodelingprep\\.com"
               }
             ],
             "replacementPatterns": [],
