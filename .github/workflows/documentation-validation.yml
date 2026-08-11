@@ -347,7 +347,10 @@ jobs:
           const fs = require('fs');
 
           function validateVersionTags() {
-            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean);
+            // Archived/process files are frozen historical records; they are
+            // exempt from fresh version tags (2026-08 audit, T2.2/T2.3 sweep).
+            const changedFiles = process.env.CHANGED_FILES.split('\n').filter(Boolean)
+              .filter(f => !f.startsWith('docs/_superseded/') && !f.startsWith('docs/_process/'));
 
             const versionRegex = /Version:\s*(\d+\.\d+\.\d+)/i;
             const dateRegex = /Last Updated:\s*(\d{4}-\d{2}-\d{2})/i;

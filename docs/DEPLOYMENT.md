@@ -1,5 +1,7 @@
 # Production Deployment Guide
 
+**Version: 1.0.0** · **Last Updated: 2026-08-11**
+
 **Last Updated**: 2026-03-04
 **Status**: Reference guide (platform is advanced-beta as of 2026-06; see [docs/STATUS.md](STATUS.md))
 

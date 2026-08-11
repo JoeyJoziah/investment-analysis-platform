@@ -1,5 +1,7 @@
 # Platform Status — Single Source of Truth
 
+**Version: 1.0.0** · **Last Updated: 2026-08-11**
+
 > **Last updated:** 2026-06-23
 > **Branch at update:** `loki/state-remediation-2026-06`
 > **Honest summary:** Advanced-beta. Not production-ready. A 2026-04 audit found 48 criticals (open items remain). A 2026-06 state analysis scored overall ~65% across 8 dimensions.
