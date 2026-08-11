@@ -62,3 +62,25 @@ class TestF8_14_002_PermissionsBlocks:
             if not re.search(r"^permissions:", wf.read_text(), re.M)
         ]
         assert missing == [], missing
+
+
+class TestF8_14_005_CanaryInterpolation:
+    """workflow_dispatch inputs must not be YAML-interpolated into run:
+    shell/heredoc text — the exact ${{ }}-into-shell pattern G3 closed."""
+
+    def test_no_event_or_input_interpolation_inside_run_blocks(self):
+        text = (WORKFLOWS / "canary-deploy.yml").read_text()
+        offenders = []
+        in_run = False
+        run_indent = 0
+        for i, line in enumerate(text.split("\n"), 1):
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+            if stripped.startswith("run:"):
+                in_run, run_indent = True, indent
+                continue
+            if in_run and stripped and indent <= run_indent:
+                in_run = False
+            if in_run and re.search(r"\$\{\{\s*(github\.event\.|inputs\.)", line):
+                offenders.append(i)
+        assert offenders == [], f"input interpolation inside run blocks at lines {offenders}"

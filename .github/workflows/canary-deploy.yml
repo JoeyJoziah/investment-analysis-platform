@@ -51,27 +51,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # F8-14-005: inputs reach the shell only via env (never YAML-rendered
+      # into run text), and the manifest is built with jq so no input can
+      # break the JSON or the surrounding shell.
       - name: Resolve canary ref
         id: meta
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+          CANARY_PERCENT: ${{ github.event.inputs.canary_percent }}
         run: |
-          TAG="${{ github.event.inputs.image_tag }}"
-          PCT="${{ github.event.inputs.canary_percent }}"
-          echo "ref=$TAG" >> "$GITHUB_OUTPUT"
-          echo "percent=$PCT" >> "$GITHUB_OUTPUT"
-          echo "Canary tag=$TAG at ${PCT}% traffic"
+          echo "ref=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "percent=$CANARY_PERCENT" >> "$GITHUB_OUTPUT"
+          echo "Canary tag=$IMAGE_TAG at ${CANARY_PERCENT}% traffic"
 
       - name: Record canary deployment intent
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+          CANARY_PERCENT: ${{ github.event.inputs.canary_percent }}
+          TARGET_ENV: ${{ github.event.inputs.environment }}
+          HEALTH_URL: ${{ github.event.inputs.health_url }}
         run: |
           mkdir -p artifacts
-          cat > artifacts/canary-manifest.json <<EOF
-          {
-            "image_tag": "${{ github.event.inputs.image_tag }}",
-            "canary_percent": ${{ github.event.inputs.canary_percent }},
-            "environment": "${{ github.event.inputs.environment }}",
-            "health_url": "${{ github.event.inputs.health_url }}",
-            "started_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          }
-          EOF
+          jq -n \
+            --arg image_tag "$IMAGE_TAG" \
+            --arg canary_percent "$CANARY_PERCENT" \
+            --arg environment "$TARGET_ENV" \
+            --arg health_url "$HEALTH_URL" \
+            --arg started_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{image_tag: $image_tag,
+              canary_percent: ($canary_percent | tonumber),
+              environment: $environment,
+              health_url: $health_url,
+              started_at: $started_at}' > artifacts/canary-manifest.json
           cat artifacts/canary-manifest.json
 
       # Placeholder for real orchestrator (K8s/ECS/Nomad). Keeps workflow green
