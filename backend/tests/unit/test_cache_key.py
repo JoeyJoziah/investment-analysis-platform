@@ -16,13 +16,26 @@ two calls with identical scalar args but DIFFERENT non-serializable args yield
 identical keys.
 """
 
-# CRITICAL: set TESTING/DATABASE_URL before importing the target module, which
-# transitively imports backend.config.settings (matches test_utils_cache.py).
+# F8-15-007: annotations must stay lazy — `dict | None` in a signature is
+# evaluated at class-creation time and TypeErrors on Python 3.9 collection.
+from __future__ import annotations
+
+# F8-15-007: the FULL required env must exist before importing the target
+# module, which transitively instantiates backend.config.settings. The prior
+# preamble (TESTING/DEBUG/DATABASE_URL only) left this module's import
+# outcome dependent on env leaked by earlier test modules — the exact
+# order-dependence T2.7 set out to eliminate. Mirrors test_gdpr_auth_198.py.
 import os
 
 os.environ.setdefault("TESTING", "True")
 os.environ.setdefault("DEBUG", "True")
+os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-testing-only")
+os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret-for-testing-only")
+os.environ.setdefault("MASTER_SECRET_KEY", "m" * 130)
 
 import hashlib
 
