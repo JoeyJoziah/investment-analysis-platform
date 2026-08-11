@@ -418,6 +418,12 @@ place or archive) · `.context/refresh_analysis.sh:99` ·
    locations are cleaned, keeping the baseline the living rotation ledger.
 5. Re-run the §12.1 acceptance grep + `git ls-files | grep -E '^\.env\.(secure|airflow)$'`
    (must be empty) and close #219 + the F8-16-001/002 batch findings.
+6. **Flip the secrets scanners from advisory to gating** (F8-14-004): in
+   `.github/workflows/security-scan.yml`, remove `continue-on-error: true`
+   (and the `|| true`) from the TruffleHog and GitLeaks steps and drop the
+   "advisory until U2 rotation completes" suffix from their names. Gating
+   them before this window would have tripped on the known tracked secrets
+   on every run; after step 4's clean scans they must gate permanently.
 
 ### 12.6 Window acceptance (PRD §4)
 
