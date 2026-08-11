@@ -649,20 +649,28 @@ ENVEOF
           # Stop services
           docker compose -f docker-compose.yml -f docker-compose.test.yml down
 
-      - name: Run security scan on Docker images
+      # F8-14-014: the former apt-key install path is deprecated (removed
+      # on newer Ubuntu images) and unpinned; use the same pinned action as
+      # every other Trivy call site (F8-14-001).
+      - name: Scan backend image (Trivy)
         continue-on-error: true
-        run: |
-          # Install trivy
-          sudo apt-get update
-          sudo apt-get install wget apt-transport-https gnupg lsb-release
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: investment-app-backend:test
+          format: json
+          output: backend-security-scan.json
+          exit-code: '0'
 
-          # Scan images
-          trivy image --exit-code 0 --format json -o backend-security-scan.json investment-app-backend:test
-          trivy image --exit-code 0 --format json -o frontend-security-scan.json investment-app-frontend:test
+      - name: Scan frontend image (Trivy)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: investment-app-frontend:test
+          format: json
+          output: frontend-security-scan.json
+          exit-code: '0'
 
       - name: Upload Docker security reports
         uses: actions/upload-artifact@v4
