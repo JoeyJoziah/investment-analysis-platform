@@ -1,5 +1,8 @@
 # Phase 2B Wave 2 Completion Report
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Overview
 Wave 2 focused on fixing fixture parameter mismatches identified in the root cause analysis.
 

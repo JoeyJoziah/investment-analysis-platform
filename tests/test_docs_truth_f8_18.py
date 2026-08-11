@@ -46,3 +46,40 @@ class TestF8_18_001_SupersededIndex:
         """Reading-order step 1 must not instruct opening an in-repo archive
         copy path that returns only a README."""
         assert "_meta/prior-reports-archive/{name}.archived.md" not in _text()
+
+
+class TestF8_18_004_005_BackendDocsSilo:
+    """F8-18-004: two contradictory '100% COMPLETE' wave reports; F8-18-005:
+    backend/docs/** sat outside every archive sweep. Fix = extend the T2.2
+    sweep: wave artifacts move to docs/_superseded/2026-06/, the one
+    reference doc stays with a version header."""
+
+    DEPLOYMENT = REPO_ROOT / "backend" / "docs" / "deployment"
+    SUPERSEDED_0606 = REPO_ROOT / "docs" / "_superseded" / "2026-06"
+
+    def test_no_wave_artifacts_left_in_backend_docs_deployment(self):
+        remaining = list(self.DEPLOYMENT.glob("*.md")) if self.DEPLOYMENT.exists() else []
+        assert len(remaining) == 0, f"unswept: {[p.name for p in remaining]}"
+
+    def test_no_100_percent_complete_claims_in_backend_docs(self):
+        hits = [
+            p for p in (REPO_ROOT / "backend" / "docs").rglob("*.md")
+            if "100% COMPLETE" in p.read_text(errors="ignore")
+        ]
+        assert hits == [], f"contradictory completion claims remain: {hits}"
+
+    def test_wave_reports_archived_with_banner(self):
+        moved = sorted(self.SUPERSEDED_0606.glob("backend-deployment-*.md"))
+        assert len(moved) == 7, f"expected 7 archived wave reports, got {len(moved)}"
+        for p in moved:
+            assert "SUPERSEDED (2026-06)" in p.read_text()[:2000], p.name
+
+    def test_database_optimization_guide_kept_with_header(self):
+        guide = REPO_ROOT / "backend" / "docs" / "DATABASE_OPTIMIZATION_GUIDE.md"
+        assert guide.exists()
+        head = "\n".join(guide.read_text().splitlines()[:12])
+        assert "Version:" in head and "Last Updated:" in head
+
+    def test_wave_0_14_report_swept_from_docs_root(self):
+        assert not (REPO_ROOT / "docs" / "WAVE_0_14_STATUS_REPORT.cgd.md").exists()
+        assert (self.SUPERSEDED_0606 / "WAVE_0_14_STATUS_REPORT.cgd.md").exists()

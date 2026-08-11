@@ -1,5 +1,7 @@
 # Database Optimization Guide for Massive Stock Data
 
+**Version: 1.0.0** · **Last Updated: 2026-08-11** *(header added by 2026-08 audit sweep; content unchanged)*
+
 ## Overview
 
 This guide covers the complete database optimization strategy for handling 6000+ stock tickers with daily updates, processing millions of rows efficiently without rate limiting or performance degradation.

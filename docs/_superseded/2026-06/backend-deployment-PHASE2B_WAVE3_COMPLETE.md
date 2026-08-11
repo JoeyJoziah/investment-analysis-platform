@@ -1,5 +1,8 @@
 # Phase 2B Wave 3 - COMPLETE SUMMARY
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Executive Summary
 
 **Wave 3: 100% COMPLETE** - All 6 phases successfully executed
