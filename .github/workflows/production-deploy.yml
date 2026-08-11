@@ -307,6 +307,18 @@ jobs:
 
     - name: Security gate check
       run: |
+        # F8-14-003: preflight ported from staging-deploy (de87a4a). Without
+        # strict mode + existence checks, a failed Trivy scan leaves no
+        # report, the JSON parse emits nothing, wc -l returns 0 and the gate
+        # vacuously prints "deployment approved".
+        set -euo pipefail
+        for f in backend-trivy-results.json frontend-trivy-results.json; do
+          if [ ! -f "$f" ]; then
+            echo "ERROR: missing Trivy report $f (scan produced no output). Failing the gate."
+            exit 1
+          fi
+        done
+
         # Check for critical and high vulnerabilities
         BACKEND_CRITICAL=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL") | .VulnerabilityID' backend-trivy-results.json | wc -l)
         BACKEND_HIGH=$(jq '.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH") | .VulnerabilityID' backend-trivy-results.json | wc -l)

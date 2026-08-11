@@ -27,3 +27,25 @@ class TestF8_14_001_MutableActionRefs:
                 if re.search(r"uses:\s*[^@\s]+@(master|main)\s*$", line):
                     offenders.append(f"{wf.name}:{i}")
         assert offenders == [], offenders
+
+
+class TestF8_14_003_ProductionTrivyGate:
+    """The production security gate must fail when the Trivy reports are
+    missing — otherwise jq emits nothing, wc -l says 0, and the step prints
+    'deployment approved' after a failed scan."""
+
+    def _gate(self):
+        t = (WORKFLOWS / "production-deploy.yml").read_text()
+        start = t.index("- name: Security gate check")
+        end = t.index("- name:", start + 10)
+        return t[start:end]
+
+    def test_gate_uses_strict_shell_mode(self):
+        assert "set -euo pipefail" in self._gate()
+
+    def test_gate_checks_report_existence_before_jq(self):
+        gate = self._gate()
+        assert re.search(r'if \[ ! -f "\$f" \]', gate), "no existence preflight"
+        assert gate.index("! -f") < gate.index("jq "), (
+            "existence check must run before any jq parse"
+        )
