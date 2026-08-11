@@ -223,3 +223,31 @@ class TestF8_14_007_GithubReadmeTruth:
         assert re.search(r"grep -rnE 'http://prdownloads[^']*'\s*\\\n\s*\.github/ ", text), (
             "plaintext-HTTP grep must scan .github/ (not just workflows/)"
         )
+
+
+class TestF8_14_008_PreCommitMypy:
+    """pre-commit has no failure-tolerance mechanism, so the mypy hook's
+    'Allow failures for now' comment was a lie: with a 3,636-error baseline
+    it blocked every backend commit, and its 'types-all' extra dependency
+    cannot even resolve. Type gating lives in type-check.yml (differential
+    baseline logic)."""
+
+    def test_mypy_hook_removed_from_pre_commit(self):
+        text = (REPO_ROOT / ".pre-commit-config.yaml").read_text()
+        assert "mirrors-mypy" not in text
+        assert "types-all" not in text
+
+    def test_pointer_to_ci_type_gate_remains(self):
+        text = (REPO_ROOT / ".pre-commit-config.yaml").read_text()
+        assert "type-check.yml" in text, "document where type gating went"
+
+
+class TestF8_14_014_TrivyInstall:
+    """apt-key is deprecated/removed on newer Ubuntu images; the unpinned
+    apt path also drifts independently of the pinned action refs."""
+
+    def test_no_apt_key_add_anywhere_in_workflows(self):
+        offenders = [
+            wf.name for wf in _workflow_files() if "apt-key add" in wf.read_text()
+        ]
+        assert offenders == [], offenders
