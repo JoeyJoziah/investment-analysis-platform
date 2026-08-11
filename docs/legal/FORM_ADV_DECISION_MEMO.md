@@ -9,7 +9,8 @@
 
 **Prepared for:** [COMPANY NAME] — Internal Use Only
 **Date:** 2026-06-23
-**Version:** 1.0-DRAFT
+**Version: 1.0.0-DRAFT**
+**Last Updated: 2026-08-11** *(draft revision date)*
 **Classification:** CONFIDENTIAL — Attorney-Client Privilege Intended
 
 ---

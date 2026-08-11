@@ -1,5 +1,7 @@
 # Session Handoff — State Analysis → Loki Remediation (2026-06-23)
 
+**Version: 1.0.0** · **Last Updated: 2026-06-23**
+
 > **Purpose.** Self-contained record of this session so any future operator (or a fresh
 > Claude/loki run) can resume with zero context loss. Pairs with the executable program in
 > [`PRD-loki-state-remediation-2026-06.md`](./PRD-loki-state-remediation-2026-06.md) and the

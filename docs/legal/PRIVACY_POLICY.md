@@ -7,8 +7,8 @@
 **[COMPANY NAME]** — Investment Analysis Platform
 
 **Effective Date:** [EFFECTIVE DATE]
-**Last Updated:** [EFFECTIVE DATE]
-**Version:** 1.0-DRAFT
+**Last Updated: 2026-08-11** *(draft revision date — effective date TBD upon counsel approval)*
+**Version: 1.0.0-DRAFT**
 
 ---
 

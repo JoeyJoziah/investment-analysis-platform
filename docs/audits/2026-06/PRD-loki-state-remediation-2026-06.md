@@ -39,6 +39,8 @@ sequencing:
 human_decisions: [D1, D2, D3, D4, D5, D6]   # all have recommended defaults — see §2
 ---
 
+**Version: 1.0.0** · **Last Updated: 2026-06-23**
+
 # PRD for Loki — Investment Platform State Remediation (2026-06)
 
 > **TL;DR (5 lines)**
