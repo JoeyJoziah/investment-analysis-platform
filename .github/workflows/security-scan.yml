@@ -335,7 +335,10 @@ jobs:
       with:
         fetch-depth: 0  # Full history for secret scanning
 
-    - name: Run TruffleHog secret scan
+    # F8-14-004: advisory until U2 rotation completes — the known tracked
+    # secrets (rotation inventory, PR-D) would trip a gating scan on every
+    # run. Flip to gating in the U2 post-window hygiene step (runbook §12.5).
+    - name: Run TruffleHog secret scan (advisory until U2 rotation completes)
       continue-on-error: true
       run: |
         docker run --rm -v "$PWD:/pwd" trufflesecurity/trufflehog:latest \
@@ -343,7 +346,7 @@ jobs:
           --only-verified \
           --json > trufflehog-results.json 2>/dev/null || true
 
-    - name: Run GitLeaks secret scan
+    - name: Run GitLeaks secret scan (advisory until U2 rotation completes)
       continue-on-error: true
       uses: gitleaks/gitleaks-action@v2
       env:
@@ -464,13 +467,14 @@ jobs:
         output: 'backend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-    - name: Run Trivy vulnerability scanner on backend (advisory; remediation tracked separately)
-      continue-on-error: true  # CVE remediation is an ongoing maintenance task, not gating
+    # F8-14-004: CRITICAL gates (fixable criticals block); HIGH stays
+    # visible in the JSON report step above but does not gate.
+    - name: Trivy backend CRITICAL gate
       uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-backend:latest'
         format: 'table'
-        severity: 'HIGH,CRITICAL'
+        severity: 'CRITICAL'
         exit-code: '1'
         ignore-unfixed: true  # skip CVEs without an upstream fix (e.g. python-ecdsa CVE-2024-23342)
 
@@ -483,13 +487,12 @@ jobs:
         output: 'frontend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-    - name: Run Trivy vulnerability scanner on frontend (advisory)
-      continue-on-error: true
+    - name: Trivy frontend CRITICAL gate
       uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-frontend:latest'
         format: 'table'
-        severity: 'HIGH,CRITICAL'
+        severity: 'CRITICAL'
         exit-code: '1'
         ignore-unfixed: true
 

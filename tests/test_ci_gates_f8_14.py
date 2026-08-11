@@ -251,3 +251,32 @@ class TestF8_14_014_TrivyInstall:
             wf.name for wf in _workflow_files() if "apt-key add" in wf.read_text()
         ]
         assert offenders == [], offenders
+
+
+class TestF8_14_004_GatingSubset:
+    """security-scan.yml had zero 'exit 1' across 990 lines — every scanner
+    neutralized by continue-on-error and/or || true. The audit's minimum
+    gating set: Trivy CRITICAL gates now; secrets scanners flip to gating
+    once the U2 rotation removes the known tracked secrets (gating them
+    earlier guarantees a red main)."""
+
+    def _text(self):
+        return (WORKFLOWS / "security-scan.yml").read_text()
+
+    def test_trivy_critical_steps_gate(self):
+        t = self._text()
+        gating = re.findall(
+            r"- name: [^\n]*CRITICAL gate[^\n]*\n(?:.+\n)+?(?=\n    - name:|\Z)", t
+        )
+        assert len(gating) == 2, "expected backend+frontend CRITICAL gate steps"
+        for step in gating:
+            assert "continue-on-error" not in step
+            assert "severity: 'CRITICAL'" in step
+            assert "exit-code: '1'" in step
+
+    def test_secret_scanners_carry_post_u2_flip_marker(self):
+        t = self._text()
+        assert t.count("advisory until U2 rotation completes") >= 2, (
+            "TruffleHog/gitleaks advisory state must be an explicit recorded "
+            "decision, not silent drift"
+        )
