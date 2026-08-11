@@ -60,6 +60,22 @@ export default defineConfig({
       url: 'http://localhost:8000/api/health',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
+      // F8-15-012: backend.config.settings instantiates at import and
+      // hard-requires these; without them uvicorn never binds and the run
+      // dies as a webServer timeout instead of a test failure. Values
+      // mirror ci.yml's test env; real env vars win when set. The API also
+      // needs Postgres/Redis running (see the e2e-tests CI job / README).
+      env: {
+        DATABASE_URL:
+          process.env.DATABASE_URL || 'postgresql://postgres:testpass@localhost:5432/test_db',
+        REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379/0',
+        SECRET_KEY: process.env.SECRET_KEY || 'test-secret-key-for-ci',
+        JWT_SECRET_KEY: process.env.JWT_SECRET_KEY || 'test-jwt-secret-key-for-ci',
+        MASTER_SECRET_KEY: process.env.MASTER_SECRET_KEY || 'test-master-secret-key-for-ci',
+        SESSION_SECRET_KEY: process.env.SESSION_SECRET_KEY || 'test-session-secret-key-for-ci',
+        ENVIRONMENT: process.env.ENVIRONMENT || 'testing',
+        TESTING: process.env.TESTING || 'True',
+      },
     },
   ],
 });
