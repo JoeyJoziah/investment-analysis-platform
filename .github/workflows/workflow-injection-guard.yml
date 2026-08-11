@@ -23,14 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: AT-G3-1.1 — no untrusted github.event.* fields inlined into shell vars
+      - name: AT-G3-1.1 — deny-by-default untrusted interpolation guard (F8-14-006)
         run: |
           set -euo pipefail
-          # Catches `VAR="${{ github.event.* }}"` shell-style assignments inside
-          # run: blocks. The safe pattern is `env: VAR: ${{ ... }}` followed by
-          # `VAR="$VAR"` (or just `"$VAR"`) inside the script.
-          if grep -nE '(AUTHOR|TITLE|BODY|MESSAGE|NAME|TEXT|URL|REASON|COMMENT)="\$\{\{ *github\.event' .github/workflows/*.yml; then
-            echo "::error::Workflow shell-injection regression (F-14-001/002). Move the value to an env: block and dereference with \"\$VAR\"."
+          # F8-14-006: the old nine-name allowlist regex missed every new
+          # variable name (TAG=, PCT=, REASON=...). The Python scanner flags
+          # ANY github.event / inputs expression interpolated inside
+          # run:/script: blocks. Legacy sites live in the frozen baseline
+          # (burn-down list); NEW sites fail. Reviewed exceptions opt out
+          # with a 'guard: allow-interpolation' comment.
+          if ! python3 .github/scripts/injection_guard.py \
+              --baseline .github/scripts/injection_guard_baseline.txt; then
+            echo "::error::Workflow shell-injection regression (F-14-001/002/F8-14-006). Move the value to an env: block and dereference with \"\$VAR\"."
             exit 1
           fi
 

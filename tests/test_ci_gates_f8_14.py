@@ -150,3 +150,61 @@ class TestF8_14_010_MigrationDetection:
         assert re.search(r"pull_request\.base\.sha|base_ref", text), (
             "no PR-aware diff base"
         )
+
+
+class TestF8_14_006_DenyByDefaultGuard:
+    """The injection guard must deny by default: ANY event/inputs
+    interpolation in a run/script block is flagged, regardless of variable
+    name — a name-allowlist cannot catch code written after the allowlist."""
+
+    @staticmethod
+    def _guard():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "injection_guard",
+            REPO_ROOT / ".github" / "scripts" / "injection_guard.py",
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_flags_names_outside_the_old_allowlist(self, tmp_path):
+        wf = tmp_path / "x.yml"
+        wf.write_text(
+            "jobs:\n  j:\n    steps:\n      - run: |\n"
+            '          TAG="${{ github.event.inputs.image_tag }}"\n'
+        )
+        assert len(self._guard().scan_file(wf)) == 1
+
+    def test_opt_out_comment_is_honoured(self, tmp_path):
+        wf = tmp_path / "x.yml"
+        wf.write_text(
+            "jobs:\n  j:\n    steps:\n      - run: |\n"
+            "          # guard: allow-interpolation (reviewed: sha only)\n"
+            '          BASE="${{ github.event.before }}"\n'
+        )
+        assert self._guard().scan_file(wf) == []
+
+    def test_env_blocks_are_not_flagged(self, tmp_path):
+        wf = tmp_path / "x.yml"
+        wf.write_text(
+            "jobs:\n  j:\n    steps:\n      - env:\n"
+            "          TAG: ${{ github.event.inputs.image_tag }}\n"
+            "        run: |\n"
+            '          echo "$TAG"\n'
+        )
+        assert self._guard().scan_file(wf) == []
+
+    def test_guard_workflow_invokes_the_scanner(self):
+        text = (WORKFLOWS / "workflow-injection-guard.yml").read_text()
+        assert "injection_guard.py" in text
+        assert "AUTHOR|TITLE|BODY" not in text, "old name-allowlist regex remains"
+
+    def test_repo_tree_has_no_unbaselined_findings(self):
+        import subprocess, sys
+        r = subprocess.run(
+            [sys.executable, ".github/scripts/injection_guard.py",
+             "--baseline", ".github/scripts/injection_guard_baseline.txt"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr

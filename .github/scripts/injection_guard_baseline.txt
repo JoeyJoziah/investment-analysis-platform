@@ -1,0 +1,80 @@
+# F8-14-006 legacy interpolation baseline (frozen 2026-08-11).
+# These 76 pre-existing github.event/inputs interpolations inside
+# run:/script: blocks predate the deny-by-default guard. BURN THIS FILE DOWN
+# (env-hoist each site) — never add entries without security review.
+.github/workflows/auto-sync.yml::REASON="PR #${{ github.event.pull_request.number }} closed"
+.github/workflows/auto-sync.yml::REASON="PR #${{ github.event.pull_request.number }} merged"
+.github/workflows/auto-sync.yml::if [[ "${{ github.event.pull_request.merged }}" == "true" ]]; then
+.github/workflows/auto-sync.yml::if [[ "${{ github.event.workflow_run.conclusion }}" == "failure" ]]; then
+.github/workflows/automated-release.yml::prerelease_tag = "${{ github.event.inputs.prerelease_tag }}" or "rc"
+.github/workflows/automated-release.yml::release_type = "${{ github.event.inputs.release_type }}" or "patch"
+.github/workflows/board-sync.yml::--url ${{ github.event.issue.html_url }} || true
+.github/workflows/board-sync.yml::--url ${{ github.event.pull_request.html_url }} || true
+.github/workflows/board-sync.yml::echo "Sync type: ${{ github.event.inputs.sync_type }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/board-sync.yml::gh issue edit ${{ github.event.issue.number }} --add-label "status:completed" || true
+.github/workflows/cleanup.yml::**Dry Run**: ${{ github.event.inputs.dry_run || 'true' }}
+.github/workflows/cleanup.yml::DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+.github/workflows/cleanup.yml::const dryRun = ${{ github.event.inputs.dry_run || true }};
+.github/workflows/cleanup.yml::const dryRun = ${{ github.event.inputs.dry_run || true }};
+.github/workflows/cleanup.yml::const dryRun = ${{ github.event.inputs.dry_run || true }};
+.github/workflows/cleanup.yml::echo "**Cleanup Type**: ${{ github.event.inputs.cleanup_type || 'all' }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/cleanup.yml::echo "**Dry Run**: ${{ github.event.inputs.dry_run || 'true' }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/daily-pipeline-validation.yml::test_mode = '${{ github.event.inputs.test_mode }}' == 'true'
+.github/workflows/dependency-updates.yml::echo "**Update Type**: ${{ github.event.inputs.update_type || 'all' }}" >> js-update-summary.md
+.github/workflows/dependency-updates.yml::echo "**Update Type**: ${{ github.event.inputs.update_type || 'all' }}" >> python-update-summary.md
+.github/workflows/dependency-updates.yml::if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+.github/workflows/dependency-updates.yml::if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+.github/workflows/dependency-updates.yml::if [[ "${{ github.event.inputs.update_type }}" == "security-only" ]]; then
+.github/workflows/github-swarm.yml::body += `PR #${{ github.event.pull_request.number }} was merged and may require documentation updates:\n\n`;
+.github/workflows/github-swarm.yml::title: `docs: Update documentation for PR #${{ github.event.pull_request.number }}`,
+.github/workflows/issue-management.yml::ISSUE_NUMBER="${{ github.event.issue.number }}"
+.github/workflows/issue-management.yml::ISSUE_NUMBER="${{ github.event.issue.number }}"
+.github/workflows/issue-management.yml::echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
+.github/workflows/issue-management.yml::echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
+.github/workflows/issue-management.yml::echo -e "$COMMENT" | gh issue comment ${{ github.event.issue.number }} --body-file -
+.github/workflows/issue-management.yml::gh issue edit ${{ github.event.issue.number }} --add-label "$label" || echo "Label may not exist: $label"
+.github/workflows/issue-management.yml::if [ "$issue_num" != "${{ github.event.issue.number }}" ]; then
+.github/workflows/migration-check.yml::DIFF_RANGE="${{ github.event.before }}..${{ github.sha }}"
+.github/workflows/monitoring-notifications.yml::echo "**Run ID**: ${{ github.event.workflow_run.id }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/notion-github-sync.yml::"conflict_resolution": "${{ github.event.inputs.conflict_resolution || 'github_wins' }}",
+.github/workflows/notion-github-sync.yml::"direction": "${{ github.event.inputs.direction || 'bidirectional' }}",
+.github/workflows/notion-github-sync.yml::"dry_run": ${{ github.event.inputs.dry_run || false }},
+.github/workflows/notion-github-sync.yml::echo "**Conflict Resolution**: ${{ github.event.inputs.conflict_resolution || 'github_wins' }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/notion-github-sync.yml::echo "**Direction**: ${{ github.event.inputs.direction || 'bidirectional' }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/notion-github-sync.yml::echo "Conflicts were resolved using **${{ github.event.inputs.conflict_resolution || 'github_wins' }}** strategy." >> $G
+.github/workflows/performance-monitoring.yml::"environment": "${{ github.event.inputs.test_environment || 'staging' }}",
+.github/workflows/performance-monitoring.yml::DURATION="${{ github.event.inputs.test_duration || '5' }}m"
+.github/workflows/performance-monitoring.yml::case "${{ github.event.inputs.test_intensity || 'light' }}" in
+.github/workflows/performance-monitoring.yml::echo "**Environment**: ${{ github.event.inputs.test_environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/performance-monitoring.yml::echo "**Environment**: ${{ github.event.inputs.test_environment || 'staging' }}" >> performance-report.md
+.github/workflows/performance-monitoring.yml::echo "**Test Duration**: ${{ github.event.inputs.test_duration || '5' }} minutes" >> performance-report.md
+.github/workflows/performance-monitoring.yml::echo "**Test Intensity**: ${{ github.event.inputs.test_intensity || 'light' }}" >> performance-report.md
+.github/workflows/performance-monitoring.yml::if [ "${{ github.event.inputs.test_environment || 'staging' }}" = "production" ]; then
+.github/workflows/performance-monitoring.yml::test_duration_minutes = ${{ github.event.inputs.test_duration || '5' }}
+.github/workflows/pr-automation.yml::# gh pr edit ${{ github.event.pull_request.number }} --add-reviewer "$REVIEWERS"
+.github/workflows/pr-automation.yml::BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+.github/workflows/pr-automation.yml::HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+.github/workflows/pr-automation.yml::PR_NUMBER="${{ github.event.pull_request.number }}"
+.github/workflows/pr-automation.yml::PR_NUMBER="${{ github.event.pull_request.number }}"
+.github/workflows/pr-automation.yml::PR_NUMBER="${{ github.event.pull_request.number }}"
+.github/workflows/pr-automation.yml::echo "✅ Auto-merge enabled for PR #${{ github.event.pull_request.number }}"
+.github/workflows/pr-automation.yml::echo -e "$COMMENT" | gh pr comment ${{ github.event.pull_request.number }} --body-file -
+.github/workflows/pr-automation.yml::echo -e "$COMMENT" | gh pr comment ${{ github.event.pull_request.number }} --body-file -
+.github/workflows/pr-automation.yml::gh pr edit ${{ github.event.pull_request.number }} --add-label "$label" || true
+.github/workflows/pr-automation.yml::gh pr merge ${{ github.event.pull_request.number }} \
+.github/workflows/production-deploy.yml::echo "prerelease=${{ github.event.release.prerelease }}" >> $GITHUB_OUTPUT
+.github/workflows/production-deploy.yml::echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+.github/workflows/production-deploy.yml::echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+.github/workflows/production-deploy.yml::git checkout ${{ github.event.inputs.tag || github.event.release.tag_name }}
+.github/workflows/release-management.yml::is_prerelease = "true" if ("${{ github.event.inputs.pre_release }}" == "true" or "-rc" in version or "-alpha" in version
+.github/workflows/release-management.yml::release_type = "${{ github.event.inputs.release_type }}"
+.github/workflows/reusable-build.yml::case "${{ inputs.environment }}" in
+.github/workflows/reusable-build.yml::echo "**Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/reusable-build.yml::echo "**Platforms**: ${{ inputs.platforms }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/reusable-build.yml::echo "**Push Images**: ${{ inputs.push-images }}" >> $GITHUB_STEP_SUMMARY
+.github/workflows/reusable-test.yml::if [[ "${{ inputs.skip-slow-tests }}" == "true" ]]; then
+.github/workflows/reusable-test.yml::if [[ "${{ inputs.skip-slow-tests }}" == "true" ]]; then
+.github/workflows/workflow-coordinator.yml::ENVIRONMENT="${{ github.event.inputs.environment }}"
+.github/workflows/workflow-coordinator.yml::SKIP_TESTS="${{ github.event.inputs.skip_tests }}"
+.github/workflows/workflow-coordinator.yml::WORKFLOW_TYPE="${{ github.event.inputs.workflow_type }}"
+.github/workflows/workflow-coordinator.yml::echo "**Workflow Type**: ${{ github.event.inputs.workflow_type }}" >> $GITHUB_STEP_SUMMARY
