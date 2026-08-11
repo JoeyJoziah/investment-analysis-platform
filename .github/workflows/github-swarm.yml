@@ -207,8 +207,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          # Get changed files
-          gh pr diff $PR_NUMBER --name-only > changed_files.txt
+          # Get changed files. `gh pr diff` 406s when the diff exceeds
+          # GitHub's 20k-line API cap; fall back to the paginated files API
+          # so a large (e.g. docs-sweep) PR degrades instead of failing.
+          if ! gh pr diff $PR_NUMBER --name-only > changed_files.txt 2>diff_err.txt; then
+            echo "gh pr diff failed ($(cat diff_err.txt)); falling back to files API"
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' > changed_files.txt
+          fi
           echo "Changed files:"
           cat changed_files.txt
 
