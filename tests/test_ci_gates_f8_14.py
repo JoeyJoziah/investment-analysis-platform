@@ -117,3 +117,36 @@ class TestF8_14_013_DryRunVar:
         writes = len(re.findall(r'"?dry_run=', text))
         reads = len(re.findall(r"env\.dry_run|\$dry_run|\$\{dry_run\}", text))
         assert writes == 0 or reads > 0, f"{writes} writes, {reads} reads"
+
+
+class TestF8_14_009_AutoSyncInterpolation:
+    """workflow_run.name is repo-influenced text; it must reach the shell
+    via env, not YAML interpolation inside a quoted assignment."""
+
+    def test_workflow_run_name_not_interpolated_in_run(self):
+        text = (WORKFLOWS / "auto-sync.yml").read_text()
+        offenders = [
+            i for i, line in enumerate(text.split("\n"), 1)
+            if "${{ github.event.workflow_run.name }}" in line
+            and "env:" not in line and not line.strip().startswith(("TRIGGER_WORKFLOW:",))
+        ]
+        assert offenders == [], offenders
+
+
+class TestF8_14_010_MigrationDetection:
+    """Migration detection must work on pull_request events (github.event.
+    before is unset there) and must not swallow failures with || echo ''."""
+
+    def test_no_silent_fallback_swallowing_diff_failures(self):
+        text = (WORKFLOWS / "migration-check.yml").read_text()
+        offenders = [
+            i for i, line in enumerate(text.split("\n"), 1)
+            if "git diff" in line and '|| echo ""' in line
+        ]
+        assert offenders == [], f"git diff failures swallowed at {offenders}"
+
+    def test_pull_request_aware_diff_range(self):
+        text = (WORKFLOWS / "migration-check.yml").read_text()
+        assert re.search(r"pull_request\.base\.sha|base_ref", text), (
+            "no PR-aware diff base"
+        )

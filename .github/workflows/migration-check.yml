@@ -61,8 +61,20 @@ jobs:
     - name: Detect migration changes
       id: changes
       run: |
+        # F8-14-010: github.event.before is unset on pull_request, which
+        # rendered a broken range that the old "|| echo" chain silently
+        # swallowed — every PR reported has_migrations=false. Use the PR
+        # base on PR events (fetch-depth: 0 is set above) and fail loudly.
+        set -euo pipefail
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          DIFF_RANGE="origin/${{ github.base_ref }}...HEAD"
+        else
+          DIFF_RANGE="${{ github.event.before }}..${{ github.sha }}"
+        fi
+        echo "Diff range: $DIFF_RANGE"
+
         # Check for new migration files
-        MIGRATION_FILES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} -- backend/migrations/versions/ || git diff --name-only HEAD~1..HEAD -- backend/migrations/versions/ || echo "")
+        MIGRATION_FILES=$(git diff --name-only "$DIFF_RANGE" -- backend/migrations/versions/)
         
         if [ -n "$MIGRATION_FILES" ]; then
           echo "has_migrations=true" >> $GITHUB_OUTPUT
@@ -76,7 +88,7 @@ jobs:
         fi
         
         # Check for model changes
-        MODEL_CHANGES=$(git diff --name-only ${{ github.event.before }}..${{ github.sha }} -- backend/models/ || git diff --name-only HEAD~1..HEAD -- backend/models/ || echo "")
+        MODEL_CHANGES=$(git diff --name-only "$DIFF_RANGE" -- backend/models/)
         
         if [ -n "$MODEL_CHANGES" ]; then
           echo "has_model_changes=true" >> $GITHUB_OUTPUT
