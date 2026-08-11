@@ -208,3 +208,18 @@ class TestF8_14_006_DenyByDefaultGuard:
             cwd=REPO_ROOT, capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
+
+
+class TestF8_14_007_GithubReadmeTruth:
+    """.github/README.md must not document states that no longer exist."""
+
+    def test_no_stale_sarif_v2_claim_or_http_recipe(self):
+        text = (REPO_ROOT / ".github" / "README.md").read_text()
+        assert "upload-sarif@v2" not in text
+        assert "http://prdownloads" not in text
+
+    def test_guard_http_grep_covers_all_of_dot_github(self):
+        text = (WORKFLOWS / "workflow-injection-guard.yml").read_text()
+        assert re.search(r"grep -rnE 'http://prdownloads[^']*'\s*\\\n\s*\.github/ ", text), (
+            "plaintext-HTTP grep must scan .github/ (not just workflows/)"
+        )
