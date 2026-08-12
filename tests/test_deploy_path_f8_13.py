@@ -217,3 +217,29 @@ class TestF8_13_024_RuntimeMounts:
 
     def test_static_mount_dropped(self):
         assert "./static" not in PROD.read_text()
+
+
+class TestF8_13_013_MlImageHygiene:
+    """ML images must not COPY .env* (one .dockerignore edit away from a
+    baked credential leak; config comes from compose environment blocks)
+    and must not run as root."""
+
+    ML = ["Dockerfile.ml-api", "Dockerfile.ml-monitoring", "Dockerfile.ml-scheduler"]
+
+    def test_no_env_copy(self):
+        offenders = [f for f in self.ML
+                     if "COPY .env" in (REPO_ROOT / f).read_text()]
+        assert offenders == [], offenders
+
+    def test_runs_as_non_root(self):
+        offenders = [f for f in self.ML
+                     if not re.search(r"^USER \w+", (REPO_ROOT / f).read_text(), re.M)]
+        assert offenders == [], offenders
+
+
+class TestF8_13_025_PythonPathCoupling:
+    """PYTHONPATH must not hardcode python3.12 while the version is an ARG —
+    bumping the ARG would silently break imports at runtime."""
+
+    def test_no_hardcoded_site_packages_version(self):
+        assert "python3.12/site-packages" not in (REPO_ROOT / "Dockerfile.backend").read_text()
