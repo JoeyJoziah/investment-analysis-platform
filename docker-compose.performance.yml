@@ -1,10 +1,14 @@
-version: '3.8'
 
+# F8-13-006: limits expressed in the same deploy.resources shape as the
+# base/production files — the short-form memory keys conflict fatally with
+# deploy.resources.limits.memory when the files merge.
 x-performance-limits: &performance-limits
-  mem_limit: 2g
-  memswap_limit: 2g
-  cpu_shares: 1024
-  pids_limit: 200
+  deploy:
+    resources:
+      limits:
+        memory: 2g
+        cpus: "1.0"
+        pids: 200
 
 services:
   backend:

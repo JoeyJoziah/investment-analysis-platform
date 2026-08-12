@@ -62,3 +62,33 @@ class TestQ1_NginxAdoption_F8_13_001_002_003_014_017:
         compose mount now makes that statement true."""
         t = PROD.read_text()
         assert "infrastructure/docker/nginx/nginx-ssl.conf" in t
+
+
+class TestF8_13_005_EnvFileOptional:
+    """A gitignored .env must not hard-fail every documented compose
+    invocation from a clean clone."""
+
+    def test_env_file_entries_are_optional(self):
+        t = (REPO_ROOT / "docker-compose.yml").read_text()
+        assert "required: false" in t
+        plain = re.findall(r"env_file:\s*\n\s*- \.env\s*$", t, re.M)
+        assert plain == [], "short-form env_file: - .env remains"
+
+
+class TestF8_13_006_PerformanceOverlay:
+    """The overlay must express limits in the same deploy.resources shape
+    as the base file — mem_limit conflicts fatally with it."""
+
+    def test_no_mem_limit_conflict_keys(self):
+        t = (REPO_ROOT / "docker-compose.performance.yml").read_text()
+        assert "mem_limit" not in t
+        assert "deploy" in t and "resources" in t
+
+
+class TestF8_13_021_ObsoleteVersionKey:
+    def test_no_version_keys_in_any_compose_file(self):
+        offenders = [
+            p.name for p in REPO_ROOT.glob("docker-compose*.yml")
+            if re.search(r"^version:", p.read_text(), re.M)
+        ]
+        assert offenders == [], offenders

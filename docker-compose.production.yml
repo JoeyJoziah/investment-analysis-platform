@@ -2,7 +2,6 @@
 # Investment Analysis Platform - Cost-Optimized Production Stack ($50/month target)
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.production.yml up -d
 
-version: '3.8'
 
 # Common configuration templates
 x-logging: &default-logging

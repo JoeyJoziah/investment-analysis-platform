@@ -92,7 +92,9 @@ services:
       dockerfile: ./Dockerfile.backend
     container_name: investment_api
     env_file:
-      - .env
+      # F8-13-005: .env is gitignored; a clean clone must still resolve
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -171,7 +173,9 @@ services:
       dockerfile: ./Dockerfile.backend
     container_name: investment_worker
     env_file:
-      - .env
+      # F8-13-005: .env is gitignored; a clean clone must still resolve
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -239,7 +243,9 @@ services:
       dockerfile: ./Dockerfile.backend
     container_name: investment_scheduler
     env_file:
-      - .env
+      # F8-13-005: .env is gitignored; a clean clone must still resolve
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/investment_db
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -270,7 +276,9 @@ services:
     image: apache/airflow:2.7.3-python3.11
     container_name: investment_airflow
     env_file:
-      - .env
+      # F8-13-005: .env is gitignored; a clean clone must still resolve
+      - path: .env
+        required: false
     environment:
       # Use LocalExecutor instead of CeleryExecutor for lower memory footprint
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
