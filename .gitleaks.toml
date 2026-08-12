@@ -122,15 +122,21 @@ description = "Allowlisted files"
 # creds (scripts/testing/test_all_passwords.py, scope 17) and
 # credential-bearing docs (F-08-009) live. Genuine fixtures should use
 # narrow path-specific allowlist entries instead.
-files = [
+#
+# NOTE: gitleaks v8's path allowlist key is `paths` — the former separate
+# `files` list was a v7-ism that v8 silently ignored, so everything in it
+# was never actually allowlisted. All file patterns live in `paths` now.
+paths = [
     '''(.*?)(jpg|gif|doc|pdf|bin|svg|socket)$''',
-    '''^\.env\.example$''',
-    '''^\.env\.template$''',
+    '''(^|/)\.env\.example$''',
+    '''(^|/)\.env\.template$''',
     '''package-lock\.json$''',
     '''yarn\.lock$''',
-]
-
-paths = [
+    # detect-secrets ledger: stores SHA1 hashes of secrets, never plaintext —
+    # scanning it yields hundreds of generic-api-key false positives.
+    # (^|/) so the match survives both git mode (relative paths) and
+    # --no-git mode (absolute paths).
+    '''(^|/)\.secrets\.baseline$''',
     '''node_modules/''',
     '''\.git/''',
     '''htmlcov/''',
