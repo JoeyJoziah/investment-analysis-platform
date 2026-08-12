@@ -173,3 +173,47 @@ class TestF8_13_009_SingleImageLineage:
         t = (REPO_ROOT / "scripts" / "testing" / "validation" / "validate_structure.py").read_text()
         assert "infrastructure/docker/backend/Dockerfile" not in t
         assert '"Dockerfile.backend"' in t
+
+
+class TestF8_13_011_DataDirOutsideRepo:
+    """Default DATA_DIR must not put Postgres/Redis/monitoring storage
+    inside the tracked working tree (accidental commits; git clean would
+    destroy production state)."""
+
+    def test_no_volume_device_defaults_into_the_repo(self):
+        t = PROD.read_text()
+        assert "${DATA_DIR:-./data}" not in t
+        assert "${DATA_DIR:-/var/lib/investment-platform}" in t
+
+    def test_env_template_documents_data_dir(self):
+        t = (REPO_ROOT / ".env.production.example").read_text()
+        assert "DATA_DIR" in t
+
+
+class TestF8_13_018_019_StandaloneProduction:
+    """Q2: production is a STANDALONE stack. The overlay usage comment was
+    a lie (the two-file merge unioned source bind-mounts over the immutable
+    image and collided two nginx services on 80/443)."""
+
+    def test_no_overlay_usage_comment(self):
+        t = PROD.read_text()
+        assert "-f docker-compose.yml -f docker-compose.production.yml" not in t
+        assert "docker compose -f docker-compose.production.yml" in t
+
+    def test_base_compose_has_no_edge_nginx(self):
+        t = (REPO_ROOT / "docker-compose.yml").read_text()
+        assert "image: nginx:alpine" not in t
+        assert "nginx-prometheus-exporter" not in t
+
+
+class TestF8_13_024_RuntimeMounts:
+    """./logs bind-mounts are created root-owned by the engine while the
+    backend runs as appuser (cannot write); ./static serves nothing."""
+
+    def test_logs_use_a_named_volume(self):
+        t = PROD.read_text()
+        assert "./logs:/app/logs" not in t
+        assert "app_logs:/app/logs" in t
+
+    def test_static_mount_dropped(self):
+        assert "./static" not in PROD.read_text()
