@@ -53,19 +53,9 @@ services:
         pytest backend/tests -v --cov=backend --cov-report=html --cov-report=term-missing --junit-xml=test-results.xml
       "
 
-  # Frontend testing
-  frontend_test:
-    build:
-      context: .
-      dockerfile: ./Dockerfile.frontend
-      target: test
-    volumes:
-      - ./frontend/web/src:/app/src
-      - ./frontend/web/public:/app/public
-    environment:
-      - NODE_ENV=test
-      - CI=true
-    command: npm test -- --coverage --watchAll=false
+  # F8-13-008: the former frontend test service requested a nonexistent
+  # build target and mounted source over an nginx image with no npm;
+  # frontend unit tests run in the CI frontend job instead.
 
 volumes:
   postgres_test_data:

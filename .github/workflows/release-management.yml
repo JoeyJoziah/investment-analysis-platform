@@ -349,6 +349,7 @@ jobs:
         docker buildx build \
           --platform linux/amd64 \
           --file Dockerfile.backend \
+            --target runtime \
           --tag "$BACKEND_IMAGE" \
           --tag "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend:latest" \
           --cache-from type=gha,scope=backend-release \

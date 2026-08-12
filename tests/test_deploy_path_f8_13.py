@@ -92,3 +92,54 @@ class TestF8_13_021_ObsoleteVersionKey:
             if re.search(r"^version:", p.read_text(), re.M)
         ]
         assert offenders == [], offenders
+
+
+class TestF8_13_007_DevStages:
+    """The documented dev overlay requests target: development from both
+    root Dockerfiles; the stages must exist."""
+
+    def test_backend_has_development_stage(self):
+        assert re.search(r"^FROM .* AS development", (REPO_ROOT / "Dockerfile.backend").read_text(), re.M)
+
+    def test_frontend_has_development_stage(self):
+        assert re.search(r"^FROM .* AS development", (REPO_ROOT / "Dockerfile.frontend").read_text(), re.M)
+
+
+class TestF8_13_008_FrontendTestService:
+    """frontend_test requested a nonexistent target and mounted source over
+    an nginx image with no npm; unit tests run in the CI frontend job."""
+
+    def test_frontend_test_service_removed(self):
+        t = (REPO_ROOT / "docker-compose.test.yml").read_text()
+        assert "frontend_test" not in t
+
+
+class TestC4_DefaultTargetFootgun:
+    """DISCOVERED during C4 (not in the audit): Dockerfile.backend's last
+    stage is `test`, and Docker builds the LAST stage when no target is
+    given — so every target-less build site (production-deploy, staging,
+    ci, reusable-build, release-management, security-scan, base compose,
+    deploy scripts) was building and shipping the TEST image (CMD pytest,
+    dev deps). Every build of the backend Dockerfile must pin a target."""
+
+    def _sites(self):
+        import subprocess
+        out = subprocess.run(
+            ["git", "grep", "-n", "Dockerfile.backend", "--",
+             ".github/workflows", "scripts", "docker-compose.yml",
+             "docker-compose.dev.yml", "docker-compose.test.yml",
+             "docker-compose.production.yml"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        ).stdout.strip().split("\n")
+        return [l for l in out if l]
+
+    def test_every_backend_build_site_pins_a_target(self):
+        offenders = []
+        for line in self._sites():
+            path, lineno, _ = line.split(":", 2)
+            text = (REPO_ROOT / path).read_text().split("\n")
+            ln = int(lineno)
+            window = "\n".join(text[max(0, ln - 4):ln + 6])
+            if ("build" in window or "docker build" in window) and "target" not in window:
+                offenders.append(f"{path}:{lineno}")
+        assert offenders == [], offenders

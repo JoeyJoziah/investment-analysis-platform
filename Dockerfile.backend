@@ -127,6 +127,15 @@ CMD ["gunicorn", "backend.api.main:app", \
      "--max-requests", "1000", \
      "--max-requests-jitter", "50"]
 
+# Stage: Development — used by docker-compose.dev.yml `target: development`
+# (F8-13-007). runtime already ships uvicorn; --reload falls back to
+# StatReload when watchfiles is absent. Source is bind-mounted by the
+# overlay, so no extra COPY is needed.
+FROM runtime AS development
+ENV DEBUG=true \
+    PYTHONDONTWRITEBYTECODE=1
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
 # Stage 3: Test — used by docker-compose.test.yml `target: test`
 FROM runtime AS test
 USER root

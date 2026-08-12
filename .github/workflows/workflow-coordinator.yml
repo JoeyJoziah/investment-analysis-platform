@@ -201,6 +201,7 @@ jobs:
         docker buildx build \
           --platform linux/amd64 \
           --file Dockerfile.backend \
+            --target runtime \
           --tag ${{ env.REGISTRY }}/${{ github.repository }}/backend:$TAG \
           --tag ${{ env.REGISTRY }}/${{ github.repository }}/backend:latest \
           --cache-from type=gha,scope=backend-coord \

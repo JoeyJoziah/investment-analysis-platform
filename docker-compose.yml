@@ -90,6 +90,8 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.backend
+      # C4 2026-08: the last stage is `test`; a target-less build ships it
+      target: runtime
     container_name: investment_api
     env_file:
       # F8-13-005: .env is gitignored; a clean clone must still resolve
@@ -171,6 +173,7 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.backend
+      target: runtime
     container_name: investment_worker
     env_file:
       # F8-13-005: .env is gitignored; a clean clone must still resolve
@@ -241,6 +244,7 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.backend
+      target: runtime
     container_name: investment_scheduler
     env_file:
       # F8-13-005: .env is gitignored; a clean clone must still resolve
