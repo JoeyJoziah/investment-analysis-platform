@@ -2,28 +2,33 @@
 
 **Version: 1.0.0** · **Last Updated: 2026-08-11**
 
-> **Last updated:** 2026-06-23
-> **Branch at update:** `loki/state-remediation-2026-06`
-> **Honest summary:** Advanced-beta. Not production-ready. A 2026-04 audit found 48 criticals (open items remain). A 2026-06 state analysis scored overall ~65% across 8 dimensions.
+> **Last updated:** 2026-08-12 (originally authored 2026-06-23 on `loki/state-remediation-2026-06`; salvaged to main via the 2026-08 U1 branch-salvage)
+> **Honest summary:** Advanced-beta. Not production-ready. A 2026-04 audit found 48 criticals (open items remain); a 2026-06 state analysis scored overall ~65% across 8 dimensions; a 2026-08 audit (19 scopes, 325 fresh findings) drives the current remediation cycle — see `docs/audits/2026-08/`.
 
 ---
 
-## Current Milestone: Loki State Remediation (active)
+## Current Milestone: 2026-08 Audit Remediation (active)
 
-| Tier | Name | Status |
-|------|------|--------|
-| T0 — Deploy-blockers | Dev-Dockerfile in prod (T0.1 ✅ #247), crash-looping cost_monitor (T0.3 ✅ #248), alembic drift (#216) | T0.1 + T0.3 done; #216 queued |
-| T1 — ML correctness | Random-init weights served silently at inference | T1.1–T1.4 done on branch |
-| T2 — Docs truth | Lying "100% complete" docs archived; single status entry point | This file + T2.2/T2.3 in progress |
-| T3 — Hygiene | Dockerfile/compose/ModelManager sprawl | Queued |
-| T4 — Regulatory scaffolding | Form ADV, Privacy Policy, ToS drafts (human-gated) | Queued |
-| SECRETS (#1) | Live secrets in committed `.env*` files | Owner: Devin (out-of-band; rotation required) |
+The 2026-06 tiers below are historical record; their salvageable work landed
+via the U1 branch-salvage PRs. Current work is organized as clusters C1–C11
+per `docs/audits/2026-08/EXECUTIVE_SUMMARY.md`.
+
+| Cluster | Name | Status (2026-08-12) |
+|---------|------|---------------------|
+| C1 — Branch salvage (U1) | 2026-06 branch cherry-picked as PRs #260/#261/#262 | PRs open, CI green |
+| C2 — Secret rotation | Scanner truth + U2 window runbook (PR #263) | Prep open; **rotation itself pending the operator's maintenance window** |
+| C3 — CI gates that can fail | 16 findings (PR #264) | PR open, CI green |
+| C4 — Deploy-path repair | nginx/compose/image-lineage (PR #266) | PR open, CI green |
+| C5–C11 | Fork bridge (P1=real bridge), auth/realtime, admin truth, DB bootstrap (U3), observability, ML (P2=train real), docs/test tail | Not started |
+
+*(2026-06 tiers, for the record: T0/T1 landed via #247/#248 + convergent
+fixes; T2/T4 salvage landed in PRs #260–#262; T3 folded into C4/C6.)*
 
 **Outstanding blockers before production:**
-1. Secrets rotation + git-history purge (#219)
-2. Migration architecture gap (FINDING-T0.4; no zero-downtime envelope)
-3. Regulatory documents (Form ADV / Privacy Policy / ToS)
-4. ML model weights loaded at inference (T1 fixes guard the paths; real weights deployment TBD)
+1. Secrets rotation + post-window hygiene (#219 + wider 2026-08 inventory; runbook §12) — scheduled, operator-executed
+2. Migration architecture gap (D7/U3 — no initial-schema revision; C8)
+3. Regulatory documents remain DRAFT pending counsel (Form ADV memo is HUMAN-BLOCKING)
+4. ML models have no real trained weights (P2 decision 2026-08-11: train a real model; acceptance metrics TBD with owner)
 
 ---
 
@@ -48,7 +53,7 @@ See `docs/SUPERSEDED.md` for the index of stale archived docs.
 
 ---
 
-## Dimension Scores (2026-06-23 State Analysis)
+## Dimension Scores (2026-06-23 State Analysis — historical snapshot, pre-2026-08 remediation)
 
 | Dimension | Score | One-line read |
 |-----------|-------|---------------|
