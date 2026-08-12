@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # HTTP from prdownloads.sourceforge.net with no checksum — MITM path to root-on-
 # build-host). Mirrors the workflow-side fix in
 # .github/workflows/comprehensive-testing.yml and the optimized variant in
-# infrastructure/docker/backend/Dockerfile.optimized.
+# the retired infrastructure backend image variant (deleted in T3.1).
 RUN apt-get update && apt-get install -y --no-install-recommends bash autoconf automake libtool && \
     TA_LIB_VERSION="0.4.0" && \
     TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651" && \

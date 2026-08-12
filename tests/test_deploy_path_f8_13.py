@@ -143,3 +143,33 @@ class TestC4_DefaultTargetFootgun:
             if ("build" in window or "docker build" in window) and "target" not in window:
                 offenders.append(f"{path}:{lineno}")
         assert offenders == [], offenders
+
+
+class TestF8_13_009_SingleImageLineage:
+    """Two divergent production image lineages were both live (GHA built the
+    root Dockerfiles; blue-green built infrastructure/.../Dockerfile.optimized
+    — py3.12 vs 3.11, node 20 vs 18, checksum pinning vs none). One canonical
+    lineage: the root Dockerfiles (T3.1/D4)."""
+
+    def test_no_optimized_dockerfiles_referenced_or_present(self):
+        import subprocess
+        hits = subprocess.run(
+            ["git", "grep", "-l", "Dockerfile.optimized", "--",
+             ":!docs", ":!tests"],
+            cwd=REPO_ROOT, capture_output=True, text=True,
+        ).stdout.strip()
+        assert hits == "", hits
+        assert not list((REPO_ROOT / "infrastructure" / "docker").rglob("Dockerfile*"))
+
+    def test_no_stray_frontend_web_dockerfile(self):
+        assert not (REPO_ROOT / "frontend" / "web" / "Dockerfile").exists()
+
+    def test_blue_green_builds_the_canonical_dockerfiles(self):
+        t = (REPO_ROOT / "scripts" / "deployment" / "blue_green_deploy.sh").read_text()
+        assert 'Dockerfile.backend"' in t and 'Dockerfile.frontend"' in t
+        assert "--target production" in t, "frontend build must pin the production stage"
+
+    def test_validate_structure_asserts_canonical_paths(self):
+        t = (REPO_ROOT / "scripts" / "testing" / "validation" / "validate_structure.py").read_text()
+        assert "infrastructure/docker/backend/Dockerfile" not in t
+        assert '"Dockerfile.backend"' in t
