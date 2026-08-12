@@ -99,7 +99,9 @@ RUN mkdir -p /app/logs /app/data /app/ml_models /app/cache && \
 RUN ldconfig
 
 # Set environment variables
-ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages \
+# F8-13-025: no version-pinned site-packages entry — PATH picks up
+# /home/appuser/.local/bin and Python resolves the user site itself.
+ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     PATH=/home/appuser/.local/bin:$PATH \
     NLTK_DATA=/usr/local/share/nltk_data
@@ -150,5 +152,5 @@ COPY --chown=appuser:appuser requirements-dev.txt /app/requirements-dev.txt
 RUN pip install --no-cache-dir --user -r /app/requirements-dev.txt || true
 USER appuser
 WORKDIR /app
-ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages
+ENV PYTHONPATH=/app
 CMD ["pytest", "backend/tests", "-q", "--tb=short"]
