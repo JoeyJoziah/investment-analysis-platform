@@ -283,7 +283,8 @@ services:
     container_name: investment_nginx_prod
     <<: *restart-policy
     volumes:
-      - ./infrastructure/docker/frontend/nginx.optimized.conf:/etc/nginx/nginx.conf:ro
+      # Q1 (2026-08): nginx-ssl.conf is the authoritative edge config.
+      - ./infrastructure/docker/nginx/nginx-ssl.conf:/etc/nginx/nginx.conf:ro
       - ./infrastructure/docker/frontend/security-headers.conf:/etc/nginx/conf.d/security-headers.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
       - certbot_webroot:/var/www/certbot:ro
@@ -295,7 +296,7 @@ services:
       - backend
       - frontend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/nginx_status"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       <<: *healthcheck-defaults
     logging: *default-logging
     deploy:

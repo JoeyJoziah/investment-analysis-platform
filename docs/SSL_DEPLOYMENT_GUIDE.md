@@ -10,7 +10,7 @@ Status: scaffolding present, awaiting domain registration to provision certs.
 # Provision certs (requires public DNS pointing at the host + port 80 reachable)
 ./scripts/init-ssl.sh your-domain.com admin@your-domain.com
 
-# Production stack uses nginx-ssl.conf automatically when ssl/ has fullchain.pem
+# Production mounts infrastructure/docker/nginx/nginx-ssl.conf as /etc/nginx/nginx.conf (Q1 2026-08); it requires ssl/ to hold fullchain.pem/privkey.pem/chain.pem/dhparam.pem
 ./start.sh prod
 ```
 
