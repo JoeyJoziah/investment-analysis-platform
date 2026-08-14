@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.auth.oauth2 import get_current_user
+from backend.auth.oauth2 import get_current_user, get_current_admin_user
 from backend.config.database import get_async_db_session
 from backend.config.settings import settings
 from backend.ml.model_manager import get_model_manager, ModelManager
@@ -830,7 +830,7 @@ async def promote_model_version(
     model_name: str,
     version: str,
     target_stage: str = "production",
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> ApiResponse[Dict[str, Any]]:
     """Promote a model version to staging or production."""
     try:
@@ -872,7 +872,7 @@ async def promote_model_version(
 async def rollback_model_version(
     model_name: str,
     target_version: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> ApiResponse[Dict[str, Any]]:
     """Rollback a model to a specific previous version."""
     try:

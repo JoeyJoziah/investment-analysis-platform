@@ -54,3 +54,26 @@ def test_revoke_already_expired_token_is_noop_not_error():
 
     assert result is True
     assert mgr.redis_client.store == {}  # nothing to blacklist, but no exception
+
+
+def test_revoke_without_redis_blacklists_in_memory():
+    mgr = JWTManager.__new__(JWTManager)
+    mgr.blacklist_prefix = "jwt_blacklist"
+    mgr.session_prefix = "user_session"
+    mgr.redis_client = None
+    mgr._memory_blacklist = {}
+    token = _token_expiring_in(1)
+
+    assert mgr.revoke_token(token) is True
+    assert mgr._is_token_blacklisted(token) is True
+
+
+def test_memory_blacklist_ignores_expired_entry():
+    mgr = JWTManager.__new__(JWTManager)
+    mgr.blacklist_prefix = "jwt_blacklist"
+    mgr.redis_client = None
+    mgr._memory_blacklist = {}
+    token = _token_expiring_in(-1)
+
+    assert mgr.revoke_token(token) is True
+    assert mgr._is_token_blacklisted(token) is False

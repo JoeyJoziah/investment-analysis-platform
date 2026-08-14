@@ -39,6 +39,8 @@ from typing import Any, Dict, Optional
 
 import socketio
 
+from backend.security.jwt_manager import TokenType, get_jwt_manager
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -58,6 +60,8 @@ sio: socketio.AsyncServer = socketio.AsyncServer(
 
 # Maps socket session id -> set of rooms the client is in
 _client_rooms: Dict[str, set] = {}
+# Maps socket session id -> verified JWT payload
+_client_auth: Dict[str, Dict[str, Any]] = {}
 
 # Maps price-room name -> background streaming task
 _price_tasks: Dict[str, asyncio.Task] = {}
@@ -72,9 +76,31 @@ _STREAM_ERROR_RETRY = 5
 # Lifecycle events
 # ---------------------------------------------------------------------------
 
+def _extract_socket_token(
+    auth: Optional[Dict], environ: Optional[Dict[str, Any]]
+) -> Optional[str]:
+    if isinstance(auth, dict):
+        token = auth.get("token") or auth.get("access_token")
+        if token:
+            return str(token)
+    if not environ:
+        return None
+    header = environ.get("HTTP_AUTHORIZATION") or environ.get("http_authorization")
+    if header and str(header).lower().startswith("bearer "):
+        return str(header).split(" ", 1)[1].strip()
+    return None
+
+
 @sio.event
 async def connect(sid: str, environ: Dict[str, Any], auth: Optional[Dict] = None):
-    """Handle a new Socket.IO connection."""
+    """Handle a new Socket.IO connection. Requires a valid access token."""
+    token = _extract_socket_token(auth, environ)
+    payload = (
+        get_jwt_manager().verify_token(token, TokenType.ACCESS) if token else None
+    )
+    if not payload:
+        raise ConnectionRefusedError("authentication required")
+    _client_auth[sid] = payload
     _client_rooms[sid] = set()
     logger.info("Socket.IO client connected: %s (total: %d)", sid, len(_client_rooms))
     await sio.emit(
@@ -90,6 +116,7 @@ async def connect(sid: str, environ: Dict[str, Any], auth: Optional[Dict] = None
 @sio.event
 async def disconnect(sid: str):
     """Handle a Socket.IO disconnection and clean up rooms / tasks."""
+    _client_auth.pop(sid, None)
     rooms = _client_rooms.pop(sid, set())
     logger.info(
         "Socket.IO client disconnected: %s (was in %d rooms)", sid, len(rooms)
@@ -105,6 +132,22 @@ async def disconnect(sid: str):
 # Client -> Server event handlers
 # ---------------------------------------------------------------------------
 
+async def _require_socket_auth(sid: str) -> Optional[Dict[str, Any]]:
+    payload = _client_auth.get(sid)
+    if payload:
+        return payload
+    await sio.emit(
+        "error",
+        {
+            "code": "UNAUTHORIZED",
+            "message": "Not authenticated",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        to=sid,
+    )
+    return None
+
+
 @sio.event
 async def subscribe_prices(sid: str, data: Dict[str, Any]):
     """
@@ -114,6 +157,8 @@ async def subscribe_prices(sid: str, data: Dict[str, Any]):
 
         { "symbols": ["AAPL", "TSLA"] }
     """
+    if not await _require_socket_auth(sid):
+        return
     symbols = data.get("symbols", [])
     if not isinstance(symbols, list) or not symbols:
         await sio.emit(
@@ -165,6 +210,8 @@ async def subscribe_portfolio(sid: str, data: Dict[str, Any]):
 
         { "portfolio_id": "uuid-string" }
     """
+    if not await _require_socket_auth(sid):
+        return
     portfolio_id = data.get("portfolio_id")
     if not portfolio_id:
         await sio.emit(
@@ -203,6 +250,9 @@ async def subscribe_alerts(sid: str, data: Dict[str, Any]):
 
         { "user_id": "uuid-string" }
     """
+    payload = await _require_socket_auth(sid)
+    if not payload:
+        return
     user_id = data.get("user_id")
     if not user_id:
         await sio.emit(
@@ -210,6 +260,18 @@ async def subscribe_alerts(sid: str, data: Dict[str, Any]):
             {
                 "code": "INVALID_PAYLOAD",
                 "message": "subscribe_alerts requires a 'user_id'",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            to=sid,
+        )
+        return
+
+    if str(user_id) != str(payload.get("user_id")):
+        await sio.emit(
+            "error",
+            {
+                "code": "FORBIDDEN",
+                "message": "Cannot subscribe to another user's alerts",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             to=sid,

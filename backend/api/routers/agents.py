@@ -521,6 +521,7 @@ async def get_budget_status(
 
 @router.get("/capabilities")
 async def get_agent_capabilities(
+    current_user=Depends(get_current_user),
     engine: HybridAnalysisEngine = Depends(get_hybrid_engine)
 ) -> ApiResponse[AgentCapabilitiesResponse]:
     """

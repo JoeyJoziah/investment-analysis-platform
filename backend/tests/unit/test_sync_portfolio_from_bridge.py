@@ -422,6 +422,23 @@ class TestDryRunDefault:
         assert applied["actions"][0]["qty"] == Decimal("10")
         assert "sync complete" in capsys.readouterr().out
 
+    def test_apply_refuses_empty_desired(self, tmp_path, monkeypatch, capsys):
+        snapshot = _snapshot(positions=[])
+        _write_hub(tmp_path, monkeypatch, snapshot)
+        for key in ("IAP_BASE_URL", "IAP_USERNAME", "IAP_PASSWORD"):
+            monkeypatch.setenv(key, "x")
+
+        applied = {}
+        monkeypatch.setattr(
+            sync_pfb,
+            "_apply_actions",
+            lambda *args: applied.setdefault("hit", True),
+            raising=True,
+        )
+        assert sync_pfb.main(["--portfolio-id", "p1", "--apply"]) == 2
+        assert not applied
+        assert "refusing --apply" in capsys.readouterr().err
+
 
 # --------------------------------------------------------- json serialization
 

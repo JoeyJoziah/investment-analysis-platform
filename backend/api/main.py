@@ -2,7 +2,7 @@
 Main FastAPI Application - World-Leading Investment Analysis Platform
 """
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
@@ -211,7 +211,7 @@ try:
     )
 
     # 4. CSRF Protection - After security headers
-    environment = os.getenv("ENVIRONMENT", "development").lower()
+    environment = os.getenv("ENVIRONMENT", settings.ENVIRONMENT).lower()
     csrf_secret = os.getenv("CSRF_SECRET_KEY")
     if not csrf_secret:
         if environment == "production":
@@ -399,10 +399,27 @@ async def root():
 
 
 @app.get("/api/v1/metrics")
-async def get_metrics():
+async def get_metrics(request: Request):
     """
-    Prometheus metrics endpoint
+    Prometheus metrics endpoint.
+
+    Accepts ``METRICS_SCRAPE_TOKEN`` as a Bearer token, or an admin JWT
+    when no scrape token is configured.
     """
+    from backend.security.jwt_manager import get_jwt_manager, TokenType
+
+    auth = request.headers.get("authorization") or ""
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    scrape = os.getenv("METRICS_SCRAPE_TOKEN")
+    if scrape:
+        if token != scrape:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return export_metrics()
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    payload = get_jwt_manager().verify_token(token, TokenType.ACCESS)
+    if not payload or not payload.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
     return export_metrics()
 
 

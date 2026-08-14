@@ -24,6 +24,7 @@ from backend.auth.oauth2 import (
     get_current_user,
     get_current_admin_user,
 )
+from backend.security.jwt_manager import get_jwt_manager, TokenType
 
 router = APIRouter(tags=["authentication"])
 
@@ -42,6 +43,11 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    refresh_token: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 class TokenData(BaseModel):
     email: Optional[str] = None
@@ -155,12 +161,12 @@ async def register(
         await db.commit()
         await db.refresh(db_user)
 
-        # Create access token via canonical jwt_manager path
-        access_token = _issue_access_token(db_user, request)
+        tokens = create_tokens(db_user, request)
 
         logger.info(f"New user registered: {user.email}")
         return success_response(data=Token(
-            access_token=access_token,
+            access_token=tokens["access_token"],
+            refresh_token=tokens.get("refresh_token"),
             token_type="bearer"
         ))
 
@@ -192,10 +198,10 @@ async def login(
     user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
-    # Create token via canonical jwt_manager path (RS256 + session + iss/aud)
-    access_token = _issue_access_token(user, request)
+    tokens = create_tokens(user, request)
     return success_response(data=Token(
-        access_token=access_token,
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token"),
         token_type="bearer"
     ))
 
@@ -218,10 +224,10 @@ async def login_alt(
     db_user.last_login = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
-    # Create token via canonical jwt_manager path (RS256 + session + iss/aud)
-    access_token = _issue_access_token(db_user, request)
+    tokens = create_tokens(db_user, request)
     return success_response(data=Token(
-        access_token=access_token,
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token"),
         token_type="bearer"
     ))
 
@@ -238,20 +244,55 @@ async def read_users_me(current_user: User = Depends(get_current_user)) -> ApiRe
     })
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)) -> ApiResponse[Dict[str, Any]]:
-    """Logout endpoint (client should discard token)"""
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+) -> ApiResponse[Dict[str, Any]]:
+    """Logout: blacklist the presented access token and drop its session."""
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1].strip()
+        if token:
+            get_jwt_manager().revoke_token(token)
     logger.info(f"User logged out: {current_user.email}")
     return success_response(data={"message": "Successfully logged out"})
 
 @router.post("/refresh")
 async def refresh_token(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    body: RefreshRequest,
+    db: AsyncSession = Depends(get_async_db_session),
     _auth_limit = Depends(auth_rate_limit)
 ) -> ApiResponse[Token]:
-    """Refresh access token"""
-    access_token = _issue_access_token(current_user, request)
+    """Mint a new access token from a still-valid refresh token."""
+    payload = get_jwt_manager().verify_token(body.refresh_token, TokenType.REFRESH)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id = payload.get("user_id")
+    username = payload.get("sub")
+    result = await db.execute(
+        select(User).filter(
+            (User.id == user_id)
+            | (User.username == username)
+            | (User.email == username)
+        )
+    )
+    user = result.scalars().first()
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    tokens = create_tokens(user, request)
     return success_response(data=Token(
-        access_token=access_token,
+        access_token=tokens["access_token"],
+        refresh_token=tokens.get("refresh_token"),
         token_type="bearer"
     ))

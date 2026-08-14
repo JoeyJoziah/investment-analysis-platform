@@ -7,13 +7,15 @@ services:
       dockerfile: Dockerfile.ml-api
     container_name: ml-api-production
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     environment:
       - ML_MODELS_PATH=/app/backend/ml_models
       - ML_LOGS_PATH=/app/backend/ml_logs
       - ML_REGISTRY_PATH=/app/backend/ml_registry
       - PYTHONPATH=/app
       - TZ=UTC
+      - ML_API_TOKEN=${ML_API_TOKEN}
+      - ML_BIND_HOST=0.0.0.0
     volumes:
       - ./backend/ml_models:/app/backend/ml_models:ro
       - ./backend/ml_logs:/app/backend/ml_logs

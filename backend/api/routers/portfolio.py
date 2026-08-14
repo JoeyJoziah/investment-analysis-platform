@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks, P
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timezone
+from decimal import Decimal
 from enum import Enum
 import uuid
 import logging
@@ -336,6 +337,7 @@ async def add_position(
     request: AddPositionRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Add a new position or add to existing position"""
@@ -347,9 +349,30 @@ async def add_position(
             detail="A price must be provided to add a position"
         )
 
-    # Create transaction record
+    portfolio = await service.repository.get_user_portfolio(
+        portfolio_id=portfolio_id, user_id=current_user.id, session=db
+    )
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio '{portfolio_id}' not found or access denied",
+        )
+
+    result = await service.add_position(
+        portfolio_id=portfolio.id,
+        stock_symbol=request.symbol.upper(),
+        quantity=request.quantity,
+        cost=request.price,
+        user_id=current_user.id,
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to add position"),
+        )
+
     transaction = Transaction(
-        id=str(uuid.uuid4()),
+        id=str(result.get("position_id") or uuid.uuid4()),
         portfolio_id=portfolio_id,
         symbol=request.symbol.upper(),
         transaction_type=request.transaction_type,
@@ -377,6 +400,7 @@ async def remove_position(
     request: RemovePositionRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db_session),
     service: PortfolioService = Depends(get_portfolio_service)
 ) -> ApiResponse[Dict[str, Any]]:
     """Remove or reduce a position"""
@@ -399,7 +423,45 @@ async def remove_position(
     else:
         quantity_to_sell = request.quantity or 0
 
-    # Create transaction record
+    portfolio = await service.repository.get_user_portfolio(
+        portfolio_id=portfolio_id, user_id=current_user.id, session=db
+    )
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Portfolio '{portfolio_id}' not found or access denied",
+        )
+
+    from backend.repositories import stock_repository
+
+    stock = await stock_repository.get_by_symbol(symbol.upper())
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Stock symbol '{symbol}' not found",
+        )
+
+    try:
+        position = await service.repository.add_position(
+            portfolio_id=portfolio.id,
+            stock_id=stock.id,
+            quantity=Decimal(str(quantity_to_sell)),
+            price=Decimal(str(request.price)),
+            transaction_type="sell",
+            owner_user_id=current_user.id,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if position is None and quantity_to_sell:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to remove position",
+        )
+
     transaction = Transaction(
         id=str(uuid.uuid4()),
         portfolio_id=portfolio_id,

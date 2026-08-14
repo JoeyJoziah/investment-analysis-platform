@@ -532,18 +532,12 @@ class TestPortfolioStreamEndpoint:
 class TestConnectionsEndpoint:
     """Tests for the GET /connections REST endpoint on the websocket router."""
 
-    def test_get_active_connections(self):
-        """The connections endpoint should return current state of the manager."""
+    def test_get_active_connections_requires_admin(self):
+        """The connections endpoint is admin-only (IAP-003)."""
         with TestClient(_ws_test_app) as client:
             response = client.get("/api/v1/ws/connections")
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "total_connections" in data
-        assert "clients" in data
-        assert "subscriptions" in data
-        assert "active_streams" in data
-        assert isinstance(data["total_connections"], int)
+        assert response.status_code in (401, 403)
 
 
 # ---------------------------------------------------------------------------

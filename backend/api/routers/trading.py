@@ -94,7 +94,12 @@ async def validate_order(
     if order.stop_price is not None:
         order_data["stop_price"] = order.stop_price
 
-    result = await svc.validate_order(order_data)
+    result = await svc.validate_order(order_data, user_id=current_user.id)
+    if result.get("not_found"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found",
+        )
     if not result.get("valid"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -125,7 +130,12 @@ async def execute_trade(
         "quantity": trade.quantity,
         "price": trade.price,
     }
-    result = await svc.execute_trade(portfolio_id, order_dict)
+    result = await svc.execute_trade(portfolio_id, order_dict, user_id=current_user.id)
+    if result.get("not_found"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Portfolio not found",
+        )
     if not result.get("success"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -155,7 +165,9 @@ async def calculate_impact(
         "quantity": impact.quantity,
         "price": impact.price,
     }
-    result = await svc.calculate_portfolio_impact(portfolio_id, trade_data)
+    result = await svc.calculate_portfolio_impact(
+        portfolio_id, trade_data, user_id=current_user.id
+    )
     if not result.get("success"):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

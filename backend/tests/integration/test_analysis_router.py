@@ -25,11 +25,20 @@ from backend.models.unified_models import (
     Stock, PriceHistory, Exchange, Sector, Industry
 )
 from backend.api.main import app
+from backend.auth.oauth2 import get_current_user
 from backend.tests.conftest import assert_success_response
 from httpx import AsyncClient
 
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.fixture(autouse=True)
+def _override_analysis_auth(test_user):
+    """Analyze/batch now require a logged-in user (IAP-008)."""
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 # ---------------------------------------------------------------------------

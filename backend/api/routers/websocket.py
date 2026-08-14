@@ -5,7 +5,7 @@ Thin routing layer for WebSocket endpoints.  Business logic lives in
 ``backend.services.websocket_service``.
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
 from typing import Dict, Optional, Any
 import asyncio
 import json
@@ -20,7 +20,11 @@ from backend.security.websocket_security import (
     validate_subscription_permissions
 )
 from backend.security.audit_logging import get_audit_logger, AuditEventType, AuditSeverity
-from backend.auth.oauth2 import verify_token as _verify_bearer_token
+from backend.auth.oauth2 import (
+    verify_token as _verify_bearer_token,
+    get_current_admin_user,
+)
+from backend.models.unified_models import User
 
 # Service layer -- all business logic lives here
 from backend.services.websocket_service import (
@@ -439,8 +443,13 @@ async def handle_secure_client_message(
 # ---------------------------------------------------------------------------
 
 @router.post("/trigger/alert")
-async def trigger_alert(client_id: str, alert_type: str, message: str):
-    """Trigger an alert for a specific client."""
+async def trigger_alert(
+    client_id: str,
+    alert_type: str,
+    message: str,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """Trigger an alert for a specific client (admin only)."""
     alert = {
         "alert_type": alert_type,
         "message": message,
@@ -453,8 +462,13 @@ async def trigger_alert(client_id: str, alert_type: str, message: str):
 
 
 @router.post("/trigger/news")
-async def trigger_news_broadcast(headline: str, summary: str, symbol: Optional[str] = None):
-    """Broadcast news to all clients."""
+async def trigger_news_broadcast(
+    headline: str,
+    summary: str,
+    symbol: Optional[str] = None,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """Broadcast news to all clients (admin only)."""
     news = {
         "headline": headline,
         "summary": summary,
@@ -468,8 +482,10 @@ async def trigger_news_broadcast(headline: str, summary: str, symbol: Optional[s
 
 
 @router.get("/connections")
-async def get_active_connections():
-    """Get information about active WebSocket connections."""
+async def get_active_connections(
+    current_user: User = Depends(get_current_admin_user),
+):
+    """Get information about active WebSocket connections (admin only)."""
     return {
         "total_connections": len(manager.active_connections),
         "clients": list(manager.active_connections.keys()),

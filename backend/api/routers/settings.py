@@ -14,7 +14,7 @@ from pathlib import Path
 
 from backend.config.database import get_async_db_session
 from backend.models.api_response import ApiResponse, success_response
-from backend.auth.oauth2 import get_current_user
+from backend.auth.oauth2 import get_current_user, get_current_admin_user
 from backend.models.unified_models import User
 from backend.services import settings_service
 from backend.config.settings import settings as app_settings
@@ -463,9 +463,9 @@ async def get_api_keys(
 @router.put("/api-keys")
 async def update_api_keys(
     payload: ApiKeysUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ) -> ApiResponse[Dict[str, Any]]:
-    """Persist provider API keys to .env (development only).
+    """Persist provider API keys to .env (development admin only).
 
     Writing provider keys via the API is a local/single-user dev convenience and is
     refused outside development -- elsewhere keys come from the deployment environment
@@ -473,7 +473,9 @@ async def update_api_keys(
     written; .env is backed up first. A backend restart is recommended so module-level
     provider clients (built from ``settings.*`` at import) pick up the new values.
     """
-    environment = os.getenv("ENVIRONMENT", "development").lower()
+    environment = str(
+        getattr(app_settings, "ENVIRONMENT", None) or os.getenv("ENVIRONMENT") or "production"
+    ).lower()
     if environment != "development":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

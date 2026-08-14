@@ -84,6 +84,8 @@ class JWTManager:
         # Blacklist key prefix
         self.blacklist_prefix = "jwt_blacklist"
         self.session_prefix = "user_session"
+        # Used when Redis is unavailable so logout still binds this process.
+        self._memory_blacklist: Dict[str, int] = {}
     
     def _get_redis_client(self) -> redis.Redis:
         """Get Redis client for token blacklisting"""
@@ -366,8 +368,15 @@ class JWTManager:
                 self.redis_client.setex(blacklist_key, ttl, "1")
                 logger.info(f"Token revoked and added to blacklist")
             else:
-                # Fallback to in-memory storage (not persistent)
-                logger.warning("Redis not available, token revocation not persistent")
+                if not hasattr(self, "_memory_blacklist") or self._memory_blacklist is None:
+                    self._memory_blacklist = {}
+                expiry = int(exp) if exp else int(
+                    datetime.now(timezone.utc).timestamp()
+                ) + ttl
+                self._memory_blacklist[token_hash] = expiry
+                logger.warning(
+                    "Redis not available, token revocation stored in-process only"
+                )
             
             # Revoke session if applicable
             session_id = unverified_payload.get("session_id")
@@ -385,13 +394,20 @@ class JWTManager:
     def _is_token_blacklisted(self, token: str) -> bool:
         """Check if a token is in the blacklist"""
         try:
-            if not self.redis_client:
-                return False
-            
             token_hash = hashlib.sha256(token.encode()).hexdigest()
             blacklist_key = f"{self.blacklist_prefix}:{token_hash}"
-            return self.redis_client.exists(blacklist_key)
-            
+            if self.redis_client:
+                return bool(self.redis_client.exists(blacklist_key))
+
+            memory = getattr(self, "_memory_blacklist", None) or {}
+            expiry = memory.get(token_hash)
+            if expiry is None:
+                return False
+            if expiry <= int(datetime.now(timezone.utc).timestamp()):
+                memory.pop(token_hash, None)
+                return False
+            return True
+
         except Exception as e:
             logger.error(f"Error checking token blacklist: {e}")
             return False

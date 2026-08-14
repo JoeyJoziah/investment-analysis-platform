@@ -15,8 +15,9 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
@@ -46,6 +47,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_ML_PUBLIC_PATHS = {"/health"}
+
+
+@app.middleware("http")
+async def require_ml_api_token(request: Request, call_next):
+    """Require ML_API_TOKEN on every path except /health."""
+    if request.url.path in _ML_PUBLIC_PATHS:
+        return await call_next(request)
+    expected = os.getenv("ML_API_TOKEN")
+    if not expected:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "ML_API_TOKEN is not configured"},
+        )
+    auth = request.headers.get("authorization") or ""
+    token = request.headers.get("x-api-token") or ""
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    if token != expected:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    return await call_next(request)
 
 # Global variables
 loaded_models = {}
@@ -302,7 +325,7 @@ if __name__ == "__main__":
     # Run server
     uvicorn.run(
         "ml_api_server:app",
-        host="0.0.0.0",
+        host=os.getenv("ML_BIND_HOST", "127.0.0.1"),
         port=8001,
         reload=False,
         log_level="info"

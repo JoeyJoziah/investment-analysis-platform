@@ -454,11 +454,12 @@ async def withdraw_consent(
             )
 
         raw_ip = get_client_ip(request)
+        ip_address = gdpr_service.anonymize_ip(raw_ip)
 
         consent_id = await gdpr_service.withdraw_consent(
             user_id=user_id,
             consent_type=consent_type_enum,
-            ip_address=raw_ip,
+            ip_address=ip_address,
             session=db,
         )
 
@@ -468,7 +469,7 @@ async def withdraw_consent(
             granted=False,
             timestamp=datetime.now(timezone.utc),
             legal_basis="consent_withdrawal",
-            ip_address=gdpr_service.anonymize_ip(raw_ip)
+            ip_address=ip_address
         ))
 
     except HTTPException:

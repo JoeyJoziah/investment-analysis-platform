@@ -363,6 +363,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     print(f"broker-stated share positions: {len(desired)} symbol(s)")
 
+    if args.apply and not desired:
+        print(
+            "refusing --apply: desired position set is empty "
+            "(would wipe the book)",
+            file=sys.stderr,
+        )
+        return EXIT_UNUSABLE_SNAPSHOT
+
     if not args.apply:
         for symbol, position in sorted(desired.items()):
             print(f"  {symbol}: {position['qty']} @ avg {position['avg_cost']}")

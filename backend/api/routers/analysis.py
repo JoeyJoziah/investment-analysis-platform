@@ -27,6 +27,8 @@ from backend.ml.model_manager import get_model_manager
 from backend.exceptions import InsufficientDataError, ModelUnavailableError
 from backend.api.error_responses import raise_model_unavailable
 from backend.models.api_response import ApiResponse, success_response
+from backend.auth.oauth2 import get_current_user
+from backend.models.unified_models import User
 from backend.utils.numpy_serializer import sanitize_numpy
 from backend.services.analysis_service import (
     analysis_service,
@@ -224,7 +226,8 @@ async def analyze_stock(
     request: AnalysisRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_async_db_session),
-    analysis_svc = Depends(get_analysis_service)
+    analysis_svc = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[AnalysisResponse]:
     """
     Perform comprehensive analysis on a single stock with real data integration.
@@ -614,6 +617,7 @@ async def batch_analysis(
     request: BatchAnalysisRequest,
     db: AsyncSession = Depends(get_async_db_session),
     analysis_svc = Depends(get_analysis_service),
+    current_user: User = Depends(get_current_user),
 ) -> ApiResponse[List[AnalysisResponse]]:
     """Analyze multiple stocks at once"""
 
@@ -626,7 +630,13 @@ async def batch_analysis(
             include_news_sentiment=False
         )
 
-        result = await analyze_stock(analysis_req, BackgroundTasks(), db=db, analysis_svc=analysis_svc)
+        result = await analyze_stock(
+            analysis_req,
+            BackgroundTasks(),
+            db=db,
+            analysis_svc=analysis_svc,
+            current_user=current_user,
+        )
         results.append(result.data)
 
     return success_response(data=results)

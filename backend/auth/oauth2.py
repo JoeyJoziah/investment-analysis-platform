@@ -172,34 +172,17 @@ def create_tokens(user: User, request: Optional[Request] = None) -> dict:
 
 
 def decode_access_token(token: str) -> TokenData:
-    """Decode and validate a JWT access token.
+    """Decode and validate a JWT access token via jwt_manager only (RS256).
 
-    Primary path: the structured jwt_manager (RS256). Fallback: the HS256 tokens minted
-    by backend.api.routers.auth (login/register), signed with JWT_SECRET_KEY. The
-    fallback lets a single login token be accepted across ALL oauth2-protected endpoints
-    (settings, recommendations, etc.), not only auth.py's own /me. This reuses the
-    already-trusted auth.py token -- it does not introduce a new trust path or weaken
-    the RS256 path (the HS256 secret is the server-side JWT_SECRET_KEY).
+    HS256 fallback was removed: it accepted tokens without iss/aud/type and,
+    outside production, against a source-committed default secret.
     """
     payload = None
     try:
         payload = get_jwt_manager().verify_token(token, TokenType.ACCESS)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Token rejected by jwt_manager: %s", exc)
         payload = None
-
-    if not payload:
-        try:
-            payload = jwt.decode(
-                token,
-                SecurityConfig.JWT_SECRET_KEY,
-                algorithms=[
-                    SecurityConfig.JWT_ALGORITHM,
-                    SecurityConfig.JWT_ALGORITHM_FALLBACK,
-                ],
-            )
-        except Exception as e:
-            logger.warning(f"Token rejected by jwt_manager and HS256 fallback: {e}")
-            payload = None
 
     if not payload:
         raise HTTPException(

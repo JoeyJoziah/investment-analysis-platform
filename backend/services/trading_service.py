@@ -39,9 +39,20 @@ class TradingService:
     def __init__(self):
         self.repository = portfolio_repository
 
+    async def _owned_portfolio(
+        self,
+        portfolio_id: int,
+        user_id: Optional[int],
+    ):
+        """Load a portfolio only when ``user_id`` owns it. Missing owner → miss."""
+        if user_id is None:
+            return None
+        return await self.repository.get_owned_portfolio(portfolio_id, user_id)
+
     async def validate_order(
         self,
-        order_data: Dict[str, Any]
+        order_data: Dict[str, Any],
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Validate a trading order.
@@ -55,6 +66,7 @@ class TradingService:
                 - quantity: float
                 - price: Optional[float] (required for limit orders)
                 - stop_price: Optional[float] (required for stop orders)
+            user_id: Authenticated owner. Required to load the book.
 
         Returns:
             Dictionary with validation result and any errors
@@ -98,12 +110,16 @@ class TradingService:
             if not symbol or not symbol.isalpha() or len(symbol) > 5:
                 errors.append("Invalid stock symbol format")
 
-            # Validate portfolio exists and has sufficient funds/shares
+            # Validate portfolio exists, is owned, and has sufficient funds/shares
             portfolio_id = order_data.get('portfolio_id')
             if portfolio_id:
-                portfolio = await self.repository.get_by_id(portfolio_id)
+                portfolio = await self._owned_portfolio(portfolio_id, user_id)
                 if not portfolio:
-                    errors.append(f"Portfolio {portfolio_id} not found")
+                    return {
+                        'valid': False,
+                        'errors': ['Portfolio not found'],
+                        'not_found': True,
+                    }
                 else:
                     # For sell orders, validate sufficient shares
                     if order_data.get('side') == OrderSide.SELL:
@@ -137,7 +153,8 @@ class TradingService:
     async def execute_trade(
         self,
         portfolio_id: int,
-        order: Dict[str, Any]
+        order: Dict[str, Any],
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Execute a trade for a portfolio.
@@ -150,22 +167,24 @@ class TradingService:
                 - quantity: float
                 - price: float
                 - order_type: OrderType
+            user_id: Authenticated owner. Required.
 
         Returns:
             Dictionary with execution result
         """
         try:
-            # Validate order first
+            # Validate order first (includes ownership)
             validation = await self.validate_order({
                 **order,
                 'portfolio_id': portfolio_id
-            })
+            }, user_id=user_id)
 
             if not validation.get('valid'):
                 return {
                     'success': False,
                     'error': 'Order validation failed',
-                    'validation_errors': validation.get('errors', [])
+                    'validation_errors': validation.get('errors', []),
+                    'not_found': bool(validation.get('not_found')),
                 }
 
             symbol = order['symbol']
@@ -189,7 +208,8 @@ class TradingService:
                     stock_id=stock_id,
                     quantity=quantity,
                     price=price,
-                    transaction_type='buy'
+                    transaction_type='buy',
+                    owner_user_id=user_id,
                 )
 
                 if not position:
@@ -204,7 +224,8 @@ class TradingService:
                         stock_id=stock_id,
                         quantity=quantity,
                         price=price,
-                        transaction_type='sell'
+                        transaction_type='sell',
+                        owner_user_id=user_id,
                     )
                 except InvalidPositionError as exc:
                     return {
@@ -234,7 +255,8 @@ class TradingService:
     async def calculate_portfolio_impact(
         self,
         portfolio_id: int,
-        trade: Dict[str, Any]
+        trade: Dict[str, Any],
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Calculate the impact of a trade on portfolio metrics.
@@ -251,12 +273,13 @@ class TradingService:
             Dictionary containing impact analysis
         """
         try:
-            # Get current portfolio state
-            portfolio = await self.repository.get_by_id(portfolio_id)
+            # Get current portfolio state (owner only)
+            portfolio = await self._owned_portfolio(portfolio_id, user_id)
             if not portfolio:
                 return {
                     'success': False,
-                    'error': f'Portfolio {portfolio_id} not found'
+                    'error': 'Portfolio not found',
+                    'not_found': True,
                 }
 
             # Get current allocation

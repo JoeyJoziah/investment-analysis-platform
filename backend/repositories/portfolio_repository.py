@@ -3,7 +3,7 @@ Portfolio Repository
 Specialized async repository for portfolio management operations.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import logging
@@ -18,6 +18,38 @@ from backend.config.database import get_db_session
 from backend.exceptions import StaleDataError, InsufficientBalanceError, InvalidPositionError
 
 logger = logging.getLogger(__name__)
+
+
+class PositionView:
+    """ORM adapter: service code expects .symbol / .average_cost / .realized_gain."""
+
+    def __init__(self, position: Position, stock: Optional[Stock] = None):
+        self.id = position.id
+        self.quantity = position.quantity
+        self.average_cost = position.avg_cost_basis
+        self.realized_gain = getattr(position, "realized_gain_loss", None)
+        self.symbol = stock.symbol if stock is not None else None
+        self.stock_id = position.stock_id
+        self.stock = stock
+
+
+class TransactionView:
+    """ORM adapter: service code expects .symbol on a transaction row."""
+
+    def __init__(self, transaction: Transaction, stock: Optional[Stock] = None):
+        self.id = transaction.id
+        txn_type = transaction.transaction_type
+        self.transaction_type = txn_type.value if hasattr(txn_type, "value") else txn_type
+        self.quantity = transaction.quantity
+        self.price = transaction.price
+        self.total_amount = transaction.total_amount
+        self.fees = getattr(transaction, "fees", None)
+        self.notes = getattr(transaction, "notes", None)
+        self.created_at = getattr(transaction, "created_at", None) or getattr(
+            transaction, "trade_date", None
+        )
+        self.symbol = stock.symbol if stock is not None else None
+        self.stock_id = transaction.stock_id
 
 
 class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
@@ -57,6 +89,107 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         else:
             async with get_db_session(readonly=True) as session:
                 return await _get_user_portfolios(session)
+
+    async def get_user_portfolio(
+        self,
+        portfolio_id: Union[str, int],
+        user_id: int,
+        session: Optional[AsyncSession] = None,
+    ) -> Optional[Portfolio]:
+        """Return a portfolio only if it belongs to ``user_id``.
+
+        Accepts the integer PK, its string form, or the UUID ``portfolio_id``.
+        A miss (wrong owner or unknown id) is ``None`` — callers must 404.
+        """
+
+        async def _get(session: AsyncSession) -> Optional[Portfolio]:
+            owner = Portfolio.user_id == user_id
+            if isinstance(portfolio_id, int) or (
+                isinstance(portfolio_id, str) and portfolio_id.isdigit()
+            ):
+                pk = int(portfolio_id)
+                query = select(Portfolio).where(
+                    and_(
+                        owner,
+                        or_(
+                            Portfolio.id == pk,
+                            Portfolio.portfolio_id == str(portfolio_id),
+                        ),
+                    )
+                )
+            else:
+                query = select(Portfolio).where(
+                    and_(owner, Portfolio.portfolio_id == str(portfolio_id))
+                )
+            result = await session.execute(query)
+            return result.scalar_one_or_none()
+
+        if session:
+            return await _get(session)
+        async with get_db_session(readonly=True) as session:
+            return await _get(session)
+
+    async def get_owned_portfolio(
+        self,
+        portfolio_id: int,
+        user_id: int,
+        session: Optional[AsyncSession] = None,
+    ) -> Optional[Portfolio]:
+        """Integer-PK ownership lookup used by the trading service."""
+        return await self.get_user_portfolio(portfolio_id, user_id, session=session)
+
+    async def get_portfolio_positions(
+        self,
+        portfolio_id: int,
+        session: Optional[AsyncSession] = None,
+    ) -> List[PositionView]:
+        """Positions for a portfolio, adapted with ticker symbols."""
+
+        async def _get(session: AsyncSession) -> List[PositionView]:
+            query = (
+                select(Position)
+                .options(joinedload(Position.stock))
+                .where(Position.portfolio_id == portfolio_id)
+            )
+            result = await session.execute(query)
+            rows = result.unique().scalars().all()
+            return [PositionView(row, row.stock) for row in rows]
+
+        if session:
+            return await _get(session)
+        async with get_db_session(readonly=True) as session:
+            return await _get(session)
+
+    async def get_recent_transactions(
+        self,
+        portfolio_id: int,
+        limit: int = 10,
+        session: Optional[AsyncSession] = None,
+    ) -> List[TransactionView]:
+        """Recent trades for a portfolio, adapted with ticker symbols."""
+
+        async def _get(session: AsyncSession) -> List[TransactionView]:
+            query = (
+                select(Transaction)
+                .where(Transaction.portfolio_id == portfolio_id)
+                .order_by(Transaction.trade_date.desc())
+                .limit(limit)
+            )
+            result = await session.execute(query)
+            txs = result.scalars().all()
+            stock_ids = [tx.stock_id for tx in txs if tx.stock_id]
+            stocks: Dict[int, Stock] = {}
+            if stock_ids:
+                stock_result = await session.execute(
+                    select(Stock).where(Stock.id.in_(stock_ids))
+                )
+                stocks = {stock.id: stock for stock in stock_result.scalars().all()}
+            return [TransactionView(tx, stocks.get(tx.stock_id)) for tx in txs]
+
+        if session:
+            return await _get(session)
+        async with get_db_session(readonly=True) as session:
+            return await _get(session)
     
     async def get_default_portfolio(
         self,
@@ -184,6 +317,7 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
         price: Decimal,
         transaction_type: str = 'buy',
         expected_portfolio_version: Optional[int] = None,
+        owner_user_id: Optional[int] = None,
         session: Optional[AsyncSession] = None
     ) -> Optional[Position]:
         """
@@ -198,6 +332,7 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
             price: Price per share
             transaction_type: 'buy' or 'sell'
             expected_portfolio_version: Expected version for optimistic locking
+            owner_user_id: When set, the row lock also requires Portfolio.user_id
             session: Optional existing session
 
         Returns:
@@ -209,10 +344,16 @@ class PortfolioRepository(AsyncCRUDRepository[Portfolio]):
             InvalidPositionError: If trying to sell more than owned
         """
         async def _add_position(session: AsyncSession) -> Optional[Position]:
-            # Lock portfolio for update to prevent race conditions
-            portfolio_query = select(Portfolio).where(
-                Portfolio.id == portfolio_id
-            ).with_for_update()
+            # Lock portfolio for update to prevent race conditions.
+            # Ownership is required when the caller supplies owner_user_id.
+            if owner_user_id is not None:
+                portfolio_query = select(Portfolio).where(
+                    and_(Portfolio.id == portfolio_id, Portfolio.user_id == owner_user_id)
+                ).with_for_update()
+            else:
+                portfolio_query = select(Portfolio).where(
+                    Portfolio.id == portfolio_id
+                ).with_for_update()
 
             portfolio_result = await session.execute(portfolio_query)
             portfolio = portfolio_result.scalar_one_or_none()
