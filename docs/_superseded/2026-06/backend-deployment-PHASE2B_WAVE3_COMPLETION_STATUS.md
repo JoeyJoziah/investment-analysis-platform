@@ -1,5 +1,8 @@
 # Phase 2B Wave 3 Completion Status
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Completed Phases (3A, 3B, 3D)
 
 ### Phase 3A: Async Fixture Decorators ✅ (Commit 982d511)

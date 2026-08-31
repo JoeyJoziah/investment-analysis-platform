@@ -1,5 +1,8 @@
 # Phase 2B Wave 3 Phases 3A & 3B Completion Report
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Overview
 Completed Phases 3A (async fixtures) and 3B (fixture parameters) of Wave 3 remediation.
 

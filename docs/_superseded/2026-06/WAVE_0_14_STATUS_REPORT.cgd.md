@@ -77,6 +77,9 @@ hitl-claims:
     round: B
 ---
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 # Wave 0-14 Status Report (Clarity-Gated)
 
 **Repository:** JoeyJoziah/investment-analysis-platform  

@@ -1,5 +1,8 @@
 # Phase 2B Root Cause Analysis - Complete Summary
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Overview
 Comprehensive analysis of ERROR test root causes across all waves of Phase 2B remediation.
 

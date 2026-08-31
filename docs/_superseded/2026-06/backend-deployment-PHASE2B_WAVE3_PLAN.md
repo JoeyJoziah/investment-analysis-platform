@@ -1,5 +1,8 @@
 # Phase 2B Wave 3 Plan - Remaining 110 ERROR Tests
 
+> **SUPERSEDED (2026-06): historical snapshot, not current truth. See [docs/STATUS.md](../../STATUS.md).**
+
+
 ## Overview
 Analysis of remaining 110 ERROR tests after Wave 1 (async fixtures) and Wave 2 (JWT/CacheManager parameter fixes).
 

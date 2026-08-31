@@ -1,8 +1,10 @@
 # Investment Analysis Platform
 
+**Version: 1.0.0** · **Last Updated: 2026-08-11**
+
 A comprehensive, AI-powered investment analysis and recommendation platform that analyzes 6,000+ publicly traded stocks from NYSE, NASDAQ, and AMEX exchanges.
 
-**Status**: Production-Ready | **Budget**: <$50/month | **Tests**: 5026 passing | **Routers**: 18 registered in `backend/api/main.py` (plus `monitoring.py` router file present but not wired)
+**Status**: Advanced-beta (not production-ready) — see [docs/STATUS.md](docs/STATUS.md) for authoritative state | **Budget**: <$50/month target | **Tests**: ~5,298 collected | **Routers**: 18 registered in `backend/api/main.py` (plus `monitoring.py` router file present but not wired)
 
 ---
 

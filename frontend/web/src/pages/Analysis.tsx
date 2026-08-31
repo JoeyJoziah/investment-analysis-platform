@@ -27,6 +27,7 @@ import { addToWatchlist, removeFromWatchlist, fetchWatchlist } from '../store/sl
 import { addNotification } from '../store/slices/appSlice';
 import { AnalysisHeader, EmptyTickerView, LoadingErrorView } from '../components/analysis/AnalysisFilters';
 import { ChartTabContent, TechnicalTabContent } from '../components/analysis/AnalysisCharts';
+import InvestmentDisclaimer from '../components/disclaimers/InvestmentDisclaimer';
 import {
   FundamentalTabContent,
   NewsTabContent,
@@ -213,6 +214,7 @@ const Analysis: React.FC = () => {
 
   return (
     <Container maxWidth="xl">
+      <InvestmentDisclaimer context="analysis" />
       <AnalysisHeader
         quote={quote}
         isInWatchlist={isInWatchlist}
