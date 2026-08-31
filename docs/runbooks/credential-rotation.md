@@ -1,8 +1,11 @@
 # Credential Rotation Runbook — Live Postgres + Redis
 
-**Version: 1.0.0** · **Last Updated: 2026-06-17**
+**Version: 1.1.0** · **Last Updated: 2026-08-11**
 
-**Status:** Authored, awaiting a scheduled maintenance window. This runbook is the
+**Status:** Authorized (U2 decision, 2026-08-11) — ONE maintenance window covering
+§1–§8 (PG+Redis), the §12 additional batches, and the §9 KDF rotation (now bundled
+per U2; §9's opt-in framing is superseded). Operator executes; see §12 for the full
+window plan. This runbook is the
 operational procedure that resolves the git-history credential exposure tracked in
 **issue #219**.
 
@@ -336,3 +339,95 @@ Do not let KDF complications block or delay the PG/Redis rotation that closes #2
 - (authored) — PG+Redis rotation runbook created as the #219-closing procedure,
   awaiting maintenance window. Soak duration left as `__MAINTAINER_INPUT__` for the
   operator to size against pool TTL + one ingest/API cycle.
+
+## 12. U2 window extension (2026-08) — additional batches in the SAME window
+
+**Decision U2 (2026-08-11):** one maintenance window rotates everything below in
+addition to §1–§8. Sequencing inside the window: PG → Redis (§2) → Batch B → Batch C
+→ Batch D → KDF (§9, now bundled) → post-window hygiene (§12.5). Every batch keeps
+the §0 principles: pre-stage in 1Password, old value valid until revoke, per-batch
+GO/NO-GO.
+
+### 12.1 Batch B — vendor API keys (F8-16-001, critical)
+
+Rotate at each provider console, then replace the tracked values with placeholders.
+Eight keys: `ALPHA_VANTAGE`, `FINNHUB`, `POLYGON`, `NEWS`, `FMP`, `MARKETAUX`,
+`FRED`, `OPENWEATHER` (`*_API_KEY`). Reissue latency varies by vendor — request the
+new keys FIRST (start-of-window), swap + verify ingest, then delete the old keys at
+the provider (their "revoke").
+
+Tracked locations (all must be placeholder after the window):
+`.env.production.example:82-85` · `.env.secure:64-80` ·
+`.env_backup_DONOTUSE/.env.production.backup:5-14` ·
+`.env_backup_DONOTUSE/.env.production.example:91-94` ·
+`.env_backup_DONOTUSE/.env.secure:63-72`
+
+Acceptance: `python3 -c "import re;[print(l.split('=')[0]) for l in open('.env.production.example') if re.match(r'^[A-Z_]+_API_KEY=(?!your_)',l)]"` prints nothing.
+
+### 12.2 Batch C — app signing secrets + Airflow (F8-16-002, critical)
+
+- `SECRET_KEY` + `JWT_SECRET_KEY` (`.env.secure:21-22`, backup copies): rotate; JWT
+  rotation invalidates outstanding tokens — do this inside the window, not before.
+- `AIRFLOW_SECRET_KEY` (`.env.airflow:15`): currently BYTE-IDENTICAL to the app
+  `SECRET_KEY`. Give Airflow its own distinct key — do not rotate them to a shared
+  value again.
+- `AIRFLOW_FERNET_KEY` (`.env.airflow:12`): Fernet rotation re-encrypts stored
+  Airflow connections — run `airflow rotate-fernet-key` with old+new keys configured,
+  verify connections decrypt, THEN drop the old key.
+
+### 12.3 Batch D — script/service credentials (scope 17 + baseline audit 2026-08-11)
+
+The adjudicated `.secrets.baseline` (20 `is_secret: true` entries) is the
+authoritative inventory; these locations must all be dead after the window:
+
+- `scripts/testing/test_all_passwords.py` — 4 service creds (scope 17)
+- `scripts/testing/test_docker_connections.py:81` — Elasticsearch basic-auth (store
+  decommissioned; confirm the credential is dead rather than rotating)
+- `.context/refresh_analysis.sh:99` — exported `PGPASSWORD` (NOT in the prior audit
+  inventory; found by the 2026-08-11 baseline adjudication; rotates with the §3 PG batch)
+- `scripts/setup_airflow_complete.sh:133-140` — hardcoded Airflow DB + Flower
+  passwords (rotate with Batch C; replace with env lookups)
+- `scripts/deployment/blue_green_deploy.sh:253` — embedded `DATABASE_URL` (rotates
+  with the §3 PG batch; replace with env lookup)
+
+### 12.4 Complete tracked-location inventory for the §3 PG/Redis pair (F8-16-019)
+
+The §1 checklist's inventory plus these previously-missing locations — sweep ALL of
+them post-rotation: `.env.secure:37,38,45` ·
+`.env_backup_DONOTUSE/.env.production.backup:20,96` ·
+`scripts/deployment/start_data_loading.sh:58` (anchor) · embedded `DATABASE_URL` /
+`REDIS_URL` connection strings in both env files ·
+`docs/reports/security-audit-report.md:37-39` and
+`docs/deployment/PHASE6_PHASE1_PROGRESS.md:34` (credential-bearing docs — redact in
+place or archive) · `.context/refresh_analysis.sh:99` ·
+`scripts/deployment/blue_green_deploy.sh:253`.
+
+### 12.5 Post-window hygiene (ORDER MATTERS — all AFTER revoke completes)
+
+1. `git rm --cached` the tracked secret-bearing env files (`.env.secure`,
+   `.env.airflow`, `.env.production`, `frontend/web/.env.production`) so the
+   existing `.gitignore` rules become real (F8-16-006).
+2. `git rm -r --cached .env_backup_DONOTUSE/` then delete the directory
+   (F8-16-018 / U6). **Deletion is hygiene, not remediation** — history still
+   holds the old values; only the completed rotation closes the exposure.
+3. Run `scripts/security/git_secrets_cleanup.sh` (never yet run).
+4. Verify with the FIXED scanners (landed pre-window in PR-D):
+   `gitleaks detect --config .gitleaks.toml --redact` over the working tree, and
+   `detect-secrets scan --baseline .secrets.baseline` — both must report nothing
+   new. Flip the 20 `is_secret: true` baseline entries to resolved/removed as the
+   locations are cleaned, keeping the baseline the living rotation ledger.
+5. Re-run the §12.1 acceptance grep + `git ls-files | grep -E '^\.env\.(secure|airflow)$'`
+   (must be empty) and close #219 + the F8-16-001/002 batch findings.
+6. **Flip the secrets scanners from advisory to gating** (F8-14-004): in
+   `.github/workflows/security-scan.yml`, remove `continue-on-error: true`
+   (and the `|| true`) from the TruffleHog and GitLeaks steps and drop the
+   "advisory until U2 rotation completes" suffix from their names. Gating
+   them before this window would have tripped on the known tracked secrets
+   on every run; after step 4's clean scans they must gate permanently.
+
+### 12.6 Window acceptance (PRD §4)
+
+- 0 tracked credential-shaped values outside the parked set
+- `.gitleaks.toml` extends defaults (F8-08-003, landed pre-window)
+- `.secrets.baseline` fully adjudicated, 0 nulls (F8-08-004, landed pre-window)
+- #219 closed on rotation evidence, not working-tree state

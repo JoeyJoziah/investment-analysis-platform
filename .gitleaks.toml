@@ -2,6 +2,14 @@
 
 title = "Investment Analysis App Secret Detection"
 
+# F8-08-003: extend the default ruleset instead of replacing it. Without
+# this block, gitleaks v8 runs ONLY the custom rules below — no
+# generic-api-key, high-entropy or private-key detection at all, which is
+# the mechanical reason the 2026-08 audit's hand-found credentials were
+# never flagged by CI.
+[extend]
+useDefault = true
+
 # Custom rules for financial data APIs and services
 [[rules]]
 id = "alpha-vantage-api-key"
@@ -25,6 +33,32 @@ secretGroup = 2
 id = "news-api-key"
 description = "NewsAPI Key"
 regex = '''(?i)(news[_-]?api[_-]?key|newsapi[_-]?key)['"\s]*[:=]\s*['"]?([a-f0-9]{32})['"]?'''
+secretGroup = 2
+
+# F8-08-003: the four leaked vendor keys (F8-16-001) that previously had
+# no matching rule.
+[[rules]]
+id = "fmp-api-key"
+description = "Financial Modeling Prep API Key"
+regex = '''(?i)(fmp[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([A-Za-z0-9]{20,64})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "marketaux-api-key"
+description = "Marketaux API Key"
+regex = '''(?i)(marketaux[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([A-Za-z0-9]{16,64})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "fred-api-key"
+description = "FRED API Key"
+regex = '''(?i)(fred[_-]?api[_-]?key)['"\s]*[:=]\s*['"]?([a-f0-9]{16,64})['"]?'''
+secretGroup = 2
+
+[[rules]]
+id = "openweather-api-key"
+description = "OpenWeather API Key"
+regex = '''(?i)(openweather[_-]?(?:map[_-]?)?api[_-]?key)['"\s]*[:=]\s*['"]?([a-f0-9]{16,64})['"]?'''
 secretGroup = 2
 
 [[rules]]
@@ -83,18 +117,26 @@ secretGroup = 2
 # File path allowlists (files to ignore)
 [allowlist]
 description = "Allowlisted files"
-files = [
+# F8-08-003: the blanket test-file and markdown allowlist entries are
+# gone — they suppressed scanning of exactly the files where real service
+# creds (scripts/testing/test_all_passwords.py, scope 17) and
+# credential-bearing docs (F-08-009) live. Genuine fixtures should use
+# narrow path-specific allowlist entries instead.
+#
+# NOTE: gitleaks v8's path allowlist key is `paths` — the former separate
+# `files` list was a v7-ism that v8 silently ignored, so everything in it
+# was never actually allowlisted. All file patterns live in `paths` now.
+paths = [
     '''(.*?)(jpg|gif|doc|pdf|bin|svg|socket)$''',
-    '''^\.env\.example$''',
-    '''^\.env\.template$''',
-    '''.*test.*\.py$''',
-    '''.*_test\.py$''',
-    '''.*\.md$''',
+    '''(^|/)\.env\.example$''',
+    '''(^|/)\.env\.template$''',
     '''package-lock\.json$''',
     '''yarn\.lock$''',
-]
-
-paths = [
+    # detect-secrets ledger: stores SHA1 hashes of secrets, never plaintext —
+    # scanning it yields hundreds of generic-api-key false positives.
+    # (^|/) so the match survives both git mode (relative paths) and
+    # --no-git mode (absolute paths).
+    '''(^|/)\.secrets\.baseline$''',
     '''node_modules/''',
     '''\.git/''',
     '''htmlcov/''',
