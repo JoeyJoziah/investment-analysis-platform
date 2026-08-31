@@ -157,8 +157,8 @@ def main():
     
     docker_files = [
         ("docker-compose.yml", "Docker Compose"),
-        ("infrastructure/docker/backend/Dockerfile", "Backend Dockerfile"),
-        ("infrastructure/docker/frontend/Dockerfile", "Frontend Dockerfile"),
+        ("Dockerfile.backend", "Backend Dockerfile"),
+        ("Dockerfile.frontend", "Frontend Dockerfile"),
         ("infrastructure/docker/postgres/init.sql", "Postgres init script"),
     ]
     

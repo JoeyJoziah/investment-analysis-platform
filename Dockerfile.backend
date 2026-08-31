@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # HTTP from prdownloads.sourceforge.net with no checksum — MITM path to root-on-
 # build-host). Mirrors the workflow-side fix in
 # .github/workflows/comprehensive-testing.yml and the optimized variant in
-# infrastructure/docker/backend/Dockerfile.optimized.
+# the retired infrastructure backend image variant (deleted in T3.1).
 RUN apt-get update && apt-get install -y --no-install-recommends bash autoconf automake libtool && \
     TA_LIB_VERSION="0.4.0" && \
     TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651" && \
@@ -99,7 +99,9 @@ RUN mkdir -p /app/logs /app/data /app/ml_models /app/cache && \
 RUN ldconfig
 
 # Set environment variables
-ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages \
+# F8-13-025: no version-pinned site-packages entry — PATH picks up
+# /home/appuser/.local/bin and Python resolves the user site itself.
+ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     PATH=/home/appuser/.local/bin:$PATH \
     NLTK_DATA=/usr/local/share/nltk_data
@@ -127,6 +129,15 @@ CMD ["gunicorn", "backend.api.main:app", \
      "--max-requests", "1000", \
      "--max-requests-jitter", "50"]
 
+# Stage: Development — used by docker-compose.dev.yml `target: development`
+# (F8-13-007). runtime already ships uvicorn; --reload falls back to
+# StatReload when watchfiles is absent. Source is bind-mounted by the
+# overlay, so no extra COPY is needed.
+FROM runtime AS development
+ENV DEBUG=true \
+    PYTHONDONTWRITEBYTECODE=1
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
 # Stage 3: Test — used by docker-compose.test.yml `target: test`
 FROM runtime AS test
 USER root
@@ -141,5 +152,5 @@ COPY --chown=appuser:appuser requirements-dev.txt /app/requirements-dev.txt
 RUN pip install --no-cache-dir --user -r /app/requirements-dev.txt || true
 USER appuser
 WORKDIR /app
-ENV PYTHONPATH=/app:/home/appuser/.local/lib/python3.12/site-packages
+ENV PYTHONPATH=/app
 CMD ["pytest", "backend/tests", "-q", "--tb=short"]

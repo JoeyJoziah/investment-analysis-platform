@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
-COPY .env* ./
+# F8-13-013: no .env baking — configuration is injected via the
+# compose environment blocks (docker-compose.ml-production.yml).
 
 # Create necessary directories
 RUN mkdir -p backend/ml_models backend/ml_logs backend/ml_registry
@@ -35,4 +36,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8001/health || exit 1
 
 # Run the ML API server
+# F8-13-013: run as non-root, mirroring Dockerfile.backend.
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 CMD ["python3", "backend/ml/ml_api_server.py"]

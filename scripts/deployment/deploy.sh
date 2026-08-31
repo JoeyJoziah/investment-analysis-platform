@@ -111,7 +111,7 @@ run_tests() {
         log_info "Running tests..."
         
         # Build test image
-        docker build -f Dockerfile.backend -t investment-backend:test .
+        docker build -f Dockerfile.backend --target runtime -t investment-backend:test .
         
         # Run tests
         docker run --rm \

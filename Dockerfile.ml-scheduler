@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt schedule
 # Copy application code
 COPY backend/ ./backend/
 COPY scripts/ ./scripts/
-COPY .env* ./
+# F8-13-013: no .env baking — configuration is injected via the
+# compose environment blocks (docker-compose.ml-production.yml).
 
 # Create necessary directories
 RUN mkdir -p backend/ml_models backend/ml_logs backend/ml_registry data/training
@@ -29,4 +30,9 @@ ENV ML_MODELS_PATH=/app/backend/ml_models
 ENV ML_LOGS_PATH=/app/backend/ml_logs
 
 # Run the ML scheduler
+# F8-13-013: run as non-root, mirroring Dockerfile.backend.
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 CMD ["python3", "scripts/ml_scheduler.py", "--daemon"]

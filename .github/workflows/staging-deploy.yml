@@ -83,6 +83,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.backend
+        target: runtime
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.backend-meta.outputs.tags }}
@@ -99,6 +100,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile.frontend
+        target: production
         platforms: linux/amd64,linux/arm64
         push: true
         tags: ${{ steps.frontend-meta.outputs.tags }}

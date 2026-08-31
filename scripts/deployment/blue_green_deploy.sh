@@ -193,7 +193,7 @@ build_images() {
     if [[ "$SERVICES_TO_DEPLOY" =~ "backend" ]]; then
         log "INFO" "Building backend image..."
         docker build \
-            -f "${PROJECT_ROOT}/infrastructure/docker/backend/Dockerfile.optimized" \
+            -f "${PROJECT_ROOT}/Dockerfile.backend" \
             -t "investment-backend:${VERSION}" \
             -t "investment-backend:${target_env}" \
             --target runtime \
@@ -206,12 +206,13 @@ build_images() {
     if [[ "$SERVICES_TO_DEPLOY" =~ "frontend" ]]; then
         log "INFO" "Building frontend image..."
         docker build \
-            -f "${PROJECT_ROOT}/infrastructure/docker/frontend/Dockerfile.optimized" \
+            -f "${PROJECT_ROOT}/Dockerfile.frontend" \
             -t "investment-frontend:${VERSION}" \
             -t "investment-frontend:${target_env}" \
+            --target production \
             --build-arg VITE_APP_VERSION="$VERSION" \
             --build-arg VITE_APP_ENV="$ENVIRONMENT" \
-            "${PROJECT_ROOT}/frontend/web"
+            "$PROJECT_ROOT"
     fi
     
     log "INFO" "Image build completed successfully"

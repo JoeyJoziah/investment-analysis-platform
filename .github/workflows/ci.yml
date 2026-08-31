@@ -550,6 +550,7 @@ else:
       with:
         context: .
         file: ./Dockerfile.backend
+        target: runtime
         push: false
         tags: test-backend:latest
         cache-from: type=gha,scope=backend-ci

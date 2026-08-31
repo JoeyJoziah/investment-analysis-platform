@@ -606,7 +606,7 @@ jobs:
 
       - name: Build backend Docker image
         run: |
-          docker build -f Dockerfile.backend -t investment-app-backend:test .
+          docker build -f Dockerfile.backend --target runtime -t investment-app-backend:test .
 
       - name: Build frontend Docker image
         run: |
