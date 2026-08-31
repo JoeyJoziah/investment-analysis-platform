@@ -4,6 +4,22 @@ Tests all the fixes implemented for the identified error patterns
 """
 
 import pytest
+
+# T2.7 disposition: this module is ORPHANED — it imports modules that were never
+# committed to this repository (backend.utils.async_database_fixed,
+# backend.utils.enhanced_data_quality, backend.utils.robust_error_handling) and
+# symbols that do not exist (BatchProcessor, DataQualityValidator). It tests
+# functionality that is not present in the codebase, so there is no source to
+# "fix". Skipped at module level (NOT deleted) so its existence stays on record
+# pending human disposition — delete vs. implement the referenced modules.
+# Tracked: .loki dead-letter T2.7-orphan-test.
+pytest.skip(
+    "orphaned: references never-committed modules/symbols "
+    "(async_database_fixed/BatchProcessor/DataQualityValidator, "
+    "enhanced_data_quality, robust_error_handling) — see dead-letter T2.7-orphan-test",
+    allow_module_level=True,
+)
+
 import pytest_asyncio
 import asyncio
 import logging
