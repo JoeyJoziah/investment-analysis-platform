@@ -43,12 +43,20 @@ on:
         description: 'Frontend image digest'
         value: ${{ jobs.build.outputs.frontend-digest }}
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     outputs:
       backend-image: ${{ steps.backend-meta.outputs.tags }}

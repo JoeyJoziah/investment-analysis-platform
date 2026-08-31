@@ -40,6 +40,11 @@ on:
         default: false
         type: boolean
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 concurrency:
   group: auto-sync-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
@@ -58,6 +63,10 @@ jobs:
     steps:
       - name: Analyze Trigger
         id: analyze
+        env:
+          # F8-14-009: workflow name reaches the shell via env, not
+          # YAML interpolation inside a quoted assignment.
+          TRIGGER_WORKFLOW: ${{ github.event.workflow_run.name }}
         run: |
           SHOULD_SYNC="true"
           REASON=""
@@ -79,7 +88,7 @@ jobs:
               fi
               ;;
             workflow_run)
-              REASON="Workflow '${{ github.event.workflow_run.name }}' completed"
+              REASON="Workflow '$TRIGGER_WORKFLOW' completed"
               if [[ "${{ github.event.workflow_run.conclusion }}" == "failure" ]]; then
                 PRIORITY="high"
               fi

@@ -23,14 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: AT-G3-1.1 — no untrusted github.event.* fields inlined into shell vars
+      - name: AT-G3-1.1 — deny-by-default untrusted interpolation guard (F8-14-006)
         run: |
           set -euo pipefail
-          # Catches `VAR="${{ github.event.* }}"` shell-style assignments inside
-          # run: blocks. The safe pattern is `env: VAR: ${{ ... }}` followed by
-          # `VAR="$VAR"` (or just `"$VAR"`) inside the script.
-          if grep -nE '(AUTHOR|TITLE|BODY|MESSAGE|NAME|TEXT|URL|REASON|COMMENT)="\$\{\{ *github\.event' .github/workflows/*.yml; then
-            echo "::error::Workflow shell-injection regression (F-14-001/002). Move the value to an env: block and dereference with \"\$VAR\"."
+          # F8-14-006: the old nine-name allowlist regex missed every new
+          # variable name (TAG=, PCT=, REASON=...). The Python scanner flags
+          # ANY github.event / inputs expression interpolated inside
+          # run:/script: blocks. Legacy sites live in the frozen baseline
+          # (burn-down list); NEW sites fail. Reviewed exceptions opt out
+          # with a 'guard: allow-interpolation' comment.
+          if ! python3 .github/scripts/injection_guard.py \
+              --baseline .github/scripts/injection_guard_baseline.txt; then
+            echo "::error::Workflow shell-injection regression (F-14-001/002/F8-14-006). Move the value to an env: block and dereference with \"\$VAR\"."
             exit 1
           fi
 
@@ -38,8 +42,10 @@ jobs:
         run: |
           set -euo pipefail
           # Catch wget OR curl HTTP (no -s requirement) plus bare URLs in shell.
+          # F8-14-007: scope includes all of .github/ so docs cannot
+          # re-seed the vulnerable recipe.
           if grep -rnE 'http://prdownloads\.sourceforge\.net' \
-              .github/workflows/ Dockerfile* infrastructure/ 2>/dev/null \
+              .github/ Dockerfile* infrastructure/ 2>/dev/null \
               | grep -vE 'workflow-injection-guard\.yml|::error::'; then
             echo "::error::Plaintext-HTTP TA-Lib download regression (F-14-003/F-13-009). Use https://github.com/ta-lib/ta-lib/releases/... + sha256sum -c."
             exit 1

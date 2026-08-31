@@ -63,7 +63,7 @@ All workflows have been standardized to:
 | `actions/download-artifact` | v4 | v3 |
 | `github/codeql-action/*` | v3 | v2 |
 
-**Note:** `staging-deploy.yml` and `production-deploy.yml` still reference `codeql-action/upload-sarif@v2` for SARIF uploads in their deploy pipelines.
+**Note:** `staging-deploy.yml` and `production-deploy.yml` upload SARIF via `codeql-action/upload-sarif@v3` (F-14-007 closed; guarded with `if: always() && hashFiles(...)` and per-scan `category:`).
 
 ## Features
 
@@ -327,7 +327,14 @@ fine for application code but not for CI service container connections.
 **3. TA-Lib Build Failures**
 TA-Lib requires the C library to be compiled from source on Ubuntu runners:
 ```bash
-wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+# F-14-003 / F-13-009: HTTPS release + sha256 verification — never the
+# plaintext-HTTP sourceforge mirror.
+TA_LIB_VERSION="0.4.0"
+TA_LIB_SHA256="9ff41efcb1c011a4b4b6dfc91610b06e39b1d7973ed5d4dee55029a0ac4dc651"
+curl -fsSL --proto '=https' --tlsv1.2 \
+  "https://github.com/ta-lib/ta-lib/releases/download/v${TA_LIB_VERSION}/ta-lib-${TA_LIB_VERSION}-src.tar.gz" \
+  -o ta-lib-0.4.0-src.tar.gz
+echo "${TA_LIB_SHA256}  ta-lib-0.4.0-src.tar.gz" | sha256sum -c -
 tar -xzf ta-lib-0.4.0-src.tar.gz
 cd ta-lib/ && ./configure --prefix=/usr && make && sudo make install
 ```

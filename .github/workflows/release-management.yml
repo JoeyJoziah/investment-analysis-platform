@@ -27,6 +27,11 @@ on:
         default: false
         type: boolean
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -316,6 +321,9 @@ jobs:
 
   # Build release artifacts
   build-release-artifacts:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [prepare-release, pre-release-validation]
@@ -395,6 +403,8 @@ jobs:
 
   # Create GitHub release
   create-github-release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [prepare-release, build-release-artifacts]
@@ -502,7 +512,7 @@ jobs:
     
     steps:
     - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: ${{ needs.build-release-artifacts.outputs.backend-image }}
         format: 'json'

@@ -1,13 +1,17 @@
 import { test, expect, Page } from '@playwright/test';
+import { E2E_USER } from './helpers';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const API_URL = process.env.API_URL || 'http://localhost:8000';
 
 // Test user for portfolio operations
 const TEST_USER = {
-  email: 'portfolio-test@example.com',
+  email: E2E_USER.email,
   username: 'portfolio-test',
-  password: 'PortfolioTest123!',
+  get password(): string {
+    // F8-15-022: no committed literal — sourced from E2E_USER_PASSWORD.
+    return E2E_USER.password;
+  },
 };
 
 test.describe('Portfolio Management', () => {

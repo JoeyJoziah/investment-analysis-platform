@@ -22,6 +22,11 @@ on:
         - secrets
         - containers
 
+# F8-14-002: default the workflow token to read-only; jobs that
+# write are granted narrow scopes at job level.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '20'
@@ -275,7 +280,7 @@ jobs:
         "
 
     - name: Yarn/NPM dependency scan with Snyk
-      uses: snyk/actions/node@master
+      uses: snyk/actions/node@0.4.0
       continue-on-error: true
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -330,7 +335,10 @@ jobs:
       with:
         fetch-depth: 0  # Full history for secret scanning
 
-    - name: Run TruffleHog secret scan
+    # F8-14-004: advisory until U2 rotation completes — the known tracked
+    # secrets (rotation inventory, PR-D) would trip a gating scan on every
+    # run. Flip to gating in the U2 post-window hygiene step (runbook §12.5).
+    - name: Run TruffleHog secret scan (advisory until U2 rotation completes)
       continue-on-error: true
       run: |
         docker run --rm -v "$PWD:/pwd" trufflesecurity/trufflehog:latest \
@@ -338,7 +346,7 @@ jobs:
           --only-verified \
           --json > trufflehog-results.json 2>/dev/null || true
 
-    - name: Run GitLeaks secret scan
+    - name: Run GitLeaks secret scan (advisory until U2 rotation completes)
       continue-on-error: true
       uses: gitleaks/gitleaks-action@v2
       env:
@@ -452,44 +460,44 @@ jobs:
 
     - name: Run Trivy vulnerability scanner on backend (all severities, report only)
       continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-backend:latest'
         format: 'json'
         output: 'backend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-    - name: Run Trivy vulnerability scanner on backend (advisory; remediation tracked separately)
-      continue-on-error: true  # CVE remediation is an ongoing maintenance task, not gating
-      uses: aquasecurity/trivy-action@master
+    # F8-14-004: CRITICAL gates (fixable criticals block); HIGH stays
+    # visible in the JSON report step above but does not gate.
+    - name: Trivy backend CRITICAL gate
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-backend:latest'
         format: 'table'
-        severity: 'HIGH,CRITICAL'
+        severity: 'CRITICAL'
         exit-code: '1'
         ignore-unfixed: true  # skip CVEs without an upstream fix (e.g. python-ecdsa CVE-2024-23342)
 
     - name: Run Trivy vulnerability scanner on frontend (all severities, report only)
       continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-frontend:latest'
         format: 'json'
         output: 'frontend-container-scan.json'
         severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-    - name: Run Trivy vulnerability scanner on frontend (advisory)
-      continue-on-error: true
-      uses: aquasecurity/trivy-action@master
+    - name: Trivy frontend CRITICAL gate
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: 'security-scan-frontend:latest'
         format: 'table'
-        severity: 'HIGH,CRITICAL'
+        severity: 'CRITICAL'
         exit-code: '1'
         ignore-unfixed: true
 
     - name: Run Trivy config scan
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         scan-type: 'config'
         format: 'json'
@@ -570,6 +578,9 @@ jobs:
 
   # Security report generation
   security-report:
+    permissions:
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     needs: [code-security, dependency-security, secret-scanning, container-security]
     if: always()

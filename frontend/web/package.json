@@ -57,9 +57,7 @@
     "test:all": "npm run test && npm run test:e2e",
     "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
     "format": "prettier --write src/**/*.{js,jsx,ts,tsx,css,scss}",
-    "format:check": "prettier --check src/**/*.{js,jsx,ts,tsx,css,scss}",
-    "cypress:run": "echo 'Cypress tests not implemented yet'",
-    "cypress:open": "echo 'Cypress tests not implemented yet'"
+    "format:check": "prettier --check src/**/*.{js,jsx,ts,tsx,css,scss}"
   },
   "eslintConfig": {
     "extends": [
