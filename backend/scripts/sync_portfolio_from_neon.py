@@ -117,7 +117,8 @@ def _fetch_neon_rows(dsn: str) -> List[Row]:
             SELECT t.account_id::text, t.txn_date::text, t.raw
               FROM tax_advisor.transactions t
              WHERE t.source = ANY(%s)
-             ORDER BY t.account_id, t.txn_date, t.created_at
+               AND NOT t.archived
+             ORDER BY t.account_id, t.txn_date, t.raw->>'filled_at', t.source_ref
             """,
             (list(FILL_SHAPED_SOURCES),),
         )
