@@ -87,3 +87,48 @@ class TestComputeSyncActions:
             desired={"AAPL": {"qty": 10, "avg_cost": Decimal("1.00")}},
         )
         assert actions == []
+
+
+class TestFetchNeonRows:
+    """Cross-repo audit 2026-09-25 (tax-advisor docs/audits): LEDG-9 / SCH-6
+    (soft-archived rows double-count once an archived fill is re-exported)
+    and LEDG-8 (fills from one export share txn_date and created_at, so the
+    FIFO order must come from the fill timestamp)."""
+
+    def _sql(self, monkeypatch):
+        import sys
+        import types
+
+        captured = {}
+
+        class _Cur:
+            def execute(self, sql, params):
+                captured["sql"] = sql
+
+            def fetchall(self):
+                return []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        class _Conn(_Cur):
+            def cursor(self):
+                return _Cur()
+
+        monkeypatch.setitem(
+            sys.modules, "psycopg", types.SimpleNamespace(connect=lambda dsn: _Conn())
+        )
+        sync_pfn._fetch_neon_rows("dsn")
+        return " ".join(captured["sql"].split())
+
+    def test_archived_rows_are_excluded(self, monkeypatch):
+        assert "NOT t.archived" in self._sql(monkeypatch)
+
+    def test_same_day_fills_ordered_by_fill_timestamp(self, monkeypatch):
+        assert (
+            "ORDER BY t.account_id, t.txn_date, t.raw->>'filled_at', t.source_ref"
+            in self._sql(monkeypatch)
+        )
